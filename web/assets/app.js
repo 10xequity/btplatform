@@ -1,10 +1,12 @@
 /* Boomtown Platform — App Shell
-   Version: v0.1 · Date: 2026-07-21
+   Version: v0.2.4 · Date: 2026-07-21
    Handles: magic-link login, verify (?token=), session (Bearer, in-memory + sessionStorage),
-   org switcher (≤2 clicks), theme toggle (instant — high-frequency action). */
+   org switcher (≤2 clicks), theme toggle (instant — high-frequency action).
+   v0.2.4: network failures show a clear message and re-enable the send button;
+           startup guard if config.js is stale/placeholder. */
 
 (function () {
-  const API = window.BT_CONFIG.apiBase;
+  const API = (window.BT_CONFIG && window.BT_CONFIG.apiBase) || "";
   const app = document.getElementById("app");
   const orgSwitcher = document.getElementById("orgSwitcher");
   const themeToggle = document.getElementById("themeToggle");
@@ -21,6 +23,12 @@
   });
   function setTheme(t) { document.documentElement.dataset.theme = t; }
 
+  /* ---------- config guard (catches stale cached config.js) ---------- */
+  if (!API || API.includes("PENDING")) {
+    render(`<div class='login-wrap'><div class='card login-card'><h1>One moment</h1><p>The app is still loading its latest settings. Hold <strong>Ctrl</strong> and press <strong>F5</strong> to refresh. If this message stays after a few minutes, tell Claude.</p></div></div>`);
+    return;
+  }
+
   /* ---------- session ---------- */
   let bearer = sessionStorage.getItem("bt_token") || null;
 
@@ -29,8 +37,13 @@
     if (bearer) headers["Authorization"] = "Bearer " + bearer;
     const orgId = localStorage.getItem("bt_org");
     if (orgId) headers["X-Org-Id"] = orgId;
-    const resp = await fetch(API + path, Object.assign({}, opts, { headers, credentials: "include" }));
-    return { ok: resp.ok, status: resp.status, data: await resp.json().catch(() => ({})) };
+    try {
+      const resp = await fetch(API + path, Object.assign({}, opts, { headers, credentials: "include" }));
+      return { ok: resp.ok, status: resp.status, data: await resp.json().catch(() => ({})) };
+    } catch (e) {
+      return { ok: false, status: 0, networkError: true,
+        data: { error: "Can't reach the server. Check your internet connection, hard-refresh (Ctrl+F5), and try again." } };
+    }
   }
 
   /* ---------- boot ---------- */
@@ -87,8 +100,14 @@
       if (!email) return notice("Enter your email address.", true);
       const btn = document.getElementById("sendLink");
       btn.disabled = true;
-      const r = await api("/api/auth/request-link", { method: "POST", body: JSON.stringify({ email }) });
-      btn.disabled = false;
+      btn.textContent = "Sending…";
+      let r;
+      try {
+        r = await api("/api/auth/request-link", { method: "POST", body: JSON.stringify({ email }) });
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Send sign-in link";
+      }
       if (!r.ok) return notice(r.data.error || "Something went wrong. Try again.", true);
       if (r.data.mode === "sandbox") {
         notice(`Sandbox mode (no email provider yet). <a href="${r.data.dev_link}">Open your sign-in link</a>.`);
