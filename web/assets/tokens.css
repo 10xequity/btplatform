@@ -1,0 +1,65 @@
+/* Boomtown Platform — Design Tokens
+   Version: v0.1 · Date: 2026-07-21
+   Source of truth: design spec §4. Dark = black/gold (first-class). Light = white/navy + yellow. */
+
+:root {
+  /* Light theme */
+  --bg: #FFFFFF;
+  --surface: #F7F7F5;
+  --surface-raised: #FFFFFF;
+  --text: #101418;
+  --text-muted: #5A6270;
+  --primary: #1B2A4A;
+  --primary-contrast: #FFFFFF;
+  --accent: #E6B800;
+  --positive: #1F7A4D;
+  --danger: #B3261E;
+  --border: #E3E2DD;
+
+  /* Shape */
+  --radius-card: 10px;
+  --radius-control: 8px;
+
+  /* Type — spec: Inter or system stack, body ≥16px, WCAG AA */
+  --font: "Inter", -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-size-body: 16px;
+
+  /* Motion — emil-design-eng: ≤300ms, strong ease-out, no ease-in, reduced-motion respected */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --dur-press: 120ms;
+  --dur-pop: 180ms;
+  --dur-modal: 240ms;
+}
+
+[data-theme="dark"] {
+  --bg: #0B0B0D;
+  --surface: #141417;
+  --surface-raised: #1B1B1F;
+  --text: #F2F0EA;
+  --text-muted: #A8A49A;
+  --primary: #D4AF37;
+  --primary-contrast: #0B0B0D;
+  --accent: #D4AF37;
+  --positive: #4CC38A;
+  --danger: #F2555A;
+  --border: #26262B;
+}
+
+/* Glass — permitted on static chrome only (header/modals), with solid fallback (spec §4) */
+.chrome-glass {
+  background: var(--surface); /* solid fallback */
+}
+@supports (backdrop-filter: blur(12px)) {
+  .chrome-glass {
+    background: color-mix(in srgb, var(--surface) 78%, transparent);
+    backdrop-filter: blur(12px) saturate(1.2);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

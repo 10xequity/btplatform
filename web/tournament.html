@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<!-- Boomtown Platform — Tournament Ops · Version: v0.2 · Date: 2026-07-21
+     Click budgets (spec §4): create from template ≤10 clicks · score a game ≤2 taps. -->
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Tournament Ops — Boomtown Athletics</title>
+  <link rel="stylesheet" href="assets/tokens.css" />
+  <link rel="stylesheet" href="assets/app.css" />
+  <link rel="stylesheet" href="assets/tournament.css" />
+</head>
+<body>
+  <header class="header chrome-glass no-print">
+    <div class="wordmark"><a href="index.html" style="color:inherit;text-decoration:none">Boomtown <span>Athletics</span></a></div>
+    <div class="spacer"></div>
+    <select id="orgSwitcher" class="org-switcher" aria-label="Switch organization"></select>
+    <button id="themeToggle" class="btn ghost theme-toggle" aria-label="Toggle dark or light theme">◐</button>
+  </header>
+
+  <main class="main wide" id="app" aria-live="polite">
+    <section class="toolbar no-print">
+      <select id="eventSelect" class="org-switcher" aria-label="Choose event"></select>
+      <button id="newEventBtn" class="btn">New tournament</button>
+      <div class="spacer"></div>
+      <button id="printBtn" class="btn ghost">Print pool sheet</button>
+      <button id="csvBtn" class="btn ghost">Export CSV</button>
+    </section>
+
+    <section id="newEventForm" class="card no-print" hidden>
+      <h3>New tournament</h3>
+      <div class="form-row">
+        <div class="field"><label for="evName">Name</label><input id="evName" placeholder="REVCO Summer Slam" /></div>
+        <div class="field"><label for="evDate">Date</label><input id="evDate" type="date" /></div>
+        <div class="field"><label for="evTemplate">Format</label>
+          <select id="evTemplate" class="org-switcher"></select>
+        </div>
+        <div class="field"><label for="evCourts">Courts</label><input id="evCourts" type="number" min="1" max="12" value="4" /></div>
+      </div>
+      <button id="createEventBtn" class="btn">Create</button>
+      <span id="newEventMsg" class="muted"></span>
+    </section>
+
+    <section id="teamsPanel" class="card no-print" hidden>
+      <h3>Teams <span id="teamCount" class="muted"></span></h3>
+      <div class="field">
+        <label for="teamPaste">Add teams — one per line</label>
+        <textarea id="teamPaste" rows="3" placeholder="Sets on the Beach&#10;Block Party&#10;Net Gains"></textarea>
+      </div>
+      <button id="addTeamsBtn" class="btn">Add teams</button>
+      <button id="generateBtn" class="btn" style="margin-left:8px">Generate schedule</button>
+      <div id="feasBox"></div>
+    </section>
+
+    <div id="warningsBox" class="no-print"></div>
+
+    <section id="gridPanel" hidden>
+      <h3 class="print-title" id="printTitle"></h3>
+      <div class="grid-scroll"><table class="pool-grid" id="poolGrid"></table></div>
+    </section>
+
+    <section id="standingsPanel" class="card" hidden>
+      <div class="row-between no-print">
+        <h3>Standings</h3>
+        <button id="bracketBtn" class="btn ghost">Break to bracket (Top <select id="aSize" class="inline-select"><option>4</option><option selected>8</option><option>10</option></select> A / rest BB)</button>
+      </div>
+      <table class="standings" id="standingsTable"></table>
+    </section>
+  </main>
+
+  <div id="scoreSheet" class="score-sheet no-print" hidden aria-modal="true" role="dialog" aria-label="Enter score"></div>
+
+  <script src="assets/config.js"></script>
+  <script src="assets/tournament.js"></script>
+</body>
+</html>

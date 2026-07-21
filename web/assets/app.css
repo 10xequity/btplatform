@@ -1,0 +1,144 @@
+/* Boomtown Platform — App Shell Styles
+   Version: v0.1 · Date: 2026-07-21
+   Motion rules (emil-design-eng): theme toggle & org switch = high-frequency → NO animation.
+   Buttons get 120ms press feedback. Cards fade in once on load. Nothing exceeds 300ms. */
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: var(--font-size-body);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------- header ---------- */
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--border);
+  /* signature: the court baseline — a single gold line under the chrome */
+  box-shadow: 0 2px 0 0 var(--accent);
+}
+
+.wordmark {
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  font-size: 18px;
+  text-transform: uppercase;
+}
+.wordmark span { color: var(--accent); }
+
+.header .spacer { flex: 1; }
+
+/* Org switcher — spec click budget: org switch ≤2 clicks (open + pick = 2) */
+.org-switcher {
+  appearance: none;
+  font: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  padding: 8px 36px 8px 12px;
+  min-height: 44px; /* touch target */
+  background-image: url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%23888' stroke-width='2'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  cursor: pointer;
+}
+
+/* ---------- buttons ---------- */
+.btn {
+  font: inherit;
+  font-weight: 600;
+  color: var(--primary-contrast);
+  background: var(--primary);
+  border: 0;
+  border-radius: var(--radius-control);
+  padding: 10px 18px;
+  min-height: 44px;
+  cursor: pointer;
+  transition: transform var(--dur-press) var(--ease-out);
+}
+.btn:active { transform: scale(0.97); }
+.btn:focus-visible, .org-switcher:focus-visible, input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.btn.ghost {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+.btn[disabled] { opacity: 0.5; cursor: not-allowed; }
+
+/* Theme toggle: fired often → instant, no transition on the swap itself */
+.theme-toggle { min-width: 44px; }
+
+/* ---------- layout ---------- */
+.main {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 28px 20px 64px;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  padding: 20px;
+}
+
+/* One-time page-load reveal (rare → allowed). Stagger 50ms, never blocks input. */
+.reveal { opacity: 0; transform: translateY(8px); animation: reveal 240ms var(--ease-out) forwards; }
+.reveal:nth-child(2) { animation-delay: 50ms; }
+.reveal:nth-child(3) { animation-delay: 100ms; }
+@keyframes reveal { to { opacity: 1; transform: none; } }
+
+/* ---------- login ---------- */
+.login-wrap {
+  min-height: calc(100dvh - 120px);
+  display: grid;
+  place-items: center;
+}
+.login-card { width: min(420px, 92vw); }
+.login-card h1 { font-size: 22px; margin: 0 0 4px; }
+.login-card p { color: var(--text-muted); margin: 0 0 16px; }
+
+.field { display: grid; gap: 6px; margin-bottom: 14px; }
+.field label { font-size: 14px; font-weight: 600; }
+.field input {
+  font: inherit;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  padding: 10px 12px;
+  min-height: 44px;
+}
+
+.notice { border-left: 3px solid var(--accent); padding: 10px 12px; background: var(--surface-raised); border-radius: 0 var(--radius-control) var(--radius-control) 0; margin-top: 14px; font-size: 14px; overflow-wrap: anywhere; }
+.notice.error { border-left-color: var(--danger); }
+.notice a { color: var(--accent); }
+
+/* ---------- dashboard ---------- */
+.grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); margin-top: 18px; }
+.module h3 { margin: 0 0 6px; font-size: 16px; }
+.module p { margin: 0; color: var(--text-muted); font-size: 14px; }
+.status { display: inline-block; font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; margin-top: 10px; }
+.status.live { color: var(--positive); }
+.status.next { color: var(--text-muted); }
+
+.role-pill { font-size: 12px; font-weight: 700; color: var(--primary-contrast); background: var(--primary); border-radius: 999px; padding: 3px 10px; }
+
+@media (hover: hover) and (pointer: fine) {
+  .btn:hover { filter: brightness(1.06); }
+}

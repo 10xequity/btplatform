@@ -1,0 +1,20 @@
+# Boomtown Platform — Worker config
+# Version: v0.1 · Date: 2026-07-21
+name = "boomtown-api"
+main = "worker/src/index.js"
+compatibility_date = "2026-07-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "boomtown-prod"
+database_id = "6cde5d11-4199-4e57-b10f-2b7e968264ea"
+
+[vars]
+# Update APP_URL after GitHub Pages is live (e.g. https://10xequity.github.io/btplatform/web)
+APP_URL = "https://10xequity.github.io/btplatform/web"
+ALLOWED_ORIGINS = "https://10xequity.github.io"
+SENDER_EMAIL = "no-reply@boomtownvb.com"
+
+# Secrets (set via GitHub repo Settings → Secrets, consumed by the deploy workflow):
+#   CLOUDFLARE_API_TOKEN  — required for deploy
+#   BREVO_API_KEY         — optional; auth runs in sandbox mode until added
