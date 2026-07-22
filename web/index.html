@@ -1,1 +1,28 @@
+<!DOCTYPE html>
+<!-- Boomtown Platform — App Shell · Version: v0.2.4 · Date: 2026-07-21 -->
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Boomtown Athletics</title>
+  <link rel="stylesheet" href="assets/tokens.css" />
+  <link rel="stylesheet" href="assets/app.css" />
+</head>
+<body>
+  <header class="header chrome-glass">
+    <div class="wordmark">Boomtown <span>Athletics</span></div>
+    <div class="spacer"></div>
+    <select id="orgSwitcher" class="org-switcher" aria-label="Switch organization" hidden></select>
+    <button id="themeToggle" class="btn ghost theme-toggle" aria-label="Toggle dark or light theme">◐</button>
+    <button id="logoutBtn" class="btn ghost" hidden>Sign out</button>
+  </header>
+
+  <main class="main" id="app" aria-live="polite">
+    <!-- rendered by app.js -->
+  </main>
+
+  <script src="assets/config.js?v=0.2.4"></script>
+  <script src="assets/app.js?v=0.2.4"></script>
+</body>
+</html>
 index.html v0.2.4 (2026-07-21): cache-busted config/app script tags
