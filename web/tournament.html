@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Boomtown Platform — Tournament Ops · Version: v0.3.0 · Date: 2026-07-21
+<!-- Boomtown Platform — Tournament Ops · Version: v0.3.0 · Date: 2026-07-21 · sidebar added v0.4.0 (2026-07-22)
      Click budgets (spec §4): create from template ≤10 clicks · score a game ≤2 taps. -->
 <html lang="en" data-theme="dark">
 <head>
@@ -8,6 +8,7 @@
   <title>Tournament Ops — Boomtown Athletics</title>
   <link rel="stylesheet" href="assets/tokens.css" />
   <link rel="stylesheet" href="assets/app.css" />
+  <link rel="stylesheet" href="assets/admin.css?v=0.4.0" />
   <link rel="stylesheet" href="assets/tournament.css" />
 </head>
 <body>
@@ -18,7 +19,8 @@
     <button id="themeToggle" class="btn ghost theme-toggle" aria-label="Toggle dark or light theme">◐</button>
   </header>
 
-  <main class="main wide" id="app" aria-live="polite">
+  <div class="admin-layout">
+  <main class="main wide admin-main" id="app" aria-live="polite">
     <section class="toolbar no-print">
       <select id="eventSelect" class="org-switcher" aria-label="Choose event"></select>
       <button id="newEventBtn" class="btn">New tournament</button>
@@ -68,10 +70,12 @@
       <table class="standings" id="standingsTable"></table>
     </section>
   </main>
+  </div><!-- /admin-layout -->
 
   <div id="scoreSheet" class="score-sheet no-print" hidden aria-modal="true" role="dialog" aria-label="Enter score"></div>
 
   <script src="assets/config.js?v=0.3.0"></script>
+  <script src="assets/admin-nav.js?v=0.4.0"></script>
   <script src="assets/tournament.js?v=0.3.0"></script>
 </body>
 </html>

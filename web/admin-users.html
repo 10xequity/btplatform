@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<!-- Boomtown Platform — Members, Admins & Roles · Version: v0.4.0 · Date: 2026-07-22 -->
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Members &amp; Roles · Boomtown Admin</title>
+  <link rel="stylesheet" href="assets/tokens.css" />
+  <link rel="stylesheet" href="assets/app.css" />
+  <link rel="stylesheet" href="assets/admin.css?v=0.4.0" />
+  <script>document.documentElement.dataset.theme = localStorage.getItem("bt_theme") || "dark";</script>
+</head>
+<body>
+  <header class="header chrome-glass">
+    <a class="wordmark" href="admin.html" style="text-decoration:none;color:inherit">Boomtown <span>Athletics</span></a>
+    <div class="spacer"></div>
+    <select id="orgSwitcher" class="org-switcher" aria-label="Switch organization"></select>
+    <a class="btn ghost" href="index.html">App home</a>
+  </header>
+
+  <div class="admin-layout">
+    <main class="admin-main">
+      <div class="page-head">
+        <h1>People</h1>
+        <div class="spacer"></div>
+        <button class="btn" id="addUserBtn">+ Add admin / staff</button>
+      </div>
+
+      <div class="tabs" role="tablist">
+        <button class="tab active" data-tab="members" role="tab">Members</button>
+        <button class="tab" data-tab="roles" role="tab">Admins &amp; Roles</button>
+        <button class="tab" data-tab="perms" role="tab">What each role can do</button>
+      </div>
+
+      <section id="tab-members">
+        <div class="toolbar">
+          <input type="search" id="memberSearch" placeholder="Search name, email, phone…" aria-label="Search members" />
+          <span class="help-text" id="memberCount"></span>
+        </div>
+        <div id="membersWrap" class="card" style="padding:0"><div class="empty">Loading…</div></div>
+      </section>
+
+      <section id="tab-roles" hidden>
+        <p class="help-text">Roles are per organization. New people sign in with the normal email link — no passwords.</p>
+        <div id="rolesWrap" class="card" style="padding:0"><div class="empty">Loading…</div></div>
+      </section>
+
+      <section id="tab-perms" hidden>
+        <div id="permsWrap" class="card" style="padding:0"><div class="empty">Loading…</div></div>
+      </section>
+    </main>
+  </div>
+
+  <script src="assets/config.js?v=0.4.0"></script>
+  <script src="assets/admin-nav.js?v=0.4.0"></script>
+  <script src="assets/admin-users.js?v=0.4.0"></script>
+</body>
+</html>

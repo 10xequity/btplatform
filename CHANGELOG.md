@@ -27,3 +27,23 @@
 ## v0.3.1 — 2026-07-22 (Root redirect)
 - Added root index.html: `https://10xequity.github.io/btplatform/` now redirects to `/web/` instead of showing GitHub's 404 page.
 - No app-code changes. Module 4 (v0.3.0) verified fully deployed: all 14 files at correct paths in commit 3c00990; GitHub Pages build+deployment and Deploy Worker actions both green.
+
+## v0.4.0 — 2026-07-22 · Module 5 (Schedule) + System Admin Panel
+
+**Database (migration 0003 — ALREADY APPLIED to live D1 by Claude, no action needed):**
+- `schedule_views` (public/internal built-ins + custom views), `event_templates`, `programs`
+- `events` gains `series_id`, `program_id`, `recurrence_json` (recurring series support)
+
+**Worker (auto-deploys on push):**
+- `schedule.js` — public schedule feed `GET /api/schedule` with server-enforced view profiles (spec §3.7); views CRUD
+- `admin.js` — user/role management (admin-only, last-admin safety guard), member (contact) management, permissions matrix
+- `events_admin.js` — templates, duplicate, recurring series (weekly/biweekly/monthly, ≤52), "this-and-future" series edit/cancel, bulk create (CSV, ≤200 rows), bulk edit, per-event registrations CSV export, programs
+- `index.js` → v0.4.0, mounts the three new modules
+
+**Web app:**
+- Admin panel with shared sidebar (`admin-nav.js` + `admin.css`): hover highlights, active section, mobile top-bar collapse
+- `admin.html` dashboard · `admin-events.html` calendar with drag-and-drop create/reschedule, template palette, recurring, bulk import/edit, Views & Embed tab · `admin-event.html` per-event screen (details, publish/cancel, duplicate, save-as-template, series editing, sign-up link, registrations with remind/mark-paid, CSV download) · `admin-users.html` members + admins & roles + role capability matrix
+- `schedule.html` public schedule (list + month) · `widget.js` embeddable widget for boomtownvb.com / coloradoboom.com
+- `tournament.html` / `admin-registrations.html` retrofitted with the sidebar
+
+**Known limits (deliberate, small):** event times are stored as entered (no timezone math) — fine while everything is in Colorado; recurring monthly = same day-of-month; bulk import caps at 200 rows per upload.

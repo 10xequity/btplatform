@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<!-- Boomtown Platform — Public Schedule · Version: v0.4.0 · Date: 2026-07-22
+     Public page (no sign-in). ?view=slug picks the view profile; ?embed=1 strips chrome for the widget. -->
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Schedule · Boomtown Athletics</title>
+  <link rel="stylesheet" href="assets/tokens.css" />
+  <link rel="stylesheet" href="assets/app.css" />
+  <link rel="stylesheet" href="assets/admin.css?v=0.4.0" />
+  <style>
+    .sched-wrap { max-width: 960px; margin: 0 auto; padding: 16px; }
+    .sched-ev { display: flex; gap: 14px; padding: 14px; border: 1px solid var(--border);
+      border-radius: var(--radius-card); margin-bottom: 10px; background: var(--surface);
+      transition: border-color 140ms var(--ease-out); }
+    .sched-ev:hover { border-color: var(--primary); }
+    .sched-date { min-width: 64px; text-align: center; }
+    .sched-date .d { font-size: 22px; font-weight: 700; color: var(--primary); line-height: 1.1; }
+    .sched-date .m { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); }
+    .sched-body { flex: 1; min-width: 0; }
+    .sched-name { font-weight: 600; font-size: 16px; }
+    .sched-meta { font-size: 13.5px; color: var(--text-muted); margin-top: 2px; }
+    .sched-cta { align-self: center; }
+    body.embed .header { display: none; }
+    body.embed .sched-wrap { padding: 4px; }
+  </style>
+  <script>
+    (function () {
+      const p = new URLSearchParams(location.search);
+      const t = p.get("theme");
+      document.documentElement.dataset.theme =
+        (t === "light" || t === "dark") ? t : (localStorage.getItem("bt_theme") ||
+        (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark"));
+    })();
+  </script>
+</head>
+<body>
+  <header class="header chrome-glass">
+    <a class="wordmark" href="index.html" style="text-decoration:none;color:inherit">Boomtown <span>Athletics</span></a>
+    <div class="spacer"></div>
+  </header>
+
+  <div class="sched-wrap">
+    <div class="page-head">
+      <h1 id="schedTitle" style="font-size:20px;margin:0">Schedule</h1>
+      <div class="spacer"></div>
+      <select id="orgFilter" aria-label="Filter by organization"><option value="">All orgs</option></select>
+      <div class="tabs" style="border:0;margin:0">
+        <button class="tab active" data-mode="list">List</button>
+        <button class="tab" data-mode="month">Month</button>
+      </div>
+    </div>
+    <div id="schedBody"><div class="empty">Loading schedule…</div></div>
+  </div>
+
+  <script src="assets/config.js?v=0.4.0"></script>
+  <script src="assets/schedule.js?v=0.4.0"></script>
+</body>
+</html>

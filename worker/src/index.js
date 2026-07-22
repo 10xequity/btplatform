@@ -1,6 +1,9 @@
 /**
  * Boomtown Platform — API Worker
- * Version: v0.3.0 · Date: 2026-07-21 · Modules 1–4
+ * Version: v0.4.0 · Date: 2026-07-22 · Modules 1–5 + Admin Panel
+ *
+ * v0.4.0 (2026-07-22): schedule views + public feed (schedule.js), admin users/roles/members
+ *   (admin.js), event templates/recurring/bulk/CSV export (events_admin.js). Migration 0003 applied live.
  *
  * Endpoints:
  *   POST /api/auth/request-link   { email }            → sends magic link (sandbox: returns dev_link)
@@ -31,6 +34,9 @@
  */
 import { tournamentRoutes, wire } from "./tournaments.js";
 import { registrationRoutes, wireRegistrations, squareWebhook } from "./registrations.js";
+import { adminRoutes, wireAdmin } from "./admin.js";
+import { scheduleRoutes, wireSchedule } from "./schedule.js";
+import { eventsAdminRoutes, wireEventsAdmin } from "./events_admin.js";
 
 const MAGIC_LINK_TTL_MIN = 15;
 const SESSION_TTL_DAYS = 30;
@@ -44,6 +50,9 @@ const wiredHelpers = {
 };
 wire(wiredHelpers);
 wireRegistrations(wiredHelpers);
+wireAdmin(wiredHelpers);
+wireSchedule(wiredHelpers);
+wireEventsAdmin(wiredHelpers);
 
 /** ctx carries the caller's session + selected org for role checks. */
 async function buildCtx(request, env) {
@@ -87,12 +96,15 @@ export default {
       } else if (url.pathname === "/api/orgs" && request.method === "GET") {
         res = await listOrgs(env);
       } else if (url.pathname === "/api/health") {
-        res = json({ ok: true, version: "v0.3.0" });
+        res = json({ ok: true, version: "v0.4.0" });
       } else if (url.pathname === "/api/webhooks/square" && request.method === "POST") {
         res = await squareWebhook(request, env); // server-to-server; signature-verified inside
       } else if (url.pathname.startsWith("/api/")) {
         const ctx = await buildCtx(request, env);
-        res = (await tournamentRoutes(request, env, url, ctx))
+        res = (await scheduleRoutes(request, env, url, ctx))
+           || (await eventsAdminRoutes(request, env, url, ctx))
+           || (await adminRoutes(request, env, url, ctx))
+           || (await tournamentRoutes(request, env, url, ctx))
            || (await registrationRoutes(request, env, url, ctx))
            || json({ error: "Not found" }, 404);
       } else {

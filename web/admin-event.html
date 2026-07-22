@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<!-- Boomtown Platform — Event Management · Version: v0.4.0 · Date: 2026-07-22 -->
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Event · Boomtown Admin</title>
+  <link rel="stylesheet" href="assets/tokens.css" />
+  <link rel="stylesheet" href="assets/app.css" />
+  <link rel="stylesheet" href="assets/admin.css?v=0.4.0" />
+  <script>document.documentElement.dataset.theme = localStorage.getItem("bt_theme") || "dark";</script>
+</head>
+<body>
+  <header class="header chrome-glass">
+    <a class="wordmark" href="admin.html" style="text-decoration:none;color:inherit">Boomtown <span>Athletics</span></a>
+    <div class="spacer"></div>
+    <select id="orgSwitcher" class="org-switcher" aria-label="Switch organization"></select>
+    <a class="btn ghost" href="index.html">App home</a>
+  </header>
+
+  <div class="admin-layout">
+    <main class="admin-main" id="main">
+      <div class="empty">Loading event…</div>
+    </main>
+  </div>
+
+  <script src="assets/config.js?v=0.4.0"></script>
+  <script src="assets/admin-nav.js?v=0.4.0"></script>
+  <script src="assets/admin-event.js?v=0.4.0"></script>
+</body>
+</html>

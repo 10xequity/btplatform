@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<!-- Boomtown Platform — Events & Programs Admin · Version: v0.4.0 · Date: 2026-07-22 -->
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Events · Boomtown Admin</title>
+  <link rel="stylesheet" href="assets/tokens.css" />
+  <link rel="stylesheet" href="assets/app.css" />
+  <link rel="stylesheet" href="assets/admin.css?v=0.4.0" />
+  <script>document.documentElement.dataset.theme = localStorage.getItem("bt_theme") || "dark";</script>
+</head>
+<body>
+  <header class="header chrome-glass">
+    <a class="wordmark" href="admin.html" style="text-decoration:none;color:inherit">Boomtown <span>Athletics</span></a>
+    <div class="spacer"></div>
+    <select id="orgSwitcher" class="org-switcher" aria-label="Switch organization"></select>
+    <a class="btn ghost" href="index.html">App home</a>
+  </header>
+
+  <div class="admin-layout">
+    <main class="admin-main">
+      <div class="page-head">
+        <h1>Events &amp; Programs</h1>
+        <div class="spacer"></div>
+        <button class="btn" id="newEventBtn">+ New event</button>
+        <button class="btn ghost" id="newRecurringBtn">↻ Recurring</button>
+        <button class="btn ghost" id="bulkImportBtn">⇪ Bulk import</button>
+      </div>
+
+      <div class="tabs" role="tablist">
+        <button class="tab active" data-tab="calendar" role="tab">Calendar</button>
+        <button class="tab" data-tab="list" role="tab">List</button>
+        <button class="tab" data-tab="views" role="tab">Views &amp; Embed</button>
+      </div>
+
+      <section id="tab-calendar">
+        <p class="help-text">Drag a <strong>template chip</strong> onto a day to create an event there, or drag an
+          <strong>existing event</strong> to a different day to reschedule it (its time of day is kept).</p>
+        <div class="palette" id="palette"></div>
+        <div class="cal-toolbar">
+          <button class="btn ghost" id="calPrev" aria-label="Previous month">‹</button>
+          <strong id="calTitle" style="min-width:150px;text-align:center"></strong>
+          <button class="btn ghost" id="calNext" aria-label="Next month">›</button>
+          <button class="btn ghost" id="calToday">Today</button>
+        </div>
+        <div class="cal-grid" id="calGrid"></div>
+      </section>
+
+      <section id="tab-list" hidden>
+        <div class="toolbar">
+          <input type="search" id="listSearch" placeholder="Search events…" aria-label="Search events" />
+          <select id="listStatus" aria-label="Filter by status">
+            <option value="">All statuses</option>
+            <option>draft</option><option>published</option><option>in_progress</option>
+            <option>completed</option><option>cancelled</option>
+          </select>
+          <div class="spacer"></div>
+          <span id="selCount" class="help-text"></span>
+          <button class="btn ghost" id="bulkEditBtn" disabled>Bulk edit selected</button>
+        </div>
+        <div id="listWrap"></div>
+      </section>
+
+      <section id="tab-views" hidden>
+        <p class="help-text">A <strong>view</strong> controls what the public schedule shows. <em>Public</em> hides names
+          and counts; <em>Internal</em> shows both. Custom views get an unguessable link — settings are enforced by the
+          server, not just hidden in the page.</p>
+        <div class="toolbar"><button class="btn" id="newViewBtn">+ New view</button></div>
+        <div id="viewsWrap"></div>
+        <h2 style="font-size:16px;margin-top:24px">Embed on your website</h2>
+        <p class="help-text">Copy this into any page on boomtownvb.com / coloradoboom.com:</p>
+        <pre class="card" id="embedSnippet" style="padding:12px;overflow-x:auto;font-size:13px"></pre>
+        <button class="btn ghost" id="copyEmbed">Copy snippet</button>
+      </section>
+    </main>
+  </div>
+
+  <script src="assets/config.js?v=0.4.0"></script>
+  <script src="assets/admin-nav.js?v=0.4.0"></script>
+  <script src="assets/admin-events.js?v=0.4.0"></script>
+</body>
+</html>

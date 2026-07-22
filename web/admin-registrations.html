@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Boomtown Platform — Registrations Admin · Version: v0.3.0 · Date: 2026-07-21
+<!-- Boomtown Platform — Registrations Admin · Version: v0.3.0 · Date: 2026-07-21 · sidebar added v0.4.0 (2026-07-22)
      Unpaid list + one-click reminder (spec §3.2) · cash collect · Google Forms CSV import · captain score links. -->
 <html lang="en" data-theme="dark">
 <head>
@@ -8,6 +8,7 @@
   <title>Registrations — Boomtown Athletics</title>
   <link rel="stylesheet" href="assets/tokens.css?v=0.3.0" />
   <link rel="stylesheet" href="assets/app.css?v=0.3.0" />
+  <link rel="stylesheet" href="assets/admin.css?v=0.4.0" />
   <style>
     table.regs { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
     table.regs th, table.regs td { text-align: left; padding: 8px 10px; border-bottom: 1px solid rgba(128,128,128,.2); }
@@ -28,7 +29,8 @@
     <button id="themeToggle" class="btn ghost theme-toggle" aria-label="Toggle dark or light theme">◐</button>
   </header>
 
-  <main class="main wide" id="app" aria-live="polite">
+  <div class="admin-layout">
+  <main class="main wide admin-main" id="app" aria-live="polite">
     <section class="toolbar">
       <select id="eventSelect" class="org-switcher" aria-label="Choose event"></select>
       <a href="tournament.html" class="btn ghost" style="text-decoration:none">Tournament ops</a>
@@ -54,8 +56,10 @@
       <div id="scoreLinksList"></div>
     </section>
   </main>
+  </div><!-- /admin-layout -->
 
   <script src="assets/config.js?v=0.3.0"></script>
+  <script src="assets/admin-nav.js?v=0.4.0"></script>
   <script src="assets/admin-registrations.js?v=0.3.0"></script>
 </body>
 </html>
