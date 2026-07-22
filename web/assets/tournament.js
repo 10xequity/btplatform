@@ -1,11 +1,18 @@
 /* Boomtown Platform — Tournament Ops
-   Version: v0.2 · Date: 2026-07-21
+   Version: v0.3.0 · Date: 2026-07-21 (v0.3.0: network-failure + stale-config guards, matching app.js v0.2.4)
    Flow: pick/create event → paste teams → generate (feasibility gate with one-tap fixes)
    → live grid (drag to move, tap to score in 2 taps) → standings → bracket → print/CSV. */
 
 (function () {
-  const API = window.BT_CONFIG.apiBase;
+  const API = (window.BT_CONFIG || {}).apiBase;
   const $ = (id) => document.getElementById(id);
+
+  /* config guard — catches a stale cached config.js */
+  if (!API || API.includes("PENDING")) {
+    document.getElementById("app").innerHTML =
+      "<div class='card'><h1>One moment</h1><p>The app is still loading its latest settings. Hold <strong>Ctrl</strong> and press <strong>F5</strong> to refresh. If this message stays after a few minutes, tell Claude.</p></div>";
+    return;
+  }
   let bearer = sessionStorage.getItem("bt_token") || null;
   let currentEvent = null, teams = [], teamName = {}, matches = [], formats = {};
 
@@ -23,8 +30,13 @@
     if (bearer) headers["Authorization"] = "Bearer " + bearer;
     const orgId = localStorage.getItem("bt_org");
     if (orgId) headers["X-Org-Id"] = orgId;
-    const resp = await fetch(API + path, Object.assign({}, opts, { headers, credentials: "include" }));
-    return { ok: resp.ok, status: resp.status, data: await resp.json().catch(() => ({})) };
+    try {
+      const resp = await fetch(API + path, Object.assign({}, opts, { headers, credentials: "include" }));
+      return { ok: resp.ok, status: resp.status, data: await resp.json().catch(() => ({})) };
+    } catch (e) {
+      return { ok: false, status: 0, networkError: true,
+        data: { error: "Can't reach the server. Check your internet connection, hard-refresh (Ctrl+F5), and try again." } };
+    }
   }
 
   /* ---------- boot ---------- */

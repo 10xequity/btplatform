@@ -1,6 +1,6 @@
 /**
  * Boomtown Platform — Tournament API routes
- * Version: v0.2 · Date: 2026-07-21
+ * Version: v0.3.0 · Date: 2026-07-21 (v0.3.0: export refreshStandings for captain self-scoring)
  * Mounted by worker/src/index.js. All writes require admin/staff role in the event's org.
  * Reads: published events are public; drafts require staff.
  */
@@ -236,7 +236,7 @@ async function scoreMatch(request, env, ctx, matchId) {
   return json({ ok: true, score_a: sa, score_b: sb });
 }
 
-async function refreshStandings(env, eventId, orgId) {
+export async function refreshStandings(env, eventId, orgId) {
   const rows = (await env.DB.prepare(
     "SELECT team_a_id AS teamA, team_b_id AS teamB, score_a AS scoreA, score_b AS scoreB FROM matches WHERE event_id=?1 AND stage='pool' AND deleted_at IS NULL"
   ).bind(eventId).all()).results;

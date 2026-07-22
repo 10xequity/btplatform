@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Boomtown Platform — Tournament Ops · Version: v0.2 · Date: 2026-07-21
+<!-- Boomtown Platform — Tournament Ops · Version: v0.3.0 · Date: 2026-07-21
      Click budgets (spec §4): create from template ≤10 clicks · score a game ≤2 taps. -->
 <html lang="en" data-theme="dark">
 <head>
@@ -23,6 +23,7 @@
       <select id="eventSelect" class="org-switcher" aria-label="Choose event"></select>
       <button id="newEventBtn" class="btn">New tournament</button>
       <div class="spacer"></div>
+      <a href="admin-registrations.html" class="btn ghost" style="text-decoration:none">Registrations</a>
       <button id="printBtn" class="btn ghost">Print pool sheet</button>
       <button id="csvBtn" class="btn ghost">Export CSV</button>
     </section>
@@ -70,7 +71,7 @@
 
   <div id="scoreSheet" class="score-sheet no-print" hidden aria-modal="true" role="dialog" aria-label="Enter score"></div>
 
-  <script src="assets/config.js"></script>
-  <script src="assets/tournament.js"></script>
+  <script src="assets/config.js?v=0.3.0"></script>
+  <script src="assets/tournament.js?v=0.3.0"></script>
 </body>
 </html>

@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<!-- Boomtown Platform — Captain Self-Scoring · Version: v0.3.0 · Date: 2026-07-21
+     Click budget: score a game in ≤2 taps (tap winner → tap point margin, auto-submits). -->
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Score your game — Boomtown Athletics</title>
+  <link rel="stylesheet" href="assets/tokens.css?v=0.3.0" />
+  <link rel="stylesheet" href="assets/app.css?v=0.3.0" />
+  <style>
+    .score-wrap { max-width: 520px; margin: 0 auto; }
+    .match { border: 1px solid rgba(128,128,128,.3); border-radius: 12px; padding: 14px; margin-bottom: 12px; }
+    .match h3 { margin: 0 0 4px; font-size: 1.05rem; }
+    .meta { opacity: .7; font-size: .85rem; margin-bottom: 10px; }
+    .taps { display: flex; gap: 10px; }
+    .taps .btn, .diffs .btn { flex: 1; min-height: 52px; font-size: 1.05rem; } /* big thumb targets */
+    .diffs { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-top: 10px; }
+    .done { border-color: #3a7; }
+    .done .result { font-weight: 600; }
+    #status { margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <header class="header chrome-glass">
+    <div class="wordmark">Boomtown <span>Athletics</span></div>
+    <div class="spacer"></div>
+    <button id="themeToggle" class="btn ghost theme-toggle" aria-label="Toggle dark or light theme">◐</button>
+  </header>
+
+  <main class="main" aria-live="polite">
+    <div class="score-wrap" id="scoreApp"><div class="card"><p>Loading your games…</p></div></div>
+  </main>
+
+  <script src="assets/config.js?v=0.3.0"></script>
+  <script src="assets/score.js?v=0.3.0"></script>
+</body>
+</html>

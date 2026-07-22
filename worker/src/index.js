@@ -1,6 +1,6 @@
 /**
  * Boomtown Platform — API Worker
- * Version: v0.1 · Date: 2026-07-21 · Module 1 (Foundation)
+ * Version: v0.3.0 · Date: 2026-07-21 · Modules 1–4
  *
  * Endpoints:
  *   POST /api/auth/request-link   { email }            → sends magic link (sandbox: returns dev_link)
@@ -25,19 +25,25 @@
  *   - TOTP for admin (spec §3.8): NOT yet enforced — lands v0.3 before real data entry.
  *
  * v0.2 (2026-07-21): tournament engine routes mounted (see tournaments.js).
+ * v0.3.0 (2026-07-21): Module 4 — registration + Square + captain scoring (see registrations.js).
+ *   New optional secrets: SQUARE_ACCESS_TOKEN, SQUARE_WEBHOOK_SIGNATURE_KEY, SQUARE_WEBHOOK_URL,
+ *   SQUARE_LOCATION_ID, SQUARE_ENV ('production' | anything else = sandbox).
  */
 import { tournamentRoutes, wire } from "./tournaments.js";
+import { registrationRoutes, wireRegistrations, squareWebhook } from "./registrations.js";
 
 const MAGIC_LINK_TTL_MIN = 15;
 const SESSION_TTL_DAYS = 30;
 
-wire({
+const wiredHelpers = {
   json,
   audit: (env, ctx, action, entity, entityId, detail) =>
     audit(env, ctx.orgId, ctx.userId, action, entity, entityId, detail),
   isStaff,
   requireStaff,
-});
+};
+wire(wiredHelpers);
+wireRegistrations(wiredHelpers);
 
 /** ctx carries the caller's session + selected org for role checks. */
 async function buildCtx(request, env) {
@@ -81,10 +87,14 @@ export default {
       } else if (url.pathname === "/api/orgs" && request.method === "GET") {
         res = await listOrgs(env);
       } else if (url.pathname === "/api/health") {
-        res = json({ ok: true, version: "v0.2" });
+        res = json({ ok: true, version: "v0.3.0" });
+      } else if (url.pathname === "/api/webhooks/square" && request.method === "POST") {
+        res = await squareWebhook(request, env); // server-to-server; signature-verified inside
       } else if (url.pathname.startsWith("/api/")) {
         const ctx = await buildCtx(request, env);
-        res = (await tournamentRoutes(request, env, url, ctx)) || json({ error: "Not found" }, 404);
+        res = (await tournamentRoutes(request, env, url, ctx))
+           || (await registrationRoutes(request, env, url, ctx))
+           || json({ error: "Not found" }, 404);
       } else {
         res = json({ error: "Not found" }, 404);
       }

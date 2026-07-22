@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<!-- Boomtown Platform — Public Registration · Version: v0.3.0 · Date: 2026-07-21
+     Field set replicated from the live Google Forms (spec §3.2) + admin custom fields. -->
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Register — Boomtown Athletics</title>
+  <link rel="stylesheet" href="assets/tokens.css?v=0.3.0" />
+  <link rel="stylesheet" href="assets/app.css?v=0.3.0" />
+  <style>
+    /* page-local styles only; design tokens come from tokens.css */
+    .reg-card { max-width: 640px; margin: 0 auto; }
+    .field { margin-bottom: 14px; display: flex; flex-direction: column; gap: 6px; }
+    .field label { font-size: 0.9rem; opacity: 0.85; }
+    .field input, .field select, .field textarea {
+      padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(128,128,128,.35);
+      background: transparent; color: inherit; font: inherit;
+    }
+    .field input:focus-visible, .field select:focus-visible, .field textarea:focus-visible { outline: 2px solid var(--accent, #D4AF37); }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    @media (max-width: 520px) { .two-col { grid-template-columns: 1fr; } }
+    .teammate-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 8px; }
+    .waiver-box { max-height: 180px; overflow-y: auto; border: 1px solid rgba(128,128,128,.35); border-radius: 8px; padding: 12px; font-size: 0.85rem; opacity: 0.9; }
+    .check { flex-direction: row; align-items: center; gap: 10px; }
+    .check input { width: 20px; height: 20px; }
+    .msg { padding: 12px; border-radius: 8px; margin-top: 12px; }
+    .msg.ok { border: 1px solid #3a7; }
+    .msg.err { border: 1px solid #c55; }
+    .price { font-size: 1.1rem; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <header class="header chrome-glass">
+    <div class="wordmark">Boomtown <span>Athletics</span></div>
+    <div class="spacer"></div>
+    <button id="themeToggle" class="btn ghost theme-toggle" aria-label="Toggle dark or light theme">◐</button>
+  </header>
+
+  <main class="main" id="app" aria-live="polite">
+    <div class="card reg-card" id="regCard">
+      <p>Loading event…</p>
+    </div>
+  </main>
+
+  <script src="assets/config.js?v=0.3.0"></script>
+  <script src="assets/register.js?v=0.3.0"></script>
+</body>
+</html>
