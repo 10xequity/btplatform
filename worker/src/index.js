@@ -1,6 +1,13 @@
 /**
  * Boomtown Platform — API Worker
- * Version: v0.4.0 · Date: 2026-07-22 · Modules 1–5 + Admin Panel
+ * Version: v0.5.0 · Date: 2026-07-22 · Modules 1–6 + Admin Panel
+ *
+ * v0.5.0 (2026-07-22): Member profiles + family accounts (profiles.js) — self-service profile,
+ *   avatar upload (R2), guardian-signed waivers with signature ledger, results résumé from
+ *   standings, upcoming events + ICS, email-reminder opt-in, season seeding materialization.
+ *   Passkeys (webauthn.js): Face ID / fingerprint sign-in (replaces the planned TOTP).
+ *   Migration 0004 + webauthn_challenges applied live. New binding: AVATARS (R2 bucket
+ *   "boomtown-avatars"). Health reports v0.5.0.
  *
  * v0.4.0 (2026-07-22): schedule views + public feed (schedule.js), admin users/roles/members
  *   (admin.js), event templates/recurring/bulk/CSV export (events_admin.js). Migration 0003 applied live.
@@ -14,6 +21,7 @@
  *
  * Env bindings (wrangler.toml):
  *   DB               — D1 database "boomtown-prod"
+ *   AVATARS          — R2 bucket "boomtown-avatars" (profile photos; keys only in D1)
  *   ALLOWED_ORIGINS  — comma-separated list of allowed frontend origins
  *   APP_URL          — frontend URL used inside magic-link emails
  *   BREVO_API_KEY    — (secret, optional) when absent, auth runs in SANDBOX mode:
@@ -25,7 +33,7 @@
  *     (Safari blocks third-party cookies between github.io and workers.dev).
  *   - Bootstrap: the FIRST user ever to verify becomes admin of all orgs. Every later
  *     user starts with no role (public-level) until an admin assigns one.
- *   - TOTP for admin (spec §3.8): NOT yet enforced — lands v0.3 before real data entry.
+ *   - Passkeys (v0.5.0): device-bound WebAuthn credentials — supersedes the TOTP plan.
  *
  * v0.2 (2026-07-21): tournament engine routes mounted (see tournaments.js).
  * v0.3.0 (2026-07-21): Module 4 — registration + Square + captain scoring (see registrations.js).
@@ -37,6 +45,8 @@ import { registrationRoutes, wireRegistrations, squareWebhook } from "./registra
 import { adminRoutes, wireAdmin } from "./admin.js";
 import { scheduleRoutes, wireSchedule } from "./schedule.js";
 import { eventsAdminRoutes, wireEventsAdmin } from "./events_admin.js";
+import { profileRoutes, wireProfiles } from "./profiles.js";
+import { webauthnRoutes, wireWebauthn } from "./webauthn.js";
 
 const MAGIC_LINK_TTL_MIN = 15;
 const SESSION_TTL_DAYS = 30;
@@ -47,12 +57,16 @@ const wiredHelpers = {
     audit(env, ctx.orgId, ctx.userId, action, entity, entityId, detail),
   isStaff,
   requireStaff,
+  sendLoginLink,
+  issueSession,
 };
 wire(wiredHelpers);
 wireRegistrations(wiredHelpers);
 wireAdmin(wiredHelpers);
 wireSchedule(wiredHelpers);
 wireEventsAdmin(wiredHelpers);
+wireProfiles(wiredHelpers);
+wireWebauthn(wiredHelpers);
 
 /** ctx carries the caller's session + selected org for role checks. */
 async function buildCtx(request, env) {
@@ -96,12 +110,14 @@ export default {
       } else if (url.pathname === "/api/orgs" && request.method === "GET") {
         res = await listOrgs(env);
       } else if (url.pathname === "/api/health") {
-        res = json({ ok: true, version: "v0.4.0" });
+        res = json({ ok: true, version: "v0.5.0" });
       } else if (url.pathname === "/api/webhooks/square" && request.method === "POST") {
         res = await squareWebhook(request, env); // server-to-server; signature-verified inside
       } else if (url.pathname.startsWith("/api/")) {
         const ctx = await buildCtx(request, env);
-        res = (await scheduleRoutes(request, env, url, ctx))
+        res = (await webauthnRoutes(request, env, url, ctx))
+           || (await profileRoutes(request, env, url, ctx))
+           || (await scheduleRoutes(request, env, url, ctx))
            || (await eventsAdminRoutes(request, env, url, ctx))
            || (await adminRoutes(request, env, url, ctx))
            || (await tournamentRoutes(request, env, url, ctx))
@@ -128,6 +144,11 @@ async function requestLink(request, env) {
   if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
     return json({ error: "Enter a valid email address." }, 400);
   }
+  return sendLoginLink(env, email);
+}
+
+/** Shared: create + (sandbox: return / email mode: send) a magic sign-in link. */
+async function sendLoginLink(env, email) {
   const token = randomToken();
   const tokenHash = await sha256(token);
   const expires = new Date(Date.now() + MAGIC_LINK_TTL_MIN * 60_000).toISOString();
@@ -182,16 +203,25 @@ async function verifyLink(request, env) {
     await audit(env, null, user.id, "user.create", "users", user.id, { bootstrapped });
   }
 
-  // Create session
+  const res = await issueSession(env, user.id, "magic-link");
+  // issueSession returns a Response; add the bootstrap flag by rebuilding the body.
+  const data = await res.json();
+  const out = json({ ...data, bootstrapped });
+  out.headers.append("Set-Cookie", res.headers.get("Set-Cookie"));
+  return out;
+}
+
+/** Shared: create a session for a verified user (magic link OR passkey). */
+async function issueSession(env, userId, method) {
   const sessionToken = randomToken();
   const sessionHash = await sha256(sessionToken);
   const sessionExpiry = new Date(Date.now() + SESSION_TTL_DAYS * 86_400_000).toISOString();
   await env.DB.prepare(
     "INSERT INTO sessions (user_id, token_hash, expires_at) VALUES (?1, ?2, ?3)"
-  ).bind(user.id, sessionHash, sessionExpiry).run();
-  await audit(env, null, user.id, "auth.login", "sessions", null, {});
+  ).bind(userId, sessionHash, sessionExpiry).run();
+  await audit(env, null, userId, "auth.login", "sessions", null, { method: method || "magic-link" });
 
-  const res = json({ ok: true, token: sessionToken, bootstrapped });
+  const res = json({ ok: true, token: sessionToken });
   res.headers.append(
     "Set-Cookie",
     `bt_session=${sessionToken}; Max-Age=${SESSION_TTL_DAYS * 86400}; Path=/; HttpOnly; Secure; SameSite=None`
@@ -220,7 +250,10 @@ async function me(request, env) {
   const roles = (await env.DB.prepare(
     "SELECT org_id, role FROM user_org_roles WHERE user_id = ?1 AND deleted_at IS NULL"
   ).bind(session.user_id).all()).results;
-  return json({ user, roles });
+  const passkeys = await env.DB.prepare(
+    "SELECT COUNT(*) AS n FROM webauthn_credentials WHERE user_id = ?1 AND deleted_at IS NULL"
+  ).bind(session.user_id).first();
+  return json({ user, roles, passkeys: passkeys.n });
 }
 
 async function listOrgs(env) {

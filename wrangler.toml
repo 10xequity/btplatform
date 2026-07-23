@@ -1,5 +1,5 @@
 # Boomtown Platform — Worker config
-# Version: v0.1 · Date: 2026-07-21
+# Version: v0.5.0 · Date: 2026-07-22
 name = "boomtown-api"
 main = "worker/src/index.js"
 compatibility_date = "2026-07-01"
@@ -8,6 +8,13 @@ compatibility_date = "2026-07-01"
 binding = "DB"
 database_name = "boomtown-prod"
 database_id = "6cde5d11-4199-4e57-b10f-2b7e968264ea"
+
+# v0.5.0: profile photos. Create the bucket ONCE in the Cloudflare dashboard
+# (R2 → Create bucket → name it exactly "boomtown-avatars") BEFORE uploading this file,
+# or the deploy will fail.
+[[r2_buckets]]
+binding = "AVATARS"
+bucket_name = "boomtown-avatars"
 
 [vars]
 # Update APP_URL after GitHub Pages is live (e.g. https://10xequity.github.io/btplatform/web)
