@@ -1,9 +1,11 @@
 /* Boomtown Platform — App Shell
-   Version: v0.2.4 · Date: 2026-07-21
+   Version: v0.6.0 · Date: 2026-07-23
    Handles: magic-link login, verify (?token=), session (Bearer, in-memory + sessionStorage),
    org switcher (≤2 clicks), theme toggle (instant — high-frequency action).
    v0.2.4: network failures show a clear message and re-enable the send button;
-           startup guard if config.js is stale/placeholder. */
+           startup guard if config.js is stale/placeholder.
+   v0.6.0: member/manager sign-in switch · dashboard cards all clickable (Foundation → Settings,
+           Leagues area, Member Management, Settings) · site-nav sidebar on the dashboard. */
 
 (function () {
   const API = (window.BT_CONFIG && window.BT_CONFIG.apiBase) || "";
@@ -77,11 +79,16 @@
   function renderLogin(errorMsg) {
     logoutBtn.hidden = true;
     orgSwitcher.hidden = true;
+    const savedRole = localStorage.getItem("bt_login_role") || "member";
     render(`
       <div class="login-wrap">
         <div class="card login-card reveal">
           <h1>Sign in</h1>
-          <p>Enter your email and we'll send a one-time sign-in link. No password needed.</p>
+          <div class="login-tabs" role="tablist" aria-label="Sign in as">
+            <button id="tabMember" class="login-tab" role="tab" aria-selected="false">Member</button>
+            <button id="tabManager" class="login-tab" role="tab" aria-selected="false">Manager</button>
+          </div>
+          <p id="loginHint"></p>
           <div class="field">
             <label for="email">Email</label>
             <input id="email" type="email" autocomplete="email" inputmode="email" placeholder="you@example.com" />
@@ -91,6 +98,22 @@
         </div>
       </div>`);
     if (errorMsg) notice(errorMsg, true);
+
+    const tabs = { member: document.getElementById("tabMember"), manager: document.getElementById("tabManager") };
+    function pickRole(r) {
+      localStorage.setItem("bt_login_role", r);
+      tabs.member.classList.toggle("active", r === "member");
+      tabs.manager.classList.toggle("active", r === "manager");
+      tabs.member.setAttribute("aria-selected", r === "member");
+      tabs.manager.setAttribute("aria-selected", r === "manager");
+      document.getElementById("loginHint").textContent = r === "manager"
+        ? "Staff & admins: use Face ID / fingerprint below if you\u2019ve added a passkey, or the email link."
+        : "We\u2019ll email you a one-time sign-in link. No password needed.";
+    }
+    tabs.member.addEventListener("click", () => pickRole("member"));
+    tabs.manager.addEventListener("click", () => pickRole("manager"));
+    pickRole(savedRole);
+
     const emailInput = document.getElementById("email");
     document.getElementById("sendLink").addEventListener("click", submit);
     emailInput.addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); });
@@ -100,7 +123,7 @@
       if (!email) return notice("Enter your email address.", true);
       const btn = document.getElementById("sendLink");
       btn.disabled = true;
-      btn.textContent = "Sending…";
+      btn.textContent = "Sending\u2026";
       let r;
       try {
         r = await api("/api/auth/request-link", { method: "POST", body: JSON.stringify({ email }) });
@@ -112,7 +135,7 @@
       if (r.data.mode === "sandbox") {
         notice(`Sandbox mode (no email provider yet). <a href="${r.data.dev_link}">Open your sign-in link</a>.`);
       } else {
-        notice("Link sent. Check your email — it expires in 15 minutes.");
+        notice("Link sent. Check your email \u2014 it expires in 15 minutes.");
       }
     }
     function notice(msg, isError) {
@@ -140,31 +163,26 @@
       const orgId = Number(orgSwitcher.value);
       const org = orgs.find((o) => o.id === orgId);
       const role = roleByOrg[orgId] || "member";
+      const staff = role === "admin" || role === "staff";
+      const card = (href, title, desc, status) => `
+        <a class="card module reveal" href="${href}" style="text-decoration:none;color:inherit">
+          <h3>${title} \u2192</h3><p>${desc}</p>
+          <span class="status ${status === "Live" ? "live" : "next"}">${status}</span>
+        </a>`;
       render(`
         <h2 style="margin:0 0 2px">${org ? org.name : ""}</h2>
-        <p style="margin:0;color:var(--text-muted)">Signed in as ${meData.user.email} · <span class="role-pill">${role}</span></p>
+        <p style="margin:0;color:var(--text-muted)">Signed in as ${meData.user.email} \u00b7 <span class="role-pill">${role}</span></p>
         <div class="grid">
-          <div class="card module reveal">
-            <h3>Foundation</h3>
-            <p>Database, sign-in, roles, and org switching.</p>
-            <span class="status live">Live</span>
-          </div>
-          ${role === "admin" || role === "staff"
-            ? `<a class="card module reveal" href="tournament.html" style="text-decoration:none;color:inherit">
-                <h3>Tournaments →</h3>
-                <p>Formats, auto-scheduler, live scoring, standings, brackets.</p>
-                <span class="status live">Live</span>
-              </a>`
-            : `<div class="card module reveal">
-                <h3>Tournaments</h3>
-                <p>Formats, auto-scheduler, live scoring, standings, brackets.</p>
-                <span class="status next">Coming soon</span>
-              </div>`}
-          <div class="card module reveal">
-            <h3>Registration</h3>
-            <p>Sign-up forms, Square checkout, unpaid reminders.</p>
-            <span class="status next">Module 4</span>
-          </div>
+          ${card("schedule.html", "Schedule", "Every upcoming tournament, league night, and event.", "Live")}
+          ${staff
+            ? card("tournament.html", "Tournaments", "Formats, auto-scheduler, live scoring, standings, brackets.", "Live")
+            : card("schedule.html?type=tournament", "Tournaments", "Standings, schedules, and results.", "Live")}
+          ${card("leagues.html", "Leagues", "League nights, weekly schedules, and season standings.", "Live")}
+          ${card("profile.html", "My Profile", "Photo, results r\u00e9sum\u00e9, family accounts, reminders.", "Live")}
+          ${staff ? card("admin-users.html", "Member Management", "Members, roles, and admin access.", "Live") : ""}
+          ${staff ? card("admin-registrations.html", "Registrations", "Sign-ups, Square payments, unpaid reminders.", "Live") : ""}
+          ${card("settings.html", "Settings", "Sign-in \u0026 security, passkeys, appearance, reminders.", "Live")}
+          ${staff ? card("settings.html#system", "Foundation", "Database, sign-in, roles, and org switching.", "Live") : ""}
         </div>`);
     }
   }

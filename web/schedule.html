@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Boomtown Platform — Public Schedule · Version: v0.4.0 · Date: 2026-07-22
+<!-- Boomtown Platform — Public Schedule · Version: v0.6.0 · Date: 2026-07-23 (← Home button + site-wide sidebar; sidebar auto-skips in ?embed=1)
      Public page (no sign-in). ?view=slug picks the view profile; ?embed=1 strips chrome for the widget. -->
 <html lang="en" data-theme="dark">
 <head>
@@ -39,9 +39,10 @@
   <header class="header chrome-glass">
     <a class="wordmark" href="index.html" style="text-decoration:none;color:inherit">Boomtown <span>Athletics</span></a>
     <div class="spacer"></div>
+    <a class="btn ghost" href="index.html" style="text-decoration:none" aria-label="Back to home">← Home</a>
   </header>
 
-  <div class="sched-wrap">
+  <main class="sched-wrap">
     <div class="page-head">
       <h1 id="schedTitle" style="font-size:20px;margin:0">Schedule</h1>
       <div class="spacer"></div>
@@ -52,8 +53,9 @@
       </div>
     </div>
     <div id="schedBody"><div class="empty">Loading schedule…</div></div>
-  </div>
+  </main>
 
+  <script src="assets/site-nav.js?v=0.6.0" defer></script>
   <script src="assets/config.js?v=0.4.0"></script>
   <script src="assets/schedule.js?v=0.4.0"></script>
 </body>

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Boomtown Platform — Member Profile · Version: v1.0 · Date: 2026-07-22 · Ships in: v0.5.0
+<!-- Boomtown Platform — Member Profile · Version: v1.1 · Date: 2026-07-23 · Ships in: v0.6.0 (adds ← Home + site-wide sidebar)
      Self-service profile, family accounts + guardian signing, upcoming events, results résumé. -->
 <html lang="en" data-theme="dark">
 <head>
@@ -52,6 +52,7 @@
   <header class="header chrome-glass">
     <a class="wordmark" href="index.html" style="text-decoration:none">Boomtown <span>Athletics</span></a>
     <div class="spacer"></div>
+    <a class="btn ghost" href="index.html" style="text-decoration:none" aria-label="Back to home">← Home</a>
     <button id="themeToggle" class="btn ghost theme-toggle" aria-label="Toggle dark or light theme">◐</button>
     <button id="logoutBtn" class="btn ghost" hidden>Sign out</button>
   </header>
@@ -65,6 +66,7 @@
   <input type="file" id="avatarFile" accept="image/jpeg,image/png,image/webp" hidden />
   <div id="modalRoot"></div>
 
+  <script src="assets/site-nav.js?v=0.6.0" defer></script>
   <script src="assets/config.js?v=0.5.0"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js" defer></script>
   <script src="assets/passkey.js?v=0.5.0" defer></script>

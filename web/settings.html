@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<!-- Boomtown Platform — Settings · Version: v1.0 · Date: 2026-07-23 · Ships in: v0.6.0
+     Account, sign-in & security (passkeys), appearance, reminders, and (staff) System.
+     Requires sign-in; redirects to index.html when no session. -->
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Settings — Boomtown Athletics</title>
+  <link rel="stylesheet" href="assets/tokens.css" />
+  <link rel="stylesheet" href="assets/app.css?v=0.6.0" />
+  <script>
+    (function () {
+      document.documentElement.dataset.theme = localStorage.getItem("bt_theme") ||
+        (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+    })();
+  </script>
+</head>
+<body>
+  <header class="header chrome-glass">
+    <a class="wordmark" href="index.html" style="text-decoration:none">Boomtown <span>Athletics</span></a>
+    <div class="spacer"></div>
+    <a class="btn ghost" href="index.html" style="text-decoration:none" aria-label="Back to home">&#8592; Home</a>
+    <button id="themeToggle" class="btn ghost theme-toggle" aria-label="Toggle dark or light theme">&#9680;</button>
+    <button id="logoutBtn" class="btn ghost">Sign out</button>
+  </header>
+
+  <main class="main settings-wrap" id="app" aria-live="polite">
+    <div class="card"><p>Loading your settings&#8230;</p></div>
+  </main>
+
+  <script src="assets/site-nav.js?v=0.6.0" defer></script>
+  <script src="assets/config.js?v=0.6.0"></script>
+  <script src="assets/passkey.js?v=0.6.0" defer></script>
+  <script src="assets/settings.js?v=1.0" defer></script>
+</body>
+</html>

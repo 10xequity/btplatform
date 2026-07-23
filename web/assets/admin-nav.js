@@ -1,5 +1,5 @@
 /* Boomtown Platform — Admin sidebar (shared)
-   Version: v0.4.0 · Date: 2026-07-22
+   Version: v0.6.0 · Date: 2026-07-23 (adds Home, Leagues, Settings)
    Include AFTER the <div class="admin-layout"> exists. Injects the sidebar,
    marks the current page active, and provides window.BT_ADMIN helpers
    (api(), guard(), esc(), money(), modal helpers) used by all admin pages. */
@@ -16,9 +16,12 @@
     { label: "People", items: [
       { href: "admin-users.html",         ico: "◉", text: "Members" },
       { href: "admin-users.html#roles",   ico: "⚿", text: "Admins & Roles" },
+      { href: "settings.html",            ico: "⚙", text: "Settings" },
     ]},
     { label: "Public", items: [
+      { href: "index.html",               ico: "⌂", text: "Home" },
       { href: "schedule.html",            ico: "▣", text: "Schedule Page" },
+      { href: "leagues.html",             ico: "◇", text: "Leagues Page" },
       { href: "admin-events.html#views",  ico: "◨", text: "Views & Embed" },
     ]},
   ];

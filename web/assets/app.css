@@ -1,5 +1,5 @@
 /* Boomtown Platform — App Shell Styles
-   Version: v0.1 · Date: 2026-07-21
+   Version: v0.6.0 · Date: 2026-07-23 (v0.1 base 2026-07-21)
    Motion rules (emil-design-eng): theme toggle & org switch = high-frequency → NO animation.
    Buttons get 120ms press feedback. Cards fade in once on load. Nothing exceeds 300ms. */
 
@@ -142,3 +142,29 @@ html, body {
 @media (hover: hover) and (pointer: fine) {
   .btn:hover { filter: brightness(1.06); }
 }
+
+/* ===== v0.6.0 additions · 2026-07-23 ===================================== */
+/* Font-consistency fix: browsers give form controls their own UI font unless told
+   otherwise — this was the source of mismatched fonts in filters/selects/date
+   inputs on schedule + admin pages. Tokens' --font now applies everywhere. */
+input, select, textarea, button { font: inherit; color: inherit; }
+
+/* Sign-in role switch (Member / Manager) */
+.login-tabs { display: flex; gap: 6px; margin: 4px 0 10px; }
+.login-tab { flex: 1; min-height: 44px; font-weight: 600; background: transparent;
+  color: var(--text-muted); border: 1px solid var(--border);
+  border-radius: var(--radius-control); cursor: pointer; }
+.login-tab.active { color: var(--primary); border-color: var(--primary);
+  box-shadow: inset 0 -2px 0 0 var(--accent); background: var(--surface); }
+.login-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Settings page */
+.settings-wrap { max-width: 720px; }
+.settings-section { margin-bottom: 16px; }
+.settings-section h3 { margin: 0 0 4px; font-size: 16px; }
+.settings-row { display: flex; align-items: center; gap: 12px; padding: 12px 0;
+  border-bottom: 1px solid var(--border); }
+.settings-row:last-child { border-bottom: 0; }
+.settings-row .grow { flex: 1; min-width: 0; }
+.settings-row .k { font-weight: 600; font-size: 15px; }
+.settings-row .v { color: var(--text-muted); font-size: 14px; overflow-wrap: anywhere; }

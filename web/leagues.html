@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<!-- Boomtown Platform — Leagues · Version: v1.0 · Date: 2026-07-23 · Ships in: v0.6.0
+     Dedicated league area (volleyballlife pattern: leagues are first-class, not a tournament
+     footnote): current & upcoming league nights, register links, season standings entry point.
+     Public page (no sign-in). Data: /api/schedule filtered to type=league. -->
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Leagues — Boomtown Athletics</title>
+  <link rel="stylesheet" href="assets/tokens.css" />
+  <link rel="stylesheet" href="assets/app.css?v=0.6.0" />
+  <style>
+    .lg-wrap { max-width: 960px; margin: 0 auto; padding: 16px; }
+    .lg-ev { display: flex; gap: 14px; padding: 14px; border: 1px solid var(--border);
+      border-radius: var(--radius-card); margin-bottom: 10px; background: var(--surface); }
+    .lg-date { min-width: 64px; text-align: center; }
+    .lg-date .d { font-size: 22px; font-weight: 700; color: var(--primary); line-height: 1.1; }
+    .lg-date .m { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); }
+    .lg-body { flex: 1; min-width: 0; }
+    .lg-name { font-weight: 600; font-size: 16px; }
+    .lg-meta { font-size: 13.5px; color: var(--text-muted); margin-top: 2px; }
+    .lg-cta { align-self: center; }
+    .empty { color: var(--text-muted); padding: 24px; text-align: center; }
+  </style>
+  <script>
+    (function () {
+      document.documentElement.dataset.theme = localStorage.getItem("bt_theme") ||
+        (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+    })();
+  </script>
+</head>
+<body>
+  <header class="header chrome-glass">
+    <a class="wordmark" href="index.html" style="text-decoration:none">Boomtown <span>Athletics</span></a>
+    <div class="spacer"></div>
+    <a class="btn ghost" href="index.html" style="text-decoration:none" aria-label="Back to home">&#8592; Home</a>
+  </header>
+
+  <main class="lg-wrap" id="app" aria-live="polite">
+    <div class="page-head" style="display:flex;align-items:center;gap:12px">
+      <h1 style="font-size:20px;margin:0">Leagues</h1>
+      <div class="spacer" style="flex:1"></div>
+      <select id="orgFilter" class="org-switcher" aria-label="Filter by organization"><option value="">All orgs</option></select>
+    </div>
+    <div id="lgBody"><div class="empty">Loading leagues&#8230;</div></div>
+  </main>
+
+  <script src="assets/site-nav.js?v=0.6.0" defer></script>
+  <script src="assets/config.js?v=0.6.0"></script>
+  <script src="assets/leagues.js?v=1.0" defer></script>
+</body>
+</html>
