@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<!-- Boomtown Platform — My Dashboard · Version: v1.1 · Date: 2026-07-24 · Ships in: v0.9.1
+     RECOVERY of the v0.7.0 member dashboard (ZIP never uploaded). Signed-in home:
+     notifications inbox, upcoming events, your teams (with captain invites + auto
+     roster connect). Public visitors are sent to index.html to sign in. -->
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>My Dashboard — Boomtown Athletics</title>
+  <link rel="stylesheet" href="assets/tokens.css?v=0.9.1" />
+  <link rel="stylesheet" href="assets/app.css?v=0.9.1" />
+  <style>
+    .hm-wrap { max-width: 760px; margin: 0 auto; padding: 16px; }
+    .hm-grid { display: grid; gap: 14px; }
+    .hm-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card); padding: 16px; }
+    .hm-card h2 { font-size: 16px; margin: 0 0 10px; }
+    .ntf { display: flex; gap: 10px; align-items: flex-start; padding: 10px 0; border-bottom: 1px solid var(--border); }
+    .ntf:last-child { border-bottom: 0; }
+    .ntf .dot { flex: none; width: 8px; height: 8px; border-radius: 50%; margin-top: 7px; background: var(--accent); }
+    .ntf.read .dot { background: var(--border); }
+    .ntf .t { font-weight: 600; font-size: 15px; }
+    .ntf .b { font-size: 13.5px; color: var(--text-muted); }
+    .ntf .when { margin-left: auto; flex: none; font-size: 12px; color: var(--text-muted); }
+    .up-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+    .up-row:last-child { border-bottom: 0; }
+    .up-row .nm { flex: 1; min-width: 0; }
+    .up-row .nm b { display: block; font-size: 15px; }
+    .up-row .nm span { font-size: 13px; color: var(--text-muted); }
+    .tm-member { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: 14px; }
+    .tm-member .st { font-size: 12px; color: var(--text-muted); margin-left: auto; flex: none; }
+    .tm-member .st.ok { color: var(--positive); }
+  </style>
+  <script>
+    (function () {
+      document.documentElement.dataset.theme = localStorage.getItem("bt_theme") ||
+        (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+    })();
+  </script>
+</head>
+<body>
+  <header class="header chrome-glass">
+    <a class="wordmark" href="index.html" style="text-decoration:none">Boomtown <span>Athletics</span></a>
+    <div class="spacer"></div>
+    <a class="btn ghost" href="index.html" style="text-decoration:none">&#8592; Home</a>
+  </header>
+
+  <main class="hm-wrap" id="app" aria-live="polite">
+    <h1 id="hello" style="font-size:24px;margin:8px 0 16px">Welcome back</h1>
+    <div class="hm-grid">
+      <section class="hm-card" id="notifications" aria-label="Notifications">
+        <div style="display:flex;align-items:center;gap:10px">
+          <h2 style="margin:0">Notifications</h2><div class="spacer" style="flex:1"></div>
+          <button class="btn ghost" id="readAll" hidden>Mark all read</button>
+        </div>
+        <div id="ntfList" style="margin-top:6px"><p class="help-text">Loading…</p></div>
+      </section>
+
+      <section class="hm-card" aria-label="Upcoming events">
+        <h2>Upcoming events</h2>
+        <div id="upList"><p class="help-text">Loading…</p></div>
+      </section>
+
+      <section class="hm-card" aria-label="Your teams">
+        <h2>Your teams</h2>
+        <p class="help-text" style="margin-top:-4px">Teammates your captain added show as “not connected” until they sign in with the same email.</p>
+        <div id="teamList"><p class="help-text">Loading…</p></div>
+      </section>
+    </div>
+    <div id="status" role="status" aria-live="polite" style="margin-top:10px"></div>
+  </main>
+
+  <script src="assets/config.js?v=0.9.1"></script>
+  <script src="assets/site-nav.js?v=2.0" defer></script>
+  <script src="home.js?v=1.1" defer></script>
+</body>
+</html>

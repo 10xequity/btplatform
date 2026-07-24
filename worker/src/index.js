@@ -2,6 +2,8 @@
  * Boomtown Platform — API Worker
  * Version: v0.9.0 · Date: 2026-07-23 · Modules 1–10
  *
+ * v0.9.1 (2026-07-24): RECOVERY — restores the never-uploaded v0.7.0 worker files
+ * (leagues_admin.js, registrations.js v1.2 exports + retry-payment). No new routes here.
  * v0.9.0 (2026-07-23): Check-in & attendance (checkin.js — door roster with waiver
  *   flags, tap check-in/undo, walk-ins, rotating self-check-in token + public QR page,
  *   member attendance history). Migration 0006. Health reports v0.9.0.
@@ -132,7 +134,7 @@ export default {
       } else if (url.pathname === "/api/orgs" && request.method === "GET") {
         res = await listOrgs(env);
       } else if (url.pathname === "/api/health") {
-        res = json({ ok: true, version: "v0.9.0" });
+        res = json({ ok: true, version: "v0.9.1" });
       } else if (url.pathname === "/api/webhooks/square" && request.method === "POST") {
         res = await squareWebhook(request, env); // server-to-server; signature-verified inside
       } else if (url.pathname.startsWith("/api/")) {

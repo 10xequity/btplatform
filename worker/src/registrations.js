@@ -1,7 +1,13 @@
 /**
  * Boomtown Platform — Registration + Square + Captain-scoring routes
- * Version: v0.3.0 · Date: 2026-07-21 · Module 4
+ * Version: v1.2 · Date: 2026-07-24 · Modules 4 + 8 (recovery)
  * Mounted by worker/src/index.js (same wire() pattern as tournaments.js).
+ *
+ * v1.2 (2026-07-24, RECOVERY — the v0.7.0 ZIP was never uploaded, so the v1.0/v1.1
+ * edits were lost; this restores everything worker/src/index.js v0.9.x imports):
+ *   - export sendEmail / escapeHtml / waiverReminderSweep (used by the daily cron)
+ *   - POST /api/registrations/:id/retry-payment — mint a FRESH Square link
+ *     (Control Center "Rerun" button, admin-dash.js v1.0)
  *
  * Public routes:
  *   GET  /api/events/:id/form           event basics + custom form fields (published events only)
@@ -46,6 +52,10 @@ export async function registrationRoutes(request, env, url, ctx) {
   if ((match = p.match(/^\/api\/events\/(\d+)\/registrations$/)) && m === "GET") return listRegistrations(request, env, ctx, +match[1], url);
   if ((match = p.match(/^\/api\/registrations\/(\d+)\/remind$/)) && m === "POST") return remind(env, ctx, +match[1]);
   if ((match = p.match(/^\/api\/registrations\/(\d+)\/mark-paid$/)) && m === "POST") return markPaid(env, ctx, +match[1]);
+  if ((match = p.match(/^\/api\/registrations\/(\d+)\/retry-payment$/)) && m === "POST") return retryPayment(env, ctx, +match[1]);
+  if ((match = p.match(/^\/api\/team-members\/(\d+)\/invite$/)) && m === "POST") return inviteTeammate(env, ctx, +match[1]);
+  if (p === "/api/profile/connect-teams" && m === "POST") return connectTeams(env, ctx);
+  if (p === "/api/profile/teams" && m === "GET") return myTeams(env, ctx);
   if ((match = p.match(/^\/api\/events\/(\d+)\/import$/)) && m === "POST") return importRows(request, env, ctx, +match[1]);
   if ((match = p.match(/^\/api\/events\/(\d+)\/score-links$/)) && m === "POST") return scoreLinks(env, ctx, +match[1]);
   if ((match = p.match(/^\/api\/score\/([a-f0-9]{16,64})$/))) {
@@ -195,7 +205,7 @@ async function submitRegistration(request, env, eventId) {
     message: "Registered! Complete payment to lock in your spot." });
 }
 
-async function createSquareLink(env, ev, itemName, amountCents, regId) {
+async function createSquareLink(env, ev, itemName, amountCents, regId, idemKey) {
   if (!env.SQUARE_ACCESS_TOKEN) return { error: "SQUARE_ACCESS_TOKEN not set (sandbox mode)" };
   const locationId = ev.square_location_id || env.SQUARE_LOCATION_ID;
   if (!locationId) return { error: "No Square location ID configured for this org" };
@@ -209,7 +219,7 @@ async function createSquareLink(env, ev, itemName, amountCents, regId) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        idempotency_key: `bt-reg-${regId}`,
+        idempotency_key: idemKey || `bt-reg-${regId}`,
         quick_pay: {
           name: itemName.slice(0, 120),
           price_money: { amount: amountCents, currency: "USD" },
@@ -465,4 +475,212 @@ async function captainScore(request, env, token) {
   await audit(env, { orgId: mt.org_id, userId: null }, "match.score.captain", "matches", matchId, { team: team.id, winner, diff });
   await refreshStandings(env, mt.event_id, mt.org_id);
   return json({ ok: true, score_a: sa, score_b: sb });
+}
+
+/* ================================================================
+ * v1.2 recovery additions (Module 8 — lost v0.7.0 ZIP, rebuilt 2026-07-24)
+ * ================================================================ */
+
+/** Shared HTML escaper — also imported by index.js (cron email bodies). */
+export function escapeHtml(s) {
+  return String(s == null ? "" : s).replace(/[&<>"']/g, c =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+/** Shared Brevo sender. Returns true on success, false in sandbox mode or on failure. */
+export async function sendEmail(env, to, subject, htmlContent) {
+  if (!env.BREVO_API_KEY) return false; // sandbox: caller decides what to surface
+  try {
+    const resp = await fetch("https://api.brevo.com/v3/smtp/email", {
+      method: "POST",
+      headers: { "api-key": env.BREVO_API_KEY, "content-type": "application/json" },
+      body: JSON.stringify({
+        sender: { name: "Boomtown Athletics", email: env.SENDER_EMAIL || "no-reply@boomtownvb.com" },
+        to: [{ email: to }],
+        subject,
+        htmlContent,
+      }),
+    });
+    return resp.ok;
+  } catch { return false; }
+}
+
+/** Daily cron (original v0.7.0 design): chase roster members on UPCOMING events
+ *  who have NO valid waiver on file — the same people the door page flags NO
+ *  WAIVER. Max 1 email per person per 48h (deduped via a 'waiver_reminder'
+ *  notifications row; contact-less roster emails dedupe on payload email). */
+export async function waiverReminderSweep(env) {
+  const rows = (await env.DB.prepare(
+    `SELECT DISTINCT tm.member_email AS email, tm.member_name AS name, tm.contact_id,
+            e.org_id, e.name AS event_name, e.starts_at
+     FROM team_members tm
+     JOIN teams t ON t.id = tm.team_id AND t.deleted_at IS NULL
+     JOIN events e ON e.id = t.event_id AND e.deleted_at IS NULL
+       AND e.status IN ('published','in_progress')
+       AND e.starts_at BETWEEN datetime('now') AND datetime('now', '+14 days')
+     WHERE tm.deleted_at IS NULL AND tm.member_email IS NOT NULL
+       AND NOT EXISTS (SELECT 1 FROM waivers w
+                       JOIN contacts c ON c.id = w.contact_id AND c.deleted_at IS NULL
+                       WHERE c.org_id = e.org_id AND c.email = tm.member_email
+                         AND w.deleted_at IS NULL AND w.expires_at > datetime('now'))
+       AND NOT EXISTS (SELECT 1 FROM notifications n
+                       WHERE n.kind = 'waiver_reminder'
+                         AND n.created_at > datetime('now', '-2 days')
+                         AND json_extract(n.payload_json, '$.email') = tm.member_email)
+     LIMIT 100`
+  ).all()).results;
+  let sent = 0;
+  for (const r of rows) {
+    const when = (r.starts_at || "").replace("T", " ").slice(0, 16);
+    const ok = await sendEmail(env, r.email, "One thing before you play — sign your waiver",
+      `<p>Hi ${escapeHtml(r.name || "there")} — you're on a roster for <strong>${escapeHtml(r.event_name)}</strong> (${when}), but we don't have a signed waiver for you yet.</p>` +
+      `<p><a href="${env.APP_URL}/">Sign in with this email</a> to take care of it, or sign at check-in — it takes a minute either way.</p>`);
+    await env.DB.prepare(
+      "INSERT INTO notifications (org_id, kind, target, contact_id, title, body, payload_json, sent_at) VALUES (?1,'waiver_reminder',?2,?3,?4,?5,?6,datetime('now'))"
+    ).bind(r.org_id, r.contact_id ? "member" : "log", r.contact_id || null,
+      "Waiver needed", `Sign your waiver before ${r.event_name}. You can do it at check-in too.`,
+      JSON.stringify({ email: r.email })).run();
+    if (ok) sent++;
+  }
+  return { due: rows.length, emailed: sent };
+}
+
+/** Control Center "Rerun": mint a FRESH Square payment link (new idempotency key)
+ *  for a still-unpaid registration, replacing the stored link. */
+async function retryPayment(env, ctx, regId) {
+  const reg = await env.DB.prepare(
+    `SELECT r.id, r.status, r.org_id, c.email, t.name AS team_name,
+            e.id AS event_id, e.name AS event_name, e.price_cents
+     FROM registrations r
+     LEFT JOIN contacts c ON c.id = r.contact_id
+     LEFT JOIN teams t ON t.id = r.team_id
+     JOIN events e ON e.id = r.event_id
+     WHERE r.id = ?1 AND r.deleted_at IS NULL`
+  ).bind(regId).first();
+  if (!reg) return json({ error: "Registration not found." }, 404);
+  const deny = await requireStaff(env, ctx, reg.org_id);
+  if (deny) return deny;
+  if (!["pending", "email-sent"].includes(reg.status)) {
+    return json({ error: `Can't rerun a registration with status '${reg.status}'.` }, 400);
+  }
+  if (!(reg.price_cents > 0)) return json({ error: "This event is free — nothing to charge." }, 400);
+
+  // square_location_id comes from the event's org row (same lookup remind/submit use)
+  const orgLoc = await env.DB.prepare(
+    "SELECT o.square_location_id FROM events e JOIN orgs o ON o.id=e.org_id WHERE e.id=?1"
+  ).bind(reg.event_id).first();
+  const evLike = { id: reg.event_id, square_location_id: orgLoc && orgLoc.square_location_id };
+
+  const link = await createSquareLink(env, evLike, `${reg.event_name} — ${reg.team_name || "registration"}`,
+    reg.price_cents, regId, `bt-reg-${regId}-r${Date.now()}`);
+  if (link.error) {
+    return json({ ok: true, mode: "sandbox",
+      message: "Square isn't connected yet (sandbox) — no new link was created.", detail: link.error });
+  }
+  await env.DB.prepare(
+    "UPDATE registrations SET square_order_id=?1, checkout_url=?2, updated_at=datetime('now') WHERE id=?3"
+  ).bind(link.order_id, link.url, regId).run();
+  await audit(env, ctx, "registration.retry-payment", "registrations", regId, {});
+
+  if (reg.email && await sendEmail(env, reg.email, `New payment link — ${reg.event_name}`,
+      `<p>Here's a fresh payment link for <strong>${escapeHtml(reg.team_name || "your registration")}</strong> — <a href="${link.url}">complete your payment</a> to lock in your spot.</p>`)) {
+    await env.DB.prepare("UPDATE registrations SET status='email-sent', last_reminded_at=datetime('now') WHERE id=?1").bind(regId).run();
+    return json({ ok: true, mode: "email", emailed: true, checkout_url: link.url,
+      message: `New link created and emailed to ${reg.email}.` });
+  }
+  return json({ ok: true, mode: "sandbox", checkout_url: link.url,
+    message: "New link created. Email isn't connected yet — copy it and send it yourself." });
+}
+
+/* ---------- teammate connect / invite (lost v0.7.0 feature, rebuilt) ---------- */
+
+async function myContact(env, ctx) {
+  if (!ctx.session) return null;
+  const u = await env.DB.prepare("SELECT email FROM users WHERE id=?1 AND deleted_at IS NULL").bind(ctx.userId).first();
+  if (!u) return null;
+  return env.DB.prepare(
+    "SELECT id, email, full_name FROM contacts WHERE org_id=?1 AND email=?2 AND deleted_at IS NULL"
+  ).bind(ctx.orgId, u.email.toLowerCase()).first();
+}
+
+/** Link roster rows that were entered by a captain (name + email, no account yet)
+ *  to the signed-in member's contact. Idempotent; home.html calls it on load. */
+async function connectTeams(env, ctx) {
+  if (!ctx.session) return json({ error: "Sign in first." }, 401);
+  const u = await env.DB.prepare("SELECT email FROM users WHERE id=?1 AND deleted_at IS NULL").bind(ctx.userId).first();
+  if (!u) return json({ error: "Sign in first." }, 401);
+  const email = u.email.toLowerCase();
+  const r = await env.DB.prepare(
+    `UPDATE team_members SET contact_id = (
+        SELECT c.id FROM contacts c
+        WHERE c.email = ?1 AND c.org_id = team_members.org_id AND c.deleted_at IS NULL),
+      updated_at = datetime('now')
+     WHERE member_email = ?1 AND contact_id IS NULL AND deleted_at IS NULL
+       AND EXISTS (SELECT 1 FROM contacts c2 WHERE c2.email = ?1 AND c2.org_id = team_members.org_id AND c2.deleted_at IS NULL)`
+  ).bind(email).run();
+  return json({ ok: true, linked: r.meta.changes });
+}
+
+/** Teams I'm on (this org, upcoming or in-progress events), with the roster —
+ *  powers the home.html "Your teams" panel and captain invite buttons. */
+async function myTeams(env, ctx) {
+  if (!ctx.session) return json({ error: "Sign in first." }, 401);
+  const me = await myContact(env, ctx);
+  if (!me) return json({ teams: [] });
+  const teams = (await env.DB.prepare(
+    `SELECT DISTINCT t.id, t.name, t.captain_contact_id, e.id AS event_id, e.name AS event_name,
+            e.starts_at, e.type
+     FROM teams t
+     JOIN events e ON e.id = t.event_id AND e.deleted_at IS NULL
+       AND e.status IN ('published','in_progress')
+     LEFT JOIN team_members tm ON tm.team_id = t.id AND tm.deleted_at IS NULL
+     WHERE t.org_id = ?1 AND t.deleted_at IS NULL
+       AND (t.captain_contact_id = ?2 OR tm.contact_id = ?2)
+     ORDER BY e.starts_at`
+  ).bind(ctx.orgId, me.id).all()).results;
+  for (const t of teams) {
+    t.is_captain = t.captain_contact_id === me.id;
+    t.members = (await env.DB.prepare(
+      `SELECT id, member_name, member_email, contact_id, invited_at, is_sub
+       FROM team_members WHERE team_id=?1 AND deleted_at IS NULL ORDER BY id`
+    ).bind(t.id).all()).results.map(m => ({
+      id: m.id, name: m.member_name, is_sub: !!m.is_sub,
+      connected: !!m.contact_id, invited: !!m.invited_at,
+      email_on_file: !!m.member_email,
+    }));
+  }
+  return json({ teams });
+}
+
+/** Captain (or staff) emails a roster member an invite to create their profile. */
+async function inviteTeammate(env, ctx, tmId) {
+  if (!ctx.session) return json({ error: "Sign in first." }, 401);
+  const tm = await env.DB.prepare(
+    `SELECT tm.id, tm.org_id, tm.member_name, tm.member_email, tm.contact_id, tm.invited_at,
+            t.name AS team_name, t.captain_contact_id, e.name AS event_name
+     FROM team_members tm
+     JOIN teams t ON t.id = tm.team_id AND t.deleted_at IS NULL
+     JOIN events e ON e.id = t.event_id AND e.deleted_at IS NULL
+     WHERE tm.id = ?1 AND tm.deleted_at IS NULL`
+  ).bind(tmId).first();
+  if (!tm) return json({ error: "Teammate not found." }, 404);
+  const me = await myContact(env, ctx);
+  const staff = await isStaff(env, ctx, tm.org_id);
+  if (!staff && (!me || me.id !== tm.captain_contact_id)) {
+    return json({ error: "Only the team captain (or staff) can send invites." }, 403);
+  }
+  if (tm.contact_id) return json({ ok: true, message: "They already have a profile — nothing to send." });
+  if (!tm.member_email) return json({ error: "No email on file for this teammate. Ask them to register or give you their email." }, 400);
+
+  const col = tm.invited_at ? "reminded_at" : "invited_at";
+  const ok = await sendEmail(env, tm.member_email, `You're on ${tm.team_name} — Boomtown Athletics`,
+    `<p>Hi ${escapeHtml(tm.member_name || "there")} — you're on the roster for <strong>${escapeHtml(tm.team_name)}</strong> (${escapeHtml(tm.event_name)}).</p>` +
+    `<p><a href="${env.APP_URL}/">Sign in with this email</a> to see your schedule, results, and reminders.</p>`);
+  await env.DB.prepare(
+    `UPDATE team_members SET ${col}=datetime('now'), updated_at=datetime('now') WHERE id=?1`
+  ).bind(tmId).run();
+  await audit(env, { orgId: tm.org_id, userId: ctx.userId }, "teammate.invite", "team_members", tmId, { mode: ok ? "email" : "sandbox" });
+  return ok
+    ? json({ ok: true, mode: "email", message: `Invite sent to ${tm.member_email}.` })
+    : json({ ok: true, mode: "sandbox", message: "Email isn't connected yet (sandbox) — marked as invited, but no email went out." });
 }

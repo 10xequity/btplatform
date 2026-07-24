@@ -1,5 +1,8 @@
 /* Boomtown Platform — Site-wide sidebar navigation (shared)
-   File: web/assets/site-nav.js · Version: v1.0 · Date: 2026-07-23 · Ships in: v0.6.0
+   File: web/assets/site-nav.js · Version: v2.0 · Date: 2026-07-24 · Ships in: v0.9.1
+   v2.0 (RECOVERY of the lost v0.7.0 nav): member notifications bell — signed-in
+   members get "My Dashboard" and a "Notifications" item with a live unread badge
+   (GET /api/notifications); both land on home.html. Everything else unchanged.
    UX pattern: persistent left rail (gymdesk-style) matching the Tournament Ops sidebar;
    collapses to a horizontal scroll bar on narrow screens (volleyballlife mobile pattern).
    Self-contained: injects its own styles (tokens only), wraps <main>/#app automatically.
@@ -28,6 +31,9 @@
   .site-nav .nav-item.active { background: var(--surface); color: var(--primary);
     box-shadow: inset 2px 0 0 0 var(--accent); }
   .site-nav .nav-item:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .site-nav .badge { margin-left: auto; flex: none; min-width: 20px; height: 20px; padding: 0 6px;
+    border-radius: 999px; background: var(--accent); color: var(--bg); font-size: 12px; font-weight: 800;
+    display: grid; place-items: center; }
   .site-layout > main, .site-layout > .site-content { flex: 1; min-width: 0; }
   @media (hover: hover) and (pointer: fine) { .site-nav .nav-item:hover { background: var(--surface); } }
   @media (max-width: 860px) {
@@ -69,7 +75,14 @@
       ]},
     ];
     if (signedIn) {
+      let unread = 0;
+      try {
+        const n = await fetch(API + "/api/notifications", { headers: authHeaders(), credentials: "include" });
+        if (n.ok) unread = (await n.json()).unread || 0;
+      } catch (e) { /* worker older than v0.9.1 or offline: no badge */ }
       NAV.push({ label: "You", items: [
+        { href: "home.html",     ico: "▦", text: "My Dashboard" },
+        { href: "home.html#notifications", ico: "◔", text: "Notifications", badge: unread },
         { href: "profile.html",  ico: "◉", text: "My Profile" },
         { href: "settings.html", ico: "⚙", text: "Settings" },
       ]});
@@ -99,7 +112,7 @@
       <div class="nav-group" role="group" aria-label="${g.label}">
         <div class="nav-label">${g.label}</div>
         ${g.items.map(i => `<a class="nav-item${i.href.split("#")[0] === here ? " active" : ""}" href="${i.href}"
-          ${i.href.split("#")[0] === here ? 'aria-current="page"' : ""}><span class="ico" aria-hidden="true">${i.ico}</span>${i.text}</a>`).join("")}
+          ${i.href.split("#")[0] === here ? 'aria-current="page"' : ""}><span class="ico" aria-hidden="true">${i.ico}</span>${i.text}${i.badge ? `<span class="badge" aria-label="${i.badge} unread">${i.badge > 9 ? "9+" : i.badge}</span>` : ""}</a>`).join("")}
       </div>`).join("");
     layout.appendChild(aside);
     layout.appendChild(main);

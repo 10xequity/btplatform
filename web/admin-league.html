@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<!-- Boomtown Platform — League Manager · Version: v1.1 · Date: 2026-07-24 · Ships in: v0.9.1
+     RECOVERY of the v0.7.0 page (ZIP never uploaded). Weekly matchup generator with a
+     level-gap cap of 2, team level board, tap scoring (existing 2-tap contract),
+     season standings, staff-of-the-night assignment. Uses the shared admin rail
+     (admin-nav.js) so the menu is identical to every other admin page. -->
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>League Manager — Boomtown Athletics</title>
+  <link rel="stylesheet" href="assets/tokens.css?v=0.9.1" />
+  <link rel="stylesheet" href="assets/app.css?v=0.9.1" />
+  <link rel="stylesheet" href="assets/admin.css?v=0.9.1" />
+  <style>
+    .lm-grid { display: grid; grid-template-columns: minmax(300px, 380px) 1fr; gap: 16px; align-items: start; }
+    @media (max-width: 1020px) { .lm-grid { grid-template-columns: 1fr; } }
+    .lvl-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+    .lvl-row:last-child { border-bottom: 0; }
+    .lvl-row .nm { flex: 1; min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .lvl-row .rec { font-size: 13px; color: var(--text-muted); flex: none; }
+    .lvl-row select { width: 72px; min-height: 40px; }
+    .wk-card { margin-bottom: 14px; }
+    .wk-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+    .wk-head h3 { font-size: 16px; margin: 0; }
+    .mt-row { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--border); }
+    .mt-row:last-child { border-bottom: 0; }
+    .mt-row .court { flex: none; width: 52px; font-size: 12.5px; color: var(--text-muted); }
+    .mt-row .vs { flex: 1; min-width: 0; font-size: 15px; }
+    .mt-row .vs b.win { color: var(--positive); }
+    .mt-row .score { flex: none; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .diff-btns { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
+    .diff-btns .btn { min-width: 52px; }
+    .warn-note { color: var(--warn); font-size: 13.5px; margin-top: 6px; }
+  </style>
+</head>
+<body>
+  <header class="header chrome-glass">
+    <div class="wordmark"><a href="index.html" style="color:inherit;text-decoration:none">Boomtown <span>Athletics</span></a></div>
+    <div class="spacer"></div>
+    <select id="orgSwitcher" class="org-switcher" aria-label="Switch organization"></select>
+    <button id="themeToggle" class="btn ghost theme-toggle" aria-label="Toggle dark or light theme">◐</button>
+  </header>
+
+  <div class="admin-layout">
+  <main class="main wide admin-main" id="app" aria-live="polite">
+    <div class="page-head"><h1>League Manager</h1><div class="spacer"></div>
+      <select id="leagueSelect" class="org-switcher" aria-label="Choose league"></select></div>
+
+    <div id="status" role="status" aria-live="polite"></div>
+    <div id="board" hidden>
+      <div class="lm-grid">
+        <div>
+          <section class="card">
+            <h2 style="font-size:16px;margin:0 0 4px">Team levels</h2>
+            <p class="help-text" style="margin-top:0">1 = strongest, 5 = newest. Teams more than 2 levels apart never get matched.</p>
+            <div id="levels"></div>
+            <button class="btn" id="saveLevels" style="margin-top:12px">Save levels</button>
+          </section>
+          <section class="card" style="margin-top:14px">
+            <h2 style="font-size:16px;margin:0 0 4px">Staff for the night</h2>
+            <p class="help-text" style="margin-top:0">Shows on the Control Center schedule.</p>
+            <select id="staffSelect" aria-label="Assign staff" style="width:100%"></select>
+          </section>
+          <section class="card" style="margin-top:14px">
+            <h2 style="font-size:16px;margin:0 0 8px">Standings</h2>
+            <table class="tbl"><thead><tr><th>#</th><th>Team</th><th>W–L</th><th>±</th></tr></thead>
+              <tbody id="standings"></tbody></table>
+          </section>
+        </div>
+        <div>
+          <div class="toolbar">
+            <button class="btn" id="genWeek">Generate next week</button>
+            <span class="help-text" id="genHint"></span>
+          </div>
+          <div id="weeks"></div>
+        </div>
+      </div>
+    </div>
+    <p class="empty" id="emptyMsg" hidden>No leagues yet. <a href="admin-events.html">Create an event</a> with type “league”, add teams in Tournament Ops or via registration, then come back.</p>
+  </main>
+  </div><!-- /admin-layout -->
+
+  <script src="assets/config.js?v=0.9.1"></script>
+  <script src="assets/admin-nav.js?v=0.9.1"></script>
+  <script src="assets/admin-league.js?v=1.1"></script>
+</body>
+</html>

@@ -1,5 +1,5 @@
 /* Boomtown Platform — Design Tokens
-   Version: v0.1 · Date: 2026-07-21
+   Version: v0.2.1 · Date: 2026-07-24 (v0.1 base 2026-07-21 + recovered v0.2 contrast fixes, see foot of file)
    Source of truth: design spec §4. Dark = black/gold (first-class). Light = white/navy + yellow. */
 
 :root {
@@ -63,3 +63,33 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ============================================================
+   v0.2.1 additions · 2026-07-24 · Ships in: v0.9.1
+   RECOVERY of the lost v0.7.0 "tokens v0.2" contrast fixes:
+   - Global themed form controls — fixes white-on-white inputs and
+     white dropdown menus in dark mode (root cause: browser default
+     backgrounds behind `color: inherit`).
+   - Brand-colored visited links (no purple).
+   - Base text 17px on member pages for readability.
+   ============================================================ */
+input, select, textarea {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control, 8px);
+  padding: 9px 12px;
+  min-height: 44px;
+  font: inherit;
+  color-scheme: light dark; /* native pickers/dropdown menus follow the theme */
+}
+[data-theme="dark"] { color-scheme: dark; }
+[data-theme="light"] { color-scheme: light; }
+select option { background: var(--surface); color: var(--text); }
+input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 2px solid var(--primary); outline-offset: 1px;
+}
+input::placeholder, textarea::placeholder { color: var(--text-muted); opacity: 1; }
+a { color: var(--primary); }
+a:visited { color: var(--primary); }
+body { font-size: 17px; }
