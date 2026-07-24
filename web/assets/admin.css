@@ -1,5 +1,5 @@
 /* Boomtown Platform — Admin Panel styles
-   Version: v0.4.0 · Date: 2026-07-22
+   Version: v0.5.0 · Date: 2026-07-23 (streamline pass; base v0.4.0 2026-07-22)
    Layers on tokens.css + app.css. Motion: exact properties only, ≤240ms, ease-out
    (emil-design-eng — no `transition: all`, hover feedback is instant-feeling). */
 
@@ -141,3 +141,15 @@
   .modal .row2 { grid-template-columns: 1fr; }
   .cal-day { min-height: 64px; }
 }
+
+/* ===== v0.5.0 streamline pass · 2026-07-23 (ships in v0.8.0) ====================
+   Gymdesk pattern study: lighter density, consistent card rhythm, calmer chrome.
+   Cards breathe (18px pad), one heading scale, tables lose visual weight. */
+.card { padding: 18px; }
+.card > h2:first-child { margin-top: 0; }
+.admin-main { padding: 22px 26px 64px; max-width: 1280px; }
+.page-head h1 { font-size: 24px; letter-spacing: -0.01em; }
+.tbl { font-size: 15px; }
+.tbl th { font-size: 12px; }
+.tbl td { padding: 11px 10px; }
+.stat-cards { gap: 12px; }

@@ -1,6 +1,17 @@
 /**
  * Boomtown Platform — API Worker
- * Version: v0.5.0 · Date: 2026-07-22 · Modules 1–6 + Admin Panel
+ * Version: v0.8.0 · Date: 2026-07-23 · Modules 1–8 + Control Center
+ *
+ * v0.8.0 (2026-07-23): Control Center dashboard endpoint (reports.js v1.1 —
+ *   /api/admin/dashboard: month money, outstanding list, 7-day trend, schedule,
+ *   member count, admin alerts). Health reports v0.8.0.
+ *
+ * v0.7.0 (2026-07-23): League management (leagues_admin.js — weekly scheduler with the
+ *   2-level separation rule, rematch avoidance, bye rotation; reuses tournament score/
+ *   standings/drag endpoints). Sales reports + member notification inbox (reports.js).
+ *   Teammate connect/invite + payment retry + waiver-reminder sweep (registrations.js v0.4.0).
+ *   NEW: scheduled() cron — daily waiver reminders + 24h event reminders for opted-in
+ *   members (migration 0005 applied live; wrangler.toml gains [triggers]).
  *
  * v0.5.0 (2026-07-22): Member profiles + family accounts (profiles.js) — self-service profile,
  *   avatar upload (R2), guardian-signed waivers with signature ledger, results résumé from
@@ -47,6 +58,9 @@ import { scheduleRoutes, wireSchedule } from "./schedule.js";
 import { eventsAdminRoutes, wireEventsAdmin } from "./events_admin.js";
 import { profileRoutes, wireProfiles } from "./profiles.js";
 import { webauthnRoutes, wireWebauthn } from "./webauthn.js";
+import { leagueRoutes, wireLeagues } from "./leagues_admin.js";
+import { reportRoutes, wireReports } from "./reports.js";
+import { waiverReminderSweep, sendEmail, escapeHtml } from "./registrations.js";
 
 const MAGIC_LINK_TTL_MIN = 15;
 const SESSION_TTL_DAYS = 30;
@@ -67,6 +81,8 @@ wireSchedule(wiredHelpers);
 wireEventsAdmin(wiredHelpers);
 wireProfiles(wiredHelpers);
 wireWebauthn(wiredHelpers);
+wireLeagues(wiredHelpers);
+wireReports(wiredHelpers);
 
 /** ctx carries the caller's session + selected org for role checks. */
 async function buildCtx(request, env) {
@@ -110,12 +126,14 @@ export default {
       } else if (url.pathname === "/api/orgs" && request.method === "GET") {
         res = await listOrgs(env);
       } else if (url.pathname === "/api/health") {
-        res = json({ ok: true, version: "v0.5.0" });
+        res = json({ ok: true, version: "v0.8.0" });
       } else if (url.pathname === "/api/webhooks/square" && request.method === "POST") {
         res = await squareWebhook(request, env); // server-to-server; signature-verified inside
       } else if (url.pathname.startsWith("/api/")) {
         const ctx = await buildCtx(request, env);
         res = (await webauthnRoutes(request, env, url, ctx))
+           || (await leagueRoutes(request, env, url, ctx))
+           || (await reportRoutes(request, env, url, ctx))
            || (await profileRoutes(request, env, url, ctx))
            || (await scheduleRoutes(request, env, url, ctx))
            || (await eventsAdminRoutes(request, env, url, ctx))
@@ -135,7 +153,53 @@ export default {
       return res;
     }
   },
+
+  /** Cron (wrangler.toml [triggers]) — daily: waiver chasing + 24h event reminders. */
+  async scheduled(controller, env, ectx) {
+    ectx.waitUntil(runDailyJobs(env));
+  },
 };
+
+async function runDailyJobs(env) {
+  try {
+    const waivers = await waiverReminderSweep(env);
+    console.log("waiver sweep", JSON.stringify(waivers));
+  } catch (e) { console.error("waiver sweep failed", e); }
+  try {
+    const events = await eventReminderSweep(env);
+    console.log("event reminders", JSON.stringify(events));
+  } catch (e) { console.error("event reminder sweep failed", e); }
+}
+
+/** 24h event reminders — only members who opted in (Settings toggle, consent stored v0.5.0). */
+async function eventReminderSweep(env) {
+  const rows = (await env.DB.prepare(
+    `SELECT DISTINCT r.id AS reg_id, c.id AS contact_id, c.email, c.full_name,
+            e.org_id, e.name AS event_name, e.starts_at, e.location
+     FROM registrations r
+     JOIN contacts c ON c.id = r.contact_id AND c.deleted_at IS NULL
+     JOIN member_profiles mp ON mp.contact_id = c.id AND mp.reminder_opt_in = 1 AND mp.deleted_at IS NULL
+     JOIN events e ON e.id = r.event_id AND e.deleted_at IS NULL AND e.status IN ('published','in_progress')
+     WHERE r.deleted_at IS NULL AND r.status IN ('paid','comped','cash-pending','pending','email-sent')
+       AND e.starts_at BETWEEN datetime('now') AND datetime('now', '+1 day')
+       AND NOT EXISTS (SELECT 1 FROM notifications n WHERE n.contact_id = c.id AND n.kind = 'event_reminder'
+                         AND json_extract(n.payload_json, '$.reg_id') = r.id)
+     LIMIT 200`
+  ).all()).results;
+  let sent = 0;
+  for (const r of rows) {
+    const when = (r.starts_at || "").replace("T", " ").slice(0, 16);
+    const ok = await sendEmail(env, r.email, `Tomorrow: ${r.event_name}`,
+      `<p>Hi ${escapeHtml(r.full_name || "there")} — reminder that <strong>${escapeHtml(r.event_name)}</strong> starts ${when}${r.location ? " at " + escapeHtml(r.location) : ""}.</p><p>See you on the court!</p>`);
+    await env.DB.prepare(
+      "INSERT INTO notifications (org_id, kind, target, contact_id, title, body, payload_json, sent_at) VALUES (?1,'event_reminder','member',?2,?3,?4,?5,datetime('now'))"
+    ).bind(r.org_id, r.contact_id, `Tomorrow: ${r.event_name}`,
+      `Starts ${when}${r.location ? " at " + r.location : ""}.`,
+      JSON.stringify({ reg_id: r.reg_id })).run();
+    if (ok) sent++;
+  }
+  return { due: rows.length, emailed: sent };
+}
 
 /* ---------- auth ---------- */
 

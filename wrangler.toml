@@ -1,5 +1,5 @@
 # Boomtown Platform — Worker config
-# Version: v0.5.0 · Date: 2026-07-22
+# Version: v0.8.0 · Date: 2026-07-23
 name = "boomtown-api"
 main = "worker/src/index.js"
 compatibility_date = "2026-07-01"
@@ -25,3 +25,7 @@ SENDER_EMAIL = "no-reply@boomtownvb.com"
 # Secrets (set via GitHub repo Settings → Secrets, consumed by the deploy workflow):
 #   CLOUDFLARE_API_TOKEN  — required for deploy
 #   BREVO_API_KEY         — optional; auth runs in sandbox mode until added
+
+# v0.7.0 — daily cron: waiver reminders + 24h event reminders (09:00 America/Denver ≈ 15:00 UTC)
+[triggers]
+crons = ["0 15 * * *"]
