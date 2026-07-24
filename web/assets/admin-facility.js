@@ -1,5 +1,7 @@
 /* Boomtown Platform — Facility Calendar (admin)
-   Version: v1.0 · Date: 2026-07-24 · Ships in: v0.12.0
+   Version: v1.1.0 · Date: 2026-07-24 · Ships in: v0.13.0
+   v1.1.0 (M12B): rental-requests approval panel (pending list, preset picker, approve/decline,
+   share-accept retry). Auto-claimed event bookings render like any booking (source badge in modal title).
    Day grid (spaces × time, 6:00–23:00) + Week list, conflict-checked booking modal,
    weekly series, closures, CSV importer. */
 (async function () {
@@ -316,6 +318,42 @@
   function hourLabel(m) { const h = Math.floor(m / 60); return `${((h + 11) % 12) + 1}${h >= 12 ? "p" : "a"}`; }
   function fmtMin(m) { const h = Math.floor(m / 60), mm = String(m % 60).padStart(2, "0"); return `${((h + 11) % 12) + 1}:${mm}${h >= 12 ? "p" : "a"}`; }
   function toHM(m) { return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`; }
+
+  /* ---------- rental requests (v1.1.0) ---------- */
+  const rrRoot = document.getElementById("rentalRequests");
+  async function loadRequests() {
+    if (!rrRoot) return;
+    const res = await api("/api/admin/facility/requests?status=pending");
+    if (!res.ok) { rrRoot.innerHTML = ""; return; }
+    const reqs = res.data.requests || [];
+    if (!reqs.length) { rrRoot.innerHTML = ""; return; }
+    const presetOpts = presets.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join("");
+    rrRoot.innerHTML = `<section class="rr-card" aria-label="Rental requests">
+      <h2>Rental requests <span class="meta">(${reqs.length} pending)</span></h2>
+      ${reqs.map(r => `<div class="rr-row" data-id="${r.id}">
+        <span class="who">${esc(r.requester_name)}</span>
+        <span class="meta">${esc(r.date)} · ${esc(r.time)}${r.est_attendees ? ` · ~${r.est_attendees} people` : ""}</span>
+        <span class="meta grow">${esc(r.spaces_text || "")}${r.notes ? ` — ${esc(r.notes)}` : ""}</span>
+        <select aria-label="Spaces to reserve">${presetOpts}</select>
+        <button class="btn" data-act="approve">Approve</button>
+        <button class="btn ghost" data-act="decline">Decline</button>
+      </div>`).join("")}
+    </section>`;
+    rrRoot.querySelectorAll("button[data-act]").forEach(btn => btn.addEventListener("click", async () => {
+      const row = btn.closest(".rr-row"), id = row.dataset.id, act = btn.dataset.act;
+      const payload = act === "approve" ? { preset_id: Number(row.querySelector("select").value) } : {};
+      let res = await api(`/api/admin/facility/requests/${id}/${act}`, { method: "POST", body: JSON.stringify(payload) });
+      if (res.status === 409 && res.data && res.data.hard === false) {
+        if (confirm(`${res.data.error} Book anyway (shared)?`)) {
+          res = await api(`/api/admin/facility/requests/${id}/${act}`, { method: "POST", body: JSON.stringify({ ...payload, force: true }) });
+        } else return;
+      }
+      if (res.ok) { loadRequests(); load(); }
+      else alert((res.data && res.data.error) || "Could not update the request.");
+    }));
+  }
+  loadRequests();
+
 
   load();
 })();

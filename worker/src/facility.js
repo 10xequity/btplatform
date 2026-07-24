@@ -1,6 +1,10 @@
 /**
  * Boomtown Platform — Court & Facility Management (Module 12, Phase A)
- * File: worker/src/facility.js · Version: v1.0 · Date: 2026-07-24 · Ships in: v0.12.0
+ * File: worker/src/facility.js · Version: v1.1.0 · Date: 2026-07-24 · Ships in: v0.13.0
+ * v1.1.0 (M12 Phase B): auto-claim (tournaments/leagues reserve default courts, move to open
+ *   courts on conflict, drag-editable like any booking) + rental REQUESTS (member-submitted,
+ *   staff approve → booking under org 10; public self-serve rental stays HIDDEN). Migration 0009
+ *   (space_bookings.source, rental_requests) applied live 2026-07-24.
  *
  * Staff-gated endpoints:
  *   GET    /api/admin/facility/spaces                → { spaces, presets (with space_ids), operators }
@@ -26,8 +30,14 @@ export function wireFacility(h) { ({ json, audit, requireStaff } = h); }
 
 export async function facilityRoutes(request, env, url, ctx) {
   const p = url.pathname, m = request.method;
+  // Member-facing rental REQUEST (v1.1.0). Self-serve public rental stays hidden by design.
+  if (p === "/api/rental-request" && m === "POST") return createRentalRequest(request, env, ctx);
   if (!p.startsWith("/api/admin/facility")) return null;
   const deny = await requireStaff(env, ctx); if (deny) return deny;
+
+  if (p === "/api/admin/facility/requests" && m === "GET") return listRequests(env, url);
+  const rq = p.match(/^\/api\/admin\/facility\/requests\/(\d+)\/(approve|decline)$/);
+  if (rq && m === "POST") return decideRequest(request, env, ctx, Number(rq[1]), rq[2]);
 
   if (p === "/api/admin/facility/spaces" && m === "GET") return getSpaces(env);
   if (p === "/api/admin/facility/bookings" && m === "GET") return listBookings(env, url);
@@ -464,6 +474,192 @@ function parseCsv(text) {
 function num(v) { const n = parseInt(v, 10); return Number.isFinite(n) ? n : null; }
 function fmtMin(m) { const h = Math.floor(m / 60), mm = String(m % 60).padStart(2, "0"); const ap = h >= 12 ? "PM" : "AM"; return `${((h + 11) % 12) + 1}:${mm} ${ap}`; }
 async function body(request) { try { return await request.json(); } catch { return {}; } }
+
+
+
+/* ================= M12 Phase B (v1.1.0) — auto-claim + rental requests ================= */
+
+/** Derive a booking window from an event's starts_at. weekRound N shifts +7(N-1) days (leagues). */
+export function eventWindow(starts_at, budgetMinutes = 420, weekRound = null) {
+  if (!starts_at) return null;
+  const s = String(starts_at).trim();
+  const m = s.match(/^(\d{4}-\d{2}-\d{2})[T ](\d{1,2}):(\d{2})/);
+  let date, start_min;
+  if (m) { date = m[1]; start_min = Number(m[2]) * 60 + Number(m[3]); }
+  else {
+    const d = s.match(/^(\d{4}-\d{2}-\d{2})$/);
+    if (!d) return null;
+    date = d[1]; start_min = 8 * 60; // date-only events default to 8:00 AM
+  }
+  if (weekRound && weekRound > 1) {
+    const dt = new Date(date + "T00:00:00Z");
+    dt.setUTCDate(dt.getUTCDate() + 7 * (weekRound - 1));
+    date = dt.toISOString().slice(0, 10);
+  }
+  const end_min = Math.min(1440, start_min + Math.max(30, Number(budgetMinutes) || 420));
+  return { date, start_min, end_min };
+}
+
+/** Default courts = first N in sort order; busy defaults are replaced by the next open courts. */
+export function chooseCourts(count, allIds, busy) {
+  const defaults = allIds.slice(0, count);
+  const kept = defaults.filter((id) => !busy.has(id));
+  const moved = [];
+  for (const id of allIds.slice(count)) {
+    if (kept.length + moved.length >= count) break;
+    if (!busy.has(id)) moved.push(id);
+  }
+  const chosen = [...kept, ...moved];
+  return { chosen, moved, shortfall: Math.max(0, count - chosen.length) };
+}
+
+/** Soft-release prior auto-claims for an event (all dates, or one date for a league week). */
+export async function releaseAutoClaims(env, eventId, date = null) {
+  const sql = date
+    ? "UPDATE space_bookings SET deleted_at=datetime('now') WHERE event_id=?1 AND source='auto' AND date=?2 AND deleted_at IS NULL"
+    : "UPDATE space_bookings SET deleted_at=datetime('now') WHERE event_id=?1 AND source='auto' AND deleted_at IS NULL";
+  const stmt = env.DB.prepare(sql);
+  const r = date ? await stmt.bind(eventId, date).run() : await stmt.bind(eventId).run();
+  return r.meta.changes;
+}
+
+/**
+ * Claim courts on the facility calendar for a generated schedule. Never throws into the
+ * scheduler: callers wrap it and schedule generation succeeds regardless. The claim is a
+ * normal booking (source='auto') — staff can drag/edit/delete it on the Facility calendar.
+ */
+export async function autoClaimForEvent(env, ctx, ev, opts = {}) {
+  const weekRound = opts.weekRound || null;
+  const win = eventWindow(ev.starts_at, opts.budgetMinutes, weekRound);
+  if (!win) return { skipped: "Event has no start date — no courts claimed. Book manually on the Facility calendar." };
+  const wanted = Math.max(1, Number(opts.courts) || ev.court_count || 4);
+
+  await releaseAutoClaims(env, ev.id, weekRound ? win.date : null);
+
+  const all = (await env.DB.prepare(
+    "SELECT id, name FROM spaces WHERE kind='court' AND deleted_at IS NULL ORDER BY sort"
+  ).all()).results;
+  const busyRows = (await env.DB.prepare(
+    `SELECT DISTINCT bs.space_id FROM space_bookings b
+     JOIN booking_spaces bs ON bs.booking_id = b.id
+     WHERE b.date=?1 AND b.deleted_at IS NULL AND NOT (b.end_min <= ?2 OR b.start_min >= ?3)`
+  ).bind(win.date, win.start_min, win.end_min).all()).results;
+  const busy = new Set(busyRows.map((r) => r.space_id));
+
+  const { chosen, moved, shortfall } = chooseCourts(wanted, all.map((a) => a.id), busy);
+  if (!chosen.length) {
+    return { skipped: `No courts open ${win.date} ${fmtMin(win.start_min)}–${fmtMin(win.end_min)} — nothing claimed. Book manually on the Facility calendar.` };
+  }
+
+  const title = weekRound ? `${ev.name} — Week ${weekRound}` : ev.name;
+  const ins = await env.DB.prepare(
+    `INSERT INTO space_bookings (org_id, event_id, title, date, start_min, end_min, share_ok, is_closure, source)
+     VALUES (?1,?2,?3,?4,?5,?6,0,0,'auto')`
+  ).bind(ev.org_id, ev.id, title, win.date, win.start_min, win.end_min).run();
+  const bid = ins.meta.last_row_id;
+  for (const sid of chosen) {
+    await env.DB.prepare("INSERT INTO booking_spaces (booking_id, space_id) VALUES (?1, ?2)").bind(bid, sid).run();
+  }
+  await audit(env, ctx, "facility.autoclaim", "space_bookings", bid,
+    { event_id: ev.id, date: win.date, courts: chosen, moved, shortfall, week: weekRound });
+
+  const nameOf = Object.fromEntries(all.map((a) => [a.id, a.name]));
+  return {
+    booking_id: bid, date: win.date,
+    time: `${fmtMin(win.start_min)}–${fmtMin(win.end_min)}`,
+    courts: chosen.map((id) => nameOf[id]),
+    moved: moved.map((id) => nameOf[id]),
+    shortfall,
+    note: shortfall
+      ? `Only ${chosen.length} of ${wanted} courts were open — adjust on the Facility calendar.`
+      : moved.length
+        ? "Some default courts were busy — claimed open courts instead (drag to move on the Facility calendar)."
+        : null,
+  };
+}
+
+/* ---------- rental requests (staff-approved; public self-serve rental stays hidden) ---------- */
+
+async function createRentalRequest(request, env, ctx) {
+  if (!ctx.session) return json({ error: "Sign in to request court time." }, 401);
+  const b = await body(request);
+  const v = validateSlot(b); if (v) return json({ error: v }, 400);
+  if (!b.name || !String(b.name).trim() || !b.email) return json({ error: "Name and email are required." }, 400);
+  const s = slot(b);
+  const ins = await env.DB.prepare(
+    `INSERT INTO rental_requests (requester_name, requester_email, requester_phone, date, start_min, end_min,
+       spaces_text, est_attendees, notes)
+     VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)`
+  ).bind(String(b.name).trim(), String(b.email).trim().toLowerCase(), b.phone || null,
+         b.date, s.start_min, s.end_min, b.spaces_text || null,
+         b.est_attendees ? Number(b.est_attendees) : null, b.notes || null).run();
+  await audit(env, ctx, "rental.request", "rental_requests", ins.meta.last_row_id, { date: b.date });
+  return json({ ok: true, id: ins.meta.last_row_id, message: "Request received — we'll confirm by email." });
+}
+
+async function listRequests(env, url) {
+  const status = url.searchParams.get("status") || "pending";
+  if (!["pending", "approved", "declined"].includes(status)) return json({ error: "Bad status filter." }, 400);
+  const rows = (await env.DB.prepare(
+    `SELECT id, requester_name, requester_email, requester_phone, date, start_min, end_min,
+            spaces_text, est_attendees, notes, status, booking_id, created_at
+     FROM rental_requests WHERE status=?1 AND deleted_at IS NULL ORDER BY date, start_min`
+  ).bind(status).all()).results;
+  for (const r of rows) r.time = `${fmtMin(r.start_min)}–${fmtMin(r.end_min)}`;
+  return json({ requests: rows });
+}
+
+async function decideRequest(request, env, ctx, id, action) {
+  const req = await env.DB.prepare(
+    "SELECT * FROM rental_requests WHERE id=?1 AND deleted_at IS NULL"
+  ).bind(id).first();
+  if (!req) return json({ error: "Request not found." }, 404);
+  if (req.status !== "pending") return json({ error: `This request was already ${req.status}.` }, 409);
+
+  if (action === "decline") {
+    await env.DB.prepare(
+      "UPDATE rental_requests SET status='declined', decided_by=?1, decided_at=datetime('now'), updated_at=datetime('now') WHERE id=?2"
+    ).bind(ctx.userId, id).run();
+    await audit(env, ctx, "rental.decline", "rental_requests", id, {});
+    return json({ ok: true, status: "declined" });
+  }
+
+  const b = await body(request); // { preset_id and/or space_ids, share_ok, force }
+  const space_ids = await resolveSpaces(env, b);
+  if (!space_ids.length) return json({ error: "Pick the courts/rooms for this rental (a preset or specific spaces)." }, 400);
+  const share_ok = b.share_ok ? 1 : 0;
+  const { conflicts, warnings } = await findConflicts(env, {
+    date: req.date, start_min: req.start_min, end_min: req.end_min, space_ids, is_closure: 0, share_ok,
+  });
+  if (conflicts.length) {
+    return json({ error: "Rental conflicts with existing reservations.", hard: true,
+      problems: [{ date: req.date, conflicts, hard: true }],
+      hint: "Change the spaces or edit the conflicting booking first." }, 409);
+  }
+  if (warnings.length && !b.force) {
+    return json({ error: "Time is shared with another booking.", hard: false,
+      problems: [{ date: req.date, warnings, hard: false }],
+      hint: "Send again with force:true (Book anyway) to accept the share." }, 409);
+  }
+
+  const ins = await env.DB.prepare(
+    `INSERT INTO space_bookings (org_id, title, date, start_min, end_min, preset_id, share_ok, is_closure,
+       poc_name, poc_email, poc_phone, est_attendees, notes, source)
+     VALUES (10,?1,?2,?3,?4,?5,?6,0,?7,?8,?9,?10,?11,'rental')`
+  ).bind(`Rental — ${req.requester_name}`, req.date, req.start_min, req.end_min,
+         b.preset_id ? Number(b.preset_id) : null, share_ok,
+         req.requester_name, req.requester_email, req.requester_phone,
+         req.est_attendees, req.notes).run();
+  const bid = ins.meta.last_row_id;
+  for (const sid of space_ids) {
+    await env.DB.prepare("INSERT INTO booking_spaces (booking_id, space_id) VALUES (?1, ?2)").bind(bid, sid).run();
+  }
+  await env.DB.prepare(
+    "UPDATE rental_requests SET status='approved', booking_id=?1, decided_by=?2, decided_at=datetime('now'), updated_at=datetime('now') WHERE id=?3"
+  ).bind(bid, ctx.userId, id).run();
+  await audit(env, ctx, "rental.approve", "rental_requests", id, { booking_id: bid });
+  return json({ ok: true, status: "approved", booking_id: bid });
+}
 
 /* exported for worker/test/facility.test.mjs */
 export { findConflicts, parseTime, parseDate, parseSpacesText, parseCsv };

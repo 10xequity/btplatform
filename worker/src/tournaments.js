@@ -1,12 +1,15 @@
 /**
  * Boomtown Platform — Tournament API routes
- * Version: v0.3.0 · Date: 2026-07-21 (v0.3.0: export refreshStandings for captain self-scoring)
+ * Version: v0.4.0 · Date: 2026-07-24 (v0.4.0/M12B: schedule generation auto-claims courts on the
+ *   facility calendar via facility.js — default courts, moved to open courts on conflict,
+ *   drag-editable like any booking. v0.3.0: export refreshStandings for captain self-scoring)
  * Mounted by worker/src/index.js. All writes require admin/staff role in the event's org.
  * Reads: published events are public; drafts require staff.
  */
 import {
   FORMAT_TEMPLATES, feasibility, generatePairings, scheduleMatches, computeStandings, buildBracket,
 } from "./scheduler.js";
+import { autoClaimForEvent, releaseAutoClaims } from "./facility.js";
 
 export async function tournamentRoutes(request, env, url, ctx) {
   const p = url.pathname;
@@ -166,7 +169,15 @@ async function generateSchedule(request, env, ctx, eventId) {
   }
   await env.DB.prepare("UPDATE events SET court_count=?1, updated_at=datetime('now') WHERE id=?2").bind(params.courts, eventId).run();
   await audit(env, ctx, "schedule.generate", "events", eventId, { ...params, rounds: sched.rounds.length });
-  return json({ generated: true, feasibility: feas, rounds: sched.rounds.length, byeSpread: sched.spread });
+
+  // M12 Phase B: claim courts on the facility calendar. Never blocks schedule generation.
+  let facility_claim = null;
+  try {
+    facility_claim = await autoClaimForEvent(env, ctx, { ...ev, court_count: params.courts },
+      { courts: params.courts, budgetMinutes: params.budgetMinutes });
+  } catch (e) { console.error("autoclaim failed", e); facility_claim = { skipped: "Court claim failed — book manually on the Facility calendar." }; }
+
+  return json({ generated: true, feasibility: feas, rounds: sched.rounds.length, byeSpread: sched.spread, facility_claim });
 }
 
 async function getSchedule(env, ctx, eventId) {

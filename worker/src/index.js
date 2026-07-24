@@ -1,6 +1,12 @@
 /**
  * Boomtown Platform — API Worker
- * Version: v0.12.0 · Date: 2026-07-24 · Modules 1–12
+ * Version: v0.13.0 · Date: 2026-07-24 · Modules 1–12B
+ *
+ * v0.13.0 (2026-07-24): M12 Phase B — tournament schedules + league weeks auto-claim courts on
+ *   the facility calendar (facility.js v1.1.0, tournaments.js v0.4.0, leagues_admin.js v1.2.0);
+ *   rental REQUEST feature (member POST /api/rental-request, staff approve/decline under
+ *   /api/admin/facility/requests). Public self-serve rental stays HIDDEN. Migration 0009
+ *   (space_bookings.source, rental_requests) applied live. Health reports v0.13.0.
  *
  * v0.12.0 (2026-07-24): Court & Facility Management Phase A (facility.js — space atoms,
  *   presets, conflict engine w/ Court Share + closures, bookings CRUD w/ weekly series,
@@ -154,7 +160,7 @@ export default {
       } else if (url.pathname === "/api/orgs" && request.method === "GET") {
         res = await listOrgs(env);
       } else if (url.pathname === "/api/health") {
-        res = json({ ok: true, version: "v0.12.0" });
+        res = json({ ok: true, version: "v0.13.0" });
       } else if (url.pathname === "/api/webhooks/square" && request.method === "POST") {
         res = await membershipWebhook(request, env); // verifies signature; forwards payment.* to squareWebhook
       } else if (url.pathname.startsWith("/api/")) {

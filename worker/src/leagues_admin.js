@@ -1,6 +1,8 @@
 /**
  * Boomtown Platform — League Manager (Module 8, RECOVERY BUILD)
- * File: worker/src/leagues_admin.js · Version: v1.1 · Date: 2026-07-24
+ * File: worker/src/leagues_admin.js · Version: v1.2.0 · Date: 2026-07-24
+ * v1.2.0 (M12B): week generation auto-claims courts for that week night on the facility
+ *   calendar (window = starts_at time + weekMinutes, default 180); deleting a week releases it.
  * The original v1.0 shipped in the v0.7.0 ZIP, which was never uploaded to the
  * repo; this rebuild restores the module against the SAME live schema
  * (migration 0005: teams.level_num, events.staff_contact_id) and the same
@@ -21,6 +23,8 @@
  * 1 = strongest). Priorities: fewest previous meetings between the pair, then
  * smallest level gap. Odd team count → the team with the most games sits (bye).
  */
+
+import { autoClaimForEvent, releaseAutoClaims, eventWindow } from "./facility.js";
 
 let json, audit, isStaff, requireStaff;
 export function wireLeagues(helpers) { ({ json, audit, isStaff, requireStaff } = helpers); }
@@ -224,7 +228,15 @@ async function generateWeek(request, env, ctx, id) {
     court = court % courts + 1;
   }
   await audit(env, ctx, "league.week.generate", "events", id, { round, matches: pairs.length, byes: byes.length });
-  return json({ ok: true, round, matches: pairs.length, byes, warnings });
+
+  // M12 Phase B: claim this week's courts on the facility calendar. Never blocks the week.
+  let facility_claim = null;
+  try {
+    facility_claim = await autoClaimForEvent(env, ctx, ev,
+      { courts, budgetMinutes: Number(b.weekMinutes) || cfg.weekMinutes || 180, weekRound: round });
+  } catch (e) { console.error("autoclaim failed", e); facility_claim = { skipped: "Court claim failed — book manually on the Facility calendar." }; }
+
+  return json({ ok: true, round, matches: pairs.length, byes, warnings, facility_claim });
 }
 
 async function deleteWeek(env, ctx, id, round) {
@@ -242,6 +254,11 @@ async function deleteWeek(env, ctx, id, round) {
     "UPDATE matches SET deleted_at=datetime('now') WHERE event_id=?1 AND round=?2 AND deleted_at IS NULL"
   ).bind(id, round).run();
   await audit(env, ctx, "league.week.delete", "events", id, { round, removed: r.meta.changes });
+  // Release that week's auto-claimed courts (manual bookings are untouched).
+  try {
+    const win = eventWindow(ev.starts_at, 180, round);
+    if (win) await releaseAutoClaims(env, id, win.date);
+  } catch (e) { console.error("claim release failed", e); }
   return json({ ok: true, removed: r.meta.changes });
 }
 
