@@ -1,5 +1,5 @@
 /* Boomtown Platform — Control Center (manager home)
-   File: web/assets/admin-dash.js · Version: v1.0 · Date: 2026-07-23 · Ships in: v0.8.0
+   File: web/assets/admin-dash.js · Version: v1.2 · Date: 2026-07-24 · Ships in: v0.8.0
    Data: one call to GET /api/admin/dashboard (reports.js v1.1).
    Actions inline: Remind (existing link) and Rerun (fresh Square link) straight from
    the overdue list — no navigating to the Registrations page for routine follow-up. */
@@ -31,6 +31,7 @@
     }
     const d = r.data;
     kpis(d); schedule(d.events || []); due(d.unpaid || []); trend(d.trend || []); alerts(d.alerts || []);
+    mrr(); // v0.10.0: memberships card (separate endpoint so old workers don't break the dashboard)
   }
 
   function kpis(d) {
@@ -46,6 +47,19 @@
         <div class="sub">contacts in this org</div></div>
       <div class="kpi"><div class="n">${(d.events || []).length}</div><div class="l">Live &amp; upcoming events</div>
         <div class="sub">published or in progress</div></div>`;
+  }
+
+  async function mrr() {
+    try {
+      const r = await api("/api/admin/mrr");
+      if (!r.ok) return; // worker older than v0.10.0 — skip silently
+      const d = r.data;
+      const el = document.createElement("div");
+      el.className = "kpi" + (d.past_due_count > 0 ? " warn" : "");
+      el.innerHTML = `<div class="n">${money(d.mrr_cents)}</div><div class="l">Monthly recurring revenue</div>
+        <div class="sub">${d.active_count} active membership${d.active_count === 1 ? "" : "s"}${d.past_due_count ? ` · <b>${d.past_due_count} payment issue${d.past_due_count === 1 ? "" : "s"}</b>` : ""} · <a href="admin-plans.html">Manage →</a></div>`;
+      $("kpis").appendChild(el);
+    } catch (e) { /* non-fatal */ }
   }
 
   function schedule(rows) {

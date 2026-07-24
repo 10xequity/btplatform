@@ -1,5 +1,6 @@
 /* Boomtown Platform — Site-wide sidebar navigation (shared)
-   File: web/assets/site-nav.js · Version: v2.0 · Date: 2026-07-24 · Ships in: v0.9.1
+   File: web/assets/site-nav.js · Version: v2.1 · Date: 2026-07-24 · Ships in: v0.10.0
+   v2.1: Membership item under "You" (membership.html — plans, status, cancel).
    v2.0 (RECOVERY of the lost v0.7.0 nav): member notifications bell — signed-in
    members get "My Dashboard" and a "Notifications" item with a live unread badge
    (GET /api/notifications); both land on home.html. Everything else unchanged.
@@ -84,6 +85,7 @@
         { href: "home.html",     ico: "▦", text: "My Dashboard" },
         { href: "home.html#notifications", ico: "◔", text: "Notifications", badge: unread },
         { href: "profile.html",  ico: "◉", text: "My Profile" },
+        { href: "membership.html", ico: "★", text: "Membership" },
         { href: "settings.html", ico: "⚙", text: "Settings" },
       ]});
       if (role === "admin" || role === "staff") {

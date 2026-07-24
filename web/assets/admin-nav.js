@@ -68,6 +68,7 @@
     ]},
     { label: "Money", items: [
       { href: "admin-reports.html",       ico: "sales",  text: "Sales & Reports" },
+      { href: "admin-plans.html",         ico: "sales",  text: "Memberships" },
     ]},
     { label: "People", items: [
       { href: "admin-users.html",         ico: "members", text: "Members" },

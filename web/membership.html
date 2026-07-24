@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<!-- Boomtown Platform — Membership · Version: v1.0 · Date: 2026-07-24 · Ships in: v0.10.0
+     Member-facing memberships: current status banner, plan cards, subscribe via Square
+     payment link (card stored by Square, renews automatically), cancel at period end. -->
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Membership — Boomtown Athletics</title>
+  <link rel="stylesheet" href="assets/tokens.css?v=0.10.0" />
+  <link rel="stylesheet" href="assets/app.css?v=0.10.0" />
+  <style>
+    .ms-wrap { max-width: 760px; margin: 0 auto; padding: 16px; }
+    .ms-banner { border: 1px solid var(--border); border-radius: var(--radius-card); padding: 14px 16px; margin-bottom: 16px; background: var(--surface); }
+    .ms-banner.ok { border-color: var(--positive); }
+    .ms-banner.warn { border-color: var(--warning, #e6a23c); }
+    .ms-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+    .plan { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card); padding: 18px; display: flex; flex-direction: column; }
+    .plan h2 { font-size: 17px; margin: 0; }
+    .plan .price { font-size: 26px; font-weight: 800; margin: 8px 0 2px; }
+    .plan .price small { font-size: 13px; font-weight: 600; color: var(--text-muted); }
+    .plan .desc { font-size: 13.5px; color: var(--text-muted); margin: 6px 0 10px; }
+    .plan ul { margin: 0 0 14px; padding-left: 18px; font-size: 13.5px; }
+    .plan ul li { margin: 3px 0; }
+    .plan .btn { margin-top: auto; min-height: 44px; }
+  </style>
+  <script>
+    (function () {
+      document.documentElement.dataset.theme = localStorage.getItem("bt_theme") ||
+        (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+    })();
+  </script>
+</head>
+<body>
+  <header class="header chrome-glass">
+    <a class="wordmark" href="index.html" style="text-decoration:none">Boomtown <span>Athletics</span></a>
+    <div class="spacer"></div>
+    <a class="btn ghost" href="home.html" style="text-decoration:none">&#8592; My Dashboard</a>
+  </header>
+
+  <main class="ms-wrap" id="app" aria-live="polite">
+    <h1 style="font-size:24px;margin:8px 0 14px">Membership</h1>
+    <div id="current"></div>
+    <div class="ms-grid" id="plans"><p class="help-text">Loading plans…</p></div>
+    <div id="status" role="status" aria-live="polite" style="margin-top:12px"></div>
+  </main>
+
+  <script src="assets/config.js?v=0.10.0"></script>
+  <script src="assets/site-nav.js?v=2.1" defer></script>
+  <script src="assets/membership.js?v=1.0" defer></script>
+</body>
+</html>

@@ -1,6 +1,12 @@
 /**
  * Boomtown Platform — API Worker
- * Version: v0.9.0 · Date: 2026-07-23 · Modules 1–10
+ * Version: v0.10.0 · Date: 2026-07-24 · Modules 1–11
+ *
+ * v0.10.0 (2026-07-24): Memberships & recurring billing (memberships.js — plans CRUD w/
+ *   Square Catalog plan+variation, subscribe via payment link checkout_options.subscription_plan_id,
+ *   cancel-at-period-end, MRR endpoint). Migration 0007 applied live. /api/webhooks/square now
+ *   enters via membershipWebhook, which handles subscription and invoice events and forwards payment events
+ *   to the unchanged registrations handler. Health reports v0.10.0.
  *
  * v0.9.1 (2026-07-24): RECOVERY — restores the never-uploaded v0.7.0 worker files
  * (leagues_admin.js, registrations.js v1.2 exports + retry-payment). No new routes here.
@@ -58,7 +64,7 @@
  *   SQUARE_LOCATION_ID, SQUARE_ENV ('production' | anything else = sandbox).
  */
 import { tournamentRoutes, wire } from "./tournaments.js";
-import { registrationRoutes, wireRegistrations, squareWebhook } from "./registrations.js";
+import { registrationRoutes, wireRegistrations } from "./registrations.js";
 import { adminRoutes, wireAdmin } from "./admin.js";
 import { scheduleRoutes, wireSchedule } from "./schedule.js";
 import { eventsAdminRoutes, wireEventsAdmin } from "./events_admin.js";
@@ -67,6 +73,7 @@ import { webauthnRoutes, wireWebauthn } from "./webauthn.js";
 import { leagueRoutes, wireLeagues } from "./leagues_admin.js";
 import { reportRoutes, wireReports } from "./reports.js";
 import { checkinRoutes, wireCheckin } from "./checkin.js";
+import { membershipRoutes, wireMemberships, membershipWebhook } from "./memberships.js";
 import { waiverReminderSweep, sendEmail, escapeHtml } from "./registrations.js";
 
 const MAGIC_LINK_TTL_MIN = 15;
@@ -91,6 +98,7 @@ wireWebauthn(wiredHelpers);
 wireLeagues(wiredHelpers);
 wireReports(wiredHelpers);
 wireCheckin(wiredHelpers);
+wireMemberships(wiredHelpers);
 
 /** ctx carries the caller's session + selected org for role checks. */
 async function buildCtx(request, env) {
@@ -134,15 +142,16 @@ export default {
       } else if (url.pathname === "/api/orgs" && request.method === "GET") {
         res = await listOrgs(env);
       } else if (url.pathname === "/api/health") {
-        res = json({ ok: true, version: "v0.9.1" });
+        res = json({ ok: true, version: "v0.10.0" });
       } else if (url.pathname === "/api/webhooks/square" && request.method === "POST") {
-        res = await squareWebhook(request, env); // server-to-server; signature-verified inside
+        res = await membershipWebhook(request, env); // verifies signature; forwards payment.* to squareWebhook
       } else if (url.pathname.startsWith("/api/")) {
         const ctx = await buildCtx(request, env);
         res = (await webauthnRoutes(request, env, url, ctx))
            || (await leagueRoutes(request, env, url, ctx))
            || (await reportRoutes(request, env, url, ctx))
            || (await checkinRoutes(request, env, url, ctx))
+           || (await membershipRoutes(request, env, url, ctx))
            || (await profileRoutes(request, env, url, ctx))
            || (await scheduleRoutes(request, env, url, ctx))
            || (await eventsAdminRoutes(request, env, url, ctx))

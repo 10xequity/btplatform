@@ -1,5 +1,5 @@
 /* Boomtown Platform — My Dashboard
-   File: web/home.js · Version: v1.1 · Date: 2026-07-24 · Ships in: v0.9.1
+   File: web/home.js · Version: v1.2 · Date: 2026-07-24 · Ships in: v0.10.0 (adds Membership card)
    RECOVERY of the lost v0.7.0 member dashboard. On load: silently links roster
    rows to this account (POST /api/profile/connect-teams), then renders the
    notification inbox, upcoming events, and teams (captains can send invites). */
@@ -40,6 +40,7 @@
     const first = ((me.data.contact && me.data.contact.full_name) || "").split(/\s+/)[0];
     if (first) $("hello").textContent = `Welcome back, ${first}`;
     api("/api/profile/connect-teams", { method: "POST" }); // fire-and-forget roster link
+    loadMembership();
     loadNotifications(); loadUpcoming(); loadTeams();
   }
 
@@ -106,4 +107,27 @@
       if (r2.ok) loadTeams();
     });
   }
+
+  async function loadMembership() {
+    const box = $("memBox");
+    if (!box) return;
+    const r = await api("/api/profile/subscription");
+    if (!r.ok) { box.innerHTML = `<p class="help-text">Membership plans are coming soon.</p>`; return; }
+    const s = r.data.subscription;
+    if (!s || s.status === "canceled" || s.status === "deactivated") {
+      box.innerHTML = `<p class="help-text" style="margin:0">No membership yet.</p>
+        <a class="btn" href="membership.html" style="margin-top:10px;display:inline-block;text-decoration:none">See plans</a>`;
+      return;
+    }
+    const price = "$" + (s.price_cents / 100).toFixed(2) + (s.billing_interval === "ANNUAL" ? "/yr" : "/mo");
+    const line = s.status === "past_due"
+      ? `<b style="color:var(--warning,#e6a23c)">Payment issue</b> — update your card from the Membership page.`
+      : s.status === "pending"
+        ? `Payment pending — finish checkout from the Membership page.`
+        : `Active · renews ${s.current_period_end ? s.current_period_end.slice(0, 10) : "on schedule"}`;
+    box.innerHTML = `<div style="font-weight:700">${esc(s.plan_name)} <span style="color:var(--text-muted);font-weight:600">${price}</span></div>
+      <p class="help-text" style="margin:6px 0 10px">${line}</p>
+      <a class="btn ghost" href="membership.html" style="text-decoration:none">Manage membership</a>`;
+  }
+
 })();
