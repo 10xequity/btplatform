@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<!-- Boomtown Platform — Door Check-in · Version: v1.0 · Date: 2026-07-23 · Ships in: v0.9.0
+     Big-tap roster for the door: name + team + waiver flag, one tap = checked in (tap again = undo),
+     walk-in entry, live progress counter, self-check-in QR + link for the table tent. -->
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Check-in — Boomtown Athletics</title>
+  <link rel="stylesheet" href="assets/tokens.css?v=0.9.0" />
+  <link rel="stylesheet" href="assets/app.css?v=0.9.0" />
+  <link rel="stylesheet" href="assets/admin.css?v=0.9.0" />
+  <style>
+    .ck-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+    .ck-progress { font-size: 20px; font-weight: 800; }
+    .ck-progress b { color: var(--accent); }
+    .ck-search { flex: 1; min-width: 200px; }
+    .ck-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; }
+    .ck-card { display: flex; align-items: center; gap: 12px; text-align: left; font: inherit;
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card);
+      padding: 14px; min-height: 74px; cursor: pointer; width: 100%;
+      transition: transform var(--dur-press) var(--ease-out), border-color 120ms var(--ease-out); }
+    .ck-card:active { transform: scale(0.98); }
+    .ck-card .who { flex: 1; min-width: 0; }
+    .ck-card .n { font-weight: 700; font-size: 17px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ck-card .t { font-size: 13.5px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ck-card .mark { flex: none; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center;
+      border: 2px solid var(--border); font-size: 19px; font-weight: 800; color: transparent; }
+    .ck-card.in { border-color: color-mix(in srgb, var(--positive) 55%, transparent);
+      background: color-mix(in srgb, var(--positive) 8%, var(--surface)); }
+    .ck-card.in .mark { border-color: var(--positive); color: var(--positive); }
+    .waiver-flag { display: inline-block; font-size: 11.5px; font-weight: 800; letter-spacing: .04em;
+      padding: 2px 8px; border-radius: 999px; margin-left: 6px; }
+    .waiver-flag.no { color: var(--danger); border: 1px solid color-mix(in srgb, var(--danger) 55%, transparent); }
+    .qr-box { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+    .qr-box #qr { background: #fff; padding: 10px; border-radius: 10px; }
+    .qr-box code { font-size: 12.5px; overflow-wrap: anywhere; }
+    .team-head { grid-column: 1 / -1; font-size: 13px; font-weight: 800; letter-spacing: .06em;
+      text-transform: uppercase; color: var(--text-muted); margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <header class="header chrome-glass">
+    <div class="wordmark"><a href="index.html" style="color:inherit;text-decoration:none">Boomtown <span>Athletics</span></a></div>
+    <div class="spacer"></div>
+    <select id="orgSwitcher" class="org-switcher" aria-label="Switch organization"></select>
+    <button id="themeToggle" class="btn ghost theme-toggle" aria-label="Toggle dark or light theme">◐</button>
+  </header>
+
+  <div class="admin-layout">
+  <main class="main wide admin-main" id="app" aria-live="polite">
+    <div class="page-head"><h1>Door Check-in</h1><div class="spacer"></div>
+      <select id="eventSelect" class="org-switcher" aria-label="Choose event"></select></div>
+
+    <div class="ck-head">
+      <span class="ck-progress" id="progress"></span>
+      <input class="ck-search" id="search" type="search" placeholder="Type a name to jump to it…" aria-label="Search roster" />
+      <button class="btn ghost" id="walkinBtn">+ Walk-in</button>
+      <button class="btn ghost" id="qrBtn">Self check-in QR</button>
+    </div>
+    <div id="status" role="status" aria-live="polite"></div>
+
+    <section class="card" id="qrCard" hidden>
+      <h2 style="font-size:16px;margin:0 0 10px">Self check-in — print this or prop up a tablet</h2>
+      <div class="qr-box"><div id="qr"></div>
+        <div><p class="help-text" style="margin-top:0">Players scan → enter their email → checked in.
+          Rotating the code kills the old link.</p>
+          <code id="qrUrl"></code><br/>
+          <button class="btn ghost" id="copyUrl" style="margin-top:8px">Copy link</button>
+          <button class="btn ghost" id="rotate" style="margin-top:8px">Rotate code</button></div></div>
+    </section>
+
+    <div class="ck-list" id="roster"><p class="empty">Pick an event.</p></div>
+  </main>
+  </div><!-- /admin-layout -->
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="assets/config.js?v=0.9.0"></script>
+  <script src="assets/admin-nav.js?v=0.9.0"></script>
+  <script src="assets/admin-checkin.js?v=1.0"></script>
+</body>
+</html>

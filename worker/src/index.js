@@ -1,6 +1,10 @@
 /**
  * Boomtown Platform — API Worker
- * Version: v0.8.0 · Date: 2026-07-23 · Modules 1–8 + Control Center
+ * Version: v0.9.0 · Date: 2026-07-23 · Modules 1–10
+ *
+ * v0.9.0 (2026-07-23): Check-in & attendance (checkin.js — door roster with waiver
+ *   flags, tap check-in/undo, walk-ins, rotating self-check-in token + public QR page,
+ *   member attendance history). Migration 0006. Health reports v0.9.0.
  *
  * v0.8.0 (2026-07-23): Control Center dashboard endpoint (reports.js v1.1 —
  *   /api/admin/dashboard: month money, outstanding list, 7-day trend, schedule,
@@ -60,6 +64,7 @@ import { profileRoutes, wireProfiles } from "./profiles.js";
 import { webauthnRoutes, wireWebauthn } from "./webauthn.js";
 import { leagueRoutes, wireLeagues } from "./leagues_admin.js";
 import { reportRoutes, wireReports } from "./reports.js";
+import { checkinRoutes, wireCheckin } from "./checkin.js";
 import { waiverReminderSweep, sendEmail, escapeHtml } from "./registrations.js";
 
 const MAGIC_LINK_TTL_MIN = 15;
@@ -83,6 +88,7 @@ wireProfiles(wiredHelpers);
 wireWebauthn(wiredHelpers);
 wireLeagues(wiredHelpers);
 wireReports(wiredHelpers);
+wireCheckin(wiredHelpers);
 
 /** ctx carries the caller's session + selected org for role checks. */
 async function buildCtx(request, env) {
@@ -126,7 +132,7 @@ export default {
       } else if (url.pathname === "/api/orgs" && request.method === "GET") {
         res = await listOrgs(env);
       } else if (url.pathname === "/api/health") {
-        res = json({ ok: true, version: "v0.8.0" });
+        res = json({ ok: true, version: "v0.9.0" });
       } else if (url.pathname === "/api/webhooks/square" && request.method === "POST") {
         res = await squareWebhook(request, env); // server-to-server; signature-verified inside
       } else if (url.pathname.startsWith("/api/")) {
@@ -134,6 +140,7 @@ export default {
         res = (await webauthnRoutes(request, env, url, ctx))
            || (await leagueRoutes(request, env, url, ctx))
            || (await reportRoutes(request, env, url, ctx))
+           || (await checkinRoutes(request, env, url, ctx))
            || (await profileRoutes(request, env, url, ctx))
            || (await scheduleRoutes(request, env, url, ctx))
            || (await eventsAdminRoutes(request, env, url, ctx))

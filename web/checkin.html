@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<!-- Boomtown Platform — Self Check-in (public, token-gated) · Version: v1.0 · Date: 2026-07-23 · Ships in: v0.9.0
+     QR target: checkin.html?t=TOKEN. Player enters email → roster match = checked in;
+     no match = recorded as unverified with a "see the desk" note. Single file, no nav (kiosk-friendly). -->
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Check in — Boomtown Athletics</title>
+  <link rel="stylesheet" href="assets/tokens.css?v=0.9.0" />
+  <link rel="stylesheet" href="assets/app.css?v=0.9.0" />
+  <style>
+    .ck-wrap { min-height: 100dvh; display: grid; place-items: center; padding: 20px; }
+    .ck-card { width: min(440px, 94vw); text-align: center; }
+    .ck-card h1 { font-size: 24px; margin: 0 0 4px; }
+    .ck-card .sub { color: var(--text-muted); margin: 0 0 18px; }
+    .big-ok { font-size: 52px; line-height: 1; margin: 8px 0 10px; }
+    .msg { margin-top: 14px; font-size: 16px; }
+    .msg.ok { color: var(--positive); } .msg.err { color: var(--danger); }
+    #email { text-align: center; font-size: 18px; }
+  </style>
+</head>
+<body>
+  <main class="ck-wrap"><div class="card ck-card" id="card"><h1>One moment…</h1></div></main>
+  <script src="assets/config.js?v=0.9.0"></script>
+  <script>
+  (function () {
+    var API = (window.BT_CONFIG || {}).apiBase || "";
+    var card = document.getElementById("card");
+    var token = new URLSearchParams(location.search).get("t");
+    var esc = function (s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); };
+    document.documentElement.dataset.theme = localStorage.getItem("bt_theme") ||
+      (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+
+    if (!token || !API || API.indexOf("PENDING") !== -1) {
+      card.innerHTML = "<h1>Link problem</h1><p class='sub'>This check-in link is missing its code. Scan the QR at the desk again.</p>";
+      return;
+    }
+    fetch(API + "/api/checkin/" + token).then(function (r) { return r.json().then(function (d) {
+      if (!r.ok) { card.innerHTML = "<h1>Not active</h1><p class='sub'>" + esc(d.error || "Ask the desk for a fresh QR.") + "</p>"; return; }
+      var ev = d.event;
+      card.innerHTML = "<h1>" + esc(ev.name) + "</h1>" +
+        "<p class='sub'>" + (ev.starts_at ? esc(ev.starts_at.slice(0, 16)).replace("T", " ") + " · " : "") + esc(ev.location || "") + "</p>" +
+        "<div class='field' style='text-align:left'><label for='email'>Your email (the one you registered with)</label>" +
+        "<input id='email' type='email' autocomplete='email' inputmode='email' /></div>" +
+        "<button class='btn' id='go' style='width:100%'>Check me in</button>" +
+        "<div class='msg' id='msg' role='status' aria-live='polite'></div>";
+      document.getElementById("go").onclick = submit;
+      document.getElementById("email").addEventListener("keydown", function (e) { if (e.key === "Enter") submit(); });
+    }); });
+
+    function submit() {
+      var email = document.getElementById("email").value.trim();
+      var msg = document.getElementById("msg");
+      if (!email) { msg.className = "msg err"; msg.textContent = "Enter your email."; return; }
+      var btn = document.getElementById("go");
+      btn.disabled = true; btn.textContent = "Checking in…";
+      fetch(API + "/api/checkin/" + token, {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: email })
+      }).then(function (r) { return r.json().then(function (d) {
+        btn.disabled = false; btn.textContent = "Check me in";
+        if (!r.ok) { msg.className = "msg err"; msg.textContent = d.error || "That didn't work — try again."; return; }
+        card.innerHTML = "<div class='big-ok'>" + (d.unmatched ? "🙋" : "✅") + "</div>" +
+          "<h1>" + (d.unmatched ? "Almost!" : "You're in!") + "</h1>" +
+          "<p class='sub'>" + esc(d.message) + "</p>";
+      }); }).catch(function () {
+        btn.disabled = false; btn.textContent = "Check me in";
+        msg.className = "msg err"; msg.textContent = "No connection — show the desk this screen.";
+      });
+    }
+  })();
+  </script>
+</body>
+</html>
