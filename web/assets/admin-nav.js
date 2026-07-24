@@ -1,5 +1,12 @@
 /* Boomtown Platform — Admin sidebar (shared)
-   Version: v0.8.0 · Date: 2026-07-23 (Check-in link added)
+   Version: v0.11.0 · Date: 2026-07-24 (Module 11.5 — UX & Navigation hardening)
+   v0.11.0: collapse handle moved to the rail's side edge (owner request) · category
+   groups collapse individually (chevron on the label, state remembered per group) ·
+   menu reordered for daily flow (Dashboard → Events → Registrations → Check-in →
+   ops tools) · SANDBOX group: "View as member" (renders the member experience without
+   logging out; Exit pill returns here) + "Test data" modal (generate / wipe the
+   TEST 90000+ set via /api/admin/testdata) · BT_ADMIN.fail() — standard error box
+   with Back + Dashboard so no page dead-ends.
    v0.7.0 (owner spec): regrouped so every manager function is easy to find
    (Run events / Money / People / Member site) · inline SVG icons that describe
    each destination · collapse-to-icons toggle (persisted, bigger working area) ·
@@ -50,6 +57,28 @@
     html[data-nav="min"] .bt-collapse svg { transform: rotate(180deg); }
     html[data-nav="min"] .bt-collapse .txt { display: none; }
     .bt-backbar-admin { margin: 0 0 12px; }
+    /* v0.11.0: side-edge collapse handle (fixed → immune to the rail's own scroll/clip) */
+    .bt-edge { position: fixed; top: 50vh; left: 219px; transform: translateY(-50%);
+      width: 26px; height: 56px; display: grid; place-items: center; cursor: pointer;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 13px;
+      color: var(--text-muted); z-index: 11; }
+    .bt-edge:hover, .bt-edge:focus-visible { color: var(--text); border-color: var(--primary); }
+    .bt-edge svg { width: 16px; height: 16px; transition: transform 160ms var(--ease-out); }
+    html[data-nav="min"] .bt-edge { left: 55px; }
+    html[data-nav="min"] .bt-edge svg { transform: rotate(180deg); }
+    @media (max-width: 860px) { .bt-edge { display: none; } }
+    /* v0.11.0: collapsible groups */
+    .nav-label { display: flex; align-items: center; cursor: pointer; user-select: none; min-height: 32px; }
+    .nav-label .grp-chev { margin-left: auto; width: 14px; height: 14px; opacity: .6; transition: transform 160ms var(--ease-out); }
+    .nav-group.closed .grp-chev { transform: rotate(-90deg); }
+    .nav-group.closed .nav-item { display: none; }
+    html[data-nav="min"] .nav-group.closed .nav-item { display: flex; } /* icon mode ignores group collapse */
+    /* v0.11.0: sandbox group + fail box */
+    .nav-group.sandbox { border-top: 1px dashed var(--border); padding-top: 8px; }
+    .nav-group.sandbox .nav-label { color: var(--warning, #e6a23c); }
+    .bt-fail { border: 1px solid var(--border); border-radius: var(--radius-card);
+      padding: 18px; background: var(--surface); }
+    .bt-fail .bt-fail-actions { display: flex; gap: 10px; margin-top: 12px; }
     @media (max-width: 860px) {
       html[data-nav="min"] .admin-layout { grid-template-columns: 1fr; }
       .sidebar .rail-foot { display: none; }
@@ -58,24 +87,24 @@
   document.head.appendChild(extra);
   if (localStorage.getItem("bt_nav_collapsed") === "1") document.documentElement.dataset.nav = "min";
   const NAV = [
-    { label: "Run events", items: [
+    { label: "Run events", key: "run", items: [
       { href: "admin.html",               ico: "dash",   text: "Dashboard" },
       { href: "admin-events.html",        ico: "events", text: "Events & Programs" },
-      { href: "tournament.html",          ico: "ops",    text: "Tournament Ops" },
-      { href: "admin-league.html",        ico: "league", text: "League Manager" },
       { href: "admin-registrations.html", ico: "regs",   text: "Registrations" },
       { href: "admin-checkin.html",       ico: "door",   text: "Check-in" },
+      { href: "tournament.html",          ico: "ops",    text: "Tournament Ops" },
+      { href: "admin-league.html",        ico: "league", text: "League Manager" },
     ]},
-    { label: "Money", items: [
+    { label: "Money", key: "money", items: [
       { href: "admin-reports.html",       ico: "sales",  text: "Sales & Reports" },
       { href: "admin-plans.html",         ico: "sales",  text: "Memberships" },
     ]},
-    { label: "People", items: [
+    { label: "People", key: "people", items: [
       { href: "admin-users.html",         ico: "members", text: "Members" },
       { href: "admin-users.html#roles",   ico: "roles",   text: "Admins & Roles" },
       { href: "settings.html",            ico: "gear",    text: "Settings" },
     ]},
-    { label: "Member site", items: [
+    { label: "Member site", key: "site", items: [
       { href: "index.html",               ico: "home",  text: "Home" },
       { href: "schedule.html",            ico: "sched", text: "Schedule Page" },
       { href: "leagues.html",             ico: "league", text: "Leagues Page" },
@@ -90,18 +119,76 @@
     aside.className = "sidebar";
     aside.setAttribute("aria-label", "Admin sections");
     aside.innerHTML = NAV.map(g => `
-      <nav class="nav-group">
-        <div class="nav-label">${g.label}</div>
+      <nav class="nav-group${localStorage.getItem("bt_navgrp_" + g.key) === "closed" ? " closed" : ""}" data-key="${g.key}">
+        <div class="nav-label" role="button" tabindex="0" aria-expanded="${localStorage.getItem("bt_navgrp_" + g.key) !== "closed"}">${g.label}<span class="grp-chev">${ICONS.chevron}</span></div>
         ${g.items.map(i => `
           <a class="nav-item" href="${i.href}" title="${i.text}">${ICONS[i.ico] || ""}<span class="txt">${i.text}</span></a>`).join("")}
       </nav>`).join("");
+    // SANDBOX group (demo tools — visible to staff; everything it does is reversible)
+    aside.insertAdjacentHTML("beforeend", `
+      <nav class="nav-group sandbox" data-key="sandbox">
+        <div class="nav-label" role="button" tabindex="0" aria-expanded="true">Sandbox<span class="grp-chev">${ICONS.chevron}</span></div>
+        <a class="nav-item" href="#" id="btViewMember" title="View as member">${ICONS.members}<span class="txt">View as member</span></a>
+        <a class="nav-item" href="#" id="btTestData" title="Test data">${ICONS.regs}<span class="txt">Test data…</span></a>
+      </nav>`);
+    // v0.11.0: collapse handle on the rail's side edge (was a bottom button)
     aside.insertAdjacentHTML("beforeend",
-      `<div class="rail-foot"><button class="bt-collapse" type="button" aria-label="Collapse navigation">${ICONS.chevron}<span class="txt">Collapse</span></button></div>`);
+      `<button class="bt-edge" type="button" aria-label="Collapse or expand navigation">${ICONS.chevron}</button>`);
     layout.prepend(aside);
-    aside.querySelector(".bt-collapse").addEventListener("click", () => {
+    aside.querySelector(".bt-edge").addEventListener("click", () => {
       const min = document.documentElement.dataset.nav === "min";
       if (min) delete document.documentElement.dataset.nav; else document.documentElement.dataset.nav = "min";
       localStorage.setItem("bt_nav_collapsed", min ? "0" : "1");
+    });
+    // group collapse (remembered per group; keyboard: Enter/Space)
+    aside.querySelectorAll(".nav-group .nav-label").forEach(lbl => {
+      const toggle = () => {
+        const grp = lbl.closest(".nav-group");
+        const closed = grp.classList.toggle("closed");
+        lbl.setAttribute("aria-expanded", String(!closed));
+        localStorage.setItem("bt_navgrp_" + grp.dataset.key, closed ? "closed" : "open");
+      };
+      lbl.addEventListener("click", toggle);
+      lbl.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } });
+    });
+    // sandbox actions
+    aside.querySelector("#btViewMember").addEventListener("click", e => {
+      e.preventDefault();
+      sessionStorage.setItem("bt_demo_member", "1");
+      location.href = "home.html";
+    });
+    aside.querySelector("#btTestData").addEventListener("click", async e => {
+      e.preventDefault();
+      const st = await api("/api/admin/testdata");
+      const seeded = st.ok && st.data.seeded;
+      const c = (st.ok && st.data.counts) || {};
+      const back = openModal(`
+        <h2 style="margin:0 0 8px">Test data <span style="font-size:12px;color:var(--warning,#e6a23c);font-weight:700">SANDBOX</span></h2>
+        <p class="help-text">Sample events, teams, games, and registrations — all marked TEST, all in the 90000+ ID range, all removable with one click. Real data can't be touched.</p>
+        <p style="font-size:14px">${seeded
+          ? `Currently seeded: ${c.events || 0} events · ${c.teams || 0} teams · ${c.matches || 0} games · ${c.registrations || 0} registrations · ${c.contacts || 0} contacts`
+          : "No test data at the moment."}</p>
+        <div style="display:flex;gap:10px;margin-top:12px">
+          <button class="btn" id="tdGen" ${seeded ? "disabled" : ""}>Generate test data</button>
+          <button class="btn ghost" id="tdWipe" ${seeded ? "" : "disabled"}>Wipe test data</button>
+          <button class="btn ghost" id="tdClose">Close</button>
+        </div>
+        <div id="tdStatus" role="status" aria-live="polite" style="margin-top:10px"></div>`);
+      const say = m => { back.querySelector("#tdStatus").textContent = m || ""; };
+      back.querySelector("#tdClose").onclick = closeModal;
+      back.querySelector("#tdGen").onclick = async () => {
+        say("Creating…");
+        const r = await api("/api/admin/testdata/generate", { method: "POST" });
+        say(r.data.message || r.data.error);
+        if (r.ok) setTimeout(() => location.reload(), 1200);
+      };
+      back.querySelector("#tdWipe").onclick = async () => {
+        if (!confirm("Wipe all TEST data (the 90000+ range)? Real data is never touched.")) return;
+        say("Wiping…");
+        const r = await api("/api/admin/testdata/wipe", { method: "POST" });
+        say(r.data.message || r.data.error);
+        if (r.ok) setTimeout(() => location.reload(), 1200);
+      };
     });
     // "← Back": previous page via history (falls back to the dashboard)
     const mainEl = layout.querySelector(".admin-main");
@@ -150,10 +237,27 @@
 
   /* Redirect to sign-in if there's no session; returns /api/me payload if signed in. */
   async function guard() {
+    // Admin pages exit member-demo mode automatically (View-as-member is presentation only).
+    if (sessionStorage.getItem("bt_demo_member") === "1") { location.href = "home.html"; return null; }
     if (!bearer()) { location.href = "index.html"; return null; }
     const me = await api("/api/me");
     if (!me.ok) { location.href = "index.html"; return null; }
     return me.data;
+  }
+
+  /* v0.11.0: standard dead-end recovery — render an error WITH a way back. */
+  function fail(el, msg) {
+    if (typeof el === "string") el = document.getElementById(el);
+    if (!el) return;
+    el.innerHTML = `<div class="bt-fail"><b>${esc(msg || "Something went wrong.")}</b>
+      <div class="bt-fail-actions">
+        <button class="btn ghost" type="button" data-act="back">← Back</button>
+        <a class="btn" href="admin.html" style="text-decoration:none">Go to Dashboard</a>
+        <button class="btn ghost" type="button" data-act="retry">Reload</button>
+      </div></div>`;
+    el.querySelector('[data-act="back"]').onclick = () =>
+      (history.length > 1 && document.referrer.startsWith(location.origin)) ? history.back() : (location.href = "admin.html");
+    el.querySelector('[data-act="retry"]').onclick = () => location.reload();
   }
 
   const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c =>
@@ -190,5 +294,5 @@
     URL.revokeObjectURL(url);
   }
 
-  window.BT_ADMIN = { api, guard, esc, money, fmtDT, openModal, closeModal, downloadText };
+  window.BT_ADMIN = { api, guard, esc, money, fmtDT, openModal, closeModal, downloadText, fail };
 })();

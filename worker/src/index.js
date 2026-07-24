@@ -1,6 +1,10 @@
 /**
  * Boomtown Platform — API Worker
- * Version: v0.10.0 · Date: 2026-07-24 · Modules 1–11
+ * Version: v0.11.0 · Date: 2026-07-24 · Modules 1–11.5
+ *
+ * v0.11.0 (2026-07-24): UX & Navigation hardening + Sandbox tools (sandbox.js —
+ *   staff-gated test-data generate/wipe/status for the admin rail demo toolbar).
+ *   Health reports v0.11.0. No schema changes.
  *
  * v0.10.0 (2026-07-24): Memberships & recurring billing (memberships.js — plans CRUD w/
  *   Square Catalog plan+variation, subscribe via payment link checkout_options.subscription_plan_id,
@@ -74,6 +78,7 @@ import { leagueRoutes, wireLeagues } from "./leagues_admin.js";
 import { reportRoutes, wireReports } from "./reports.js";
 import { checkinRoutes, wireCheckin } from "./checkin.js";
 import { membershipRoutes, wireMemberships, membershipWebhook } from "./memberships.js";
+import { sandboxRoutes, wireSandbox } from "./sandbox.js";
 import { waiverReminderSweep, sendEmail, escapeHtml } from "./registrations.js";
 
 const MAGIC_LINK_TTL_MIN = 15;
@@ -99,6 +104,7 @@ wireLeagues(wiredHelpers);
 wireReports(wiredHelpers);
 wireCheckin(wiredHelpers);
 wireMemberships(wiredHelpers);
+wireSandbox(wiredHelpers);
 
 /** ctx carries the caller's session + selected org for role checks. */
 async function buildCtx(request, env) {
@@ -142,7 +148,7 @@ export default {
       } else if (url.pathname === "/api/orgs" && request.method === "GET") {
         res = await listOrgs(env);
       } else if (url.pathname === "/api/health") {
-        res = json({ ok: true, version: "v0.10.0" });
+        res = json({ ok: true, version: "v0.11.0" });
       } else if (url.pathname === "/api/webhooks/square" && request.method === "POST") {
         res = await membershipWebhook(request, env); // verifies signature; forwards payment.* to squareWebhook
       } else if (url.pathname.startsWith("/api/")) {
@@ -152,6 +158,7 @@ export default {
            || (await reportRoutes(request, env, url, ctx))
            || (await checkinRoutes(request, env, url, ctx))
            || (await membershipRoutes(request, env, url, ctx))
+           || (await sandboxRoutes(request, env, url, ctx))
            || (await profileRoutes(request, env, url, ctx))
            || (await scheduleRoutes(request, env, url, ctx))
            || (await eventsAdminRoutes(request, env, url, ctx))

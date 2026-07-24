@@ -1,5 +1,9 @@
 /* Boomtown Platform — Site-wide sidebar navigation (shared)
-   File: web/assets/site-nav.js · Version: v2.1 · Date: 2026-07-24 · Ships in: v0.10.0
+   File: web/assets/site-nav.js · Version: v2.2 · Date: 2026-07-24 · Ships in: v0.11.0
+   v2.2: View-as-member demo mode — when sessionStorage bt_demo_member=1 (set from the
+   admin rail's Sandbox group) the Manage group is hidden and a fixed "Viewing as
+   member — Exit" pill returns to the Control Center. Presentation only: the server
+   role never changes, and admin pages bounce back to home.html while the flag is on.
    v2.1: Membership item under "You" (membership.html — plans, status, cancel).
    v2.0 (RECOVERY of the lost v0.7.0 nav): member notifications bell — signed-in
    members get "My Dashboard" and a "Notifications" item with a live unread badge
@@ -88,7 +92,19 @@
         { href: "membership.html", ico: "★", text: "Membership" },
         { href: "settings.html", ico: "⚙", text: "Settings" },
       ]});
-      if (role === "admin" || role === "staff") {
+      const demoMember = sessionStorage.getItem("bt_demo_member") === "1";
+      if ((role === "admin" || role === "staff") && demoMember) {
+        const pill = document.createElement("button");
+        pill.type = "button";
+        pill.textContent = "Viewing as member — Exit";
+        pill.setAttribute("style",
+          "position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:60;" +
+          "min-height:44px;padding:10px 18px;border-radius:999px;border:1px solid var(--warning,#e6a23c);" +
+          "background:var(--surface);color:var(--text);font:inherit;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.25)");
+        pill.onclick = () => { sessionStorage.removeItem("bt_demo_member"); location.href = "admin.html"; };
+        document.body.appendChild(pill);
+      }
+      if ((role === "admin" || role === "staff") && !demoMember) {
         NAV.push({ label: "Manage", items: [
           { href: "tournament.html",          ico: "◫", text: "Tournament Ops" },
           { href: "admin-events.html",        ico: "▤", text: "Events & Programs" },

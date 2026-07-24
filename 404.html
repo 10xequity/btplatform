@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<!-- Boomtown Platform — Not Found · Version: v1.0 · Date: 2026-07-24 · Ships in: v0.11.0
+     GitHub Pages serves this for any missing path. Guarantees navigation always
+     returns (owner rule: no dead ends). -->
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Page not found — Boomtown Athletics</title>
+  <link rel="stylesheet" href="/btplatform/web/assets/tokens.css?v=0.11.0" />
+  <link rel="stylesheet" href="/btplatform/web/assets/app.css?v=0.11.0" />
+  <script>
+    (function () {
+      document.documentElement.dataset.theme = localStorage.getItem("bt_theme") ||
+        (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+    })();
+  </script>
+</head>
+<body>
+  <header class="header chrome-glass">
+    <a class="wordmark" href="/btplatform/web/index.html" style="text-decoration:none">Boomtown <span>Athletics</span></a>
+  </header>
+  <main style="max-width:560px;margin:10vh auto;padding:0 16px;text-align:center" aria-live="polite">
+    <h1 style="font-size:26px;margin:0 0 8px">That page doesn't exist</h1>
+    <p style="color:var(--text-muted);margin:0 0 20px">The link may be old, or the page moved in an update.</p>
+    <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+      <button class="btn ghost" type="button" onclick="history.length>1?history.back():location.href='/btplatform/web/index.html'" style="min-height:44px">← Back</button>
+      <a class="btn" href="/btplatform/web/index.html" style="min-height:44px;text-decoration:none;display:inline-flex;align-items:center">Home</a>
+      <a class="btn ghost" href="/btplatform/web/home.html" style="min-height:44px;text-decoration:none;display:inline-flex;align-items:center">My Dashboard</a>
+    </div>
+  </main>
+</body>
+</html>
