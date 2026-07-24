@@ -1,5 +1,5 @@
 /* Boomtown Platform — Admin sidebar (shared)
-   Version: v0.11.0 · Date: 2026-07-24 (Module 11.5 — UX & Navigation hardening)
+   Version: v2.2 · Date: 2026-07-24 (v2.1 = Module 11.5 UX hardening; v2.2 adds Facility Calendar item — Module 12)
    v0.11.0: collapse handle moved to the rail's side edge (owner request) · category
    groups collapse individually (chevron on the label, state remembered per group) ·
    menu reordered for daily flow (Dashboard → Events → Registrations → Check-in →
@@ -92,6 +92,7 @@
       { href: "admin-events.html",        ico: "events", text: "Events & Programs" },
       { href: "admin-registrations.html", ico: "regs",   text: "Registrations" },
       { href: "admin-checkin.html",       ico: "door",   text: "Check-in" },
+      { href: "admin-facility.html",      ico: "sched",  text: "Facility Calendar" },
       { href: "tournament.html",          ico: "ops",    text: "Tournament Ops" },
       { href: "admin-league.html",        ico: "league", text: "League Manager" },
     ]},

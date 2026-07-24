@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<!-- Boomtown Platform — Facility Calendar (admin) · Version: v1.0 · Date: 2026-07-24 · Ships in: v0.12.0
+     Court-by-time day grid over 13 courts + 6 rooms, operator-colored bookings, conflict-checked
+     booking modal (presets, Court Share, closures, weekly series), CSV importer.
+     Design: tokens only · no animation on grid navigation (daily-frequency rule) ·
+     modal enter 200ms ease-out from scale(.97) · 44px targets · focus-visible everywhere. -->
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Facility Calendar — Boomtown Athletics</title>
+  <link rel="stylesheet" href="assets/tokens.css?v=0.12.0" />
+  <link rel="stylesheet" href="assets/app.css?v=0.12.0" />
+  <link rel="stylesheet" href="assets/admin.css?v=0.12.0" />
+  <style>
+    .fc-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+    .fc-toolbar .grow { flex: 1; }
+    .fc-toolbar input[type="date"] { min-height: 44px; }
+    .fc-datelabel { font-size: 18px; font-weight: 700; min-width: 210px; }
+    .seg { display: inline-flex; border: 1px solid var(--border); border-radius: var(--radius-control); overflow: hidden; }
+    .seg button { min-height: 44px; min-width: 64px; border: 0; background: transparent; color: var(--text); font: inherit; cursor: pointer; padding: 0 14px; }
+    .seg button[aria-pressed="true"] { background: var(--primary); color: var(--primary-contrast); font-weight: 700; }
+    .seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+    /* legend */
+    .fc-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 0 0 12px; font-size: 13px; color: var(--text-muted); }
+    .fc-legend .op { display: inline-flex; align-items: center; gap: 6px; }
+    .fc-legend .dot { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+
+    /* day grid */
+    .fc-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); }
+    .fc-grid { display: grid; min-width: 1180px; position: relative;
+      grid-template-columns: 64px repeat(var(--ncols), minmax(56px, 1fr)); }
+    .fc-head { position: sticky; top: 0; z-index: 3; background: var(--surface); border-bottom: 1px solid var(--border);
+      font-size: 12.5px; font-weight: 700; text-align: center; padding: 8px 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .fc-head.room { color: var(--text-muted); }
+    .fc-head.divide, .fc-col.divide { border-left: 2px solid var(--border); }
+    .fc-timecol { position: relative; border-right: 1px solid var(--border); }
+    .fc-time { position: absolute; right: 6px; transform: translateY(-50%); font-size: 11.5px; color: var(--text-muted); }
+    .fc-col { position: relative; border-right: 1px solid color-mix(in srgb, var(--border) 55%, transparent); }
+    .fc-col:last-child { border-right: 0; }
+    .fc-hourline { position: absolute; left: 0; right: 0; border-top: 1px solid color-mix(in srgb, var(--border) 55%, transparent); }
+    .fc-body { display: contents; }
+    .fc-block { position: absolute; left: 2px; right: 2px; border-radius: 6px; padding: 3px 5px; font-size: 11.5px;
+      line-height: 1.25; overflow: hidden; cursor: pointer; border: 0; text-align: left; color: var(--text);
+      background: color-mix(in srgb, var(--op) 22%, var(--surface)); border-left: 3px solid var(--op); }
+    .fc-block:hover { background: color-mix(in srgb, var(--op) 34%, var(--surface)); }
+    .fc-block:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; z-index: 2; }
+    .fc-block .t { font-weight: 700; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .fc-block.closure { background: repeating-linear-gradient(-45deg, color-mix(in srgb, var(--danger) 16%, var(--surface)) 0 8px, var(--surface) 8px 16px); border-left-color: var(--danger); }
+    .fc-block.shared::after { content: "shared"; font-size: 10px; color: var(--text-muted); }
+    .fc-nowline { position: absolute; left: 64px; right: 0; border-top: 2px solid var(--accent); z-index: 2; pointer-events: none; }
+
+    /* week list */
+    .fc-week { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+    .fc-daycard h3 { font-size: 15px; margin: 0 0 8px; }
+    .fc-daycard h3 button { background: none; border: 0; color: var(--primary); font: inherit; font-weight: 700; cursor: pointer; padding: 4px; min-height: 32px; }
+    .fc-daycard ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+    .fc-daycard li button { width: 100%; text-align: left; border: 1px solid var(--border); border-left: 3px solid var(--op);
+      background: var(--surface); color: var(--text); border-radius: 6px; padding: 8px 10px; font: inherit; font-size: 13.5px; cursor: pointer; min-height: 44px; }
+    .fc-daycard li button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .fc-daycard .none { color: var(--text-muted); font-size: 13.5px; }
+
+    /* modal */
+    .fc-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: grid; place-items: center; z-index: 40; padding: 14px; }
+    .fc-modal { background: var(--surface-raised, var(--surface)); border: 1px solid var(--border); border-radius: var(--radius-card);
+      width: min(680px, 100%); max-height: 92vh; overflow: auto; padding: 18px;
+      transform-origin: center; animation: fcIn var(--dur-pop, 200ms) var(--ease-out) both; }
+    @keyframes fcIn { from { opacity: 0; transform: scale(.97); } to { opacity: 1; transform: scale(1); } }
+    @media (prefers-reduced-motion: reduce) { .fc-modal { animation: fcFade 120ms linear both; } @keyframes fcFade { from { opacity: 0; } to { opacity: 1; } } }
+    .fc-form { display: grid; gap: 10px; grid-template-columns: 1fr 1fr; }
+    .fc-form .full { grid-column: 1 / -1; }
+    .fc-form label { display: block; font-size: 12.5px; font-weight: 600; color: var(--text-muted); margin-bottom: 4px; }
+    .fc-form input, .fc-form select, .fc-form textarea { width: 100%; min-height: 44px; }
+    .fc-form textarea { min-height: 56px; }
+    .fc-atoms { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 4px; }
+    .fc-atoms label { display: flex; align-items: center; gap: 6px; min-height: 36px; font-size: 13px; font-weight: 500; color: var(--text); margin: 0; cursor: pointer; }
+    .fc-check { display: flex; align-items: center; gap: 8px; min-height: 44px; }
+    .fc-check input { width: 18px; height: 18px; min-height: 0; }
+    .fc-conflicts { border: 1px solid var(--danger); border-radius: var(--radius-control); padding: 10px 12px; font-size: 13.5px; display: none; }
+    .fc-conflicts.warn { border-color: var(--accent); }
+    .fc-conflicts ul { margin: 6px 0 0; padding-left: 18px; }
+    .fc-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; margin-top: 14px; }
+    .btn:active { transform: scale(.97); transition: transform var(--dur-press, 120ms) var(--ease-out); }
+    details.fc-more summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; font-weight: 600; color: var(--text-muted); }
+    .fc-import textarea { width: 100%; min-height: 160px; font-family: ui-monospace, monospace; font-size: 12.5px; }
+    .fc-import .report { font-size: 13.5px; margin-top: 10px; }
+    .empty a { color: var(--primary); }
+    @media (max-width: 720px) { .fc-form { grid-template-columns: 1fr; } .fc-datelabel { min-width: 0; } }
+  </style>
+</head>
+<body>
+  <header class="header chrome-glass">
+    <div class="wordmark"><a href="index.html" style="color:inherit;text-decoration:none">Boomtown <span>Athletics</span></a></div>
+    <div class="spacer"></div>
+    <select id="orgSwitcher" class="org-switcher" aria-label="Switch organization"></select>
+    <button id="themeToggle" class="btn ghost theme-toggle" aria-label="Toggle dark or light theme">◐</button>
+  </header>
+
+  <div class="admin-layout">
+  <main class="main wide admin-main" id="app" aria-live="polite">
+    <div class="page-head"><h1>Facility Calendar</h1></div>
+    <div id="status" role="status" aria-live="polite"></div>
+
+    <div class="fc-toolbar">
+      <button class="btn ghost" id="prevBtn" aria-label="Previous">←</button>
+      <button class="btn ghost" id="todayBtn">Today</button>
+      <button class="btn ghost" id="nextBtn" aria-label="Next">→</button>
+      <input type="date" id="datePick" aria-label="Jump to date" />
+      <span class="fc-datelabel" id="dateLabel"></span>
+      <span class="grow"></span>
+      <span class="seg" role="group" aria-label="View">
+        <button id="viewDay" aria-pressed="true">Day</button>
+        <button id="viewWeek" aria-pressed="false">Week</button>
+      </span>
+      <button class="btn ghost" id="importBtn">Import CSV</button>
+      <button class="btn ghost" id="closureBtn">Add closure</button>
+      <button class="btn" id="newBtn">New booking</button>
+    </div>
+
+    <div class="fc-legend" id="legend" aria-label="Operator colors"></div>
+    <div id="calRoot"></div>
+  </main>
+  </div>
+
+  <script src="assets/admin-nav.js?v=0.12.0" defer></script>
+  <script src="assets/admin-facility.js?v=0.12.0" defer></script>
+</body>
+</html>
+<!-- Changelog: v1.0 (2026-07-24) — initial Facility Calendar page (Module 12 Phase A). -->
