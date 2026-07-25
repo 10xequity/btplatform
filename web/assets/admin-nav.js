@@ -1,7 +1,8 @@
 /* Boomtown Platform — Admin sidebar (shared)
-   Version: v2.6 · Date: 2026-07-24 · Ships in: v0.17.0
+   Version: v2.7 · Date: 2026-07-25 · Ships in: v0.18.0
    v2.6: M14 Phase B — "Message Reports" (admin-messages.html) under Marketing: the review
    queue for member-reported relay messages (content_flags).
+   v2.7: Point of Sale (admin-pos.html) added to the Money group (M15).
    v2.5: Marketing group (Marketing & Email → admin-marketing.html) between Money and People.
    v2.4 (shipped in v0.15.0): (1) MEMBER-VIEW ISOLATION — guard() now checks the caller's ROLE, not just the
    session: signed-in members with no admin/staff role on any org are bounced to home.html
@@ -115,6 +116,7 @@
     ]},
     { label: "Money", key: "money", items: [
       { href: "admin-reports.html",       ico: "sales",  text: "Sales & Reports" },
+      { href: "admin-pos.html",           ico: "sales",  text: "Point of Sale" },
       { href: "admin-plans.html",         ico: "sales",  text: "Memberships" },
     ]},
     { label: "Marketing", key: "mkt", items: [

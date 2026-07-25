@@ -1,6 +1,11 @@
 /**
  * Boomtown Platform — Sales Reports + Member Notifications
- * File: worker/src/reports.js · Version: v1.1 · Date: 2026-07-23 · Ships in: v0.8.0 (v1.0 base same day)
+ * File: worker/src/reports.js · Version: v1.2 · Date: 2026-07-25 · Ships in: v0.18.0
+ *
+ * v1.2 (M15): GET /api/admin/reports/heatmap?weeks=N (R-02, attendance by weekday × hour),
+ *   GET /api/admin/reports/pos-sales?from&to (POS revenue by day + by product),
+ *   GET /api/admin/reports/shift-coverage?from&to (R-05, shifts alongside event counts per day).
+ *   buildHeatmap() exported for unit tests.
  *
  * v1.1: GET /api/admin/dashboard — single call powering the Control Center home
  *   (this-month money, overdue/unpaid list with actionable IDs, 7-day registration
@@ -27,6 +32,9 @@ export async function reportRoutes(request, env, url, ctx) {
   if (p === "/api/notifications" && m === "GET") return inbox(env, ctx);
   if ((x = p.match(/^\/api\/notifications\/(\d+)\/read$/)) && m === "POST") return markRead(env, ctx, +x[1]);
   if (p === "/api/notifications/read-all" && m === "POST") return readAll(env, ctx);
+  if (p === "/api/admin/reports/heatmap" && m === "GET") return heatmap(env, ctx, url);
+  if (p === "/api/admin/reports/pos-sales" && m === "GET") return posSales(env, ctx, url);
+  if (p === "/api/admin/reports/shift-coverage" && m === "GET") return shiftCoverage(env, ctx, url);
   return null;
 }
 
@@ -197,6 +205,74 @@ async function readAll(env, ctx) {
     `UPDATE notifications SET read_at=datetime('now') WHERE contact_id IN (${ph}) AND read_at IS NULL`
   ).bind(...ids).run();
   return json({ ok: true });
+}
+
+
+/* ---------------- M15: attendance heatmap (R-02) ---------------- */
+
+/** Pure: rows of {dow:'0'-'6', hour:'00'-'23', n} → 7×24 matrix + max (unit-tested). */
+export function buildHeatmap(rows) {
+  const grid = Array.from({ length: 7 }, () => Array(24).fill(0));
+  let max = 0;
+  for (const r of rows) {
+    const d = +r.dow, h = +r.hour, n = +r.n || 0;
+    if (d >= 0 && d <= 6 && h >= 0 && h <= 23) { grid[d][h] += n; if (grid[d][h] > max) max = grid[d][h]; }
+  }
+  return { grid, max };
+}
+
+async function heatmap(env, ctx, url) {
+  const deny = await requireStaff(env, ctx);
+  if (deny) return deny;
+  const weeks = Math.min(52, Math.max(1, +url.searchParams.get("weeks") || 8));
+  const rows = (await env.DB.prepare(
+    `SELECT strftime('%w', checked_in_at) AS dow, strftime('%H', checked_in_at) AS hour, COUNT(*) AS n
+     FROM attendance WHERE org_id=?1 AND deleted_at IS NULL
+       AND checked_in_at >= datetime('now', ?2)
+     GROUP BY dow, hour`
+  ).bind(ctx.orgId, `-${weeks * 7} days`).all()).results;
+  return json({ weeks, ...buildHeatmap(rows) });
+}
+
+/* ---------------- M15: POS sales report ---------------- */
+
+async function posSales(env, ctx, url) {
+  const deny = await requireStaff(env, ctx);
+  if (deny) return deny;
+  const from = url.searchParams.get("from") || "0000";
+  const to = url.searchParams.get("to") || "9999";
+  const byDay = (await env.DB.prepare(
+    `SELECT date(created_at) AS day, COUNT(*) AS sales, SUM(total_cents) AS total_cents
+     FROM sales WHERE org_id=?1 AND status='recorded' AND date(created_at) BETWEEN ?2 AND ?3
+     GROUP BY day ORDER BY day`
+  ).bind(ctx.orgId, from, to).all()).results;
+  const byProduct = (await env.DB.prepare(
+    `SELECT si.label, SUM(si.qty) AS qty, SUM(si.line_total_cents) AS total_cents
+     FROM sale_items si JOIN sales s ON s.id = si.sale_id
+     WHERE s.org_id=?1 AND s.status='recorded' AND date(s.created_at) BETWEEN ?2 AND ?3
+     GROUP BY si.label ORDER BY total_cents DESC LIMIT 50`
+  ).bind(ctx.orgId, from, to).all()).results;
+  return json({ by_day: byDay, by_product: byProduct });
+}
+
+/* ---------------- M15: shift coverage (R-05) ---------------- */
+
+async function shiftCoverage(env, ctx, url) {
+  const deny = await requireStaff(env, ctx);
+  if (deny) return deny;
+  const from = url.searchParams.get("from") || "0000";
+  const to = url.searchParams.get("to") || "9999";
+  const shifts = (await env.DB.prepare(
+    `SELECT date(sh.starts_at) AS day, COUNT(*) AS shifts
+     FROM staff_shifts sh WHERE sh.org_id=?1 AND sh.deleted_at IS NULL
+       AND date(sh.starts_at) BETWEEN ?2 AND ?3 GROUP BY day`
+  ).bind(ctx.orgId, from, to).all()).results;
+  const events = (await env.DB.prepare(
+    `SELECT date(starts_at) AS day, COUNT(*) AS events
+     FROM events WHERE org_id=?1 AND deleted_at IS NULL
+       AND date(starts_at) BETWEEN ?2 AND ?3 GROUP BY day`
+  ).bind(ctx.orgId, from, to).all()).results;
+  return json({ shifts, events });
 }
 
 /** Shared helper for other modules: file an in-app notification for one contact. */

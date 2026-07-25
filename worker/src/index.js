@@ -1,7 +1,10 @@
 /**
  * Boomtown Platform — API Worker
- * Version: v0.17.0 · Date: 2026-07-24 · Modules 1–14B
+ * Version: v0.18.0 · Date: 2026-07-25 · Modules 1–15
  *
+ * v0.18.0 (2026-07-25): M15 — pos.js mounted after messages (POS-lite sales/products,
+ *   promo codes on the day-one discounts table per D-M15-1, sponsors incl. public
+ *   GET /api/sponsors, staff shifts). reports.js v1.2 adds heatmap/pos-sales/shift-coverage.
  * v0.17.0 (2026-07-24): M14 Phase B — Messages, Relay & Player Library (messages.js):
  *   privacy-gated library search (public/members/private tiers, spec §3.4; staff see all),
  *   member-to-member message RELAY (in-app notification + email via sendEmail; addresses
@@ -129,6 +132,7 @@ import { securityRoutes, wireSecurity } from "./security.js";
 import { memberPortalRoutes, wireMemberPortal } from "./member_portal.js";
 import { marketingRoutes, wireMarketing, campaignQueueSweep } from "./marketing.js";
 import { messagesRoutes, wireMessages } from "./messages.js";
+import { posRoutes, wirePos } from "./pos.js";
 import { waiverReminderSweep, sendEmail, escapeHtml } from "./registrations.js";
 
 const MAGIC_LINK_TTL_MIN = 15;
@@ -160,6 +164,7 @@ wireSecurity(wiredHelpers);
 wireMemberPortal(wiredHelpers);
 wireMarketing(wiredHelpers);
 wireMessages(wiredHelpers);
+wirePos(wiredHelpers);
 
 /** ctx carries the caller's session + selected org for role checks. */
 async function buildCtx(request, env) {
@@ -203,13 +208,14 @@ export default {
       } else if (url.pathname === "/api/orgs" && request.method === "GET") {
         res = await listOrgs(env);
       } else if (url.pathname === "/api/health") {
-        res = json({ ok: true, version: "v0.17.0" });
+        res = json({ ok: true, version: "v0.18.0" });
       } else if (url.pathname === "/api/webhooks/square" && request.method === "POST") {
         res = await membershipWebhook(request, env); // verifies signature; forwards payment.* to squareWebhook
       } else if (url.pathname.startsWith("/api/")) {
         const ctx = await buildCtx(request, env);
         res = (await marketingRoutes(request, env, url, ctx))
            || (await messagesRoutes(request, env, url, ctx))
+           || (await posRoutes(request, env, url, ctx))
            || (await webauthnRoutes(request, env, url, ctx))
            || (await securityRoutes(request, env, url, ctx))
            || (await memberPortalRoutes(request, env, url, ctx))

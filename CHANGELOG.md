@@ -146,3 +146,16 @@
 - **M13 (security.js NEW, admin-security.html/js NEW, admin-nav.js v2.3):** Security & Recovery page under People — audit-log viewer (kind presets: sign-ins/deletes/money/facility/roles, search, id-cursor "Load older"), **Trash & restore** (soft-deleted events/teams/registrations/contacts/facility bookings/rental requests, one-click whitelist-only Restore — auth/security tables deliberately NOT restorable), **Lockout rescue** (admin issues a one-time sign-in link for a locked-out member; sandbox shows the link with Copy, Brevo mode emails it; always audited).
 - No schema changes. index.js v0.14.0 wires both modules; health reports v0.14.0.
 - Tests: worker/test/security_portal.test.mjs (6: whitelist safety incl. never-restorable auth tables, agreements dedup/sort/empty). Validation gate: node --check ✓ · esbuild bundle reports v0.14.0 ✓ · 25/25 tests ✓ · live D1 spot check (trash list, restore round trip, agreements SQL, log join) ✓.
+
+## v0.18.0 — 2026-07-25 (M15: POS-lite, Promo Codes, Sponsors, Staff Shifts)
+- NEW worker/src/pos.js v1.0: products CRUD, register sales (server-side pricing, per-line
+  proportional discounts, basis-point tax, stock decrement with amber low-stock flag, void
+  with restock), promo codes on the day-one `discounts` table (D-M15-1, +3 columns in
+  migration 0012), sponsors (admin CRUD + public GET /api/sponsors), staff shifts CRUD.
+  Square payments record as SANDBOX — no live charge (standing rule 1).
+- worker/src/reports.js v1.2: R-02 attendance heatmap, POS sales report, R-05 shift coverage.
+- worker/src/index.js v0.18.0: pos mounted after messages; health reports v0.18.0.
+- NEW web/admin-pos.html + assets/admin-pos.js v1.0 (Sell / Products / Promo Codes /
+  Sponsors / Shifts / Insights). web/assets/admin-nav.js v2.7: Point of Sale in Money group.
+- db/migrations/2026-07-25_0012_pos_v1_0.sql applied live (additive only).
+- Deferred to v0.18.1: balance-due chip on the check-in roster (Gymdesk pattern).
