@@ -1,0 +1,491 @@
+/**
+ * Boomtown Platform — Messages, Relay & Player Library module (M14 Phase B)
+ * File: worker/src/messages.js · Version: v1.0 · Date: 2026-07-24 · Ships in: v0.17.0
+ *
+ * Member-facing (magic-link/passkey session), mounted by worker/src/index.js:
+ *   GET  /api/library/search?q=&position=&level=&gender=  → privacy-gated player library.
+ *        Tiers (member_profiles.visibility): 'public' = anyone, 'members' = signed-in only,
+ *        'private' = hidden from search (admin/staff always see everything, spec §3.4).
+ *        Players you've blocked (or who blocked you) never appear in each other's results.
+ *   POST /api/messages/start   {to_contact_id, subject?, body} → new DM thread via RELAY:
+ *        in-app notification + email through sendEmail(); email addresses are NEVER exposed —
+ *        the email shows the sender's display name and links back to the member inbox.
+ *   GET  /api/messages/threads                → my inbox (unread counts + last preview)
+ *   GET  /api/messages/thread?id=             → one thread (marks it read)
+ *   POST /api/messages/reply   {thread_id, body}
+ *   GET  /api/messages/unread-count           → badge number for the site nav
+ *   POST /api/messages/block   {contact_id}   → they vanish from my search + can't message me
+ *   POST /api/messages/unblock {contact_id}
+ *   POST /api/messages/hide    {thread_id}    → hides the thread from MY inbox (resurfaces on
+ *        a new message from the other side, standard inbox behavior)
+ *   POST /api/messages/report  {message_id, reason} → content_flags row + admin notification
+ * Staff:
+ *   GET  /api/admin/messages/flags?status=open|resolved|dismissed
+ *   POST /api/admin/messages/flags/resolve {id, status, note}
+ *
+ * Abuse guards: 2,000-char body cap · max 10 NEW threads and 60 messages per member per
+ * day · member_mutes rows (set by staff) hard-block sending · blocks checked both
+ * directions on every send. Sandbox: without BREVO_API_KEY the relay email is skipped and
+ * the response says mode:"sandbox" — the in-app notification still lands.
+ *
+ * Tables (all pre-existing except the four member_profiles columns from migration 0011):
+ *   message_threads, messages, thread_participants, member_blocks, member_mutes,
+ *   content_flags, notifications · member_profiles +positions +skill_level
+ *   +gender_division +height_reach (0011, applied live 2026-07-24).
+ */
+
+import { sendEmail, escapeHtml } from "./registrations.js";
+
+let H = null; // wired: { json, audit, isStaff, requireStaff }
+export function wireMessages(helpers) { H = helpers; }
+
+const BODY_MAX = 2000;
+const SUBJECT_MAX = 120;
+const THREADS_PER_DAY = 10;
+const MESSAGES_PER_DAY = 60;
+
+/* ================================ pure helpers (unit-tested) ================================ */
+
+/** SQL fragment gating library rows by privacy tier. Staff see everything (spec §3.4). */
+export function tierClause(signedIn, staff) {
+  if (staff) return "1=1";
+  if (signedIn) return "p.visibility IN ('public','members')";
+  return "p.visibility = 'public'";
+}
+
+/** Library filter builder — same {where, binds} contract as marketing.buildSegmentWhere. */
+export function buildLibraryWhere(filter) {
+  const where = [];
+  const binds = [];
+  const f = filter || {};
+  if (f.q && String(f.q).trim()) {
+    where.push("instr(lower(c.full_name), lower(?)) > 0");
+    binds.push(String(f.q).trim().slice(0, 80));
+  }
+  if (f.position && String(f.position).trim()) {
+    where.push("instr(lower(coalesce(p.positions,'')), lower(?)) > 0");
+    binds.push(String(f.position).trim().slice(0, 40));
+  }
+  if (f.level && String(f.level).trim()) {
+    where.push("lower(coalesce(p.skill_level,'')) = lower(?)");
+    binds.push(String(f.level).trim().slice(0, 40));
+  }
+  if (f.gender && String(f.gender).trim()) {
+    where.push("lower(coalesce(p.gender_division,'')) = lower(?)");
+    binds.push(String(f.gender).trim().slice(0, 40));
+  }
+  return { where: where.length ? " AND " + where.join(" AND ") : "", binds };
+}
+
+/** Relay email body. Contains the sender's NAME and the message text only — never an
+ *  email address; replies happen in the member inbox. */
+export function relayEmailHtml(senderName, bodyText, inboxUrl) {
+  const name = escapeHtml(String(senderName || "A Boomtown member"));
+  const text = escapeHtml(String(bodyText || "")).replace(/\n/g, "<br>");
+  return `<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;color:#111">
+    <p><strong>${name}</strong> sent you a message on Boomtown Athletics:</p>
+    <blockquote style="margin:12px 0;padding:12px 16px;border-left:3px solid #E4B33C;background:#f6f6f4">${text}</blockquote>
+    <p><a href="${inboxUrl}" style="color:#8a6d1a">Open your inbox to reply</a> — replies stay inside
+    the platform, so your email address is never shared.</p>
+  </div>`;
+}
+
+/** true when a member has hit a daily send ceiling. */
+export function overFlood(count, limit) {
+  return Number(count || 0) >= Number(limit);
+}
+
+/* ==================================== routing ==================================== */
+
+export async function messagesRoutes(request, env, url, ctx) {
+  const p = url.pathname;
+  const m = request.method;
+
+  if (p === "/api/library/search" && m === "GET") return librarySearch(env, url, ctx);
+
+  if (p === "/api/messages/start" && m === "POST") return startThread(request, env, ctx);
+  if (p === "/api/messages/threads" && m === "GET") return listThreads(env, ctx);
+  if (p === "/api/messages/thread" && m === "GET") return readThread(env, url, ctx);
+  if (p === "/api/messages/reply" && m === "POST") return reply(request, env, ctx);
+  if (p === "/api/messages/unread-count" && m === "GET") return unreadCount(env, ctx);
+  if (p === "/api/messages/block" && m === "POST") return setBlock(request, env, ctx, true);
+  if (p === "/api/messages/unblock" && m === "POST") return setBlock(request, env, ctx, false);
+  if (p === "/api/messages/hide" && m === "POST") return hideThread(request, env, ctx);
+  if (p === "/api/messages/report" && m === "POST") return reportMessage(request, env, ctx);
+
+  if (p === "/api/admin/messages/flags" && m === "GET") return adminFlags(env, url, ctx);
+  if (p === "/api/admin/messages/flags/resolve" && m === "POST") return adminResolveFlag(request, env, ctx);
+
+  return null;
+}
+
+/* ==================================== library ==================================== */
+
+async function librarySearch(env, url, ctx) {
+  const signedIn = !!ctx.session;
+  const staff = signedIn && (await H.isStaff(env, ctx));
+  const me = signedIn ? await ownContact(env, ctx) : null;
+
+  const filter = {
+    q: url.searchParams.get("q") || "",
+    position: url.searchParams.get("position") || "",
+    level: url.searchParams.get("level") || "",
+    gender: url.searchParams.get("gender") || "",
+  };
+  const { where, binds } = buildLibraryWhere(filter);
+
+  let blockSql = "";
+  const blockBinds = [];
+  if (me) {
+    blockSql = ` AND c.id != ?
+      AND c.id NOT IN (SELECT blocked_contact_id FROM member_blocks
+                       WHERE org_id=? AND blocker_contact_id=? AND deleted_at IS NULL)
+      AND c.id NOT IN (SELECT blocker_contact_id FROM member_blocks
+                       WHERE org_id=? AND blocked_contact_id=? AND deleted_at IS NULL)`;
+    blockBinds.push(me.id, ctx.orgId, me.id, ctx.orgId, me.id);
+  }
+
+  const rows = (await env.DB.prepare(
+    `SELECT c.id AS contact_id, c.full_name, p.positions, p.skill_level, p.gender_division,
+            p.height_reach, p.bio, p.visibility, p.avatar_r2_key
+     FROM member_profiles p
+     JOIN contacts c ON c.id = p.contact_id AND c.deleted_at IS NULL
+     WHERE p.org_id = ? AND p.deleted_at IS NULL AND ${tierClause(signedIn, staff)}${where}${blockSql}
+     ORDER BY c.full_name COLLATE NOCASE LIMIT 50`
+  ).bind(ctx.orgId, ...binds, ...blockBinds).all()).results;
+
+  return H.json({
+    players: rows.map((r) => ({
+      contact_id: r.contact_id,
+      name: r.full_name,
+      positions: r.positions || null,
+      skill_level: r.skill_level || null,
+      gender_division: r.gender_division || null,
+      height_reach: r.height_reach || null,
+      bio: r.bio ? String(r.bio).slice(0, 200) : null,
+      visibility: r.visibility,
+      avatar_url: r.avatar_r2_key ? `/api/avatar/${r.avatar_r2_key}` : null,
+      can_message: signedIn && !staff ? true : signedIn, // signed-in members can message anyone listed
+    })),
+    signed_in: signedIn,
+  });
+}
+
+/* ==================================== relay + inbox ==================================== */
+
+async function startThread(request, env, ctx) {
+  const gate = await senderGate(env, ctx);
+  if (gate.err) return gate.err;
+  const me = gate.me;
+
+  const b = await request.json().catch(() => ({}));
+  const toId = Number(b.to_contact_id);
+  const body = String(b.body || "").trim().slice(0, BODY_MAX);
+  const subject = String(b.subject || "").trim().slice(0, SUBJECT_MAX) || null;
+  if (!toId) return H.json({ error: "Pick a player to message." }, 400);
+  if (!body) return H.json({ error: "Write a message first." }, 400);
+  if (toId === me.id) return H.json({ error: "That's you — pick another player." }, 400);
+
+  const to = await env.DB.prepare(
+    "SELECT c.id, c.email, c.full_name, p.visibility FROM contacts c LEFT JOIN member_profiles p ON p.contact_id=c.id AND p.org_id=c.org_id AND p.deleted_at IS NULL WHERE c.id=?1 AND c.org_id=?2 AND c.deleted_at IS NULL"
+  ).bind(toId, ctx.orgId).first();
+  const staff = await H.isStaff(env, ctx);
+  // Hidden players are unreachable for regular members (admin can always contact, spec §3.4).
+  if (!to || (!staff && (to.visibility || "private") === "private")) {
+    return H.json({ error: "This player can't be messaged." }, 404);
+  }
+  if (await blockedEitherWay(env, ctx.orgId, me.id, toId)) {
+    return H.json({ error: "You can't message this player." }, 403);
+  }
+
+  const started = await env.DB.prepare(
+    "SELECT COUNT(*) AS n FROM message_threads WHERE org_id=?1 AND created_by_contact_id=?2 AND created_at >= datetime('now','-1 day') AND deleted_at IS NULL"
+  ).bind(ctx.orgId, me.id).first();
+  if (overFlood(started.n, THREADS_PER_DAY)) {
+    return H.json({ error: "You've started a lot of conversations today — try again tomorrow." }, 429);
+  }
+  const floodErr = await messageFlood(env, ctx.orgId, me.id);
+  if (floodErr) return floodErr;
+
+  const th = await env.DB.prepare(
+    "INSERT INTO message_threads (org_id, kind, subject, created_by_contact_id, last_message_at) VALUES (?1,'dm',?2,?3,datetime('now'))"
+  ).bind(ctx.orgId, subject, me.id).run();
+  const threadId = th.meta.last_row_id;
+  await env.DB.prepare(
+    "INSERT INTO thread_participants (org_id, thread_id, contact_id, last_read_at) VALUES (?1,?2,?3,datetime('now')), (?1,?2,?4,NULL)"
+  ).bind(ctx.orgId, threadId, me.id, toId).run();
+  await env.DB.prepare(
+    "INSERT INTO messages (org_id, thread_id, sender_contact_id, body) VALUES (?1,?2,?3,?4)"
+  ).bind(ctx.orgId, threadId, me.id, body).run();
+
+  const mode = await notifyAndRelay(env, ctx, me, to, threadId, body);
+  await H.audit(env, ctx, "message.start", "message_threads", threadId, { to_contact_id: toId, mode });
+  return H.json({ ok: true, thread_id: threadId, mode });
+}
+
+async function reply(request, env, ctx) {
+  const gate = await senderGate(env, ctx);
+  if (gate.err) return gate.err;
+  const me = gate.me;
+
+  const b = await request.json().catch(() => ({}));
+  const threadId = Number(b.thread_id);
+  const body = String(b.body || "").trim().slice(0, BODY_MAX);
+  if (!threadId || !body) return H.json({ error: "Write a message first." }, 400);
+
+  const mine = await env.DB.prepare(
+    "SELECT tp.id FROM thread_participants tp JOIN message_threads t ON t.id=tp.thread_id AND t.deleted_at IS NULL WHERE tp.thread_id=?1 AND tp.contact_id=?2 AND tp.org_id=?3"
+  ).bind(threadId, me.id, ctx.orgId).first();
+  if (!mine) return H.json({ error: "Conversation not found." }, 404);
+
+  const others = (await env.DB.prepare(
+    "SELECT tp.contact_id, c.email, c.full_name FROM thread_participants tp JOIN contacts c ON c.id=tp.contact_id AND c.deleted_at IS NULL WHERE tp.thread_id=?1 AND tp.contact_id != ?2"
+  ).bind(threadId, me.id).all()).results;
+  for (const o of others) {
+    if (await blockedEitherWay(env, ctx.orgId, me.id, o.contact_id)) {
+      return H.json({ error: "You can't message this player." }, 403);
+    }
+  }
+  const floodErr = await messageFlood(env, ctx.orgId, me.id);
+  if (floodErr) return floodErr;
+
+  await env.DB.prepare(
+    "INSERT INTO messages (org_id, thread_id, sender_contact_id, body) VALUES (?1,?2,?3,?4)"
+  ).bind(ctx.orgId, threadId, me.id, body).run();
+  await env.DB.prepare(
+    "UPDATE message_threads SET last_message_at=datetime('now'), updated_at=datetime('now') WHERE id=?1"
+  ).bind(threadId).run();
+  // A new message resurfaces the thread for everyone who had hidden it (standard inbox behavior).
+  await env.DB.prepare(
+    "UPDATE thread_participants SET deleted_at=NULL WHERE thread_id=?1 AND contact_id != ?2"
+  ).bind(threadId, me.id).run();
+
+  let mode = "sandbox";
+  for (const o of others) mode = await notifyAndRelay(env, ctx, me, o, threadId, body);
+  await H.audit(env, ctx, "message.reply", "message_threads", threadId, { mode });
+  return H.json({ ok: true, mode });
+}
+
+async function listThreads(env, ctx) {
+  const me = await requireMember(env, ctx);
+  if (me.err) return me.err;
+  const rows = (await env.DB.prepare(
+    `SELECT t.id, t.subject, t.last_message_at,
+        (SELECT m.body FROM messages m WHERE m.thread_id=t.id AND m.deleted_at IS NULL ORDER BY m.id DESC LIMIT 1) AS preview,
+        (SELECT COUNT(*) FROM messages m WHERE m.thread_id=t.id AND m.deleted_at IS NULL
+           AND m.sender_contact_id != ?2
+           AND (tp.last_read_at IS NULL OR m.created_at > tp.last_read_at)) AS unread,
+        (SELECT group_concat(c.full_name, ', ') FROM thread_participants tp2
+           JOIN contacts c ON c.id=tp2.contact_id WHERE tp2.thread_id=t.id AND tp2.contact_id != ?2) AS with_names
+     FROM thread_participants tp
+     JOIN message_threads t ON t.id=tp.thread_id AND t.deleted_at IS NULL
+     WHERE tp.contact_id=?2 AND tp.org_id=?1 AND tp.deleted_at IS NULL
+     ORDER BY t.last_message_at DESC LIMIT 100`
+  ).bind(ctx.orgId, me.me.id).all()).results;
+  return H.json({ threads: rows.map((r) => ({
+    id: r.id, subject: r.subject, with: r.with_names || "(left)", last_message_at: r.last_message_at,
+    preview: r.preview ? String(r.preview).slice(0, 120) : "", unread: r.unread,
+  })) });
+}
+
+async function readThread(env, url, ctx) {
+  const me = await requireMember(env, ctx);
+  if (me.err) return me.err;
+  const threadId = Number(url.searchParams.get("id"));
+  const mine = await env.DB.prepare(
+    "SELECT tp.id FROM thread_participants tp JOIN message_threads t ON t.id=tp.thread_id AND t.deleted_at IS NULL WHERE tp.thread_id=?1 AND tp.contact_id=?2 AND tp.org_id=?3"
+  ).bind(threadId, me.me.id, ctx.orgId).first();
+  if (!mine) return H.json({ error: "Conversation not found." }, 404);
+
+  const t = await env.DB.prepare("SELECT id, subject FROM message_threads WHERE id=?1").bind(threadId).first();
+  const msgs = (await env.DB.prepare(
+    `SELECT m.id, m.sender_contact_id, c.full_name AS sender_name, m.body, m.created_at, m.deleted_at
+     FROM messages m JOIN contacts c ON c.id=m.sender_contact_id
+     WHERE m.thread_id=?1 ORDER BY m.id ASC LIMIT 500`
+  ).bind(threadId).all()).results;
+  const others = (await env.DB.prepare(
+    "SELECT contact_id FROM thread_participants WHERE thread_id=?1 AND contact_id != ?2"
+  ).bind(threadId, me.me.id).all()).results;
+
+  await env.DB.prepare(
+    "UPDATE thread_participants SET last_read_at=datetime('now') WHERE thread_id=?1 AND contact_id=?2"
+  ).bind(threadId, me.me.id).run();
+
+  return H.json({
+    thread: { id: t.id, subject: t.subject, other_contact_ids: others.map((o) => o.contact_id) },
+    my_contact_id: me.me.id,
+    messages: msgs.map((m) => ({
+      id: m.id, sender_contact_id: m.sender_contact_id, sender_name: m.sender_name,
+      body: m.deleted_at ? "(message removed)" : m.body, created_at: m.created_at, mine: m.sender_contact_id === me.me.id,
+    })),
+  });
+}
+
+async function unreadCount(env, ctx) {
+  const me = await requireMember(env, ctx);
+  if (me.err) return me.err;
+  const row = await env.DB.prepare(
+    `SELECT COUNT(*) AS n FROM messages m
+     JOIN thread_participants tp ON tp.thread_id=m.thread_id AND tp.contact_id=?2 AND tp.deleted_at IS NULL
+     JOIN message_threads t ON t.id=m.thread_id AND t.deleted_at IS NULL
+     WHERE m.org_id=?1 AND m.deleted_at IS NULL AND m.sender_contact_id != ?2
+       AND (tp.last_read_at IS NULL OR m.created_at > tp.last_read_at)`
+  ).bind(ctx.orgId, me.me.id).first();
+  return H.json({ unread: row.n });
+}
+
+async function setBlock(request, env, ctx, block) {
+  const me = await requireMember(env, ctx);
+  if (me.err) return me.err;
+  const b = await request.json().catch(() => ({}));
+  const otherId = Number(b.contact_id);
+  if (!otherId || otherId === me.me.id) return H.json({ error: "Pick a player first." }, 400);
+  if (block) {
+    await env.DB.prepare(
+      `INSERT INTO member_blocks (org_id, blocker_contact_id, blocked_contact_id) VALUES (?1,?2,?3)
+       ON CONFLICT(org_id, blocker_contact_id, blocked_contact_id) DO UPDATE SET deleted_at=NULL`
+    ).bind(ctx.orgId, me.me.id, otherId).run();
+  } else {
+    await env.DB.prepare(
+      "UPDATE member_blocks SET deleted_at=datetime('now') WHERE org_id=?1 AND blocker_contact_id=?2 AND blocked_contact_id=?3"
+    ).bind(ctx.orgId, me.me.id, otherId).run();
+  }
+  await H.audit(env, ctx, block ? "message.block" : "message.unblock", "member_blocks", otherId, {});
+  return H.json({ ok: true, message: block ? "Blocked. They can't message you and you won't see each other in the library." : "Unblocked." });
+}
+
+async function hideThread(request, env, ctx) {
+  const me = await requireMember(env, ctx);
+  if (me.err) return me.err;
+  const b = await request.json().catch(() => ({}));
+  await env.DB.prepare(
+    "UPDATE thread_participants SET deleted_at=datetime('now') WHERE thread_id=?1 AND contact_id=?2 AND org_id=?3"
+  ).bind(Number(b.thread_id), me.me.id, ctx.orgId).run();
+  return H.json({ ok: true, message: "Hidden. It comes back if they message you again — use Block to stop that." });
+}
+
+async function reportMessage(request, env, ctx) {
+  const me = await requireMember(env, ctx);
+  if (me.err) return me.err;
+  const b = await request.json().catch(() => ({}));
+  const msgId = Number(b.message_id);
+  const reason = String(b.reason || "").trim().slice(0, 500);
+  const msg = await env.DB.prepare(
+    `SELECT m.id FROM messages m JOIN thread_participants tp ON tp.thread_id=m.thread_id AND tp.contact_id=?2
+     WHERE m.id=?1 AND m.org_id=?3`
+  ).bind(msgId, me.me.id, ctx.orgId).first();
+  if (!msg) return H.json({ error: "Message not found." }, 404);
+  await env.DB.prepare(
+    "INSERT INTO content_flags (org_id, target_type, target_id, reporter_contact_id, reason) VALUES (?1,'message',?2,?3,?4)"
+  ).bind(ctx.orgId, msgId, me.me.id, reason || null).run();
+  await env.DB.prepare(
+    "INSERT INTO notifications (org_id, kind, target, payload_json) VALUES (?1,'message_flag','admin',?2)"
+  ).bind(ctx.orgId, JSON.stringify({ message_id: msgId, reporter_contact_id: me.me.id })).run();
+  await H.audit(env, ctx, "message.report", "messages", msgId, { reason: reason || null });
+  return H.json({ ok: true, message: "Reported. An admin will review it." });
+}
+
+/* ==================================== admin ==================================== */
+
+async function adminFlags(env, url, ctx) {
+  const denied = await H.requireStaff(env, ctx);
+  if (denied) return denied;
+  const status = ["open", "resolved", "dismissed"].includes(url.searchParams.get("status"))
+    ? url.searchParams.get("status") : "open";
+  const rows = (await env.DB.prepare(
+    `SELECT f.id, f.target_id AS message_id, f.reason, f.status, f.created_at, f.resolution_note,
+            rep.full_name AS reporter_name, m.body AS message_body, snd.full_name AS sender_name,
+            m.thread_id
+     FROM content_flags f
+     JOIN contacts rep ON rep.id = f.reporter_contact_id
+     LEFT JOIN messages m ON m.id = f.target_id
+     LEFT JOIN contacts snd ON snd.id = m.sender_contact_id
+     WHERE f.org_id=?1 AND f.target_type='message' AND f.status=?2
+     ORDER BY f.created_at DESC LIMIT 200`
+  ).bind(ctx.orgId, status).all()).results;
+  return H.json({ flags: rows });
+}
+
+async function adminResolveFlag(request, env, ctx) {
+  const denied = await H.requireStaff(env, ctx);
+  if (denied) return denied;
+  const b = await request.json().catch(() => ({}));
+  const id = Number(b.id);
+  const status = ["resolved", "dismissed"].includes(b.status) ? b.status : "resolved";
+  const note = String(b.note || "").trim().slice(0, 500) || null;
+  const flag = await env.DB.prepare(
+    "SELECT id FROM content_flags WHERE id=?1 AND org_id=?2 AND target_type='message'"
+  ).bind(id, ctx.orgId).first();
+  if (!flag) return H.json({ error: "Flag not found." }, 404);
+  await env.DB.prepare(
+    "UPDATE content_flags SET status=?1, resolution_note=?2, resolved_by_user_id=?3, resolved_at=datetime('now') WHERE id=?4"
+  ).bind(status, note, ctx.userId, id).run();
+  await H.audit(env, ctx, "message.flag_resolve", "content_flags", id, { status, note });
+  return H.json({ ok: true });
+}
+
+/* ==================================== shared bits ==================================== */
+
+async function requireMember(env, ctx) {
+  if (!ctx.session) return { err: H.json({ error: "Sign in first." }, 401) };
+  const me = await ownContact(env, ctx);
+  if (!me) return { err: H.json({ error: "No member record found for this account yet." }, 404) };
+  return { me };
+}
+
+/** Sign-in + contact + mute check, shared by both send paths. */
+async function senderGate(env, ctx) {
+  const g = await requireMember(env, ctx);
+  if (g.err) return g;
+  const mute = await env.DB.prepare(
+    `SELECT id FROM member_mutes WHERE org_id=?1 AND contact_id=?2 AND deleted_at IS NULL
+     AND (muted_until IS NULL OR muted_until > datetime('now'))`
+  ).bind(ctx.orgId, g.me.id).first();
+  if (mute) return { err: H.json({ error: "Messaging is paused on your account. Email admin@boomtownvb.com if you think this is a mistake." }, 403) };
+  return g;
+}
+
+async function messageFlood(env, orgId, contactId) {
+  const sent = await env.DB.prepare(
+    "SELECT COUNT(*) AS n FROM messages WHERE org_id=?1 AND sender_contact_id=?2 AND created_at >= datetime('now','-1 day')"
+  ).bind(orgId, contactId).first();
+  if (overFlood(sent.n, MESSAGES_PER_DAY)) {
+    return H.json({ error: "Daily message limit reached — try again tomorrow." }, 429);
+  }
+  return null;
+}
+
+async function blockedEitherWay(env, orgId, a, b) {
+  const row = await env.DB.prepare(
+    `SELECT id FROM member_blocks WHERE org_id=?1 AND deleted_at IS NULL
+     AND ((blocker_contact_id=?2 AND blocked_contact_id=?3) OR (blocker_contact_id=?3 AND blocked_contact_id=?2)) LIMIT 1`
+  ).bind(orgId, a, b).first();
+  return !!row;
+}
+
+/** Notification row + relay email (never exposes an address). Returns "email" | "sandbox". */
+async function notifyAndRelay(env, ctx, me, to, threadId, body) {
+  const senderName = me.full_name || "A Boomtown member";
+  const preview = String(body).slice(0, 140);
+  await env.DB.prepare(
+    `INSERT INTO notifications (org_id, kind, target, contact_id, title, body, link, payload_json, sent_at)
+     VALUES (?1,'message','member',?2,?3,?4,?5,?6,datetime('now'))`
+  ).bind(ctx.orgId, to.contact_id || to.id, `New message from ${senderName}`, preview,
+         "member-inbox.html", JSON.stringify({ thread_id: threadId })).run();
+  if (!to.email) return "sandbox";
+  const inboxUrl = (env.SITE_ORIGIN || "https://10xequity.github.io/btplatform/web") + "/member-inbox.html";
+  const ok = await sendEmail(env, to.email, `New message from ${senderName} — Boomtown Athletics`,
+    relayEmailHtml(senderName, body, inboxUrl));
+  return ok ? "email" : "sandbox";
+}
+
+/** Same contact resolution rule as member_portal.js. */
+async function ownContact(env, ctx) {
+  const user = await env.DB.prepare(
+    "SELECT id, email FROM users WHERE id=?1 AND deleted_at IS NULL"
+  ).bind(ctx.userId).first();
+  if (!user) return null;
+  return env.DB.prepare(
+    "SELECT * FROM contacts WHERE org_id=?1 AND deleted_at IS NULL AND (user_id=?2 OR email=?3) ORDER BY user_id DESC LIMIT 1"
+  ).bind(ctx.orgId, user.id, user.email).first();
+}

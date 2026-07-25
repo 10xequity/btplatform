@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<!-- Boomtown Platform — Message Reports (M14 Phase B) · Version: v1.0 · Date: 2026-07-24 · Ships in: v0.17.0
+     Review queue for member-reported relay messages (content_flags). Resolve or dismiss;
+     everything is audited. Muting a repeat offender is a manual step for now (member_mutes
+     row) — a one-click mute button is parked for M16. -->
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Message Reports — Boomtown Athletics</title>
+  <link rel="stylesheet" href="assets/tokens.css" />
+  <link rel="stylesheet" href="assets/app.css" />
+  <link rel="stylesheet" href="assets/admin.css?v=0.17.0" />
+  <style>
+    .flag-row { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card, 10px);
+      padding: 14px; margin-bottom: 10px; }
+    .flag-row .top { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+    .flag-row .top b { font-size: 15px; }
+    .flag-row .when { margin-left: auto; font-size: 12px; color: var(--text-muted); }
+    .flag-quote { margin: 10px 0; padding: 10px 14px; border-left: 3px solid var(--accent);
+      background: var(--surface-2, #1C1C21); font-size: 14.5px; white-space: pre-wrap; word-break: break-word; border-radius: 0 8px 8px 0; }
+    .flag-reason { font-size: 13.5px; color: var(--text-muted); }
+    .flag-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+    .seg-tabs { display: flex; gap: 8px; margin: 0 0 14px; }
+  </style>
+</head>
+<body>
+  <header class="header chrome-glass">
+    <div class="wordmark"><a href="index.html" style="color:inherit;text-decoration:none">Boomtown <span>Athletics</span></a></div>
+    <div class="spacer"></div>
+  </header>
+
+  <div class="admin-layout">
+  <main class="main wide admin-main" id="app" aria-live="polite">
+    <div class="page-head"><h1>Message Reports</h1></div>
+    <p class="help-text" style="margin:0 0 12px">Messages members flagged from their inbox.
+      Resolve when handled, dismiss when it's fine. Every decision is written to the audit log.</p>
+    <div class="seg-tabs" role="tablist">
+      <button class="btn" id="tabOpen" type="button" aria-pressed="true">Open</button>
+      <button class="btn ghost" id="tabResolved" type="button" aria-pressed="false">Resolved</button>
+      <button class="btn ghost" id="tabDismissed" type="button" aria-pressed="false">Dismissed</button>
+    </div>
+    <div id="flagList"><p class="help-text">Loading…</p></div>
+  </main>
+  </div><!-- /admin-layout -->
+
+  <script src="assets/config.js?v=0.17.0"></script>
+  <script src="assets/admin-nav.js?v=0.17.0" defer></script>
+  <script src="assets/admin-messages.js?v=0.17.0" defer></script>
+</body>
+</html>
+<!-- Changelog: v1.0 (2026-07-24) — initial Message Reports admin page (M14 Phase B). -->

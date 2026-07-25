@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<!-- Boomtown Platform — Player Library (M14 Phase B) · Version: v1.0 · Date: 2026-07-24 · Ships in: v0.17.0
+     Teammate finder (spec §3.4): search by name / position / level / division, privacy-tiered
+     (public tier for visitors, +members tier when signed in, hidden never listed). Message
+     button opens a relay compose — email addresses are never shown or shared. Signed-in
+     members also get "My player card" to set their own searchable details + visibility. -->
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Player Library — Boomtown Athletics</title>
+  <link rel="stylesheet" href="assets/tokens.css" />
+  <link rel="stylesheet" href="assets/app.css" />
+  <style>
+    .lib-main { max-width: 860px; margin: 0 auto; padding: 16px; }
+    .lib-filters { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr auto; gap: 8px; align-items: end; margin: 0 0 16px; }
+    @media (max-width: 720px) { .lib-filters { grid-template-columns: 1fr 1fr; } .lib-filters .btn { grid-column: 1/-1; } }
+    .lib-filters label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 700; }
+    .lib-filters input, .lib-filters select { min-height: 44px; font: inherit; padding: 8px 10px;
+      background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-control, 8px); }
+    .pl-card { display: flex; gap: 14px; align-items: flex-start; background: var(--surface);
+      border: 1px solid var(--border); border-radius: var(--radius-card, 10px); padding: 14px; margin-bottom: 10px; }
+    .pl-card .avatar { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; flex: none;
+      background: var(--surface-2, #1C1C21); display: grid; place-items: center; font-weight: 800; font-size: 20px; border: 1px solid var(--border); }
+    .pl-card .who { flex: 1; min-width: 0; }
+    .pl-card .who b { font-size: 16px; }
+    .pl-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+    .pl-tag { font-size: 12.5px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-muted); }
+    .pl-bio { font-size: 13.5px; color: var(--text-muted); margin-top: 6px; }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card, 10px); padding: 16px; }
+    .mycard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
+    .mycard-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 700; }
+    .mycard-grid input, .mycard-grid select { min-height: 44px; font: inherit; padding: 8px 10px;
+      background: var(--surface-2, #1C1C21); color: var(--text); border: 1px solid var(--border); border-radius: 8px; }
+    .compose-modal { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: grid; place-items: center; z-index: 70; padding: 16px; }
+    .compose-modal .box { width: min(480px, 100%); background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-card, 10px); padding: 18px; }
+    .compose-modal textarea { width: 100%; min-height: 120px; font: inherit; padding: 10px; resize: vertical;
+      background: var(--surface-2, #1C1C21); color: var(--text); border: 1px solid var(--border); border-radius: 8px; }
+    .compose-modal input { width: 100%; min-height: 44px; font: inherit; padding: 8px 10px; margin-bottom: 8px;
+      background: var(--surface-2, #1C1C21); color: var(--text); border: 1px solid var(--border); border-radius: 8px; }
+    .row-actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; justify-content: flex-end; }
+    .help-foot { text-align: center; color: var(--text-muted, #A8A49A); margin: 40px 0 24px; font-size: 15px; }
+  </style>
+</head>
+<body>
+  <header class="header chrome-glass">
+    <a class="wordmark" href="index.html" style="text-decoration:none">Boomtown <span>Athletics</span></a>
+    <div class="spacer"></div>
+    <a class="btn ghost" href="member-inbox.html">Inbox</a>
+  </header>
+
+  <main class="lib-main" id="app" aria-live="polite">
+    <div class="page-head"><h1>Player Library</h1></div>
+    <p class="help-text" style="margin:0 0 14px">Find teammates and subs. Messages go through the
+      platform — nobody's email address is ever shared. Control whether you appear here from
+      <b>My player card</b> below (or your <a href="profile.html">profile</a>).</p>
+
+    <form class="lib-filters" id="filters">
+      <label>Name <input name="q" placeholder="Search players" autocomplete="off"></label>
+      <label>Position <input name="position" placeholder="setter, outside…" autocomplete="off"></label>
+      <label>Level
+        <select name="level"><option value="">Any</option><option>A</option><option>BB</option><option>B</option><option>C</option><option>Open</option></select></label>
+      <label>Division
+        <select name="gender"><option value="">Any</option><option value="womens">Women's</option><option value="mens">Men's</option><option value="coed">Co-ed</option></select></label>
+      <button class="btn" type="submit">Search</button>
+    </form>
+
+    <div id="results"><p class="help-text">Loading players…</p></div>
+
+    <section class="card" id="myCard" hidden aria-label="My player card" style="margin-top:24px">
+      <h2 style="margin:0 0 4px;font-size:17px">My player card</h2>
+      <p class="help-text" style="margin:0 0 10px">What other players see when they search the library.</p>
+      <div class="mycard-grid">
+        <label>Positions <input id="mc_positions" placeholder="setter, DS" maxlength="120"></label>
+        <label>Level
+          <select id="mc_level"><option value="">—</option><option>A</option><option>BB</option><option>B</option><option>C</option><option>Open</option></select></label>
+        <label>Division
+          <select id="mc_gender"><option value="">—</option><option value="womens">Women's</option><option value="mens">Men's</option><option value="coed">Co-ed</option></select></label>
+        <label>Height / reach <input id="mc_height" placeholder='6-1 / 7-9' maxlength="120"></label>
+        <label>Who can find me
+          <select id="mc_visibility">
+            <option value="public">Anyone (public)</option>
+            <option value="members">Members only</option>
+            <option value="private">Hidden — not searchable</option>
+          </select></label>
+      </div>
+      <div class="row-actions" style="justify-content:flex-start">
+        <button class="btn" id="mcSave" type="button">Save my card</button>
+        <span class="help-text" id="mcStatus" role="status"></span>
+      </div>
+    </section>
+  </main>
+
+  <p class="help-foot">Have questions or need help? <a href="mailto:admin@boomtownvb.com">Email us</a></p>
+
+  <script src="assets/config.js?v=0.17.0"></script>
+  <script src="assets/site-nav.js?v=0.17.0" defer></script>
+  <script src="assets/library.js?v=0.17.0" defer></script>
+</body>
+</html>
+<!-- Changelog: v1.0 (2026-07-24) — initial Player Library page (M14 Phase B). -->

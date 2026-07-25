@@ -1,6 +1,10 @@
 /**
  * Boomtown Platform — Member Profiles + Family Accounts module
- * File: worker/src/profiles.js · Version: v1.0 · Date: 2026-07-22 · Ships in: v0.5.0
+ * File: worker/src/profiles.js · Version: v1.1 · Date: 2026-07-24 · Ships in: v0.17.0
+ *
+ * v1.1 (v0.17.0): player-card fields for the M14B library — update() accepts positions,
+ *   skill_level, gender_division, height_reach (migration 0011 columns); profileFields()
+ *   returns them. Everything else unchanged from v1.0 (v0.5.0).
  *
  * Member-facing (magic-link session):
  *   GET  /api/profile/me                       → own contact + profile + family summary
@@ -163,6 +167,10 @@ async function update(request, env, ctx) {
     fields.instagram_handle = h || null;
   }
   if (["public", "members", "private"].includes(body.visibility)) fields.visibility = body.visibility;
+  // v1.1 (M14B): player-card fields for the library.
+  for (const f of ["positions", "skill_level", "gender_division", "height_reach"]) {
+    if (typeof body[f] === "string") fields[f] = body[f].trim().slice(0, 120) || null;
+  }
   if (body.show_history === 0 || body.show_history === 1) fields.show_history = body.show_history;
   if (body.show_instagram === 0 || body.show_instagram === 1) fields.show_instagram = body.show_instagram;
   if (typeof body.date_of_birth === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.date_of_birth)) {
@@ -336,6 +344,10 @@ function profileFields(p) {
     bio: p.bio,
     date_of_birth: p.date_of_birth,
     visibility: p.visibility,
+    positions: p.positions ?? null,
+    skill_level: p.skill_level ?? null,
+    gender_division: p.gender_division ?? null,
+    height_reach: p.height_reach ?? null,
     show_history: p.show_history,
     show_instagram: p.show_instagram,
     reminder_opt_in: p.reminder_opt_in,

@@ -1,5 +1,11 @@
 /* Boomtown Platform — Site-wide sidebar navigation (shared)
-   File: web/assets/site-nav.js · Version: v2.2 · Date: 2026-07-24 · Ships in: v0.11.0
+   File: web/assets/site-nav.js · Version: v2.4 · Date: 2026-07-24 · Ships in: v0.17.0
+   v2.4: M14 Phase B — "Player Library" item (library.html) in Explore; signed-in "Inbox"
+   item (member-inbox.html) with a live unread badge (GET /api/messages/unread-count,
+   silent fallback on older workers). Absorbs the v2.3 brand work below.
+   v2.3 (re-issued; the original v0.15.0 paste never landed): brand logo — the wordmark PNG
+   (assets/logo-boom-wordmark.png) renders on a black chip at the top of the rail, links
+   home; hidden in the mobile horizontal-rail mode (the header wordmark already shows).
    v2.2: View-as-member demo mode — when sessionStorage bt_demo_member=1 (set from the
    admin rail's Sandbox group) the Manage group is hidden and a fixed "Viewing as
    member — Exit" pill returns to the Control Center. Presentation only: the server
@@ -39,6 +45,10 @@
   .site-nav .badge { margin-left: auto; flex: none; min-width: 20px; height: 20px; padding: 0 6px;
     border-radius: 999px; background: var(--accent); color: var(--bg); font-size: 12px; font-weight: 800;
     display: grid; place-items: center; }
+  .site-nav .nav-brand { display: block; margin: 0 4px 14px; padding: 12px 14px; border-radius: var(--radius-card, 10px);
+    background: #000; border: 1px solid var(--border); line-height: 0; }
+  .site-nav .nav-brand img { width: 100%; height: auto; display: block; }
+  .site-nav .nav-brand:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .site-layout > main, .site-layout > .site-content { flex: 1; min-width: 0; }
   @media (hover: hover) and (pointer: fine) { .site-nav .nav-item:hover { background: var(--surface); } }
   @media (max-width: 860px) {
@@ -48,6 +58,7 @@
       -webkit-overflow-scrolling: touch; }
     .site-nav .nav-group { display: flex; gap: 4px; }
     .site-nav .nav-label { display: none; }
+    .site-nav .nav-brand { display: none; }
     .site-nav .nav-item { white-space: nowrap; padding: 8px 12px; }
     .site-nav .nav-item.active { box-shadow: inset 0 -2px 0 0 var(--accent); }
   }`;
@@ -77,17 +88,23 @@
         { href: "index.html",    ico: "⌂", text: "Home" },
         { href: "schedule.html", ico: "▣", text: "Schedule" },
         { href: "leagues.html",  ico: "◇", text: "Leagues" },
+        { href: "library.html",  ico: "◎", text: "Player Library" },
       ]},
     ];
     if (signedIn) {
-      let unread = 0;
+      let unread = 0, inboxUnread = 0;
       try {
         const n = await fetch(API + "/api/notifications", { headers: authHeaders(), credentials: "include" });
         if (n.ok) unread = (await n.json()).unread || 0;
       } catch (e) { /* worker older than v0.9.1 or offline: no badge */ }
+      try {
+        const iu = await fetch(API + "/api/messages/unread-count", { headers: authHeaders(), credentials: "include" });
+        if (iu.ok) inboxUnread = (await iu.json()).unread || 0;
+      } catch (e) { /* worker older than v0.17.0 or offline: no badge */ }
       NAV.push({ label: "You", items: [
         { href: "home.html",     ico: "▦", text: "My Dashboard" },
         { href: "home.html#notifications", ico: "◔", text: "Notifications", badge: unread },
+        { href: "member-inbox.html", ico: "✉", text: "Inbox", badge: inboxUnread },
         { href: "profile.html",  ico: "◉", text: "My Profile" },
         { href: "membership.html", ico: "★", text: "Membership" },
         { href: "settings.html", ico: "⚙", text: "Settings" },
@@ -126,7 +143,8 @@
     const aside = document.createElement("nav");
     aside.className = "site-nav";
     aside.setAttribute("aria-label", "Site navigation");
-    aside.innerHTML = NAV.map(g => `
+    aside.innerHTML = `<a class="nav-brand" href="index.html" aria-label="Boomtown Athletics home">
+      <img src="assets/logo-boom-wordmark.png" alt="Boomtown Athletics" width="584" height="293"></a>` + NAV.map(g => `
       <div class="nav-group" role="group" aria-label="${g.label}">
         <div class="nav-label">${g.label}</div>
         ${g.items.map(i => `<a class="nav-item${i.href.split("#")[0] === here ? " active" : ""}" href="${i.href}"
