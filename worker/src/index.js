@@ -1,7 +1,12 @@
 /**
  * Boomtown Platform — API Worker
- * Version: v0.19.0 · Date: 2026-07-25 · Modules 1–16
+ * Version: v0.20.0 · Date: 2026-07-25 · Modules 1–17
  *
+ * v0.20.0 (2026-07-25): PWA + Web Push — push.js mounted before waitlists (subscribe/
+ *   unsubscribe/status, public VAPID key, staff test-send; RFC 8291 aes128gcm + RFC 8292
+ *   VAPID implemented on WebCrypto, zero deps). waitlists.js v1.1 sends a push alongside
+ *   the offer email. Daily cron adds pushPruneSweep. Requires Worker secrets
+ *   VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY (+ optional VAPID_SUBJECT) and migration 0014.
  * v0.19.0 (2026-07-25): Waitlists — waitlists.js mounted after pos (join/offer/claim,
  *   admin queue, expiring claim tokens; sendEmail injected via wire to avoid a circular
  *   import). registrations.js v1.3 enforces events.capacity + adds staff cancel with
@@ -138,6 +143,7 @@ import { marketingRoutes, wireMarketing, campaignQueueSweep } from "./marketing.
 import { messagesRoutes, wireMessages } from "./messages.js";
 import { posRoutes, wirePos } from "./pos.js";
 import { waitlistRoutes, wireWaitlists, waitlistSweep } from "./waitlists.js";
+import { pushRoutes, wirePush, pushPruneSweep } from "./push.js"; // v0.20.0 PWA web push
 import { waiverReminderSweep, sendEmail, escapeHtml } from "./registrations.js";
 
 const MAGIC_LINK_TTL_MIN = 15;
@@ -171,6 +177,7 @@ wireMarketing(wiredHelpers);
 wireMessages(wiredHelpers);
 wirePos(wiredHelpers);
 wireWaitlists({ ...wiredHelpers, sendEmail, escapeHtml }); // sendEmail injected — no circular import
+wirePush(wiredHelpers); // v0.20.0
 
 /** ctx carries the caller's session + selected org for role checks. */
 async function buildCtx(request, env) {
@@ -214,7 +221,7 @@ export default {
       } else if (url.pathname === "/api/orgs" && request.method === "GET") {
         res = await listOrgs(env);
       } else if (url.pathname === "/api/health") {
-        res = json({ ok: true, version: "v0.19.0" });
+        res = json({ ok: true, version: "v0.20.0" });
       } else if (url.pathname === "/api/webhooks/square" && request.method === "POST") {
         res = await membershipWebhook(request, env); // verifies signature; forwards payment.* to squareWebhook
       } else if (url.pathname.startsWith("/api/")) {
@@ -222,6 +229,7 @@ export default {
         res = (await marketingRoutes(request, env, url, ctx))
            || (await messagesRoutes(request, env, url, ctx))
            || (await posRoutes(request, env, url, ctx))
+           || (await pushRoutes(request, env, url, ctx))
            || (await waitlistRoutes(request, env, url, ctx))
            || (await webauthnRoutes(request, env, url, ctx))
            || (await securityRoutes(request, env, url, ctx))
@@ -275,6 +283,10 @@ async function runDailyJobs(env) {
     const wl = await waitlistSweep(env); // v0.19.0: expire stale offers, auto-offer next
     if (wl.expired || wl.autoOffered) console.log("waitlist sweep", JSON.stringify(wl));
   } catch (e) { console.error("waitlist sweep failed", e); }
+  try {
+    const pr = await pushPruneSweep(env); // v0.20.0: drop dead/failing push subscriptions
+    if (pr.disabled || pr.purged) console.log("push prune", JSON.stringify(pr));
+  } catch (e) { console.error("push prune failed", e); }
 }
 
 /** 24h event reminders — only members who opted in (Settings toggle, consent stored v0.5.0). */

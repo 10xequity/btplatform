@@ -1,5 +1,5 @@
 /* Boomtown Platform — Admin sidebar (shared)
-   Version: v2.8 · Date: 2026-07-25 · Ships in: v0.19.0
+   Version: v2.9 · Date: 2026-07-25 · Ships in: v0.20.0
    v2.6: M14 Phase B — "Message Reports" (admin-messages.html) under Marketing: the review
    queue for member-reported relay messages (content_flags).
    v2.8: Waitlists (admin-waitlists.html) added after Registrations (v0.19.0).
@@ -29,7 +29,9 @@
    Sales & Reports links. The rail stays pinned left with identical spacing on
    every admin page; only the content area changes.
    Include AFTER the <div class="admin-layout"> exists. Provides window.BT_ADMIN
-   helpers (api(), guard(), esc(), money(), modal helpers) used by all admin pages. */
+   helpers (api(), guard(), esc(), money(), modal helpers) used by all admin pages.
+   v2.9: PWA bootstrap — injects manifest/apple meta + registers sw.js on every admin page (v0.20.0).
+*/
 
 (function () {
   const API = (window.BT_CONFIG && window.BT_CONFIG.apiBase) || "";
@@ -347,4 +349,21 @@
   guard();
 
   window.BT_ADMIN = { api, guard, esc, money, fmtDT, openModal, closeModal, downloadText, fail };
+
+  /* ---------- v2.9: PWA bootstrap (manifest + apple meta + service worker) ---------- */
+  (function pwaBootstrap() {
+    try {
+      const head = document.head;
+      if (!document.querySelector('link[rel="manifest"]')) {
+        const l = document.createElement("link"); l.rel = "manifest"; l.href = "manifest.webmanifest"; head.appendChild(l);
+      }
+      if (!document.querySelector('meta[name="theme-color"]')) {
+        const t = document.createElement("meta"); t.name = "theme-color"; t.content = "#0B0B0D"; head.appendChild(t);
+      }
+      if (!document.querySelector('link[rel="apple-touch-icon"]')) {
+        const a = document.createElement("link"); a.rel = "apple-touch-icon"; a.href = "assets/logo-boom-icon-512.png"; head.appendChild(a);
+      }
+      if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(function () {});
+    } catch (e) { /* PWA extras are never load-blocking */ }
+  })();
 })();

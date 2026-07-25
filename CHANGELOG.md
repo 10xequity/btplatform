@@ -177,3 +177,12 @@
   admin-waitlists.html/js v1.0 (queue management) · admin-nav.js v2.8 (Waitlists item).
 - **DB:** migration 0013 (waitlists table + 3 indexes) — applied live 2026-07-25.
 - Tests 58 → 68 (waitlists.test.mjs). Emails ride the sandbox switch (rule 12).
+
+## v0.20.0 — 2026-07-25 — PWA + Web Push
+- **PWA:** `manifest.webmanifest` + `sw.js` (network-first shell cache; API never cached). Site installable to the home screen on Android and iPhone. Static tags on index/home/settings; every other page gets them injected by site-nav v2.5 / admin-nav v2.9.
+- **Web Push (zero deps):** `worker/src/push.js` v1.0 — RFC 8291 aes128gcm encryption + RFC 8292 VAPID on WebCrypto. Routes: vapid-key (public), subscribe/unsubscribe/status (member), admin test-send (staff). Requires Worker secrets `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` (+ optional `VAPID_SUBJECT`); without them everything no-ops safely.
+- **Waitlists v1.1:** offer push sent alongside the offer email (deep-links to the ?wtoken= claim).
+- **Settings v1.1:** push on/off toggle with iOS Add-to-Home-Screen hint (settings.js v1.1 + push.js client v1.0).
+- **Cron:** daily `pushPruneSweep` — dead endpoints (404/410) soft-deleted immediately, chronic failures disabled, 30-day purge.
+- **DB:** migration 0014 `push_subscriptions` (additive; applied live via Cloudflare MCP).
+- Tests 29/29 locally (pos 12 · waitlists 10 · push 7 incl. full RFC 8291 encrypt→decrypt round trip).

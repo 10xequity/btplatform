@@ -1,6 +1,6 @@
 /**
  * Boomtown Platform — Waitlists (M16-precursor, "Waitlists" roadmap item)
- * File: worker/src/waitlists.js · Version: v1.0 · Date: 2026-07-25 · Ships in: v0.19.0
+ * File: worker/src/waitlists.js · Version: v1.1 · Date: 2026-07-25 · Ships in: v0.19.0 · v1.1 ships in v0.20.0
  *
  * Full events queue signups; a drop (admin cancel) auto-offers the next team an
  * expiring claim link that funnels into the normal registration flow (spec v0.2 §3.1).
@@ -20,6 +20,8 @@
  *   markClaimed(env, waitlistId, regId) · offerNext(env, eventId, opts) · waitlistSweep(env)
  * Pure (unit-tested): computeIsFull · offerExpired · normalizeJoin · nextOfferExpiry
  */
+
+import { sendPushToEmail } from "./push.js"; // v1.1 — push alongside offer email (one-way import, no cycle)
 
 let json, audit, isStaff, requireStaff, sendEmail, escapeHtml;
 export function wireWaitlists(helpers) {
@@ -170,6 +172,13 @@ export async function offerNext(env, eventId, opts = {}) {
          <p><a href="${link}">Claim your spot →</a></p>
          <p>This link holds the spot until <strong>${escapeHtml(expires)} UTC</strong>. If it expires, the spot is offered to the next team in line.</p>`);
     } catch (e) { console.error("waitlist offer email failed", e); } // offer still stands; admin screen shows the link state
+    try { // v1.1: push notification alongside the email (no-op until VAPID secrets are set)
+      await sendPushToEmail(env, w.email, {
+        title: "A spot opened up! 🏐",
+        body: `You're next in line for ${ev.name}. Tap to claim before the offer expires.`,
+        url: link, tag: `bt-wl-${w.id}`,
+      });
+    } catch (e) { console.error("waitlist offer push failed", e); }
     return { offered: true, waitlist_id: w.id, email: w.email, name: w.name, expires_at: expires };
   }
   return { offered: false, reason: "Too many skippable entries in a row — check the queue." };

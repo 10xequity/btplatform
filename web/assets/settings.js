@@ -1,5 +1,6 @@
 /* Boomtown Platform — Settings
-   File: web/assets/settings.js · Version: v1.0 · Date: 2026-07-23 · Ships in: v0.6.0
+   File: web/assets/settings.js · Version: v1.1 · Date: 2026-07-25 · Ships in: v0.6.0 (v1.1 in v0.20.0)
+   v1.1: Push-notification row in the Reminders card (BT_PUSH from push.js).
    Sections: Account (name/email/photo — edits live on the Profile page; email is your
    sign-in identity, changed by staff on request), Sign-in & security (passkeys replace
    passwords AND 2FA — one gesture is both factors), Appearance, Reminders, System (staff).
@@ -108,17 +109,27 @@
       </section>
 
       <section class="card settings-section reveal" aria-labelledby="sNotif">
-        <h3 id="sNotif">Reminders</h3>
+        <h3 id="sNotif">Reminders &amp; notifications</h3>
         <div class="settings-row">
           <div class="grow"><div class="k">Event email reminders</div>
             <div class="v">We'll email you 24 hours before events you're registered for.</div></div>
           <button id="remBtn" class="btn ghost">${remindersOn ? "Turn off" : "Turn on"}</button>
+        </div>
+        <div class="settings-row">
+          <div class="grow"><div class="k">Push notifications on this device</div>
+            <div class="v" id="pushState">Checking&#8230;</div></div>
+          <button id="pushBtn" class="btn ghost" hidden>Turn on</button>
         </div>
       </section>
 
       ${staff ? `
       <section class="card settings-section reveal" aria-labelledby="sSys" id="system">
         <h3 id="sSys">System (staff)</h3>
+        <div class="settings-row">
+          <div class="grow"><div class="k">Test push notifications</div>
+            <div class="v">Sends a test notification to every device where you turned push on.</div></div>
+          <button id="pushTestBtn" class="btn ghost">Send test</button>
+        </div>
         <div class="settings-row">
           <div class="grow"><div class="k">Members, roles &amp; admin access</div>
             <div class="v">Add staff, change roles, look up any member.</div></div>
@@ -137,6 +148,45 @@
     `;
 
     document.getElementById("signOut2").addEventListener("click", () => document.getElementById("logoutBtn").click());
+
+    /* staff push test (v1.1) */
+    const ptb = document.getElementById("pushTestBtn");
+    if (ptb) ptb.onclick = async () => {
+      ptb.disabled = true; ptb.textContent = "Sending\u2026";
+      const r = await api("/api/admin/push/test", { method: "POST", body: "{}" });
+      ptb.disabled = false;
+      ptb.textContent = r.ok ? `Sent to ${r.data.sent || 0} device${(r.data.sent||0) === 1 ? "" : "s"}` : (r.data.error || "Failed");
+      setTimeout(() => { ptb.textContent = "Send test"; }, 4000);
+    };
+
+    /* push notifications (v1.1) */
+    initPush();
+    async function initPush() {
+      const stateEl = document.getElementById("pushState");
+      const btn = document.getElementById("pushBtn");
+      if (!window.BT_PUSH) { stateEl.textContent = "Not available on this page."; return; }
+      if (BT_PUSH.iosNeedsInstall()) {
+        stateEl.textContent = "On iPhone/iPad: first tap Share \u2192 Add to Home Screen, then open Boomtown from that icon to turn these on.";
+        return;
+      }
+      if (!BT_PUSH.supported()) { stateEl.textContent = "This browser doesn't support push notifications."; return; }
+      async function refresh() {
+        const s = await BT_PUSH.state();
+        if (s === "blocked") { stateEl.textContent = "Blocked in your browser settings for this site."; btn.hidden = true; return; }
+        const on = s === "on";
+        stateEl.textContent = on ? "On \u2014 waitlist offers and updates arrive instantly." : "Off \u2014 you'll only get emails.";
+        btn.textContent = on ? "Turn off" : "Turn on";
+        btn.hidden = false;
+        btn.onclick = async () => {
+          btn.disabled = true;
+          const r = on ? await BT_PUSH.disable() : await BT_PUSH.enable();
+          btn.disabled = false;
+          if (!r.ok) stateEl.textContent = r.error;
+          else await refresh();
+        };
+      }
+      await refresh();
+    }
 
     /* reminders toggle */
     document.getElementById("remBtn").addEventListener("click", async (e) => {

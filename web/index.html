@@ -1,11 +1,17 @@
 <!DOCTYPE html>
-<!-- Boomtown Platform — App Shell · Version: v0.6.0 · Date: 2026-07-23
+<!-- Boomtown Platform — App Shell · Version: v0.7.0 · Date: 2026-07-25
+     v0.7.0: PWA — manifest link, apple-touch-icon, theme-color, sw.js registration (v0.20.0).
      v0.6.0: member/manager sign-in switch, clickable dashboard cards, site-wide sidebar (site-nav.js). -->
 <html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Boomtown Athletics</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <meta name="theme-color" content="#0B0B0D" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Boomtown" />
+  <link rel="apple-touch-icon" href="assets/logo-boom-icon-512.png" />
   <link rel="stylesheet" href="assets/tokens.css" />
   <link rel="stylesheet" href="assets/app.css" />
 </head>
@@ -26,5 +32,6 @@
   <script src="assets/site-nav.js?v=0.6.0" defer></script>
   <script src="assets/app.js?v=0.6.0"></script>
   <script src="assets/passkey.js?v=0.6.0"></script>
+  <script>if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(function(){});</script>
 </body>
 </html>

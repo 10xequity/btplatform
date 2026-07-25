@@ -1,5 +1,5 @@
 /* Boomtown Platform — Site-wide sidebar navigation (shared)
-   File: web/assets/site-nav.js · Version: v2.4 · Date: 2026-07-24 · Ships in: v0.17.0
+   File: web/assets/site-nav.js · Version: v2.5 · Date: 2026-07-25 · Ships in: v0.20.0
    v2.4: M14 Phase B — "Player Library" item (library.html) in Explore; signed-in "Inbox"
    item (member-inbox.html) with a live unread badge (GET /api/messages/unread-count,
    silent fallback on older workers). Absorbs the v2.3 brand work below.
@@ -18,7 +18,9 @@
    collapses to a horizontal scroll bar on narrow screens (volleyballlife mobile pattern).
    Self-contained: injects its own styles (tokens only), wraps <main>/#app automatically.
    Role-aware: reads /api/me when a session exists; staff/admin see the Manage group.
-   Skips itself entirely in ?embed=1 mode. Include with: <script src="assets/site-nav.js" defer></script> */
+   Skips itself entirely in ?embed=1 mode. Include with: <script src="assets/site-nav.js" defer></script>
+   v2.5: PWA bootstrap — injects manifest/apple meta + registers sw.js on every page (v0.20.0).
+*/
 
 (function () {
   if (new URLSearchParams(location.search).get("embed") === "1") return;
@@ -161,4 +163,21 @@
     if (org) h["X-Org-Id"] = org;
     return h;
   }
+
+  /* ---------- v2.5: PWA bootstrap (manifest + apple meta + service worker) ---------- */
+  (function pwaBootstrap() {
+    try {
+      const head = document.head;
+      if (!document.querySelector('link[rel="manifest"]')) {
+        const l = document.createElement("link"); l.rel = "manifest"; l.href = "manifest.webmanifest"; head.appendChild(l);
+      }
+      if (!document.querySelector('meta[name="theme-color"]')) {
+        const t = document.createElement("meta"); t.name = "theme-color"; t.content = "#0B0B0D"; head.appendChild(t);
+      }
+      if (!document.querySelector('link[rel="apple-touch-icon"]')) {
+        const a = document.createElement("link"); a.rel = "apple-touch-icon"; a.href = "assets/logo-boom-icon-512.png"; head.appendChild(a);
+      }
+      if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(function () {});
+    } catch (e) { /* PWA extras are never load-blocking */ }
+  })();
 })();
