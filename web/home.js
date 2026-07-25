@@ -1,5 +1,7 @@
 /* Boomtown Platform — My Dashboard
-   File: web/home.js · Version: v1.2 · Date: 2026-07-24 · Ships in: v0.10.0 (adds Membership card)
+   File: web/home.js · Version: v1.3.0 · Date: 2026-07-24 · Ships in: v0.14.0
+   v1.3.0 (M12.5): waiver-status chips (self + children), Agreements card
+   (/api/me/agreements), Request-court-time card gated by BT_CONFIG.RENTALS_ENABLED.
    RECOVERY of the lost v0.7.0 member dashboard. On load: silently links roster
    rows to this account (POST /api/profile/connect-teams), then renders the
    notification inbox, upcoming events, and teams (captains can send invites). */
@@ -42,6 +44,60 @@
     api("/api/profile/connect-teams", { method: "POST" }); // fire-and-forget roster link
     loadMembership();
     loadNotifications(); loadUpcoming(); loadTeams();
+    loadAgreements();
+    setupRental();
+  }
+
+  async function loadAgreements() {
+    const r = await api("/api/me/agreements");
+    const strip = $("statusStrip");
+    if (!r.ok) { if (strip) strip.innerHTML = ""; $("agrList").innerHTML = `<p class="help-text" style="margin:0">Couldn't load your agreements right now.</p>`; return; }
+    const st = r.data.status || {};
+    const chips = [];
+    const one = (c, who) => chips.push(c.waiver_ok
+      ? `<span class="chip ok">✓ ${esc(who)}: waiver signed${c.expires_at ? " · good through " + esc(String(c.expires_at).slice(0, 10)) : ""}</span>`
+      : `<span class="chip warn">! ${esc(who)}: waiver needed · <a href="profile.html">sign now</a></span>`);
+    if (st.self) one(st.self, "You");
+    (st.children || []).forEach(k => one(k, k.name || "Child"));
+    if (strip) strip.innerHTML = chips.join("");
+
+    const rows = r.data.agreements || [];
+    const label = a => (a.document_type === "waiver" ? "Liability waiver" : esc(a.document_type)) + (a.document_ref ? ` <span class="help-text">(${esc(a.document_ref)})</span>` : "");
+    const render = (list) => list.map(a => `
+      <div class="agr-row">
+        <div><b>${label(a)}</b></div>
+        <div>${esc(String(a.signed_at || "").slice(0, 10))}</div>
+        <div class="sub">For ${esc(a.subject_name)} · signed by ${esc(a.signed_name)}${a.on_behalf ? " (guardian)" : ""}${a.expires_at ? " · expires " + esc(String(a.expires_at).slice(0, 10)) : ""}</div>
+      </div>`).join("");
+    if (!rows.length) {
+      $("agrList").innerHTML = `<p class="help-text" style="margin:0">Nothing signed yet — your waiver appears here after your first registration.</p>`;
+      return;
+    }
+    const first = rows.slice(0, 5);
+    $("agrList").innerHTML = render(first) + (rows.length > 5
+      ? `<button class="btn ghost" id="agrMore" style="margin-top:8px">Show all ${rows.length}</button>` : "");
+    const more = $("agrMore");
+    if (more) more.onclick = () => { $("agrList").innerHTML = render(rows); };
+  }
+
+  function setupRental() {
+    const card = $("rentalCard");
+    if (!card) return;
+    if (!(window.BT_CONFIG && window.BT_CONFIG.RENTALS_ENABLED)) return; // hidden by owner decision
+    card.hidden = false;
+    $("rqSend").onclick = async () => {
+      const btn = $("rqSend"); btn.disabled = true;
+      const me = await api("/api/profile/me");
+      const c = (me.ok && me.data.contact) || {};
+      const r = await api("/api/rental-request", { method: "POST", body: JSON.stringify({
+        name: c.full_name || c.display_name || "Member", email: c.email || "",
+        date: $("rqDate").value, start: $("rqStart").value, end: $("rqEnd").value,
+        spaces_text: $("rqSpaces").value, notes: $("rqNotes").value,
+      }) });
+      btn.disabled = false;
+      $("rqMsg").innerHTML = `<p class="${r.ok ? "notice-ok" : "notice-err"}" style="margin:0">${esc(r.data.message || r.data.error || "Something went wrong.")}</p>`;
+      if (r.ok) { $("rqSpaces").value = ""; $("rqNotes").value = ""; }
+    };
   }
 
   async function loadNotifications() {

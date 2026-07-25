@@ -1,6 +1,14 @@
 /**
  * Boomtown Platform — API Worker
- * Version: v0.13.0 · Date: 2026-07-24 · Modules 1–12B
+ * Version: v0.14.0 · Date: 2026-07-24 · Modules 1–13
+ *
+ * v0.14.0 (2026-07-24): M12.5 Member Portal & Agreements (member_portal.js — GET /api/me/agreements:
+ *   waiver-status chips for self + children and the full signed-documents list from the waivers +
+ *   signatures ledger; member dashboard home.html/js v1.3.0 adds Status, Agreements and flag-gated
+ *   Request-court-time cards) + M13 Security & Recovery (security.js — audit-log viewer with kind
+ *   presets, soft-delete trash can with whitelist-only Restore, admin lockout rescue-link;
+ *   admin-security.html/js NEW, admin-nav.js v2.3 adds the Security & Recovery item).
+ *   No schema changes. Health reports v0.14.0.
  *
  * v0.13.0 (2026-07-24): M12 Phase B — tournament schedules + league weeks auto-claim courts on
  *   the facility calendar (facility.js v1.1.0, tournaments.js v0.4.0, leagues_admin.js v1.2.0);
@@ -90,6 +98,8 @@ import { checkinRoutes, wireCheckin } from "./checkin.js";
 import { membershipRoutes, wireMemberships, membershipWebhook } from "./memberships.js";
 import { sandboxRoutes, wireSandbox } from "./sandbox.js";
 import { facilityRoutes, wireFacility } from "./facility.js";
+import { securityRoutes, wireSecurity } from "./security.js";
+import { memberPortalRoutes, wireMemberPortal } from "./member_portal.js";
 import { waiverReminderSweep, sendEmail, escapeHtml } from "./registrations.js";
 
 const MAGIC_LINK_TTL_MIN = 15;
@@ -117,6 +127,8 @@ wireCheckin(wiredHelpers);
 wireMemberships(wiredHelpers);
 wireSandbox(wiredHelpers);
 wireFacility(wiredHelpers);
+wireSecurity(wiredHelpers);
+wireMemberPortal(wiredHelpers);
 
 /** ctx carries the caller's session + selected org for role checks. */
 async function buildCtx(request, env) {
@@ -160,12 +172,14 @@ export default {
       } else if (url.pathname === "/api/orgs" && request.method === "GET") {
         res = await listOrgs(env);
       } else if (url.pathname === "/api/health") {
-        res = json({ ok: true, version: "v0.13.0" });
+        res = json({ ok: true, version: "v0.14.0" });
       } else if (url.pathname === "/api/webhooks/square" && request.method === "POST") {
         res = await membershipWebhook(request, env); // verifies signature; forwards payment.* to squareWebhook
       } else if (url.pathname.startsWith("/api/")) {
         const ctx = await buildCtx(request, env);
         res = (await webauthnRoutes(request, env, url, ctx))
+           || (await securityRoutes(request, env, url, ctx))
+           || (await memberPortalRoutes(request, env, url, ctx))
            || (await leagueRoutes(request, env, url, ctx))
            || (await reportRoutes(request, env, url, ctx))
            || (await checkinRoutes(request, env, url, ctx))

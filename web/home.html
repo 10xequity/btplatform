@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Boomtown Platform — My Dashboard · Version: v1.2 · Date: 2026-07-24 · Ships in: v0.10.0
+<!-- Boomtown Platform — My Dashboard · Version: v1.3.0 · Date: 2026-07-24 · Ships in: v0.10.0
      RECOVERY of the v0.7.0 member dashboard (ZIP never uploaded). Signed-in home:
      notifications inbox, upcoming events, your teams (with captain invites + auto
      roster connect). Public visitors are sent to index.html to sign in. -->
@@ -30,6 +30,21 @@
     .tm-member { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: 14px; }
     .tm-member .st { font-size: 12px; color: var(--text-muted); margin-left: auto; flex: none; }
     .tm-member .st.ok { color: var(--positive); }
+      /* v1.3.0: status chips + agreements + rental request */
+    .hm-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; }
+    .chip { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 4px 12px;
+      border-radius: 999px; border: 1px solid var(--border); font-size: 14px; background: var(--surface); }
+    .chip.ok { border-color: var(--positive, #4CC38A); }
+    .chip.warn { border-color: var(--warning, #e6a23c); }
+    .chip a { color: inherit; }
+    .agr-row { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; padding: 10px 0;
+      border-bottom: 1px solid var(--border); font-size: 15px; }
+    .agr-row:last-child { border-bottom: 0; }
+    .agr-row .sub { color: var(--text-muted, #A8A49A); font-size: 13px; grid-column: 1/-1; }
+    .rq-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+    .rq-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+    .rq-grid input { min-height: 44px; font: inherit; background: var(--surface-2, #1C1C21);
+      color: inherit; border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
   </style>
   <script>
     (function () {
@@ -47,6 +62,7 @@
 
   <main class="hm-wrap" id="app" aria-live="polite">
     <h1 id="hello" style="font-size:24px;margin:8px 0 16px">Welcome back</h1>
+    <div id="statusStrip" class="hm-chips" aria-label="Account status"></div>
     <div class="hm-grid">
       <section class="hm-card" id="notifications" aria-label="Notifications">
         <div style="display:flex;align-items:center;gap:10px">
@@ -66,6 +82,26 @@
         <div id="memBox"><p class="help-text">Loading…</p></div>
       </section>
 
+      <section class="hm-card" aria-label="Agreements">
+        <h2>Agreements</h2>
+        <p class="help-text" style="margin-top:-4px">Every waiver and document signed on this account — for you and anyone you sign for.</p>
+        <div id="agrList"><p class="help-text">Loading…</p></div>
+      </section>
+
+      <section class="hm-card" id="rentalCard" aria-label="Request court time" hidden>
+        <h2>Request court time</h2>
+        <p class="help-text" style="margin-top:-4px">Tell us when — we'll confirm by email once it's approved.</p>
+        <div class="rq-grid">
+          <label>Date<input type="date" id="rqDate"></label>
+          <label>From<input type="time" id="rqStart" value="18:00"></label>
+          <label>To<input type="time" id="rqEnd" value="20:00"></label>
+          <label>Courts / rooms<input type="text" id="rqSpaces" placeholder="e.g. 2 courts, or Yoga-Den"></label>
+          <label style="grid-column:1/-1">Notes<input type="text" id="rqNotes" placeholder="Birthday party for 20, need the bar…"></label>
+        </div>
+        <button class="btn" id="rqSend" style="margin-top:10px">Send request</button>
+        <div id="rqMsg" role="status" aria-live="polite" style="margin-top:8px"></div>
+      </section>
+
       <section class="hm-card" aria-label="Your teams">
         <h2>Your teams</h2>
         <p class="help-text" style="margin-top:-4px">Teammates your captain added show as “not connected” until they sign in with the same email.</p>
@@ -75,8 +111,8 @@
     <div id="status" role="status" aria-live="polite" style="margin-top:10px"></div>
   </main>
 
-  <script src="assets/config.js?v=0.9.1"></script>
-  <script src="assets/site-nav.js?v=2.0" defer></script>
-  <script src="home.js?v=1.2" defer></script>
+  <script src="assets/config.js?v=0.14.0"></script>
+  <script src="assets/site-nav.js?v=0.14.0" defer></script>
+  <script src="home.js?v=1.3.0" defer></script>
 </body>
 </html>

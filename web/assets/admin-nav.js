@@ -1,5 +1,5 @@
 /* Boomtown Platform — Admin sidebar (shared)
-   Version: v2.2 · Date: 2026-07-24 (v2.1 = Module 11.5 UX hardening; v2.2 adds Facility Calendar item — Module 12)
+   Version: v2.3 · Date: 2026-07-24 · Ships in: v0.14.0 (adds Security & Recovery under People)
    v0.11.0: collapse handle moved to the rail's side edge (owner request) · category
    groups collapse individually (chevron on the label, state remembered per group) ·
    menu reordered for daily flow (Dashboard → Events → Registrations → Check-in →
@@ -103,6 +103,7 @@
     { label: "People", key: "people", items: [
       { href: "admin-users.html",         ico: "members", text: "Members" },
       { href: "admin-users.html#roles",   ico: "roles",   text: "Admins & Roles" },
+      { href: "admin-security.html",      ico: "roles",   text: "Security & Recovery" },
       { href: "settings.html",            ico: "gear",    text: "Settings" },
     ]},
     { label: "Member site", key: "site", items: [

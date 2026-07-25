@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<!-- Boomtown Platform — Security & Recovery (admin, Module 13)
+     File: web/admin-security.html · Version: v1.0 · Date: 2026-07-24 · Ships in: v0.14.0
+     Audit-log viewer · soft-delete trash can with Restore · lockout rescue link. -->
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Security & Recovery — Boomtown Athletics</title>
+  <link rel="stylesheet" href="assets/tokens.css?v=0.14.0" />
+  <link rel="stylesheet" href="assets/app.css?v=0.14.0" />
+  <link rel="stylesheet" href="assets/admin.css?v=0.14.0" />
+  <style>
+    .sec-grid { display: grid; gap: 16px; }
+    .sec-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+    .sec-card h2 { margin: 0 0 4px; font-size: 18px; }
+    .sec-tools { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+    .sec-tools select, .sec-tools input { min-height: 44px; font: inherit; background: var(--surface-2, #1C1C21);
+      color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
+    .sec-tools input[type="search"], .sec-tools input[type="email"] { flex: 1; min-width: 160px; }
+    .log-row { display: grid; grid-template-columns: auto 1fr auto; gap: 4px 12px; padding: 8px 0;
+      border-top: 1px solid var(--border); font-size: 14px; align-items: baseline; }
+    .log-row .act { font-weight: 600; }
+    .log-row .who { color: var(--text-dim, #A8A49A); grid-column: 1 / -1; font-size: 13px; }
+    .log-row .when { color: var(--text-dim, #A8A49A); white-space: nowrap; }
+    .tr-row { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; padding: 10px 0; border-top: 1px solid var(--border); font-size: 15px; }
+    .tr-row .lbl { font-weight: 600; }
+    .tr-row .meta { color: var(--text-dim, #A8A49A); font-size: 13px; }
+    .tr-row .grow { flex: 1; }
+    .rescue-out { margin-top: 10px; word-break: break-all; }
+  </style>
+</head>
+<body>
+  <header class="header chrome-glass">
+    <div class="wordmark"><a href="index.html" style="color:inherit;text-decoration:none">Boomtown <span>Athletics</span></a></div>
+    <div class="spacer"></div>
+  </header>
+
+  <div class="admin-layout">
+  <main class="main wide admin-main" id="app" aria-live="polite">
+    <div class="page-head"><h1>Security &amp; Recovery</h1></div>
+
+    <div class="sec-grid">
+      <section class="sec-card" aria-label="Security log">
+        <h2>Security log</h2>
+        <p class="help-text" style="margin:0 0 4px">Every write in the system — who did what, when. Read-only.</p>
+        <div class="sec-tools">
+          <select id="logKind" aria-label="Filter by kind">
+            <option value="all">All activity</option>
+            <option value="auth">Sign-ins &amp; rescue</option>
+            <option value="deletes">Deletes &amp; restores</option>
+            <option value="money">Money</option>
+            <option value="facility">Facility &amp; rentals</option>
+            <option value="roles">Users &amp; roles</option>
+          </select>
+          <input type="search" id="logQ" placeholder="Search action, entity, or email…" aria-label="Search log" />
+          <button class="btn ghost" id="logGo">Search</button>
+        </div>
+        <div id="logList"><p class="help-text">Loading…</p></div>
+        <button class="btn ghost" id="logMore" hidden style="margin-top:10px">Load older</button>
+      </section>
+
+      <section class="sec-card" aria-label="Trash and restore">
+        <h2>Trash &amp; restore</h2>
+        <p class="help-text" style="margin:0 0 4px">Nothing hard-deletes. Bring anything back with one click.</p>
+        <div class="sec-tools">
+          <select id="trEntity" aria-label="What to look in">
+            <option value="events">Events</option>
+            <option value="teams">Teams</option>
+            <option value="registrations">Registrations</option>
+            <option value="contacts">Members (contacts)</option>
+            <option value="space_bookings">Facility bookings</option>
+            <option value="rental_requests">Rental requests</option>
+          </select>
+        </div>
+        <div id="trList"><p class="help-text">Loading…</p></div>
+      </section>
+
+      <section class="sec-card" aria-label="Lockout rescue">
+        <h2>Lockout rescue</h2>
+        <p class="help-text" style="margin:0 0 4px">Member lost their passkey or can't find the sign-in email? Issue a fresh one-time link (15-minute expiry). Every rescue is logged.</p>
+        <div class="sec-tools">
+          <input type="email" id="rescueEmail" placeholder="member@email.com" aria-label="Member email" />
+          <button class="btn" id="rescueGo">Issue sign-in link</button>
+        </div>
+        <div id="rescueOut" class="rescue-out" role="status" aria-live="polite"></div>
+      </section>
+    </div>
+  </main>
+  </div>
+
+  <script src="assets/config.js?v=0.14.0"></script>
+  <script src="assets/admin-nav.js?v=0.14.0" defer></script>
+  <script src="assets/admin-security.js?v=0.14.0" defer></script>
+</body>
+</html>
