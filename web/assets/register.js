@@ -1,5 +1,8 @@
 /* Boomtown Platform — Public Registration
-   Version: v0.3.0 · Date: 2026-07-21
+   Version: v0.4.0 · Date: 2026-07-25 · Ships in: v0.19.0
+   v0.4.0: waitlists — full events show a "join the waitlist" card instead of the form;
+   a ?wtoken= claim link (from the offer email) opens the form with a claim banner and
+   passes waitlist_token so the server admits the team into the full event.
    Flow: ?event=ID → load form → fill → submit → Square checkout link (or sandbox/cash/free notice).
    Accessibility: real <label>s, keyboard-first, aria-live status region. No animation on inputs. */
 
@@ -33,6 +36,7 @@
 
   const params = new URLSearchParams(location.search);
   const eventId = params.get("event");
+  const wtoken = (params.get("wtoken") || "").trim();
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
   if (params.get("done")) {
@@ -55,8 +59,51 @@
     const r = await api(`/api/events/${encodeURIComponent(eventId)}/form`);
     if (!r.ok) { card.innerHTML = `<h1>Registration unavailable</h1><p>${esc(r.data.error || "Please try again later.")}</p>`; return; }
     ev = r.data.event; customFields = r.data.fields || [];
+    if (ev.is_full && !wtoken) { renderFullState(); return; } // v0.4.0: waitlist instead of a dead form
     renderForm();
+    if (wtoken) {
+      const note = document.createElement("p");
+      note.className = "msg ok";
+      note.setAttribute("role", "status");
+      note.textContent = "Waitlist claim link detected — this spot is held for the email your offer was sent to. Register below before the link expires.";
+      card.prepend(note);
+    }
   })();
+
+  /* ---------- v0.4.0: full event → waitlist card ---------- */
+  function renderFullState() {
+    const cap = ev.capacity ? ` (${ev.capacity} team cap)` : "";
+    card.innerHTML = `
+      <h1>${esc(ev.name)}</h1>
+      <p><strong>This event is full${cap}.</strong> Join the waitlist and we'll email you the moment a spot opens — offers come with a claim link that holds the spot for you.</p>
+      <div class="field"><label for="wlName">Captain name</label><input id="wlName" autocomplete="name" /></div>
+      <div class="field"><label for="wlEmail">Email</label><input id="wlEmail" type="email" autocomplete="email" /></div>
+      <div class="field"><label for="wlTeam">Team name (optional)</label><input id="wlTeam" /></div>
+      <div class="field"><label for="wlPhone">Phone (optional)</label><input id="wlPhone" type="tel" autocomplete="tel" /></div>
+      <button id="wlBtn" class="btn">Join the waitlist</button>
+      <p id="msg" class="msg" role="status" aria-live="polite"></p>`;
+    document.getElementById("wlBtn").addEventListener("click", joinWaitlist);
+  }
+
+  async function joinWaitlist() {
+    const $ = (id) => document.getElementById(id);
+    const msg = $("msg");
+    const show = (t, ok) => { msg.className = "msg " + (ok ? "ok" : "err"); msg.textContent = t; };
+    const btn = $("wlBtn");
+    btn.disabled = true; btn.textContent = "Joining…";
+    const r = await api(`/api/events/${encodeURIComponent(eventId)}/waitlist`, {
+      method: "POST",
+      body: JSON.stringify({ name: $("wlName").value, email: $("wlEmail").value, team_name: $("wlTeam").value, phone: $("wlPhone").value }),
+    });
+    btn.disabled = false; btn.textContent = "Join the waitlist";
+    if (!r.ok) {
+      if (r.data && r.data.open_spots) { location.href = `register.html?event=${encodeURIComponent(eventId)}`; return; }
+      show((r.data && r.data.error) || "Something went wrong. Please try again.", false);
+      return;
+    }
+    show(r.data.message || `You're #${r.data.position} on the waitlist.`, true);
+    btn.remove();
+  }
 
   function fieldHtml(f) {
     const req = f.required ? " required" : "";
@@ -140,12 +187,19 @@
       teammates, city: $("city").value, state: $("state").value, instagram: $("instagram").value,
       waiver_accepted: true, waiver_signature: $("waiverSig").value,
       payment_method: payEl ? payEl.value : "square", custom,
+      waitlist_token: wtoken || undefined, // v0.4.0: claim from the offer email
     };
     const btn = $("submitBtn");
     btn.disabled = true; btn.textContent = "Submitting…";
     const r = await api(`/api/events/${encodeURIComponent(eventId)}/register`, { method: "POST", body: JSON.stringify(body) });
     btn.disabled = false; btn.textContent = "Register";
-    if (!r.ok) { show(esc(r.data.error || "Something went wrong. Please try again."), false); return; }
+    if (!r.ok) {
+      if (r.data && r.data.event_full && r.data.waitlist_available) { // filled up between load and submit
+        show(`${esc(r.data.error)} <a href="register.html?event=${encodeURIComponent(eventId)}">Join the waitlist →</a>`, false);
+        return;
+      }
+      show(esc(r.data.error || "Something went wrong. Please try again."), false); return;
+    }
     if (r.data.checkout_url) {
       show(`${esc(r.data.message)}<br/><a class="btn" style="display:inline-block;margin-top:10px" href="${esc(r.data.checkout_url)}">Pay now →</a>`, true);
       location.href = r.data.checkout_url;

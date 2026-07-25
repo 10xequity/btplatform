@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<!-- Boomtown Platform — Waitlists (admin) · Version: v1.0 · Date: 2026-07-25 · Ships in: v0.19.0
+     Pick an event → see capacity + queue → Offer next / Offer (override) / Remove.
+     Offers email an expiring claim link (48h default); the daily sweep expires stale
+     offers and auto-offers the next team. Emails ride the sandbox switch (rule 12). -->
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Waitlists — Boomtown Athletics</title>
+  <link rel="stylesheet" href="assets/tokens.css" />
+  <link rel="stylesheet" href="assets/app.css" />
+  <link rel="stylesheet" href="assets/admin.css?v=0.19.0" />
+  <style>
+    .wl-head { display: flex; gap: 12px; align-items: end; flex-wrap: wrap; margin-bottom: 16px; }
+    .wl-head .field { min-width: 280px; }
+    .wl-cap { font-weight: 700; }
+    .wl-cap.full { color: var(--warning, #e6a23c); }
+    .wl-table { width: 100%; border-collapse: collapse; }
+    .wl-table th, .wl-table td { text-align: left; padding: 10px 8px; border-top: 1px solid var(--border); vertical-align: middle; }
+    .wl-table th { border-top: 0; color: var(--text-muted); font-size: 13px; }
+    .wl-status { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 700;
+      border: 1px solid var(--border); }
+    .wl-status.queued  { color: var(--text); }
+    .wl-status.offered { color: var(--warning, #e6a23c); border-color: currentColor; }
+    .wl-status.claimed { color: var(--positive, #4cc38a); border-color: currentColor; }
+    .wl-status.expired, .wl-status.removed { color: var(--text-muted); }
+    .wl-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .wl-actions .btn, .wl-head .btn { min-height: 44px; }
+    .wl-row-in { animation: wlIn 200ms cubic-bezier(0.23,1,0.32,1); }
+    @keyframes wlIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+    @media (prefers-reduced-motion: reduce) { .wl-row-in { animation: none; } }
+    @media (max-width: 760px) {
+      .wl-table thead { display: none; }
+      .wl-table td { display: block; border-top: 0; }
+      .wl-table tr { display: block; border-top: 1px solid var(--border); padding: 8px 0; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app" class="admin-shell">
+    <main class="admin-main" id="main">
+      <h1>Waitlists</h1>
+      <p class="muted">Full events queue teams here. Offering emails an expiring claim link; if it lapses, the nightly sweep offers the next team automatically. Cancelling a registration (Registrations screen) also auto-offers.</p>
+      <div class="wl-head">
+        <div class="field">
+          <label for="wlEvent">Event</label>
+          <select id="wlEvent" aria-label="Choose an event"></select>
+        </div>
+        <div>
+          <div class="wl-cap" id="wlCap" aria-live="polite"></div>
+        </div>
+        <button class="btn" id="wlOfferNext">Offer next in line</button>
+        <button class="btn ghost" id="wlRefresh">Refresh</button>
+      </div>
+      <div class="pos-card">
+        <table class="wl-table" aria-describedby="wlCap">
+          <thead>
+            <tr><th>#</th><th>Team / Captain</th><th>Contact</th><th>Status</th><th>Offer expires</th><th>Actions</th></tr>
+          </thead>
+          <tbody id="wlBody"></tbody>
+        </table>
+      </div>
+    </main>
+  </div>
+  <script src="assets/admin-nav.js?v=2.8"></script>
+  <script src="assets/admin-waitlists.js?v=1.0"></script>
+</body>
+</html>

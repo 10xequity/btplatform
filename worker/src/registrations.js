@@ -1,7 +1,16 @@
 /**
  * Boomtown Platform — Registration + Square + Captain-scoring routes
- * Version: v1.2 · Date: 2026-07-24 · Modules 4 + 8 (recovery)
+ * Version: v1.3 · Date: 2026-07-25 · Modules 4 + 8 · Ships in: v0.19.0
  * Mounted by worker/src/index.js (same wire() pattern as tournaments.js).
+ *
+ * v1.3 (2026-07-25, Waitlists):
+ *   - CAPACITY IS NOW ENFORCED: submitRegistration checks events.capacity against
+ *     active registrations (pending/email-sent/paid/cash-pending/comped). Full → 409
+ *     with { event_full:true, waitlist_available:true }; a valid ?wtoken= claim from
+ *     a waitlist offer bypasses the check and marks the entry claimed (waitlists.js).
+ *   - GET /api/events/:id/form now returns capacity / spots_taken / is_full.
+ *   - NEW POST /api/registrations/:id/cancel (staff) — status → 'cancelled'
+ *     (already in the day-one CHECK), then auto-offers the next waitlisted team.
  *
  * v1.2 (2026-07-24, RECOVERY — the v0.7.0 ZIP was never uploaded, so the v1.0/v1.1
  * edits were lost; this restores everything worker/src/index.js v0.9.x imports):
@@ -36,6 +45,7 @@
  *   - webhook header x-square-hmacsha256-signature = base64 HMAC-SHA256(signature_key, notification_url + raw_body)
  */
 import { refreshStandings } from "./tournaments.js";
+import { waitlistGate, markClaimed, offerNext, activeRegistrationCount, computeIsFull } from "./waitlists.js";
 
 const SQUARE_VERSION = "2026-05-20";
 
@@ -52,6 +62,7 @@ export async function registrationRoutes(request, env, url, ctx) {
   if ((match = p.match(/^\/api\/events\/(\d+)\/registrations$/)) && m === "GET") return listRegistrations(request, env, ctx, +match[1], url);
   if ((match = p.match(/^\/api\/registrations\/(\d+)\/remind$/)) && m === "POST") return remind(env, ctx, +match[1]);
   if ((match = p.match(/^\/api\/registrations\/(\d+)\/mark-paid$/)) && m === "POST") return markPaid(env, ctx, +match[1]);
+  if ((match = p.match(/^\/api\/registrations\/(\d+)\/cancel$/)) && m === "POST") return cancelRegistration(env, ctx, +match[1]);
   if ((match = p.match(/^\/api\/registrations\/(\d+)\/retry-payment$/)) && m === "POST") return retryPayment(env, ctx, +match[1]);
   if ((match = p.match(/^\/api\/team-members\/(\d+)\/invite$/)) && m === "POST") return inviteTeammate(env, ctx, +match[1]);
   if (p === "/api/profile/connect-teams" && m === "POST") return connectTeams(env, ctx);
@@ -81,12 +92,16 @@ async function eventForm(env, eventId) {
   const fields = (await env.DB.prepare(
     "SELECT id, label, field_type, options_json, required, sort_order FROM form_fields WHERE org_id=?1 AND (event_id=?2 OR event_id IS NULL) AND deleted_at IS NULL ORDER BY sort_order, id"
   ).bind(ev.org_id, eventId).all()).results;
+  const spotsTaken = await activeRegistrationCount(env, eventId); // v1.3: waitlist-aware form
   return json({
     event: {
       id: ev.id, org_id: ev.org_id, org_name: ev.org_name, name: ev.name, type: ev.type,
       starts_at: ev.starts_at, location: ev.location,
       price_cents: ev.price_cents || 0,
       cash_option_enabled: !!ev.cash_option_enabled,
+      capacity: ev.capacity || null,
+      spots_taken: spotsTaken,
+      is_full: computeIsFull(ev.capacity, spotsTaken),
     },
     fields,
   });
@@ -106,6 +121,13 @@ async function submitRegistration(request, env, eventId) {
   const payMethod = b.payment_method === "cash" ? "cash" : "square";
   if (payMethod === "cash" && !ev.cash_option_enabled) {
     return json({ error: "Cash payment isn't available for this event." }, 400); // hidden option enforced server-side
+  }
+
+  // v1.3: capacity gate — a valid waitlist claim token admits into a full event.
+  const wtoken = String(b.waitlist_token || "").trim() || null;
+  const gate = await waitlistGate(env, ev, email, wtoken);
+  if (!gate.allowed) {
+    return json({ error: gate.error, event_full: true, waitlist_available: !wtoken }, 409);
   }
 
   // Idempotency: an open registration for this email+event returns its existing checkout link.
@@ -179,6 +201,7 @@ async function submitRegistration(request, env, eventId) {
   }
 
   await audit(env, { orgId: ev.org_id, userId: null }, "registration.create", "registrations", regId, { event: eventId, method: payMethod });
+  if (gate.waitlistId) await markClaimed(env, gate.waitlistId, regId); // v1.3: waitlist claim completed
 
   // Payment
   if (status === "cash-pending") {
@@ -364,6 +387,25 @@ async function markPaid(env, ctx, regId) {
   ).bind(reg.org_id, regId, reg.price_cents || 0).run();
   await audit(env, { orgId: reg.org_id, userId: ctx.userId }, "registration.cash-collected", "registrations", regId, {});
   return json({ ok: true, message: "Marked paid (cash collected)." });
+}
+
+/** v1.3: staff cancel — frees the spot and auto-offers the next waitlisted team. */
+async function cancelRegistration(env, ctx, regId) {
+  const reg = await env.DB.prepare(
+    "SELECT r.id, r.org_id, r.event_id, r.status FROM registrations r WHERE r.id=?1 AND r.deleted_at IS NULL"
+  ).bind(regId).first();
+  if (!reg) return json({ error: "Registration not found." }, 404);
+  const deny = await staffEventGate(env, ctx, reg.event_id); if (deny) return deny;
+  if (reg.status === "cancelled") return json({ ok: true, already: true, status: "cancelled" });
+  await env.DB.prepare(
+    "UPDATE registrations SET status='cancelled', updated_at=datetime('now') WHERE id=?1"
+  ).bind(regId).run();
+  await audit(env, ctx, "registration.cancel", "registrations", regId, { event: reg.event_id, was: reg.status });
+  // NOTE: refunds stay manual in Square (SANDBOX rule 1); cancelling here only frees the spot.
+  const offer = await offerNext(env, reg.event_id, {});
+  return json({ ok: true, status: "cancelled",
+    waitlist_offer: offer.offered ? { email: offer.email, expires_at: offer.expires_at } : null,
+    waitlist_note: offer.offered ? `Spot offered to ${offer.name} (${offer.email}).` : offer.reason });
 }
 
 async function importRows(request, env, ctx, eventId) {

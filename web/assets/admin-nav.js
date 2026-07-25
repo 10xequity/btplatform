@@ -1,7 +1,8 @@
 /* Boomtown Platform — Admin sidebar (shared)
-   Version: v2.7 · Date: 2026-07-25 · Ships in: v0.18.0
+   Version: v2.8 · Date: 2026-07-25 · Ships in: v0.19.0
    v2.6: M14 Phase B — "Message Reports" (admin-messages.html) under Marketing: the review
    queue for member-reported relay messages (content_flags).
+   v2.8: Waitlists (admin-waitlists.html) added after Registrations (v0.19.0).
    v2.7: Point of Sale (admin-pos.html) added to the Money group (M15).
    v2.5: Marketing group (Marketing & Email → admin-marketing.html) between Money and People.
    v2.4 (shipped in v0.15.0): (1) MEMBER-VIEW ISOLATION — guard() now checks the caller's ROLE, not just the
@@ -109,6 +110,7 @@
       { href: "admin.html",               ico: "dash",   text: "Dashboard" },
       { href: "admin-events.html",        ico: "events", text: "Events & Programs" },
       { href: "admin-registrations.html", ico: "regs",   text: "Registrations" },
+      { href: "admin-waitlists.html",     ico: "regs",   text: "Waitlists" },
       { href: "admin-checkin.html",       ico: "door",   text: "Check-in" },
       { href: "admin-facility.html",      ico: "sched",  text: "Facility Calendar" },
       { href: "tournament.html",          ico: "ops",    text: "Tournament Ops" },

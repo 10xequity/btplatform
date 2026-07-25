@@ -159,3 +159,21 @@
   Sponsors / Shifts / Insights). web/assets/admin-nav.js v2.7: Point of Sale in Money group.
 - db/migrations/2026-07-25_0012_pos_v1_0.sql applied live (additive only).
 - Deferred to v0.18.1: balance-due chip on the check-in roster (Gymdesk pattern).
+
+## v0.19.0 — 2026-07-25 · Waitlists
+- **Capacity is now enforced at registration** (registrations.js v1.3): events with a
+  capacity return 409 `{event_full, waitlist_available}` when full; `/api/events/:id/form`
+  now reports `capacity` / `spots_taken` / `is_full`.
+- **NEW worker/src/waitlists.js v1.0** — public join (dedup, live position), status check,
+  staff queue view, "Offer next" + per-row offer (override) + remove; offers email an
+  expiring claim link (48h default, 1–168h clamp) that admits the team through the
+  capacity gate via `?wtoken=`; claims are recorded against the registration.
+- **NEW staff cancel** `POST /api/registrations/:id/cancel` — frees the spot
+  ('cancelled' was already in the day-one status CHECK) and auto-offers the next team.
+  Refunds stay manual in Square (SANDBOX, rule 1).
+- **Daily cron** adds `waitlistSweep` — expires stale offers, auto-offers the next team.
+- **Web:** register.js v0.4.0 (full events show a Join-the-waitlist card; claim banner +
+  token pass-through; graceful "filled while you typed" handling) · NEW
+  admin-waitlists.html/js v1.0 (queue management) · admin-nav.js v2.8 (Waitlists item).
+- **DB:** migration 0013 (waitlists table + 3 indexes) — applied live 2026-07-25.
+- Tests 58 → 68 (waitlists.test.mjs). Emails ride the sandbox switch (rule 12).
