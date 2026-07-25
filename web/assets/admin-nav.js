@@ -1,5 +1,16 @@
 /* Boomtown Platform — Admin sidebar (shared)
-   Version: v2.3 · Date: 2026-07-24 · Ships in: v0.14.0 (adds Security & Recovery under People)
+   Version: v2.5 · Date: 2026-07-24 · Ships in: v0.16.0
+   v2.5: Marketing group (Marketing & Email → admin-marketing.html) between Money and People.
+   v2.4 (shipped in v0.15.0): (1) MEMBER-VIEW ISOLATION — guard() now checks the caller's ROLE, not just the
+   session: signed-in members with no admin/staff role on any org are bounced to home.html
+   before any admin UI renders. The gate also auto-runs on script load, covering admin pages
+   that never call guard() themselves (tournament.html, admin-registrations.html). Server
+   APIs already 403 non-staff (requireStaff) — this closes the UI shell too. /api/me is
+   memoized so the auto-run + a page's own guard() call cost one fetch.
+   (2) UX-06 — brand logo (assets/logo-boom-wordmark.png) injected into the header wordmark
+   on every admin page; decorative (alt=""), text wordmark remains for assistive tech;
+   on logo 404 the text wordmark renders exactly as before.
+   v2.3: Ships in v0.14.0 (adds Security & Recovery under People)
    v0.11.0: collapse handle moved to the rail's side edge (owner request) · category
    groups collapse individually (chevron on the label, state remembered per group) ·
    menu reordered for daily flow (Dashboard → Events → Registrations → Check-in →
@@ -42,6 +53,10 @@
   /* v0.7.0 rail styles: collapse mode + icon sizing + back bar (layers on admin.css) */
   const extra = document.createElement("style");
   extra.textContent = `
+    /* v2.4 UX-06: brand logo chip — the mark lives on black in both themes */
+    .wordmark { display: flex; align-items: center; gap: 10px; }
+    .brand-logo { height: 22px; width: auto; display: block; background: #000;
+      border-radius: 6px; padding: 4px 8px; box-sizing: content-box; }
     .nav-item svg { width: 20px; height: 20px; flex: none; opacity: .8; }
     .nav-item.active svg { opacity: 1; }
     .sidebar .rail-foot { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border); }
@@ -99,6 +114,9 @@
     { label: "Money", key: "money", items: [
       { href: "admin-reports.html",       ico: "sales",  text: "Sales & Reports" },
       { href: "admin-plans.html",         ico: "sales",  text: "Memberships" },
+    ]},
+    { label: "Marketing", key: "mkt", items: [
+      { href: "admin-marketing.html",     ico: "sales",  text: "Marketing & Email" },
     ]},
     { label: "People", key: "people", items: [
       { href: "admin-users.html",         ico: "members", text: "Members" },
@@ -237,13 +255,22 @@
     }
   }
 
-  /* Redirect to sign-in if there's no session; returns /api/me payload if signed in. */
+  /* Redirect to sign-in if there's no session; bounce non-staff to home.html (v2.4).
+     Returns /api/me payload only for admin/staff. Memoized: auto-run + page guard() = 1 fetch. */
+  let _mePromise = null;
   async function guard() {
     // Admin pages exit member-demo mode automatically (View-as-member is presentation only).
     if (sessionStorage.getItem("bt_demo_member") === "1") { location.href = "home.html"; return null; }
     if (!bearer()) { location.href = "index.html"; return null; }
-    const me = await api("/api/me");
+    if (!_mePromise) _mePromise = api("/api/me");
+    const me = await _mePromise;
     if (!me.ok) { location.href = "index.html"; return null; }
+    // v2.4 member-view isolation: staff/admin on ANY org may enter (org switcher rescopes);
+    // everyone else never sees the admin shell. Server-side requireStaff still enforces per-org.
+    const roles = (me.data && me.data.roles) || [];
+    if (!roles.some((r) => r.role === "admin" || r.role === "staff")) {
+      location.href = "home.html"; return null;
+    }
     return me.data;
   }
 
@@ -295,6 +322,22 @@
     document.body.appendChild(a); a.click(); a.remove();
     URL.revokeObjectURL(url);
   }
+
+  /* v2.4 UX-06: put the logo in the header wordmark. Decorative — text stays for AT. */
+  (function brandLogo() {
+    const wm = document.querySelector(".wordmark");
+    if (!wm || wm.querySelector(".brand-logo")) return;
+    const img = new Image();
+    img.src = "assets/logo-boom-wordmark.png?v=1.0";
+    img.alt = "";
+    img.className = "brand-logo";
+    img.onerror = () => img.remove(); // missing file → text wordmark exactly as before
+    wm.prepend(img);
+  })();
+
+  /* v2.4: the role gate runs on EVERY admin page load — including pages that never call
+     guard() themselves — so members never see admin options. */
+  guard();
 
   window.BT_ADMIN = { api, guard, esc, money, fmtDT, openModal, closeModal, downloadText, fail };
 })();

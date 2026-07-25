@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<!-- Boomtown Platform — Marketing & Email (M14 Phase A) · Version: v1.0 · Date: 2026-07-24 · Ships in: v0.16.0
+     Segments (who), Campaigns (what), Settings (compliance address). Sandbox-aware: without a
+     Brevo key everything works but no email leaves — the mode chip says so plainly. -->
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Marketing &amp; Email — Boomtown Athletics</title>
+  <link rel="stylesheet" href="assets/tokens.css" />
+  <link rel="stylesheet" href="assets/app.css" />
+  <link rel="stylesheet" href="assets/admin.css?v=0.16.0" />
+  <style>
+    .mkt-grid { display: grid; gap: 16px; grid-template-columns: 1fr 1fr; align-items: start; }
+    @media (max-width: 1020px) { .mkt-grid { grid-template-columns: 1fr; } }
+    .mkt-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card); padding: 16px; }
+    .mkt-card h2 { margin: 0 0 4px; font-size: 17px; }
+    .mkt-strip { display: flex; gap: 10px; flex-wrap: wrap; margin: 0 0 16px; }
+    .mkt-chip { background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 8px 14px; font-size: 14px; font-weight: 600; }
+    .mkt-chip b { color: var(--primary); }
+    .mkt-chip.warn { border-color: var(--danger); }
+    .mkt-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--border); flex-wrap: wrap; }
+    .mkt-row:first-of-type { border-top: 0; }
+    .mkt-row .grow { flex: 1; min-width: 180px; }
+    .mkt-row .k { font-weight: 700; }
+    .mkt-row .v { color: var(--text-muted); font-size: 13px; }
+    .status-pill { border-radius: 999px; padding: 3px 10px; font-size: 12px; font-weight: 800; background: var(--surface-raised); border: 1px solid var(--border); }
+    .status-pill.sent { color: var(--positive); }
+    .status-pill.sending { color: var(--accent); }
+    .mkt-form label { display: block; font-weight: 700; font-size: 14px; margin: 12px 0 4px; }
+    .mkt-form input, .mkt-form select, .mkt-form textarea { width: 100%; font: inherit; padding: 10px 12px;
+      border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface-raised); color: var(--text); }
+    .mkt-form textarea { min-height: 140px; resize: vertical; }
+    .mkt-hint { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+    .mkt-actions { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+    .snippet { font: 12px/1.5 ui-monospace, monospace; background: var(--surface-raised); border: 1px solid var(--border);
+      border-radius: var(--radius-control); padding: 10px 12px; word-break: break-all; user-select: all; }
+    .preview-box { border: 1px solid var(--border); border-radius: var(--radius-control); background: #fff; color: #111; padding: 14px; margin-top: 10px; max-height: 320px; overflow: auto; }
+  </style>
+</head>
+<body>
+  <header class="header chrome-glass">
+    <div class="wordmark"><a href="index.html" style="color:inherit;text-decoration:none">Boomtown <span>Athletics</span></a></div>
+    <div class="spacer"></div>
+  </header>
+
+  <div class="admin-layout">
+  <main class="main wide admin-main" id="app" aria-live="polite">
+    <div class="page-head"><h1>Marketing &amp; Email</h1></div>
+
+    <div class="mkt-strip" id="overviewStrip"><span class="mkt-chip">Loading…</span></div>
+
+    <div class="mkt-grid">
+      <section class="mkt-card" aria-label="Segments">
+        <h2>Segments</h2>
+        <p class="help-text" style="margin:0 0 8px">Who gets an email. Unsubscribed people are always left out — no exceptions.</p>
+        <button class="btn" id="newSegBtn">New segment</button>
+        <div id="segList" style="margin-top:8px"><p class="help-text">Loading…</p></div>
+      </section>
+
+      <section class="mkt-card" aria-label="Campaigns">
+        <h2>Campaigns</h2>
+        <p class="help-text" style="margin:0 0 8px">What you send. Drafts are editable; sent campaigns are a permanent record.</p>
+        <button class="btn" id="newCampBtn">New campaign</button>
+        <div id="campList" style="margin-top:8px"><p class="help-text">Loading…</p></div>
+      </section>
+
+      <section class="mkt-card" aria-label="Compliance settings">
+        <h2>Settings</h2>
+        <div class="mkt-form">
+          <label for="mailAddr">Physical mailing address (required by email law — sending is blocked without it)</label>
+          <input id="mailAddr" type="text" placeholder="Boomtown Athletics, 123 Court St, Colorado Springs, CO 80903" />
+          <div class="mkt-actions"><button class="btn" id="saveAddrBtn">Save address</button><span id="addrMsg" class="mkt-hint" role="status"></span></div>
+        </div>
+      </section>
+
+      <section class="mkt-card" aria-label="Website signup widget">
+        <h2>Website signup widget</h2>
+        <p class="help-text" style="margin:0 0 8px">Paste this one line into boomtownvb.com where the email box should appear. New signups land in Contacts with the <b>newsletter</b> tag and proper consent.</p>
+        <div class="snippet" id="widgetSnippet">&lt;script src="https://10xequity.github.io/btplatform/web/assets/signup-widget.js?v=1.0" data-org="boomtown" defer&gt;&lt;/script&gt;</div>
+        <p class="mkt-hint">Change <code>data-org</code> to <code>match-point</code> or <code>queens-club</code> on those sites.</p>
+      </section>
+    </div>
+  </main>
+  </div><!-- /admin-layout -->
+
+  <script src="assets/config.js?v=0.16.0"></script>
+  <script src="assets/admin-nav.js?v=0.16.0" defer></script>
+  <script src="assets/admin-marketing.js?v=0.16.0" defer></script>
+</body>
+</html>
+<!-- Changelog: v1.0 (2026-07-24) — initial Marketing & Email admin page (M14 Phase A). -->

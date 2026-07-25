@@ -1,6 +1,22 @@
 /**
  * Boomtown Platform — API Worker
- * Version: v0.14.0 · Date: 2026-07-24 · Modules 1–13
+ * Version: v0.16.0 · Date: 2026-07-24 · Modules 1–14A
+ *
+ * v0.16.0 (2026-07-24): M14 Phase A — Marketing & comms (marketing.js): CRM segments
+ *   (tags/played/since filters with live counts + preview), campaigns (draft → send →
+ *   batched delivery ≤30/invocation with cron drain; sandbox mode without a Brevo key;
+ *   merged test sends), CAN-SPAM enforcement (send blocked until orgs.mailing_address set;
+ *   compliance footer + one-click unsubscribe on every email), public POST /api/signup for
+ *   the embeddable website widget (signup-widget.js) and GET /api/unsubscribe. Migration
+ *   0010 applied live (segments, campaigns, campaign_sends; contacts consent columns;
+ *   orgs.mailing_address). Health reports v0.16.0. Phase B (relay inbox + library search)
+ *   is next.
+ *
+ * v0.15.0 (2026-07-24): Member-view isolation + brand (frontend release; no worker route or
+ *   schema changes — version bumped for release parity). admin-nav.js v2.4: guard() now
+ *   role-checks and auto-runs, so signed-in members can never render the admin UI shell
+ *   (server-side requireStaff was always enforced; this closes the UI). site-nav.js v2.3 +
+ *   logo assets: brand logo in every header (UX-06 closed). Health reports v0.15.0.
  *
  * v0.14.0 (2026-07-24): M12.5 Member Portal & Agreements (member_portal.js — GET /api/me/agreements:
  *   waiver-status chips for self + children and the full signed-documents list from the waivers +
@@ -100,6 +116,7 @@ import { sandboxRoutes, wireSandbox } from "./sandbox.js";
 import { facilityRoutes, wireFacility } from "./facility.js";
 import { securityRoutes, wireSecurity } from "./security.js";
 import { memberPortalRoutes, wireMemberPortal } from "./member_portal.js";
+import { marketingRoutes, wireMarketing, campaignQueueSweep } from "./marketing.js";
 import { waiverReminderSweep, sendEmail, escapeHtml } from "./registrations.js";
 
 const MAGIC_LINK_TTL_MIN = 15;
@@ -129,6 +146,7 @@ wireSandbox(wiredHelpers);
 wireFacility(wiredHelpers);
 wireSecurity(wiredHelpers);
 wireMemberPortal(wiredHelpers);
+wireMarketing(wiredHelpers);
 
 /** ctx carries the caller's session + selected org for role checks. */
 async function buildCtx(request, env) {
@@ -172,12 +190,13 @@ export default {
       } else if (url.pathname === "/api/orgs" && request.method === "GET") {
         res = await listOrgs(env);
       } else if (url.pathname === "/api/health") {
-        res = json({ ok: true, version: "v0.14.0" });
+        res = json({ ok: true, version: "v0.16.0" });
       } else if (url.pathname === "/api/webhooks/square" && request.method === "POST") {
         res = await membershipWebhook(request, env); // verifies signature; forwards payment.* to squareWebhook
       } else if (url.pathname.startsWith("/api/")) {
         const ctx = await buildCtx(request, env);
-        res = (await webauthnRoutes(request, env, url, ctx))
+        res = (await marketingRoutes(request, env, url, ctx))
+           || (await webauthnRoutes(request, env, url, ctx))
            || (await securityRoutes(request, env, url, ctx))
            || (await memberPortalRoutes(request, env, url, ctx))
            || (await leagueRoutes(request, env, url, ctx))
@@ -221,6 +240,10 @@ async function runDailyJobs(env) {
     const events = await eventReminderSweep(env);
     console.log("event reminders", JSON.stringify(events));
   } catch (e) { console.error("event reminder sweep failed", e); }
+  try {
+    const drained = await campaignQueueSweep(env); // v0.16.0: finish any in-flight campaigns
+    if (drained.length) console.log("campaign queue", JSON.stringify(drained));
+  } catch (e) { console.error("campaign queue sweep failed", e); }
 }
 
 /** 24h event reminders — only members who opted in (Settings toggle, consent stored v0.5.0). */
