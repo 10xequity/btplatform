@@ -1,5 +1,9 @@
 /* Boomtown Platform — Admin sidebar (shared)
-   Version: v2.10 · Date: 2026-07-26 · Ships in: v0.22.0
+   Version: v2.11 · Date: 2026-07-26 · Ships in: v0.24.0
+   v2.11: Build-status indicators (v0.24.0) — loads assets/build-status.js, which stamps a
+   small BETA / WIP chip on any rail item whose module is not finished and puts a one-line
+   banner at the top of that page. Adds "Build status" to the Sandbox group. The registry
+   lives in build-status.js; nothing in this file needs editing when a status changes.
    v2.6: M14 Phase B — "Message Reports" (admin-messages.html) under Marketing: the review
    queue for member-reported relay messages (content_flags).
    v2.10: Waivers (admin-waivers.html) added under People (v0.22.0) — publish waiver
@@ -162,6 +166,7 @@
         <div class="nav-label" role="button" tabindex="0" aria-expanded="true">Sandbox<span class="grp-chev">${ICONS.chevron}</span></div>
         <a class="nav-item" href="#" id="btViewMember" title="View as member">${ICONS.members}<span class="txt">View as member</span></a>
         <a class="nav-item" href="#" id="btTestData" title="Test data">${ICONS.regs}<span class="txt">Test data…</span></a>
+        <a class="nav-item" href="admin-buildstatus.html" title="Build status">${ICONS.ops}<span class="txt">Build status</span></a>
       </nav>`);
     // v0.11.0: collapse handle on the rail's side edge (was a bottom button)
     aside.insertAdjacentHTML("beforeend",
@@ -368,5 +373,16 @@
       }
       if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(function () {});
     } catch (e) { /* PWA extras are never load-blocking */ }
+  })();
+  /* ---------- v0.24.0: build-status indicators (single registry, see build-status.js) ---------- */
+  (function statusBootstrap() {
+    try {
+      if (window.BT_STATUS || document.getElementById("bt-status-js")) return;
+      var s = document.createElement("script");
+      s.id = "bt-status-js";
+      s.src = "assets/build-status.js?v=0.24.0";
+      s.async = false;
+      document.head.appendChild(s);
+    } catch (e) { /* indicators are never load-blocking */ }
   })();
 })();

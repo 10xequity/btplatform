@@ -1,5 +1,9 @@
 /* Boomtown Platform — Site-wide sidebar navigation (shared)
-   File: web/assets/site-nav.js · Version: v2.5 · Date: 2026-07-25 · Ships in: v0.20.0
+   File: web/assets/site-nav.js · Version: v2.6 · Date: 2026-07-26 · Ships in: v0.24.0
+   v2.6: Build-status indicators (v0.24.0) — loads assets/build-status.js, which stamps a
+   small BETA / WIP chip on member-rail items that are not finished (Membership and Register
+   are SANDBOX; nothing on the member side is WIP today) and shows a dismissible banner at
+   the top of those pages. Registry lives in build-status.js, not here.
    v2.4: M14 Phase B — "Player Library" item (library.html) in Explore; signed-in "Inbox"
    item (member-inbox.html) with a live unread badge (GET /api/messages/unread-count,
    silent fallback on older workers). Absorbs the v2.3 brand work below.
@@ -179,5 +183,16 @@
       }
       if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(function () {});
     } catch (e) { /* PWA extras are never load-blocking */ }
+  })();
+  /* ---------- v0.24.0: build-status indicators (single registry, see build-status.js) ---------- */
+  (function statusBootstrap() {
+    try {
+      if (window.BT_STATUS || document.getElementById("bt-status-js")) return;
+      var s = document.createElement("script");
+      s.id = "bt-status-js";
+      s.src = "assets/build-status.js?v=0.24.0";
+      s.async = false;
+      document.head.appendChild(s);
+    } catch (e) { /* indicators are never load-blocking */ }
   })();
 })();

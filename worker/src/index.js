@@ -1,6 +1,12 @@
 /**
  * Boomtown Platform — API Worker
- * Version: v0.23.0 · Date: 2026-07-26 · Modules 1–17
+ * Version: v0.24.0 · Date: 2026-07-26 · Modules 1–17
+ *
+ * v0.24.0 (2026-07-26, Build status): frontend-only release — assets/build-status.js is
+ *   the single registry of module maturity (live / beta / wip / soon); both rails stamp a
+ *   chip on unfinished items and each affected page carries a one-line notice. No worker
+ *   logic changed and no migration: this bump exists so /api/health and the deployed site
+ *   report the same version, which is how every paste is verified.
  *
  * v0.23.0 (2026-07-26, Waiver enforcement + calendar feeds):
  *   NEW calendar.js. GET /api/calendar/:token.ics is handled BEFORE the /api/ chain and
@@ -239,7 +245,7 @@ export default {
       } else if (url.pathname === "/api/orgs" && request.method === "GET") {
         res = await listOrgs(env);
       } else if (url.pathname === "/api/health") {
-        res = json({ ok: true, version: "v0.23.0" });
+        res = json({ ok: true, version: "v0.24.0" });
       } else if (url.pathname === "/api/webhooks/square" && request.method === "POST") {
         res = await membershipWebhook(request, env); // verifies signature; forwards payment.* to squareWebhook
       } else if (url.pathname.startsWith("/api/calendar/") && url.pathname.endsWith(".ics") && request.method === "GET") {

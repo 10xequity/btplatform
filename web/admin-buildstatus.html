@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<!-- Boomtown Platform — Build Status · Version: v1.0 · Date: 2026-07-26 · Ships in: v0.24.0
+     One honest page telling a tester what is finished, what works with a caveat, what is
+     under construction and what is not built at all. Reads entirely from the registry in
+     assets/build-status.js — there is no API call and nothing to keep in sync by hand.
+     Send testers here BEFORE they start, so half-built screens stop generating bug reports
+     that are really roadmap items. -->
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Build Status — Boomtown Athletics</title>
+  <link rel="stylesheet" href="assets/tokens.css" />
+  <link rel="stylesheet" href="assets/app.css" />
+  <link rel="stylesheet" href="assets/admin.css?v=0.24.0" />
+  <style>
+    .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px;
+      overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0; }
+    .bt-intro { max-width: 68ch; }
+    .bt-cardwrap { background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; padding: 4px 4px 0; margin-top: 16px; overflow-x: auto; }
+  </style>
+</head>
+<body>
+  <header class="header chrome-glass">
+    <div class="wordmark"><a href="index.html" style="color:inherit;text-decoration:none">Boomtown <span>Athletics</span></a></div>
+    <div class="spacer"></div>
+  </header>
+
+  <div class="admin-layout">
+  <main class="main wide admin-main" id="app">
+    <div class="page-head"><h1>Build status</h1></div>
+
+    <p class="help-text bt-intro" style="margin:0 0 6px">
+      This platform is being built one module at a time, so at any moment some screens are
+      finished and some are not. Read this page before you start testing.
+    </p>
+    <p class="help-text bt-intro" style="margin:0 0 4px">
+      Anywhere a screen is not finished you will also see a small marker on the menu item
+      and a one-line notice at the top of that page, so you do not have to remember this list.
+      <b>Under construction</b> items ask you to confirm before they open — that is deliberate.
+    </p>
+    <p class="help-text bt-intro" style="margin:0 0 4px">
+      <b>Please do file</b> anything wrong on a finished screen, anything confusing, and any
+      wording that reads badly. <b>Please don't file</b> the caveats already listed below —
+      they are known and scheduled.
+    </p>
+
+    <div class="bt-cardwrap">
+      <div id="statusMount"><p class="help-text" style="padding:12px">Loading…</p></div>
+    </div>
+
+    <p class="help-text" style="margin:18px 0 0">
+      Money is in <b>Square SANDBOX</b> across the entire platform — no card is charged
+      anywhere, on any screen. Email is in <b>sandbox</b> — nothing reaches a real inbox.
+      Both are deliberate and both flip on the owner's say-so, not by accident.
+    </p>
+  </main>
+  </div><!-- /admin-layout -->
+
+  <script src="assets/config.js?v=0.24.0"></script>
+  <script src="assets/admin-nav.js?v=0.24.0" defer></script>
+  <script src="assets/build-status.js?v=0.24.0" defer></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", function () {
+      var tries = 0;
+      (function go() {
+        if (window.BT_STATUS) return window.BT_STATUS.renderTable("#statusMount");
+        if (++tries > 40) {
+          document.getElementById("statusMount").innerHTML =
+            '<p class="help-text" style="padding:12px">Could not load the status registry ' +
+            '(assets/build-status.js). Refresh once; if it persists the file did not deploy.</p>';
+          return;
+        }
+        setTimeout(go, 50);
+      })();
+    });
+  </script>
+</body>
+</html>
+<!-- Changelog: v1.0 (2026-07-26) — initial Build Status page (v0.24.0). -->

@@ -245,3 +245,54 @@
 - **Aurora correction pack (D-LOC-1).** `sandbox.js` v1.1 test-contact cities, `admin-marketing.html` CAN-SPAM placeholder (now a marked `[STREET ADDRESS]` blank rather than a fabricated one — the invented-address habit is what produced the Colorado Springs error), `marketing.test.mjs` fixture, and a new `db/2026-07-26_seed-testdata_v1_1.sql` replacing the 2026-07-23 v1.0 seed.
 - Gates: `node --check` 13/13 · tests **137/137** (26 new calendar, 9 new gate) · esbuild bundle 363 KB containing `v0.23.0`, `waiver_required`, `BEGIN:VCALENDAR`, `waiver_expiring`, `access_tokens` · migration 0016 dry-run asserted idempotent re-run, public-feed uniqueness, rotate-after-revoke, global `token_sha` uniqueness, and the `kind` CHECK.
 - Deferred to v0.24.0: teammate self-sign invite links (option B — reuses `access_tokens.kind='waiver_sign'`) and the member-facing subscribe UI.
+
+## v0.24.0 — 2026-07-26 (Build status indicators)
+
+Frontend-only release. No migration, no worker logic change — the worker version bumps only
+so `/api/health` and the deployed site report the same string, which is how every paste is
+verified.
+
+**Why:** testers are about to be pointed at a site where some screens are finished, some work
+but cannot complete their core job yet (email sending is code-blocked, Square is SANDBOX), and
+some modules do not exist. Without a marker, every half-built screen produces a bug report that
+is really a roadmap item.
+
+**NEW `web/assets/build-status.js` v1.0** — the single registry of module maturity. Four states:
+`live` (finished, no badge) · `beta` (works with a stated caveat, safe to test) · `wip` (under
+construction, cannot finish its core job) · `soon` (not built, Build Status page only). The file
+also renders every consumer of that registry: rail chips, per-page banners, and the full table.
+Change a status in this one file and everything follows.
+
+- Rail chips are **not animated** — they are on screen on every page load, which is the
+  emil-design-eng frequency rule (standards §2). Only the page banner fades, 180ms, and only
+  under `prefers-reduced-motion: no-preference`.
+- Status is never colour-only: every chip carries a text label plus an `aria-label` naming the
+  state in words (WCAG 1.4.1, standards §3).
+- `wip` items are dimmed, carry a cone glyph, and ask for confirmation before opening.
+- Banners are dismissible per page per session (`sessionStorage`), never permanently.
+- Collapsed admin rail (`data-nav="min"`) collapses each chip to a 6px dot so the rail width
+  is unchanged.
+- Tokens only, no hardcoded hex.
+
+**NEW `web/admin-buildstatus.html` v1.0** — one honest page listing every screen and every
+cross-cutting feature with its state and a tester-facing note, plus counts by state. Reads the
+registry directly; no API call, nothing to keep in sync by hand. Linked from the admin rail's
+Sandbox group.
+
+**`web/assets/admin-nav.js` v2.10 → v2.11** — loads `build-status.js`; adds **Build status** to
+the Sandbox group. The menu data structure is untouched.
+
+**`web/assets/site-nav.js` v2.5 → v2.6** — loads `build-status.js` on the member and public rails.
+
+**`worker/src/index.js` v0.23.0 → v0.24.0** — version string only.
+
+**`README.md`** — full rewrite; it had been stale at v0.12.0 for eleven releases. Module table
+current through v0.24.0, marker legend, corrected architecture table (63 tables, 137 tests,
+real route pattern), roadmap v7 pointer.
+
+**States at release:** 2 WIP (Marketing & Email — sending code-blocked until the address and
+Brevo key are in place; Web Push — three VAPID secrets never set), 9 BETA (mostly Square
+SANDBOX), the rest finished.
+
+**Gates:** `node --check` 24/24 · tests **137/137** · esbuild 363 KB containing `v0.24.0` ·
+no SQL, so no migration dry-run required.
