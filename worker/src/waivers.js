@@ -48,6 +48,78 @@ export async function sha256Hex(text) {
  * Validate + normalize a publish body. Returns { ok, error? , value? }.
  * Rejects rather than silently coerces: publishing the wrong text is not recoverable.
  */
+/* ==================== token resolution (v0.27.0) ==================== */
+
+/**
+ * ONE canonical waiver body serves every org. The legal text is identical; only the identity
+ * details differ. Storing four near-copies guarantees they drift, and a waiver that names the
+ * wrong entity or a dead opt-out address is weaker than one that names nothing.
+ *
+ * ENTITY vs ORG_NAME is the distinction that matters. ENTITY is the legal person the release
+ * runs to ("Boomtown Athletics, LLC"). ORG_NAME is the brand a family recognises
+ * ("Match Point Social"). If the brands are DBAs of one LLC, ENTITY is the same in all four
+ * and only ORG_NAME changes — which is exactly why they must be separate tokens.
+ */
+export const WAIVER_TOKENS = {
+  ENTITY:             (o) => o.legal_entity || "Boomtown Athletics, LLC",
+  ORG_NAME:           (o) => o.name || "",
+  ORG_EMAIL:          (o) => o.admin_email || o.email_sender_address || "",
+  MEDIA_OPTOUT_EMAIL: (o) => o.admin_email || o.email_sender_address || "",
+  ORG_WEBSITE:        (o) => o.website || "",
+  ORG_PHONE:          (o) => o.phone || "",
+  ORG_ADDRESS:        (o) => [o.address_line1, o.address_line2,
+                              [o.city, o.state].filter(Boolean).join(", "),
+                              o.postal_code].filter(Boolean).join(" · "),
+};
+
+/** Every token the text may use. Anything else is a typo, and a typo must not publish. */
+export const TOKEN_NAMES = Object.keys(WAIVER_TOKENS);
+
+const TOKEN_RE = /\{\{\s*([A-Z_]+)\s*\}\}/g;
+
+/** Which tokens appear in a body, in order of first use, de-duplicated. */
+export function tokensUsed(body) {
+  const seen = [];
+  for (const m of String(body || "").matchAll(TOKEN_RE)) {
+    if (!seen.includes(m[1])) seen.push(m[1]);
+  }
+  return seen;
+}
+
+/**
+ * Substitute org identity into a tokenised body.
+ * Returns { ok, text, unknown[], empty[] }.
+ *   unknown — tokens the registry doesn't recognise (a typo like {{ORG_MAIL}})
+ *   empty   — recognised tokens whose org value is blank
+ * Both are refusal conditions at publish time. A waiver rendered with a literal
+ * "{{MEDIA_OPTOUT_EMAIL}}" in §6, or with an empty one, has no working decline path — which is
+ * the specific thing the text promises. Failing closed here is the whole point.
+ */
+export function resolveWaiverTokens(body, org) {
+  const o = org || {};
+  const unknown = [], empty = [];
+  const text = String(body || "").replace(TOKEN_RE, (whole, name) => {
+    const fn = WAIVER_TOKENS[name];
+    if (!fn) { if (!unknown.includes(name)) unknown.push(name); return whole; }
+    const val = String(fn(o) == null ? "" : fn(o)).trim();
+    if (!val) { if (!empty.includes(name)) empty.push(name); return whole; }
+    return val;
+  });
+  return { ok: unknown.length === 0 && empty.length === 0, text, unknown, empty };
+}
+
+/** Human-readable reason a publish was refused. Kept next to the check so they can't diverge. */
+export function tokenFailureMessage(res) {
+  const parts = [];
+  if (res.unknown.length) {
+    parts.push(`Unknown token${res.unknown.length === 1 ? "" : "s"} ${res.unknown.map((t) => `{{${t}}}`).join(", ")}. Valid tokens: ${TOKEN_NAMES.map((t) => `{{${t}}}`).join(", ")}.`);
+  }
+  if (res.empty.length) {
+    parts.push(`This organisation has no value for ${res.empty.map((t) => `{{${t}}}`).join(", ")}. Fill it in under Organisation settings first — publishing would leave the placeholder in the signed text.`);
+  }
+  return parts.join(" ");
+}
+
 export function normalizePublish(body) {
   const label = String(body?.label ?? "").trim();
   const text = String(body?.body ?? "").replace(/\r\n/g, "\n").trim();
@@ -269,6 +341,33 @@ async function publishVersion(request, env, ctx) {
   const body = await request.json().catch(() => ({}));
   const v = normalizePublish(body);
   if (!v.ok) return H.json({ error: v.error }, 400);
+
+  // v0.27.0 — TOKEN RESOLUTION AT PUBLISH TIME, not at render time.
+  //
+  // The submitted text may use {{ORG_NAME}}, {{MEDIA_OPTOUT_EMAIL}} and friends, so one canonical
+  // waiver serves every org. But what gets STORED is the resolved text, and body_sha pins it.
+  // Resolving at render instead would mean a signed document changes retroactively the day
+  // somebody edits an org's email — a signed legal record has to stay byte-reproducible.
+  //
+  // Publish REFUSES on an unknown token or an org with a blank value. A waiver whose §6 promises
+  // a written decline path to a literal "{{MEDIA_OPTOUT_EMAIL}}" has no decline path at all, and
+  // that is precisely the clause the owner's decision rests on.
+  const org = await env.DB.prepare(
+    `SELECT id, name, website, admin_email, email_sender_address, phone,
+            address_line1, address_line2, city, state, postal_code
+       FROM orgs WHERE id = ?1 AND deleted_at IS NULL`
+  ).bind(ctx.orgId).first();
+  if (!org) return H.json({ error: "Organization not found." }, 404);
+
+  const used = tokensUsed(v.value.body);
+  const resolved = resolveWaiverTokens(v.value.body, org);
+  if (!resolved.ok) {
+    return H.json({
+      error: tokenFailureMessage(resolved),
+      tokens_used: used, unknown_tokens: resolved.unknown, empty_tokens: resolved.empty,
+    }, 400);
+  }
+  v.value.body = resolved.text;
 
   const dupLabel = await env.DB.prepare(
     "SELECT id FROM waiver_versions WHERE org_id = ?1 AND label = ?2 AND deleted_at IS NULL"

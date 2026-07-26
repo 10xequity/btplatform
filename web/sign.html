@@ -117,6 +117,10 @@
           '<div class="waiver-box" tabindex="0" role="region" aria-label="Waiver text — scrollable">' +
             esc(d.waiver.body) +
           "</div>" +
+          '<label class="fld" for="dob">Player\'s date of birth</label>' +
+          '<input type="date" id="dob" autocomplete="bday" aria-describedby="dobHint" />' +
+          '<p class="hint" id="dobHint">Required. Players under 18 cannot sign for themselves \u2014 ' +
+            'a parent or guardian signs on their behalf.</p>' +
           '<label class="fld" for="sigName">Your full legal name</label>' +
           '<input type="text" id="sigName" autocomplete="name" spellcheck="false" ' +
             'aria-describedby="sigHint" value="' + esc(d.member_name || "") + '" />' +
@@ -133,7 +137,36 @@
       var agree = document.getElementById("agree");
       var go = document.getElementById("go");
       var err = document.getElementById("err");
-      agree.addEventListener("change", function () { go.disabled = !agree.checked; });
+      var dob = document.getElementById("dob");
+
+      // Both a birthdate and acceptance are required before the button arms. Checking the age
+      // client-side is a courtesy that saves a round trip; the server enforces it regardless.
+      function minorFrom(v) {
+        var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(v || ""));
+        if (!m) return null;
+        var b = Date.UTC(+m[1], +m[2] - 1, +m[3]);
+        if (isNaN(b) || b > Date.now()) return null;
+        var n = new Date(), bd = new Date(b);
+        var age = n.getUTCFullYear() - bd.getUTCFullYear();
+        if (n.getUTCMonth() < bd.getUTCMonth() ||
+           (n.getUTCMonth() === bd.getUTCMonth() && n.getUTCDate() < bd.getUTCDate())) age -= 1;
+        return age < 18;
+      }
+      function refresh() {
+        var isMinor = minorFrom(dob.value);
+        if (isMinor === true) {
+          err.textContent = "This player is under 18. A parent or guardian has to sign in to " +
+            "their own account and add this player to their family \u2014 the guardian signs the waiver.";
+          go.disabled = true;
+          return;
+        }
+        err.textContent = "";
+        go.disabled = !(agree.checked && isMinor === false);
+      }
+      agree.addEventListener("change", refresh);
+      dob.addEventListener("change", refresh);
+      dob.addEventListener("input", refresh);
+      refresh();
 
       go.addEventListener("click", function () {
         err.textContent = "";
@@ -144,6 +177,7 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             signature_name: document.getElementById("sigName").value,
+            date_of_birth: dob.value,
             guardian: document.getElementById("guardian").checked,
             agree: true,
             version_id: d.waiver.version_id,

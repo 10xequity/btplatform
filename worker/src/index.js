@@ -179,6 +179,7 @@ import { waiverRoutes, wireWaivers } from "./waivers.js"; // v0.22.0 waiver vers
 import { calendarRoutes, wireCalendar, icsFeed } from "./calendar.js"; // v0.23.0 iCal feeds
 import { consentRoutes, wireConsent } from "./consent.js"; // v0.25.0 teammate self-sign + media consent
 import { tiersRoutes, wireTiers } from "./tiers.js"; // v0.26.0 membership tiers, grants, bulk member actions
+import { familyRoutes, wireFamily } from "./family.js"; // v0.27.0 guardians, minors, families
 import { waiverReminderSweep, waiverExpirySweep, sendEmail, escapeHtml } from "./registrations.js";
 
 const MAGIC_LINK_TTL_MIN = 15;
@@ -234,6 +235,7 @@ wireWaivers(wiredHelpers); // v0.22.0
 wireCalendar(wiredHelpers); // v0.23.0
 wireConsent(wiredHelpers); // v0.25.0
 wireTiers(wiredHelpers); // v0.26.0
+wireFamily(wiredHelpers); // v0.27.0
 
 /** ctx carries the caller's session + selected org for role checks. */
 async function buildCtx(request, env) {
@@ -285,7 +287,7 @@ export default {
       } else if (url.pathname === "/api/orgs" && request.method === "GET") {
         res = await listOrgs(env);
       } else if (url.pathname === "/api/health") {
-        res = json({ ok: true, version: "v0.26.0" });
+        res = json({ ok: true, version: "v0.27.0" });
       } else if (url.pathname === "/api/webhooks/square" && request.method === "POST") {
         res = await membershipWebhook(request, env); // verifies signature; forwards payment.* to squareWebhook
       } else if (url.pathname.startsWith("/api/calendar/") && url.pathname.endsWith(".ics") && request.method === "GET") {
@@ -298,6 +300,7 @@ export default {
            || (await calendarRoutes(request, env, url, ctx)) // v0.23.0 — feed token mint/revoke
            || (await consentRoutes(request, env, url, ctx)) // v0.25.0 — /api/sign/* + waiver links + media consent
            || (await tiersRoutes(request, env, url, ctx)) // v0.26.0 — tiers, grants, bulk members
+           || (await familyRoutes(request, env, url, ctx)) // v0.27.0 — age gate, families, age-out
            || (await marketingRoutes(request, env, url, ctx))
            || (await messagesRoutes(request, env, url, ctx))
            || (await posRoutes(request, env, url, ctx))

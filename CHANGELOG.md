@@ -410,3 +410,35 @@ applied live and verified in `sqlite_master` ✅
 - Shared `contactForSession` in `index.js`; `ctx.role` resolved once per request.
 
 **Gates:** `node --check` 25 worker modules + 5 web assets + 2 inline blocks · `node --test` **207/207** (was 160) · esbuild 408 KB containing `v0.26.0`, `membership_tiers`, `toIcsLocal`, `canReadView`, `validateBulk` · migration 0018 dry-run 14/14.
+
+## v0.27.0 — 2026-07-26 (Guardians & minors · waiver tokens · org profile)
+**Migration 0019** (`families`, `contacts.family_id`, `guardianships.aged_out_at`/`separation_choice`/`separated_at`, `member_profiles.dominant_hand`, ten `orgs` profile columns). Applied live and verified.
+
+### Minors — the safety fix
+- **`consent.js postSign` let a minor sign their own waiver.** A captain entered any teammate email and the holder self-signed. A minor cannot form a binding waiver, so the result was a void document the front desk read as valid — worse than no waiver. Date of birth is now **mandatory** on the sign flow, and a minor is refused with instructions to involve a guardian.
+- `sign.html` collects date of birth **before** the signature field, with a client-side check as courtesy; the server enforces regardless.
+- NEW `family.js`: `ageOn`, `isMinor`, `validateBirthdate`, `guardianGate`, `signerFor`, `ageOutState`, `separationRequirements`, `displayName`, `normalizeDominantHand`.
+- **Age is derived, never stored.** No `is_minor` column: a stored boolean is correct until a birthday and silently wrong after, which would keep an adult guardian-signed or let a minor age into self-signing.
+- **`isMinor` fails closed** — an unknown or unparseable birthdate returns `true`. A guardian with no birthdate on file is rejected rather than assumed adult, and a minor cannot be another minor's guardian.
+- Guardian-first ordering: a minor's birthdate halts the flow before their record is written. The reverse order lets a child self-register and self-sign before any adult appears.
+- 18th-birthday transition: `prompt` → `kept` (guardian keeps signing, may separate later) or `separated` (self-signs). A separated guardianship row is **kept, not deleted**, so the family connection stays visible and signature history reconstructable. Separation requires re-signing in the member's own name and blocks participation until done.
+- Routes: `POST /api/family/age-check` (pre-flight, writes nothing), `GET /api/family`, `POST /api/family/age-out`.
+
+### Minor display — child safety
+- `displayName` abbreviates surnames per D9 and marks minors **`(M)` on internal/staff views only**. Publishing `Ava R. (M)` on an open schedule page would hand anyone a machine-readable list of which children are on which court at which time. Unknown visibility values do not leak the marker.
+
+### Waiver tokens
+- One canonical body serves every org via `{{ENTITY}}`, `{{ORG_NAME}}`, `{{ORG_EMAIL}}`, `{{MEDIA_OPTOUT_EMAIL}}`, `{{ORG_WEBSITE}}`, `{{ORG_PHONE}}`, `{{ORG_ADDRESS}}`.
+- **`ENTITY` is deliberately separate from `ORG_NAME`** — the legal person the release runs to vs the brand a family recognises. If the brands are DBAs of one LLC, only `ORG_NAME` varies.
+- Resolution happens **at publish, not at render**, and the resolved text is what `body_sha` pins. Rendering late would mean a signed document changes retroactively when an org's email is edited.
+- Publish **refuses** on an unknown token or a blank org value. A §6 promising a written decline path to a literal `{{MEDIA_OPTOUT_EMAIL}}` has no decline path.
+
+### Org profile
+- `orgs` gains website, admin_email, phone, address_line1/2, city, state, postal_code, `is_owned`, `active`.
+- Facility address written to all ten orgs: 14200 E Alameda Ave · FieldhouseUSA · Aurora, CO 80012.
+- Four owned orgs send under their own identity; six facility renters send as `"<Name> via Boomtown"` from a controlled domain. Sending as a renter's own domain would fail SPF/DKIM and constitute impersonation.
+
+### Player bio
+- `dominant_hand` (left/right/ambidextrous), whitelisted in the worker since SQLite cannot add a CHECK via ALTER. Free text here would reach the public player card.
+
+**Gates:** `node --check` 26 worker modules + inline blocks ✅ · `node --test` **245/245** (was 207) ✅ · esbuild 418 KB containing `v0.27.0`, `resolveWaiverTokens`, `validateBirthdate`, `displayName` ✅ · migration 0019 applied and verified live ✅

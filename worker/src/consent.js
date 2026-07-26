@@ -41,6 +41,8 @@
  */
 
 let json, audit, isStaff, requireStaff;
+import { validateBirthdate } from "./family.js"; // v0.27.0 age gate — one implementation only
+
 export function wireConsent(h) { ({ json, audit, isStaff, requireStaff } = h); }
 
 const WAIVER_DAYS = 365;
@@ -243,6 +245,22 @@ async function postSign(request, env, rawToken) {
   }
 
   const b = await request.json().catch(() => ({}));
+
+  // v0.27.0 — AGE GATE. Until now this flow let a captain enter any teammate's email and that
+  // person signed for themselves. A minor cannot form a binding waiver, so a 15-year-old signing
+  // here produced a VOID document that the front desk read as valid — worse than no waiver.
+  // Date of birth is now mandatory, and a minor is refused with instructions rather than signed.
+  const dobCheck = validateBirthdate(b.date_of_birth);
+  if (!dobCheck.ok) {
+    return json({ error: dobCheck.error, need_date_of_birth: true }, 400);
+  }
+  if (dobCheck.minor) {
+    return json({
+      error: "This player is under 18, so they can't sign for themselves. A parent or guardian has to sign in to their own account and add this player to their family — then the guardian signs the waiver.",
+      minor: true, guardian_required: true,
+    }, 409);
+  }
+
   const sig = validateSignature(b.signature_name, tm.member_name);
   if (!sig.ok) return json({ error: sig.error }, 400);
   if (b.agree !== true) return json({ error: "You have to accept the waiver to continue." }, 400);
