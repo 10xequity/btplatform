@@ -1,6 +1,10 @@
 /**
  * Boomtown Platform — Member Profiles + Family Accounts module
- * File: worker/src/profiles.js · Version: v1.2 · Date: 2026-07-25 · Ships in: v0.21.0
+ * File: worker/src/profiles.js · Version: v1.3 · Date: 2026-07-26 · Ships in: v0.22.0
+ *
+ * v1.3 (2026-07-26, Waiver versioning): guardian sign-waiver pins waivers.version_id and
+ *   signatures.version_id to the active published version (was the hardcoded tag
+ *   'v1-PLACEHOLDER'). Stale/absent version → 409/503, never a silent write.
  *
  * v1.2 (2026-07-25, M16): NOTE ONLY, no code change — the legacy `profiles` table is
  *   DEPRECATED as a write target. Member identity/visibility now lives on contacts +
@@ -43,6 +47,8 @@
  *   - Points formula (documented for the owner): each event = wins × 10, plus placement
  *     bonus 1st +50 · 2nd +30 · 3rd +20. Tunable later in one place: eventPoints().
  */
+
+import { pinFor } from "./waivers.js"; // v1.3 — one-way import, no cycle
 
 let H = null; // wired: { json, audit, isStaff, requireStaff, sendLoginLink }
 export function wireProfiles(helpers) { H = helpers; }
@@ -491,20 +497,28 @@ async function signWaiver(request, env, ctx) {
   const age = ageFromDob(prof.date_of_birth);
   const expires = new Date(Date.now() + 365 * 86_400_000).toISOString();
 
+  // v1.3 — pin to the published version. A guardian signature spanning a publish is the
+  // same hazard as a member one: refuse rather than record consent to unread text.
+  const pin = await pinFor(env, ctx.orgId, body.waiver_version_id);
+  if (!pin.ok) {
+    return H.json({ error: pin.error, waiver_stale: !!pin.stale, current_version_id: pin.current_version_id }, pin.status);
+  }
+  const wv = pin.version;
+
   const w = await env.DB.prepare(
-    "INSERT INTO waivers (org_id, contact_id, waiver_text_version, signed_at, expires_at, signature_name) VALUES (?1, ?2, 'v1-PLACEHOLDER', datetime('now'), ?3, ?4)"
-  ).bind(ctx.orgId, minorId, expires, signedName).run();
+    "INSERT INTO waivers (org_id, contact_id, waiver_text_version, version_id, signed_at, expires_at, signature_name) VALUES (?1, ?2, ?3, ?4, datetime('now'), ?5, ?6)"
+  ).bind(ctx.orgId, minorId, wv.label, wv.id, expires, signedName).run();
   await env.DB.prepare(
     `INSERT INTO signatures (org_id, subject_contact_id, signer_contact_id, on_behalf, minor_age_at_signing,
-       document_type, document_ref, signed_name, ip, user_agent)
-     VALUES (?1, ?2, ?3, 1, ?4, 'waiver', ?5, ?6, ?7, ?8)`
+       document_type, document_ref, version_id, signed_name, ip, user_agent)
+     VALUES (?1, ?2, ?3, 1, ?4, 'waiver', ?5, ?6, ?7, ?8, ?9)`
   ).bind(
     ctx.orgId, minorId, link.self.id, age,
-    "waiver:v1-PLACEHOLDER", signedName,
+    `waiver:${wv.label}`, wv.id, signedName,
     request.headers.get("CF-Connecting-IP") || null,
     (request.headers.get("User-Agent") || "").slice(0, 200)
   ).run();
-  await H.audit(env, ctx, "family.sign_waiver", "waivers", w.meta.last_row_id, { minor: minorId, on_behalf: true });
+  await H.audit(env, ctx, "family.sign_waiver", "waivers", w.meta.last_row_id, { minor: minorId, on_behalf: true, version: wv.label, version_id: wv.id });
   return H.json({ ok: true, waiver_ok: true, signed_by: signedName });
 }
 

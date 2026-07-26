@@ -186,3 +186,52 @@
 - **Cron:** daily `pushPruneSweep` — dead endpoints (404/410) soft-deleted immediately, chronic failures disabled, 30-day purge.
 - **DB:** migration 0014 `push_subscriptions` (additive; applied live via Cloudflare MCP).
 - Tests 29/29 locally (pos 12 · waitlists 10 · push 7 incl. full RFC 8291 encrypt→decrypt round trip).
+
+## v0.21.0 — 2026-07-25 — M16 Optimization + QA
+*(backfilled 2026-07-26 — this entry was missed at release)*
+- **`Cache-Control: no-store` on every API response** (index.js v0.21.0). The browser's HTTP
+  heuristic cache had served a stale `/api/health` after v0.20.0 went live; API JSON is now
+  never cached. The service-worker static-shell cache is unaffected (D-PWA-3 holds).
+- **Check-in shows money owed:** checkin.js v1.1 (`balanceCents()` / `OWED_STATUSES`; roster
+  rows carry `reg_id`, `reg_status`, `balance_cents`) + admin-checkin.js v1.1 — owes-chip on
+  the **team header** with tap-to-resolve via mark-paid (D-M16-2: per-team money, and player
+  cards are `<button>`s, so nesting a button would be invalid HTML).
+- **One-click mute:** messages.js v1.1 adds `POST /api/admin/messages/mute` + `/unmute`;
+  flags carry `sender_muted` / `sender_contact_id`. Muting does **not** resolve the report
+  (D-M16-3) — the review trail stays open. No migration: `member_mutes` already existed.
+- **Core Web Vitals gate closed:** no images missing intrinsic size, no third-party JS on
+  member pages, first-party shell 21–26 KB. Only fix needed was deferring blocking
+  `qrcodejs` on the check-in kiosk.
+- Nav/title polish: register.html + score.html gain site-nav; `·` → `—` in four page titles.
+- Tests 87/87 (7 new balance · 6 new mute). No migration, no secrets, no new pages.
+
+## v0.22.0 — 2026-07-26 — Waiver versioning
+- **The waiver text is now a database record, not a hardcoded JS constant.** It previously
+  lived only in `web/assets/register.js`, which made it impossible to tie a signature to the
+  language actually shown. **NEW `worker/src/waivers.js` v1.0** owns it:
+  public `GET /api/waiver/current` and `/api/waiver/versions/:id`, member `GET /api/waiver/mine`
+  (returns `needs_resign`), staff `GET|POST /api/admin/waivers/versions`.
+- **Every signature pins its version.** registrations.js v1.4 and profiles.js v1.3 write
+  `waivers.version_id` (and `signatures.version_id` for guardian signings) resolved through
+  `pinFor()` **before** any row is written. Publishing new text can never alter what an
+  existing signature means.
+- **Stale forms are refused, not accepted.** A form rendered against a superseded version
+  submits to a `409 { waiver_stale:true }`; register.js v0.5.0 swaps in the new text, clears
+  the tick and typed signature, and keeps everything else the person entered.
+- **Material vs minor.** A version published with `material:0` (typo/formatting) does not
+  prompt anyone to re-sign; the default is material, because an unspecified change is
+  assumed substantive.
+- **Concurrent publish is guarded at the database.** Partial unique index
+  `ux_waiver_versions_active` permits one active version per org, so a simultaneous second
+  publish fails its transaction and returns 409 instead of silently producing two live
+  waivers. Published bodies are immutable — there is no edit or delete route by design, and
+  `waiver_versions` is deliberately **excluded** from `RESTORE_WHITELIST` (same M13 rule as
+  `waivers` / `signatures`; security_portal.test.mjs v1.1 now enforces it).
+- **Web:** NEW admin-waivers.html + admin-waivers.js v1.0 (publish with a two-step confirm
+  that names how many members will be asked to re-sign; read any past version's text) ·
+  register.js v0.5.0 · admin-nav.js v2.10 (Waivers under People) · member_portal.js v1.1
+  threads `version_id` into the agreements list.
+- **DB:** migration 0015 — `waiver_versions` + `version_id` on `waivers` and `signatures`,
+  with every pre-existing signature backfilled to a per-org `v1-legacy` row carrying the
+  verbatim placeholder text those members actually saw. Never NULL.
+- Tests 102/102 (17 new: publish normalization, re-sign rules, SHA-256, legacy labelling).

@@ -1,7 +1,14 @@
 /**
  * Boomtown Platform — Registration + Square + Captain-scoring routes
- * Version: v1.3 · Date: 2026-07-25 · Modules 4 + 8 · Ships in: v0.19.0
+ * Version: v1.4 · Date: 2026-07-26 · Modules 4 + 8 · Ships in: v0.22.0
  * Mounted by worker/src/index.js (same wire() pattern as tournaments.js).
+ *
+ * v1.4 (2026-07-26, Waiver versioning):
+ *   - submitRegistration resolves the active waiver version via pinFor() BEFORE writing
+ *     anything, stores waivers.version_id, and mirrors the label into waiver_text_version.
+ *   - A form that rendered a superseded version is rejected 409 { waiver_stale:true } so a
+ *     signature is never recorded against text the signer did not read.
+ *   - No published waiver at all → 503; registrations stay closed rather than unwaivered.
  *
  * v1.3 (2026-07-25, Waitlists):
  *   - CAPACITY IS NOW ENFORCED: submitRegistration checks events.capacity against
@@ -46,6 +53,7 @@
  */
 import { refreshStandings } from "./tournaments.js";
 import { waitlistGate, markClaimed, offerNext, activeRegistrationCount, computeIsFull } from "./waitlists.js";
+import { pinFor, currentVersion } from "./waivers.js"; // v1.4 — one-way import, no cycle
 
 const SQUARE_VERSION = "2026-05-20";
 
@@ -93,6 +101,7 @@ async function eventForm(env, eventId) {
     "SELECT id, label, field_type, options_json, required, sort_order FROM form_fields WHERE org_id=?1 AND (event_id=?2 OR event_id IS NULL) AND deleted_at IS NULL ORDER BY sort_order, id"
   ).bind(ev.org_id, eventId).all()).results;
   const spotsTaken = await activeRegistrationCount(env, eventId); // v1.3: waitlist-aware form
+  const wv = await currentVersion(env, ev.org_id); // v1.4: waiver text is a DB record now
   return json({
     event: {
       id: ev.id, org_id: ev.org_id, org_name: ev.org_name, name: ev.name, type: ev.type,
@@ -104,6 +113,9 @@ async function eventForm(env, eventId) {
       is_full: computeIsFull(ev.capacity, spotsTaken),
     },
     fields,
+    // v1.4 — the waiver travels with the form so the text on screen and the version pinned
+    // at submit come from the same read. A second round trip could straddle a publish.
+    waiver: wv ? { id: wv.id, label: wv.label, body: wv.body, published_at: wv.published_at } : null,
   });
 }
 
@@ -118,6 +130,15 @@ async function submitRegistration(request, env, eventId) {
   if (!b.team_name || !String(b.team_name).trim()) return json({ error: "Team name is required." }, 400);
   if (!b.captain_name || !String(b.captain_name).trim()) return json({ error: "Captain name is required." }, 400);
   if (!b.waiver_accepted || !b.waiver_signature) return json({ error: "The waiver must be accepted and signed to register." }, 400);
+
+  // v1.4 — resolve the waiver version BEFORE anything is written. If the browser rendered an
+  // older version than the one now active, refuse: recording consent to text the signer never
+  // read is the one failure mode waiver versioning exists to prevent.
+  const pin = await pinFor(env, ev.org_id, b.waiver_version_id);
+  if (!pin.ok) {
+    return json({ error: pin.error, waiver_stale: !!pin.stale, current_version_id: pin.current_version_id }, pin.status);
+  }
+  const waiverVersion = pin.version;
   const payMethod = b.payment_method === "cash" ? "cash" : "square";
   if (payMethod === "cash" && !ev.cash_option_enabled) {
     return json({ error: "Cash payment isn't available for this event." }, 400); // hidden option enforced server-side
@@ -156,11 +177,11 @@ async function submitRegistration(request, env, eventId) {
     contact = { id: ins.meta.last_row_id };
   }
 
-  // Waiver (annual)
+  // Waiver (annual) — v1.4: pinned to the exact published version the form rendered.
   const expires = new Date(Date.now() + 365 * 86400000).toISOString();
   const wIns = await env.DB.prepare(
-    "INSERT INTO waivers (org_id, contact_id, waiver_text_version, signed_at, expires_at, signature_name) VALUES (?1,?2,'v1',datetime('now'),?3,?4)"
-  ).bind(ev.org_id, contact.id, expires, String(b.waiver_signature).trim()).run();
+    "INSERT INTO waivers (org_id, contact_id, waiver_text_version, version_id, signed_at, expires_at, signature_name) VALUES (?1,?2,?3,?4,datetime('now'),?5,?6)"
+  ).bind(ev.org_id, contact.id, waiverVersion.label, waiverVersion.id, expires, String(b.waiver_signature).trim()).run();
 
   // Team + members
   const tIns = await env.DB.prepare(

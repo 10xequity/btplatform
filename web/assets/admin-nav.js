@@ -1,7 +1,9 @@
 /* Boomtown Platform — Admin sidebar (shared)
-   Version: v2.9 · Date: 2026-07-25 · Ships in: v0.20.0
+   Version: v2.10 · Date: 2026-07-26 · Ships in: v0.22.0
    v2.6: M14 Phase B — "Message Reports" (admin-messages.html) under Marketing: the review
    queue for member-reported relay messages (content_flags).
+   v2.10: Waivers (admin-waivers.html) added under People (v0.22.0) — publish waiver
+   versions; every signature pins the version it was shown.
    v2.8: Waitlists (admin-waitlists.html) added after Registrations (v0.19.0).
    v2.7: Point of Sale (admin-pos.html) added to the Money group (M15).
    v2.5: Marketing group (Marketing & Email → admin-marketing.html) between Money and People.
@@ -131,6 +133,7 @@
       { href: "admin-users.html",         ico: "members", text: "Members" },
       { href: "admin-users.html#roles",   ico: "roles",   text: "Admins & Roles" },
       { href: "admin-security.html",      ico: "roles",   text: "Security & Recovery" },
+      { href: "admin-waivers.html",       ico: "members", text: "Waivers" },
       { href: "settings.html",            ico: "gear",    text: "Settings" },
     ]},
     { label: "Member site", key: "site", items: [

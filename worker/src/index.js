@@ -1,6 +1,11 @@
 /**
  * Boomtown Platform — API Worker
- * Version: v0.21.0 · Date: 2026-07-25 · Modules 1–17
+ * Version: v0.22.0 · Date: 2026-07-26 · Modules 1–17
+ *
+ * v0.22.0 (2026-07-26, Waiver versioning): NEW waivers.js mounted first in the API chain
+ *   (public /api/waiver/*, staff /api/admin/waivers/*). The waiver text is now a DB record
+ *   (migration 0015) and every signature pins the version it was shown. registrations.js
+ *   v1.4 and profiles.js v1.3 write waivers.version_id; publishing never rewrites history.
  *
  * v0.21.0 (2026-07-25, M16): json() now sends Cache-Control: no-store on every API
  *   response (browser HTTP heuristic cache served a stale /api/health after the v0.20.0
@@ -148,6 +153,7 @@ import { messagesRoutes, wireMessages } from "./messages.js";
 import { posRoutes, wirePos } from "./pos.js";
 import { waitlistRoutes, wireWaitlists, waitlistSweep } from "./waitlists.js";
 import { pushRoutes, wirePush, pushPruneSweep } from "./push.js"; // v0.20.0 PWA web push
+import { waiverRoutes, wireWaivers } from "./waivers.js"; // v0.22.0 waiver versioning
 import { waiverReminderSweep, sendEmail, escapeHtml } from "./registrations.js";
 
 const MAGIC_LINK_TTL_MIN = 15;
@@ -182,6 +188,7 @@ wireMessages(wiredHelpers);
 wirePos(wiredHelpers);
 wireWaitlists({ ...wiredHelpers, sendEmail, escapeHtml }); // sendEmail injected — no circular import
 wirePush(wiredHelpers); // v0.20.0
+wireWaivers(wiredHelpers); // v0.22.0
 
 /** ctx carries the caller's session + selected org for role checks. */
 async function buildCtx(request, env) {
@@ -225,12 +232,13 @@ export default {
       } else if (url.pathname === "/api/orgs" && request.method === "GET") {
         res = await listOrgs(env);
       } else if (url.pathname === "/api/health") {
-        res = json({ ok: true, version: "v0.21.0" });
+        res = json({ ok: true, version: "v0.22.0" });
       } else if (url.pathname === "/api/webhooks/square" && request.method === "POST") {
         res = await membershipWebhook(request, env); // verifies signature; forwards payment.* to squareWebhook
       } else if (url.pathname.startsWith("/api/")) {
         const ctx = await buildCtx(request, env);
-        res = (await marketingRoutes(request, env, url, ctx))
+        res = (await waiverRoutes(request, env, url, ctx)) // v0.22.0 — /api/waiver/* + /api/admin/waivers/*
+           || (await marketingRoutes(request, env, url, ctx))
            || (await messagesRoutes(request, env, url, ctx))
            || (await posRoutes(request, env, url, ctx))
            || (await pushRoutes(request, env, url, ctx))

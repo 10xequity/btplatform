@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<!-- Boomtown Platform — Waivers (admin) · Version: v1.0 · Date: 2026-07-26 · Ships in: v0.22.0
+     Publish a new waiver version; see every past version and how many signatures are pinned
+     to it. A published version is IMMUTABLE — a correction is a new version marked
+     "minor" so it does not force everyone to re-sign. -->
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Waivers — Boomtown Athletics</title>
+  <link rel="stylesheet" href="assets/tokens.css" />
+  <link rel="stylesheet" href="assets/app.css" />
+  <link rel="stylesheet" href="assets/admin.css?v=0.22.0" />
+  <style>
+    .wv-grid { display: grid; gap: 24px; grid-template-columns: minmax(0, 1fr); }
+    @media (min-width: 1100px) { .wv-grid { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); } }
+
+    .wv-current { border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+    .wv-current h2 { margin: 0 0 4px; font-size: 1rem; }
+    .wv-current .wv-meta { color: var(--text-muted); font-size: 13px; }
+    .wv-body-preview {
+      margin-top: 12px; max-height: 200px; overflow-y: auto; white-space: pre-wrap;
+      border: 1px solid var(--border); border-radius: 8px; padding: 12px;
+      font-size: 0.85rem; line-height: 1.5; background: var(--surface-2, transparent);
+    }
+
+    .wv-table { width: 100%; border-collapse: collapse; }
+    .wv-table th, .wv-table td { text-align: left; padding: 10px 8px; border-top: 1px solid var(--border); vertical-align: middle; }
+    .wv-table th { border-top: 0; color: var(--text-muted); font-size: 13px; }
+    .wv-pill { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; border: 1px solid var(--border); }
+    .wv-pill.active  { color: var(--positive, #4cc38a); border-color: currentColor; }
+    .wv-pill.retired { color: var(--text-muted); }
+    .wv-pill.legacy  { color: var(--warning, #e6a23c); border-color: currentColor; }
+    .wv-pill.minor   { color: var(--text-muted); }
+
+    .wv-form textarea {
+      width: 100%; min-height: 320px; resize: vertical; font: inherit; font-size: 0.9rem; line-height: 1.5;
+      padding: 12px; border-radius: 8px; border: 1px solid var(--border);
+      background: var(--surface, transparent); color: var(--text);
+    }
+    .wv-form .field { margin-bottom: 16px; }
+    .wv-count { color: var(--text-muted); font-size: 13px; margin-top: 6px; }
+    .wv-count.warn { color: var(--warning, #e6a23c); }
+    .wv-form .btn, .wv-table .btn { min-height: 44px; }
+    .wv-hint { color: var(--text-muted); font-size: 13px; margin: 4px 0 0; }
+
+    .wv-impact {
+      border: 1px solid var(--warning, #e6a23c); border-radius: 8px; padding: 12px;
+      font-size: 0.9rem; margin-bottom: 16px;
+    }
+    .wv-impact[hidden] { display: none; }
+
+    dialog.wv-dialog {
+      border: 1px solid var(--border); border-radius: 10px; background: var(--bg); color: var(--text);
+      max-width: 780px; width: calc(100vw - 32px); padding: 20px;
+    }
+    dialog.wv-dialog::backdrop { background: rgba(0,0,0,.55); }
+    dialog.wv-dialog .wv-body-preview { max-height: 55vh; }
+    .wv-dialog-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+
+    @media (prefers-reduced-motion: no-preference) {
+      dialog.wv-dialog[open] { animation: wvIn 200ms cubic-bezier(0.23, 1, 0.32, 1); }
+      .wv-row-in { animation: wvIn 200ms cubic-bezier(0.23, 1, 0.32, 1); }
+      @keyframes wvIn { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: none; } }
+    }
+    @media (max-width: 760px) {
+      .wv-table thead { display: none; }
+      .wv-table td { display: block; border-top: 0; padding: 4px 8px; }
+      .wv-table tr { display: block; border-top: 1px solid var(--border); padding: 8px 0; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app" class="admin-shell">
+    <main class="admin-main" id="main">
+      <h1>Waivers</h1>
+      <p class="muted">
+        The waiver members sign lives here, not in the website code. Every signature is pinned to the
+        exact version shown at the time, so publishing new text never changes what somebody already agreed to.
+      </p>
+
+      <div class="wv-grid">
+        <section aria-labelledby="wvPublishH">
+          <h2 id="wvPublishH" style="font-size:1.05rem">Publish a new version</h2>
+
+          <div class="wv-impact" id="wvImpact" hidden aria-live="polite"></div>
+
+          <div class="wv-form">
+            <div class="field">
+              <label for="wvLabel">Version label *</label>
+              <input id="wvLabel" maxlength="40" autocomplete="off" placeholder="v2" />
+              <p class="wv-hint">Members see this as “you signed v2 on 3 Aug 2026”. Must be new.</p>
+            </div>
+
+            <div class="field">
+              <label for="wvBody">Waiver text *</label>
+              <textarea id="wvBody" spellcheck="true"
+                aria-describedby="wvCount"
+                placeholder="Paste the complete waiver document here, exactly as it should appear to members."></textarea>
+              <div class="wv-count" id="wvCount" aria-live="polite">0 characters</div>
+            </div>
+
+            <div class="field check">
+              <input type="checkbox" id="wvMinor" />
+              <label for="wvMinor">Minor edit — typo or formatting only, do <strong>not</strong> ask members to re-sign</label>
+              <p class="wv-hint">Leave unticked for any change to meaning, obligations, or rights. When in doubt, leave it unticked.</p>
+            </div>
+
+            <div class="field">
+              <label for="wvNotes">Internal note <span style="opacity:.7">(optional, staff only)</span></label>
+              <input id="wvNotes" maxlength="500" autocomplete="off" placeholder="Added arbitration clause per counsel, 26 Jul" />
+            </div>
+
+            <button class="btn" id="wvPublish" style="width:100%">Review &amp; publish</button>
+            <div id="wvMsg" class="msg" role="status" aria-live="polite"></div>
+          </div>
+        </section>
+
+        <section aria-labelledby="wvHistoryH">
+          <h2 id="wvHistoryH" style="font-size:1.05rem">Current &amp; history</h2>
+          <div id="wvCurrent" class="wv-current" aria-live="polite">Loading…</div>
+
+          <table class="wv-table">
+            <thead>
+              <tr><th>Version</th><th>Published</th><th>Change</th><th>Signatures</th><th>Text</th></tr>
+            </thead>
+            <tbody id="wvBodyRows"></tbody>
+          </table>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <dialog class="wv-dialog" id="wvViewDlg" aria-labelledby="wvViewTitle">
+    <div class="wv-dialog-head">
+      <h2 id="wvViewTitle" style="margin:0;font-size:1rem">Waiver text</h2>
+      <span class="wv-meta" id="wvViewMeta" style="color:var(--text-muted);font-size:13px"></span>
+    </div>
+    <div class="wv-body-preview" id="wvViewBody" tabindex="0"></div>
+    <div style="margin-top:16px;text-align:right"><button class="btn ghost" id="wvViewClose" style="min-height:44px">Close</button></div>
+  </dialog>
+
+  <dialog class="wv-dialog" id="wvConfirmDlg" aria-labelledby="wvConfirmTitle">
+    <h2 id="wvConfirmTitle" style="margin:0 0 8px;font-size:1rem">Publish this waiver version?</h2>
+    <div id="wvConfirmText" style="font-size:0.95rem;line-height:1.5"></div>
+    <div class="wv-body-preview" id="wvConfirmBody" tabindex="0" style="margin-top:12px"></div>
+    <div style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
+      <button class="btn ghost" id="wvConfirmCancel" style="min-height:44px">Cancel</button>
+      <button class="btn" id="wvConfirmGo" style="min-height:44px">Publish</button>
+    </div>
+  </dialog>
+
+  <script src="assets/admin-nav.js?v=2.10"></script>
+  <script src="assets/admin-waivers.js?v=1.0"></script>
+</body>
+</html>

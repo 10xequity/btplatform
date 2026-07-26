@@ -1,6 +1,8 @@
 /**
  * Boomtown Platform — M13 + M12.5 tests
- * File: worker/test/security_portal.test.mjs · Version: v1.0 · Date: 2026-07-24 · Ships in: v0.14.0
+ * File: worker/test/security_portal.test.mjs · Version: v1.1 · Date: 2026-07-26 · Ships in: v0.22.0
+ * v1.1: waiver_versions added to the forbidden-restore list — a published waiver version is
+ * an immutable legal record; it has no delete route and must never be restorable from the UI.
  * Run: node --test worker/test/security_portal.test.mjs
  */
 import test from "node:test";
@@ -9,7 +11,7 @@ import { RESTORE_WHITELIST } from "../src/security.js";
 import { dedupeAgreements } from "../src/member_portal.js";
 
 test("restore whitelist NEVER includes auth/security tables", () => {
-  for (const t of ["users", "sessions", "magic_links", "webauthn_credentials", "audit_log", "waivers", "signatures"]) {
+  for (const t of ["users", "sessions", "magic_links", "webauthn_credentials", "audit_log", "waivers", "signatures", "waiver_versions"]) {
     assert.equal(t in RESTORE_WHITELIST, false, `${t} must not be restorable from the UI`);
   }
 });

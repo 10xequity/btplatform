@@ -1,5 +1,10 @@
 /* Boomtown Platform — Public Registration
-   Version: v0.4.0 · Date: 2026-07-25 · Ships in: v0.19.0
+   Version: v0.5.0 · Date: 2026-07-26 · Ships in: v0.22.0
+   v0.5.0: the waiver text is no longer a constant in this file — it arrives with
+   /api/events/:id/form as a published version row and the form submits the version id
+   alongside the signature. If the organizer publishes new text while this page is open,
+   the server returns 409 waiver_stale and we re-render the current text rather than
+   record a signature against something the signer never read.
    v0.4.0: waitlists — full events show a "join the waitlist" card instead of the form;
    a ?wtoken= claim link (from the offer email) opens the form with a claim banner and
    passes waitlist_token so the server admits the team into the full event.
@@ -50,15 +55,17 @@
 
   const LEVELS = ["Recreational", "BB/A", "A/AA", "AA-Qualifier"];
   const DIVISIONS = ["Women's", "Men's", "Coed", "Reverse Coed"];
-  // ADMIN: replace with the full Boomtown Athletics LLC waiver text before real registrations (see install doc §5).
-  const WAIVER_TEXT = "BOOMTOWN ATHLETICS LLC — RELEASE OF LIABILITY (PLACEHOLDER — admin must replace with the full official waiver text before going live). By signing below I acknowledge the risks inherent to athletic activity and release Boomtown Athletics LLC, its organizations (Boomtown Volleyball, Match Point Social, Queens Club), staff, and venues from liability for injury or loss arising from my participation.";
-
-  let ev = null, customFields = [];
+  // v0.5.0: waiver text comes from the server (waiver_versions row). No text lives in this file.
+  let ev = null, customFields = [], waiver = null;
 
   (async function boot() {
     const r = await api(`/api/events/${encodeURIComponent(eventId)}/form`);
     if (!r.ok) { card.innerHTML = `<h1>Registration unavailable</h1><p>${esc(r.data.error || "Please try again later.")}</p>`; return; }
-    ev = r.data.event; customFields = r.data.fields || [];
+    ev = r.data.event; customFields = r.data.fields || []; waiver = r.data.waiver || null;
+    if (!waiver) { // no published waiver = we cannot lawfully take a signature
+      card.innerHTML = `<h1>Registration isn't open yet</h1><p>This event can't accept registrations until the organizer publishes the participant waiver. Please check back shortly.</p>`;
+      return;
+    }
     if (ev.is_full && !wtoken) { renderFullState(); return; } // v0.4.0: waitlist instead of a dead form
     renderForm();
     if (wtoken) {
@@ -152,8 +159,8 @@
       </div>
       <div class="field"><label for="instagram">Instagram handle(s) <span style="opacity:.7">(optional)</span></label><input id="instagram" placeholder="@yourteam" /></div>
       ${customFields.map(fieldHtml).join("")}
-      <h2 style="font-size:1rem">Waiver *</h2>
-      <div class="waiver-box" tabindex="0" aria-label="Waiver text">${esc(WAIVER_TEXT)}</div>
+      <h2 style="font-size:1rem">Waiver <span style="opacity:.7;font-weight:400">(${esc(waiver.label)})</span> *</h2>
+      <div class="waiver-box" id="waiverBox" tabindex="0" role="region" aria-label="Waiver text — scroll to read in full">${esc(waiver.body)}</div>
       <div class="field check"><input type="checkbox" id="waiverAccept" /><label for="waiverAccept">I have read and agree to the waiver *</label></div>
       <div class="field"><label for="waiverSig">Type your full legal name to sign *</label><input id="waiverSig" autocomplete="name" /></div>
       ${ev.price_cents ? `
@@ -163,6 +170,33 @@
       <button id="submitBtn" class="btn" style="width:100%;margin-top:10px">Register${ev.price_cents ? " & continue to payment" : ""}</button>
       <div id="msg" role="status" aria-live="polite"></div>`;
     document.getElementById("submitBtn").onclick = submit;
+  }
+
+  /**
+   * v0.5.0 — the waiver changed while this form was open. Swap in the new text, clear the
+   * acceptance tick and the typed signature, and make the person read it again. Everything
+   * else they typed is left alone; losing a whole form to a typo fix would be worse.
+   */
+  async function refreshWaiver() {
+    const r = await api("/api/waiver/current");
+    if (!r.ok) {
+      show("The waiver was updated. Please reload this page before signing.", false);
+      return;
+    }
+    waiver = r.data.version;
+    const box = document.getElementById("waiverBox");
+    if (box) {
+      box.textContent = waiver.body;
+      box.scrollTop = 0;
+    }
+    const heading = box && box.previousElementSibling;
+    if (heading) heading.innerHTML = `Waiver <span style="opacity:.7;font-weight:400">(${esc(waiver.label)})</span> *`;
+    const accept = document.getElementById("waiverAccept");
+    const sig = document.getElementById("waiverSig");
+    if (accept) accept.checked = false;
+    if (sig) sig.value = "";
+    show("The organizer updated the waiver while you were filling this in. Please read the new text above, tick the box again and re-type your name. Nothing else you entered was lost.", false);
+    if (box) box.focus();
   }
 
   async function submit() {
@@ -186,6 +220,7 @@
       team_name: $("teamName").value, captain_name: $("captainName").value, captain_phone: $("captainPhone").value,
       teammates, city: $("city").value, state: $("state").value, instagram: $("instagram").value,
       waiver_accepted: true, waiver_signature: $("waiverSig").value,
+      waiver_version_id: waiver.id, // v0.5.0 — pins the signature to the text rendered above
       payment_method: payEl ? payEl.value : "square", custom,
       waitlist_token: wtoken || undefined, // v0.4.0: claim from the offer email
     };
@@ -196,6 +231,10 @@
     if (!r.ok) {
       if (r.data && r.data.event_full && r.data.waitlist_available) { // filled up between load and submit
         show(`${esc(r.data.error)} <a href="register.html?event=${encodeURIComponent(eventId)}">Join the waitlist →</a>`, false);
+        return;
+      }
+      if (r.data && r.data.waiver_stale) { // v0.5.0: organizer published new text mid-form
+        await refreshWaiver();
         return;
       }
       show(esc(r.data.error || "Something went wrong. Please try again."), false); return;

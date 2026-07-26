@@ -1,6 +1,6 @@
 /**
  * Boomtown Platform — Security & Recovery module (M13)
- * File: worker/src/security.js · Version: v1.0 · Date: 2026-07-24 · Ships in: v0.14.0
+ * File: worker/src/security.js · Version: v1.1 · Date: 2026-07-26 · Ships in: v0.22.0 (v1.1: comment only — waiver_versions explicitly kept OUT of RESTORE_WHITELIST)
  *
  * Staff routes (admin/staff role), mounted by worker/src/index.js:
  *   GET  /api/admin/security/log?kind=&q=&before=&limit=
@@ -30,6 +30,9 @@ export const RESTORE_WHITELIST = {
   space_bookings:  { label: "title",          extra: "date" },
   rental_requests: { label: "requester_name", extra: "date" },
   registrations:   { label: "status",         extra: "event_id" },
+  // v0.22.0 — waiver_versions is DELIBERATELY ABSENT, same rule as waivers/signatures (M13):
+  // legal records are not resurrectable from the UI. There is also no delete route for a
+  // waiver version — a published version is immutable and permanent by design.
 };
 
 const KIND_FILTERS = {

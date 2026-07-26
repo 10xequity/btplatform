@@ -1,6 +1,6 @@
 /**
  * Boomtown Platform — Member Portal module (M12.5)
- * File: worker/src/member_portal.js · Version: v1.0 · Date: 2026-07-24 · Ships in: v0.14.0
+ * File: worker/src/member_portal.js · Version: v1.1 · Date: 2026-07-26 · Ships in: v0.22.0 (was v1.0, v0.14.0)
  *
  * Member-facing (magic-link/passkey session), mounted by worker/src/index.js:
  *   GET /api/me/agreements → everything this member (and their children) has signed:
@@ -56,7 +56,7 @@ async function myAgreements(env, ctx) {
 
   // Ledger rows (either as subject or as signer).
   const sigs = (await env.DB.prepare(
-    `SELECT s.id, s.document_type, s.document_ref, s.signed_name, s.signed_at, s.on_behalf,
+    `SELECT s.id, s.document_type, s.document_ref, s.version_id, s.signed_name, s.signed_at, s.on_behalf,
             sub.full_name AS subject_name
      FROM signatures s
      JOIN contacts sub ON sub.id = s.subject_contact_id
@@ -67,7 +67,7 @@ async function myAgreements(env, ctx) {
 
   // Waiver acceptances (registration flow writes waivers only — no ledger row).
   const waivers = (await env.DB.prepare(
-    `SELECT w.id, w.contact_id, w.waiver_text_version, w.signed_at, w.expires_at, w.signature_name,
+    `SELECT w.id, w.contact_id, w.waiver_text_version, w.version_id, w.signed_at, w.expires_at, w.signature_name,
             c.full_name AS subject_name
      FROM waivers w JOIN contacts c ON c.id = w.contact_id
      WHERE w.org_id=?1 AND w.deleted_at IS NULL AND w.contact_id IN (${qs})
@@ -97,6 +97,7 @@ export function dedupeAgreements(sigs, waivers) {
       signed_name: s.signed_name,
       on_behalf: s.on_behalf ? 1 : 0,
       signed_at: s.signed_at,
+      version_id: s.version_id ?? null, // v1.1 — lets the UI link "view the text I signed"
     });
   }
   for (const w of waivers || []) {
@@ -111,6 +112,7 @@ export function dedupeAgreements(sigs, waivers) {
       on_behalf: 0,
       signed_at: w.signed_at,
       expires_at: w.expires_at,
+      version_id: w.version_id ?? null, // v1.1
     });
   }
   out.sort((a, b) => String(b.signed_at).localeCompare(String(a.signed_at)));
