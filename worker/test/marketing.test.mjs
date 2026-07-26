@@ -54,7 +54,7 @@ test("mergeVars: missing name falls back to 'there'", () => {
 });
 
 test("complianceFooter: contains org, address, and unsubscribe link", () => {
-  const f = complianceFooter("Boomtown Volleyball", "123 Court St, Colorado Springs, CO", "https://x/api/unsubscribe?c=1&t=abc");
+  const f = complianceFooter("Boomtown Volleyball", "123 Court St, Aurora, CO", "https://x/api/unsubscribe?c=1&t=abc");
   assert.match(f, /Boomtown Volleyball/);
   assert.match(f, /123 Court St/);
   assert.match(f, /href="https:\/\/x\/api\/unsubscribe\?c=1&t=abc"/);

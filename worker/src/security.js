@@ -1,6 +1,6 @@
 /**
  * Boomtown Platform — Security & Recovery module (M13)
- * File: worker/src/security.js · Version: v1.1 · Date: 2026-07-26 · Ships in: v0.22.0 (v1.1: comment only — waiver_versions explicitly kept OUT of RESTORE_WHITELIST)
+ * File: worker/src/security.js · Version: v1.2 · Date: 2026-07-26 · Ships in: v0.23.0 (v1.2: comment only — access_tokens joins waiver_versions as explicitly NOT restorable)
  *
  * Staff routes (admin/staff role), mounted by worker/src/index.js:
  *   GET  /api/admin/security/log?kind=&q=&before=&limit=

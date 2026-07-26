@@ -1,6 +1,10 @@
 /**
  * Boomtown Platform — Registration + Square + Captain-scoring routes
- * Version: v1.4 · Date: 2026-07-26 · Modules 4 + 8 · Ships in: v0.22.0
+ * Version: v1.5 · Date: 2026-07-26 · Modules 4 + 8 · Ships in: v0.23.0
+ *
+ * v1.5 (2026-07-26): + waiverExpirySweep() — emails a member ~30 days before their waiver
+ *   lapses. Calendar-driven, one notice per waiver row ever (dedupe on waiver_id, not on a
+ *   time window). Pairs with the v0.23.0 door gate in checkin.js. D-WV-8.
  * Mounted by worker/src/index.js (same wire() pattern as tournaments.js).
  *
  * v1.4 (2026-07-26, Waiver versioning):
@@ -22,6 +26,7 @@
  * v1.2 (2026-07-24, RECOVERY — the v0.7.0 ZIP was never uploaded, so the v1.0/v1.1
  * edits were lost; this restores everything worker/src/index.js v0.9.x imports):
  *   - export sendEmail / escapeHtml / waiverReminderSweep (used by the daily cron)
+ *   - v1.5 (2026-07-26): + waiverExpirySweep — T-30 notice before a waiver lapses (D-WV-8)
  *   - POST /api/registrations/:id/retry-payment — mint a FRESH Square link
  *     (Control Center "Rerun" button, admin-dash.js v1.0)
  *
@@ -603,6 +608,57 @@ export async function waiverReminderSweep(env) {
     ).bind(r.org_id, r.contact_id ? "member" : "log", r.contact_id || null,
       "Waiver needed", `Sign your waiver before ${r.event_name}. You can do it at check-in too.`,
       JSON.stringify({ email: r.email })).run();
+    if (ok) sent++;
+  }
+  return { due: rows.length, emailed: sent };
+}
+
+/**
+ * v1.5 (2026-07-26) — T-30 EXPIRY NOTICE. Distinct from waiverReminderSweep above, which is
+ * event-driven ("you're on a roster in 14 days and have no waiver at all"). This one is
+ * calendar-driven: a waiver that is still valid today but expires within 30 days.
+ *
+ * Owner decision 2026-07-26: waivers expire at one year and do NOT auto-renew; members get
+ * roughly 30 days' warning. Waiver text v2 §8 states the notice is a courtesy and that the
+ * member stays responsible whether or not it arrives — so a delivery failure here is not a
+ * platform correctness problem, but we still only try once.
+ *
+ * IDEMPOTENCY: one notice per waiver row, ever. The dedupe key is the waiver id inside a
+ * 'waiver_expiring' notifications row — NOT a time window. A 30-day window with a 48h
+ * dedupe would email the same member fifteen times.
+ */
+export async function waiverExpirySweep(env) {
+  const rows = (await env.DB.prepare(
+    `SELECT w.id AS waiver_id, w.org_id, w.expires_at, w.contact_id,
+            c.email, c.full_name AS name
+       FROM waivers w
+       JOIN contacts c ON c.id = w.contact_id AND c.deleted_at IS NULL
+      WHERE w.deleted_at IS NULL
+        AND c.email IS NOT NULL
+        AND w.expires_at > datetime('now')
+        AND w.expires_at <= datetime('now', '+30 days')
+        -- Skip anyone who already re-signed: a newer waiver for the same contact wins.
+        AND NOT EXISTS (SELECT 1 FROM waivers w2
+                        WHERE w2.contact_id = w.contact_id AND w2.deleted_at IS NULL
+                          AND w2.expires_at > w.expires_at)
+        AND NOT EXISTS (SELECT 1 FROM notifications n
+                        WHERE n.kind = 'waiver_expiring'
+                          AND json_extract(n.payload_json, '$.waiver_id') = w.id)
+      LIMIT 100`
+  ).all()).results;
+
+  let sent = 0;
+  for (const r of rows) {
+    const on = String(r.expires_at || "").replace("T", " ").slice(0, 10);
+    const ok = await sendEmail(env, r.email, "Your Boomtown waiver expires soon",
+      `<p>Hi ${escapeHtml(r.name || "there")} — your signed waiver expires on <strong>${escapeHtml(on)}</strong>.</p>` +
+      `<p>Waivers run for one year and don't renew automatically. After that date you won't be able to register for or play in a Boomtown event until you sign a new one.</p>` +
+      `<p><a href="${env.APP_URL}/profile.html">Sign in and re-sign now</a> — it takes about a minute.</p>`);
+    await env.DB.prepare(
+      "INSERT INTO notifications (org_id, kind, target, contact_id, title, body, payload_json, sent_at) VALUES (?1,'waiver_expiring',?2,?3,?4,?5,?6,datetime('now'))"
+    ).bind(r.org_id, r.contact_id ? "member" : "log", r.contact_id || null,
+      "Waiver expiring", `Your waiver expires ${on}. Re-sign to keep playing.`,
+      JSON.stringify({ waiver_id: r.waiver_id, email: r.email, expires_at: r.expires_at })).run();
     if (ok) sent++;
   }
   return { due: rows.length, emailed: sent };

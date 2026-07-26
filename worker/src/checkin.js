@@ -1,6 +1,17 @@
 /**
  * Boomtown Platform — Check-in & Attendance (Module 10)
- * File: worker/src/checkin.js · Version: v1.1 · Date: 2026-07-25 · Ships in: v0.21.0
+ * File: worker/src/checkin.js · Version: v1.2 · Date: 2026-07-26 · Ships in: v0.23.0
+ *
+ * v1.2 (2026-07-26, D-WV-7): the NO WAIVER chip is now a HARD GATE, not a warning.
+ *   Owner decision 2026-07-26: nobody participates without a current, unexpired waiver.
+ *   Enforcement lives here rather than at registration because teammates never register —
+ *   the captain enters their name and email, so there is no teammate-side submit to block.
+ *   The door is the first moment an un-waivered player actually exists as a person.
+ *
+ *   Staff check-in / walk-in without a valid waiver → 409 { waiver_required: true }.
+ *   Staff may override with a typed reason (>= 8 chars); the override is AUDITED with the
+ *   reason attached, because an override with no accountability is just a disabled gate.
+ *   The public self-check-in link has NO override — a player cannot wave themselves through.
  *
  * v1.1 (2026-07-25, M16): balance-due at the door (Gymdesk pattern, standards §4) —
  *   roster rows carry the team's registration id/status and a server-computed
@@ -28,6 +39,46 @@
 
 let json, audit, isStaff, requireStaff;
 export function wireCheckin(h) { ({ json, audit, isStaff, requireStaff } = h); }
+
+/** Minimum characters in an override reason. "ok" and "x" are not accountability. */
+export const OVERRIDE_MIN_CHARS = 8;
+
+/**
+ * Pure gate decision — no DB, unit-tested in checkin.test.mjs.
+ * @param {boolean} waiverOk  a current unexpired waiver exists for this person
+ * @param {string}  reason    typed staff override reason, if any
+ * @param {boolean} canOverride  false on the public self-check-in path
+ * @returns {{allow:boolean, overridden:boolean, reason:string|null, error:string|null}}
+ */
+export function waiverGateDecision(waiverOk, reason, canOverride = true) {
+  if (waiverOk) return { allow: true, overridden: false, reason: null, error: null };
+  const r = String(reason == null ? "" : reason).trim();
+  if (!canOverride) {
+    return { allow: false, overridden: false, reason: null,
+      error: "We don't have a current waiver on file for you. Sign it on your phone or see the front desk — it takes a minute." };
+  }
+  if (r.length >= OVERRIDE_MIN_CHARS) {
+    return { allow: true, overridden: true, reason: r, error: null };
+  }
+  return { allow: false, overridden: false, reason: null,
+    error: r.length
+      ? `Override reason must be at least ${OVERRIDE_MIN_CHARS} characters — say what happened.`
+      : "No current waiver on file. Have them sign, or check in with an override reason." };
+}
+
+/** Does this roster person have a live waiver? Same definition as roster()'s waiver_ok
+ *  and waiverReminderSweep: a non-expired waivers row for a contact with that email. */
+async function hasValidWaiver(env, orgId, { contactId = null, email = null }) {
+  if (!contactId && !email) return false;
+  const row = await env.DB.prepare(
+    `SELECT 1 AS ok FROM waivers w
+      JOIN contacts c ON c.id = w.contact_id AND c.deleted_at IS NULL
+      WHERE c.org_id = ?1 AND w.deleted_at IS NULL AND w.expires_at > datetime('now')
+        AND (c.id = ?2 OR (?3 IS NOT NULL AND lower(c.email) = lower(?3)))
+      LIMIT 1`
+  ).bind(orgId, contactId, email).first();
+  return !!row;
+}
 
 /* v1.1: statuses that still owe money. comped/paid/cancelled owe nothing. */
 export const OWED_STATUSES = ["pending", "email-sent", "cash-pending"];
@@ -107,17 +158,29 @@ async function staffCheckin(request, env, ctx, eventId) {
   const existing = await env.DB.prepare(
     "SELECT id FROM attendance WHERE event_id=?1 AND team_member_id=?2 AND deleted_at IS NULL"
   ).bind(eventId, tmId).first();
-  if (existing) { // toggle off = undo
+  if (existing) { // toggle off = undo — never gated; you can always take a check-in back
     await env.DB.prepare("UPDATE attendance SET deleted_at=datetime('now') WHERE id=?1").bind(existing.id).run();
     await audit(env, ctx, "attendance.undo", "attendance", existing.id, { event: eventId });
     return json({ ok: true, checked_in: false });
   }
+
+  // v1.2 waiver gate. A paid registrant is never turned away — staff override and the
+  // player signs at the desk. What we refuse is a SILENT check-in with no waiver.
+  const ok = await hasValidWaiver(env, ev.org_id, { contactId: tm.contact_id, email: tm.member_email });
+  const g = waiverGateDecision(ok, b.override_reason, true);
+  if (!g.allow) {
+    return json({ error: g.error, waiver_required: true, override_available: true,
+      team_member_id: tmId, member_name: tm.member_name, member_email: tm.member_email || null }, 409);
+  }
+
   const ins = await env.DB.prepare(
     `INSERT INTO attendance (org_id, event_id, contact_id, team_member_id, name_snapshot, method, checked_by_user_id)
      VALUES (?1,?2,?3,?4,?5,'staff',?6)`
   ).bind(ev.org_id, eventId, tm.contact_id || null, tmId, tm.member_name, ctx.userId).run();
-  await audit(env, ctx, "attendance.checkin", "attendance", ins.meta.last_row_id, { event: eventId, method: "staff" });
-  return json({ ok: true, checked_in: true, at: new Date().toISOString() });
+  await audit(env, ctx, g.overridden ? "attendance.checkin.waiver_override" : "attendance.checkin",
+    "attendance", ins.meta.last_row_id,
+    { event: eventId, method: "staff", ...(g.overridden ? { waiver_override_reason: g.reason } : {}) });
+  return json({ ok: true, checked_in: true, waiver_overridden: g.overridden, at: new Date().toISOString() });
 }
 
 async function walkin(request, env, ctx, eventId) {
@@ -134,12 +197,23 @@ async function walkin(request, env, ctx, eventId) {
     ).bind(ev.org_id, email).first();
     if (c) contactId = c.id;
   }
+
+  // v1.2: a walk-in with no email can never match a waiver, so this gate fires on nearly
+  // every walk-in by design — the desk either collects a signature or types why not.
+  const ok = await hasValidWaiver(env, ev.org_id, { contactId, email });
+  const g = waiverGateDecision(ok, b.override_reason, true);
+  if (!g.allow) {
+    return json({ error: g.error, waiver_required: true, override_available: true, walkin_name: name }, 409);
+  }
+
   const ins = await env.DB.prepare(
     `INSERT INTO attendance (org_id, event_id, contact_id, name_snapshot, method, checked_by_user_id)
      VALUES (?1,?2,?3,?4,'staff',?5)`
   ).bind(ev.org_id, eventId, contactId, name, ctx.userId).run();
-  await audit(env, ctx, "attendance.walkin", "attendance", ins.meta.last_row_id, { event: eventId });
-  return json({ ok: true, id: ins.meta.last_row_id });
+  await audit(env, ctx, g.overridden ? "attendance.walkin.waiver_override" : "attendance.walkin",
+    "attendance", ins.meta.last_row_id,
+    { event: eventId, ...(g.overridden ? { waiver_override_reason: g.reason } : {}) });
+  return json({ ok: true, id: ins.meta.last_row_id, waiver_overridden: g.overridden });
 }
 
 async function mintToken(env, ctx, eventId) {
@@ -186,6 +260,13 @@ async function selfCheckin(request, env, token) {
         "SELECT id FROM attendance WHERE event_id=?1 AND team_member_id=?2 AND deleted_at IS NULL"
       ).bind(ev.id, tm.id).first();
       if (dup) return json({ ok: true, already: true, message: `You're already checked in — see you on the court!` });
+      // v1.2 gate, NO override on the public path — a player can't wave themselves through.
+      const okW = await hasValidWaiver(env, ev.org_id, { contactId: tm.contact_id, email });
+      const g = waiverGateDecision(okW, null, false);
+      if (!g.allow) {
+        return json({ error: g.error, waiver_required: true,
+          sign_url: `${env.APP_URL || ""}/profile.html`, member_name: tm.member_name }, 409);
+      }
       await env.DB.prepare(
         `INSERT INTO attendance (org_id, event_id, contact_id, team_member_id, name_snapshot, method)
          VALUES (?1,?2,?3,?4,?5,'self')`
@@ -194,6 +275,10 @@ async function selfCheckin(request, env, token) {
     }
   }
   // Not on a roster: record as unverified so the desk can sort it out.
+  // v1.2 deliberately does NOT hard-gate here. This person is already being sent to the
+  // desk, and the desk's walk-in route IS gated — so the waiver check happens there, with
+  // a human present who can take a signature. Refusing at this step would leave someone
+  // who just typed their name at a dead end with no way forward.
   await env.DB.prepare(
     `INSERT INTO attendance (org_id, event_id, name_snapshot, method) VALUES (?1,?2,?3,'self')`
   ).bind(ev.org_id, ev.id, name || email).run();

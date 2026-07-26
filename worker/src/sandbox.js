@@ -1,6 +1,6 @@
 /**
  * Boomtown Platform — Sandbox / Demo tools (Module 11.5)
- * File: worker/src/sandbox.js · Version: v1.0 · Date: 2026-07-24 · Ships in: v0.11.0
+ * File: worker/src/sandbox.js · Version: v1.1 · Date: 2026-07-26 · Ships in: v0.11.0
  *
  * Staff-gated endpoints powering the admin rail's "Sandbox" group:
  *   GET  /api/admin/testdata           → counts of test rows per table (are we seeded?)
@@ -53,13 +53,13 @@ async function generate(env, ctx) {
   const stmts = [
     // contacts (8 test players)
     `INSERT INTO contacts (id, org_id, email, full_name, phone, city, state, instagram) VALUES
-     (90001,1,'test.ava@example.com','TEST Ava Stone','555-0101','Colorado Springs','CO','test_ava'),
-     (90002,1,'test.ben@example.com','TEST Ben Ortiz','555-0102','Colorado Springs','CO',NULL),
+     (90001,1,'test.ava@example.com','TEST Ava Stone','555-0101','Aurora','CO','test_ava'),
+     (90002,1,'test.ben@example.com','TEST Ben Ortiz','555-0102','Aurora','CO',NULL),
      (90003,1,'test.cami@example.com','TEST Cami Reyes','555-0103','Denver','CO','test_cami'),
      (90004,1,'test.drew@example.com','TEST Drew Park','555-0104','Pueblo','CO',NULL),
      (90005,1,'test.elle@example.com','TEST Elle Nguyen','555-0105','Monument','CO',NULL),
      (90006,1,'test.finn@example.com','TEST Finn Walker','555-0106','Fountain','CO',NULL),
-     (90007,1,'test.gia@example.com','TEST Gia Romano','555-0107','Colorado Springs','CO',NULL),
+     (90007,1,'test.gia@example.com','TEST Gia Romano','555-0107','Aurora','CO',NULL),
      (90008,1,'test.hank@example.com','TEST Hank Ellis','555-0108','Castle Rock','CO',NULL)`,
     // waiver (one full happy path)
     `INSERT INTO waivers (id, org_id, contact_id, waiver_text_version, signed_at, expires_at, signature_name) VALUES
