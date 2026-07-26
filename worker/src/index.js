@@ -192,6 +192,7 @@ import { consentRoutes, wireConsent } from "./consent.js"; // v0.25.0 teammate s
 import { tiersRoutes, wireTiers } from "./tiers.js"; // v0.26.0 membership tiers, grants, bulk member actions
 import { familyRoutes, wireFamily } from "./family.js"; // v0.27.0 guardians, minors, families
 import { documentRoutes, wireDocuments } from "./documents.js"; // v0.28.0 document library + requirements
+import { uploadRoutes, wireUploads } from "./uploads.js"; // v0.30.0 generic file uploads (R2 + D1 index)
 import { waiverReminderSweep, waiverExpirySweep, sendEmail, escapeHtml } from "./registrations.js";
 
 const MAGIC_LINK_TTL_MIN = 15;
@@ -249,11 +250,20 @@ wireConsent(wiredHelpers); // v0.25.0
 wireTiers(wiredHelpers); // v0.26.0
 wireFamily(wiredHelpers); // v0.27.0
 wireDocuments(wiredHelpers); // v0.28.0
+wireUploads(wiredHelpers); // v0.30.0
 
 /** ctx carries the caller's session + selected org for role checks. */
 async function buildCtx(request, env) {
   const session = await currentSession(request, env);
+  // F-11 (v0.30.0): validate the org before trusting a client header. Previously ANY X-Org-Id was
+  // accepted, so the seven orgs deactivated by migration 0021 stayed fully operable via a header,
+  // and a malformed header fell back to org 1 — silently operating on the live business. orgId keeps
+  // the REQUESTED value rather than being coerced, so audit rows and errors stay honest.
   const orgId = Number(request.headers.get("X-Org-Id")) || 1;
+  const orgRow = await env.DB.prepare(
+    "SELECT id FROM orgs WHERE id = ?1 AND active = 1 AND deleted_at IS NULL"
+  ).bind(orgId).first();
+  const orgOk = !!orgRow;
   const userId = session ? session.user_id : null;
   let role = null;
   if (userId) {
@@ -262,7 +272,7 @@ async function buildCtx(request, env) {
     ).bind(userId, orgId).first();
     role = r ? r.role : null;
   }
-  return { session, orgId, userId, role };
+  return { session, orgId, orgOk, userId, role };
 }
 
 async function isStaff(env, ctx, orgId = ctx.orgId) {
@@ -300,7 +310,7 @@ export default {
       } else if (url.pathname === "/api/orgs" && request.method === "GET") {
         res = await listOrgs(env);
       } else if (url.pathname === "/api/health") {
-        res = json({ ok: true, version: "v0.28.0" });
+        res = json({ ok: true, version: "v0.30.0" });
       } else if (url.pathname === "/api/webhooks/square" && request.method === "POST") {
         res = await membershipWebhook(request, env); // verifies signature; forwards payment.* to squareWebhook
       } else if (url.pathname.startsWith("/api/calendar/") && url.pathname.endsWith(".ics") && request.method === "GET") {
@@ -309,7 +319,9 @@ export default {
         res = await icsFeed(env, url, request);
       } else if (url.pathname.startsWith("/api/")) {
         const ctx = await buildCtx(request, env);
-        res = (await documentRoutes(request, env, url, ctx)) // v0.28.0 — documents, versions, requirements, compliance
+        res = (!ctx.orgOk && json({ error: "That organization isn't available." }, 404)) // F-11 (v0.30.0) — fail closed before any route sees ctx
+           || (await uploadRoutes(request, env, url, ctx)) // v0.30.0 — generic org-scoped file uploads
+           || (await documentRoutes(request, env, url, ctx)) // v0.28.0 — documents, versions, requirements, compliance
            || (await waiverRoutes(request, env, url, ctx)) // v0.22.0 — /api/waiver/* + /api/admin/waivers/*
            || (await calendarRoutes(request, env, url, ctx)) // v0.23.0 — feed token mint/revoke
            || (await consentRoutes(request, env, url, ctx)) // v0.25.0 — /api/sign/* + waiver links + media consent
@@ -471,7 +483,9 @@ async function verifyLink(request, env) {
     if (count.n === 0) {
       // Bootstrap: first-ever user becomes admin of all orgs.
       await env.DB.prepare(
-        "INSERT INTO user_org_roles (user_id, org_id, role) SELECT ?1, id, 'admin' FROM orgs"
+        // F-12 (v0.30.0): was unscoped — the first user became admin of all ten orgs including the
+        // seven deactivated ones, seeding exactly the role rows F-11 needed. Fires on any DB reset.
+        "INSERT INTO user_org_roles (user_id, org_id, role) SELECT ?1, id, 'admin' FROM orgs WHERE active = 1 AND deleted_at IS NULL"
       ).bind(user.id).run();
       bootstrapped = true;
     }
@@ -533,7 +547,8 @@ async function me(request, env) {
 
 async function listOrgs(env) {
   const orgs = (await env.DB.prepare(
-    "SELECT id, name, slug, logo_url, brand_json FROM orgs WHERE deleted_at IS NULL ORDER BY id"
+    // F-11 (v0.30.0): the switcher offered all ten. Migration 0021 was invisible until this line.
+    "SELECT id, name, slug, logo_url, brand_json FROM orgs WHERE active = 1 AND deleted_at IS NULL ORDER BY id"
   ).all()).results;
   return json({ orgs });
 }

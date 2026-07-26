@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<!-- Boomtown Platform — Files (generic upload library) · Version: v1.0 · Date: 2026-07-26 · Ships in: v0.30.0
+     One org-scoped file store. Drop files, label them, set who can see them, attach them to a
+     record. No compliance, screening or approval fields — those live in an external system by
+     owner decision (2026-07-26).
+
+     DESIGN NOTES (standards §1–§3, /visual-design-principles, /emil-design-eng)
+       Hierarchy, three tiers: (1) the drop zone is the focal point — 28px heading, largest
+       target on the page; (2) the file table; (3) the filter row, deliberately quiet.
+       Motion: the drop zone changes BACKGROUND only on dragover — dragover fires continuously,
+       and per §2 a continuous event gets no transform. The progress bar is constant motion, so
+       it is `linear`; every other easing here is the §2 ease-out curve. Table rows do not
+       animate: list rendering is a tens-per-day interaction.
+       Spacing is the 4px scale only. No hardcoded hex — tokens.css owns colour. -->
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Files — Boomtown Athletics</title>
+  <script>document.documentElement.dataset.theme = localStorage.getItem("bt_theme") || "dark";</script>
+  <link rel="stylesheet" href="assets/tokens.css" />
+  <link rel="stylesheet" href="assets/app.css" />
+  <link rel="stylesheet" href="assets/admin.css?v=0.30.0" />
+  <style>
+    .up-wrap { max-width: 1100px; margin: 0 auto; padding: 16px; }
+    .up-h1 { font-size: 28px; margin: 8px 0 4px; }
+    .up-sub { color: var(--text-dim, var(--text-muted)); margin: 0 0 24px; max-width: 68ch; }
+
+    /* ---- tier 1: the drop zone ---- */
+    .up-drop {
+      position: relative; display: block; width: 100%;
+      border: 2px dashed var(--border); border-radius: 10px;
+      background: var(--surface); padding: 32px 16px; text-align: center;
+      cursor: pointer;
+      /* dragover fires continuously — colour only, never transform (§2) */
+      transition: background-color 120ms ease, border-color 120ms ease;
+    }
+    .up-drop:hover { border-color: var(--primary); }
+    .up-drop.over { background: var(--surface-2, var(--surface-raised)); border-color: var(--primary); }
+    .up-drop:focus-within { outline: 2px solid var(--primary); outline-offset: 2px; }
+    .up-drop .big { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+    .up-drop .small { font-size: 13px; color: var(--text-dim, var(--text-muted)); }
+    .up-drop input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+
+    .up-opts { display: flex; gap: 12px; flex-wrap: wrap; margin: 16px 0 0; align-items: flex-end; }
+    .up-field { display: flex; flex-direction: column; gap: 4px; min-width: 160px; }
+    .up-field label { font-size: 14px; font-weight: 600; }           /* labels ABOVE inputs, §3 */
+    .up-field select, .up-field input {
+      font: inherit; min-height: 44px; padding: 10px 12px; color: var(--text);
+      background: var(--surface-2, var(--surface-raised));
+      border: 1px solid var(--border); border-radius: 8px;
+    }
+    .up-field .hint { font-size: 12px; color: var(--text-dim, var(--text-muted)); }
+
+    /* ---- upload progress: constant motion, therefore linear (§2) ---- */
+    .up-queue { margin: 16px 0 0; display: grid; gap: 8px; }
+    .up-item { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; }
+    .up-item .name { font-weight: 600; font-size: 15px; word-break: break-all; }
+    .up-item .meta { font-size: 13px; color: var(--text-dim, var(--text-muted)); margin-top: 2px; }
+    .up-bar { height: 6px; border-radius: 999px; background: var(--surface-2, var(--surface-raised)); margin-top: 8px; overflow: hidden; }
+    .up-bar > i { display: block; height: 100%; width: 0; background: var(--primary); transition: width 120ms linear; }
+    .up-item.err { border-color: var(--danger); }
+    .up-item.err .meta { color: var(--danger); }
+    .up-item.done .meta { color: var(--positive); }
+
+    /* ---- tier 3: filters, deliberately quiet ---- */
+    .up-filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; margin: 32px 0 12px; }
+
+    /* ---- tier 2: the table ---- */
+    .up-table { width: 100%; border-collapse: collapse; }
+    .up-table th, .up-table td { text-align: left; padding: 12px 8px; border-top: 1px solid var(--border); font-size: 15px; vertical-align: top; }
+    .up-table th { font-size: 13px; font-weight: 700; color: var(--text-dim, var(--text-muted)); border-top: 0; }
+    .up-table tr.gone td { opacity: 0.55; }
+    .up-name { font-weight: 600; word-break: break-all; }
+    .up-chip { display: inline-block; border-radius: 999px; padding: 3px 10px; font-size: 12px; font-weight: 700;
+               background: var(--surface-2, var(--surface-raised)); border: 1px solid var(--border); }
+    .up-chip.public { color: var(--warn, #e6a23c); }
+    .up-chip.members { color: var(--primary); }
+    .up-row-actions { display: flex; gap: 4px; flex-wrap: wrap; }
+    .up-row-actions button, .up-row-actions a {
+      min-height: 44px; min-width: 44px; padding: 8px 12px; font: inherit; font-size: 14px;
+      background: none; border: 1px solid var(--border); border-radius: 8px; color: var(--text);
+      cursor: pointer; display: inline-flex; align-items: center;
+    }
+    .up-row-actions button:active { transform: scale(0.97); }        /* §2 press feedback */
+    .up-row-actions button:focus-visible, .up-row-actions a:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+    .up-row-actions .danger { color: var(--danger); border-color: var(--danger); }
+
+    /* ---- skeleton, not a spinner: the shape of the answer arrives first (§3) ---- */
+    .sk { height: 16px; border-radius: 4px; background: var(--surface-2, var(--surface-raised)); }
+    .up-empty { padding: 32px 16px; text-align: center; color: var(--text-dim, var(--text-muted)); }
+    .up-empty b { color: var(--text); display: block; font-size: 18px; margin-bottom: 4px; }
+    .up-quota { font-size: 13px; color: var(--text-dim, var(--text-muted)); margin-top: 16px; }
+    .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+    @media (prefers-reduced-motion: reduce) {
+      .up-drop, .up-bar > i { transition: none; }
+      .up-row-actions button:active { transform: none; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app" class="admin-shell">
+    <main class="admin-main up-wrap">
+      <h1 class="up-h1">Files</h1>
+      <p class="up-sub">
+        One place for anything you need to keep — rosters, schedules, logos, receipts, imports.
+        Files belong to the organization you're currently switched into. Set who can see each one;
+        the default is staff only.
+      </p>
+
+      <fieldset style="border:0; padding:0; margin:0;">
+        <legend class="sr-only">Upload files</legend>
+
+        <label class="up-drop" id="drop">
+          <span class="big">Drop files here, or click to choose</span>
+          <span class="small" id="dropHint">Images, PDF, CSV, Word, Excel, ZIP · up to 10 MB each</span>
+          <input type="file" id="file" multiple aria-describedby="dropHint" />
+        </label>
+
+        <div class="up-opts">
+          <div class="up-field">
+            <label for="kind">Label these as</label>
+            <select id="kind"></select>
+          </div>
+          <div class="up-field">
+            <label for="vis">Who can see them</label>
+            <select id="vis">
+              <option value="private" selected>Staff only</option>
+              <option value="members">Signed-in members</option>
+              <option value="public">Anyone with the link</option>
+            </select>
+            <span class="hint" id="visHint">Staff only is the default.</span>
+          </div>
+          <div class="up-field">
+            <label for="notes">Note (optional)</label>
+            <input id="notes" type="text" maxlength="200" placeholder="What this is for" />
+          </div>
+        </div>
+
+        <div class="up-queue" id="queue" aria-live="polite"></div>
+      </fieldset>
+
+      <div class="up-filters">
+        <div class="up-field">
+          <label for="fKind">Filter by label</label>
+          <select id="fKind"><option value="">All labels</option></select>
+        </div>
+        <div class="up-field">
+          <label for="fQ">Search filenames</label>
+          <input id="fQ" type="search" placeholder="e.g. roster" />
+        </div>
+        <div class="up-field">
+          <label for="fDel">Show</label>
+          <select id="fDel">
+            <option value="0" selected>Current files</option>
+            <option value="1">Include removed</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="list"></div>
+      <p class="up-quota" id="quota"></p>
+    </main>
+  </div>
+
+  <script src="assets/config.js?v=0.30.0"></script>
+  <script src="assets/admin-nav.js?v=0.30.0"></script>
+  <script src="assets/admin-uploads.js?v=0.30.0" defer></script>
+</body>
+</html>

@@ -408,7 +408,11 @@ export async function documentRoutes(request, env, url, ctx) {
 
     // F-8 guard: warn, do not refuse. Requires explicit confirm_literal_names to proceed.
     const allOrgs = await env.DB.prepare(
-      `SELECT name, legal_entity FROM orgs WHERE active = 1 AND deleted_at IS NULL`
+      // F-11 (v0.30.0): a GUARD must scan the WIDEST set, not the narrowest. Filtering to active orgs
+      // meant a document containing a deactivated org's name published clean — the scan list was
+      // narrower than the set of real party names. Standards §10 check 3. Opposite direction from
+      // every other v0.30.0 predicate change, deliberately.
+      `SELECT name, legal_entity FROM orgs WHERE deleted_at IS NULL`
     ).all();
     const literals = literalOrgNames(res.text, allOrgs.results || []);
     if (literals.length && !b?.confirm_literal_names) {

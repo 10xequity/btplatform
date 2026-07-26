@@ -262,14 +262,38 @@ test("tokensUsed lists each token once, in order", () => {
 });
 
 test("resolveWaiverTokens substitutes org identity", () => {
-  const r = resolveWaiverTokens("Write to {{MEDIA_OPTOUT_EMAIL}} about {{ORG_NAME}}.", ORG);
+  // v0.30.0 (F-16): this test asserted {{MEDIA_OPTOUT_EMAIL}}, a token deliberately REMOVED from
+  // waivers.js under D-CON-5/D-CON-6 — the media release has no decline path, so an opt-out
+  // address in the body promised something the document does not offer. The code was right and
+  // the test was stale, and it had been failing at HEAD for at least one release without being
+  // noticed, because the delivery gate skipped `node --test` whenever no new tests were written.
+  // Rewritten against the tokens that actually exist.
+  const r = resolveWaiverTokens("Write to {{ORG_EMAIL}} about {{ORG_NAME}}.", ORG);
   assert.equal(r.ok, true);
   assert.equal(r.text, "Write to admin@matchptsocial.com about Match Point Social.");
 });
 
 test("ENTITY is separate from ORG_NAME — the legal person vs the brand", () => {
-  const r = resolveWaiverTokens("{{ENTITY}} trading as {{ORG_NAME}}", ORG);
-  assert.equal(r.text, "Boomtown Athletics, LLC trading as Match Point Social");
+  // v0.30.0 (F-16): this test encoded the F-10 DEFECT. The ORG fixture has no legal_entity, and
+  // the expected string was "Boomtown Athletics, LLC trading as Match Point Social" — which only
+  // passed while waivers.js carried `o.legal_entity || "Boomtown Athletics, LLC"`, silently
+  // naming Boomtown as the released party for every other org. F-10 was fixed in the code four
+  // releases ago and nobody grepped the tests, so the suite went red and stayed red. The fixture
+  // now supplies its own entity, which is what a real Match Point Social row does.
+  const r = resolveWaiverTokens("{{ENTITY}} trading as {{ORG_NAME}}",
+    { ...ORG, legal_entity: "Match Point Social LLC" });
+  assert.equal(r.ok, true);
+  assert.equal(r.text, "Match Point Social LLC trading as Match Point Social");
+});
+
+test("a MISSING legal_entity refuses rather than naming another company — F-10", () => {
+  // The regression test F-10 never had. If this ever passes with ok:true, a fallback has been
+  // reintroduced and some org is releasing a company it has no relationship with.
+  const r = resolveWaiverTokens("I release {{ENTITY}} from all claims.", ORG);
+  assert.equal(r.ok, false);
+  assert.deepEqual(r.empty, ["ENTITY"]);
+  assert.ok(!r.text.includes("Boomtown"), "no fallback company name may appear");
+  assert.match(r.text, /\{\{ENTITY\}\}/, "the unresolved token stays visible");
 });
 
 test("the address renders from the org's own fields", () => {
@@ -286,10 +310,12 @@ test("an UNKNOWN token refuses to publish and is left visible", () => {
 });
 
 test("an EMPTY org value refuses to publish", () => {
-  // A waiver promising a written decline path to a blank address has no decline path.
-  const r = resolveWaiverTokens("Write to {{MEDIA_OPTOUT_EMAIL}}", { name: "Oda Up" });
+  // v0.30.0 (F-16): retargeted from the removed MEDIA_OPTOUT_EMAIL to ORG_EMAIL. The property
+  // under test is unchanged and is the important one — a no-fallback token with a blank org
+  // value must REFUSE rather than publish a document naming nobody.
+  const r = resolveWaiverTokens("Write to {{ORG_EMAIL}}", { name: "Oda Up" });
   assert.equal(r.ok, false);
-  assert.deepEqual(r.empty, ["MEDIA_OPTOUT_EMAIL"]);
+  assert.deepEqual(r.empty, ["ORG_EMAIL"]);
   assert.match(tokenFailureMessage(r), /no value for/);
 });
 
@@ -298,7 +324,12 @@ test("token syntax tolerates internal whitespace", () => {
 });
 
 test("the token registry is stable and documented", () => {
-  for (const t of ["ENTITY", "ORG_NAME", "ORG_EMAIL", "MEDIA_OPTOUT_EMAIL", "ORG_ADDRESS"]) {
+  for (const t of ["ENTITY", "ENTITY_SHORT", "ORG_NAME", "ORG_EMAIL", "ORG_ADDRESS"]) {
     assert.ok(TOKEN_NAMES.includes(t), `${t} must be a valid token`);
   }
+  // v0.30.0 (F-16): asserted ABSENT rather than quietly dropped. The opt-out is retired
+  // (D-CON-5); if it ever reappears in the registry that is a decision being reversed by
+  // accident, and this line is what says so.
+  assert.ok(!TOKEN_NAMES.includes("MEDIA_OPTOUT_EMAIL"),
+    "MEDIA_OPTOUT_EMAIL is retired under D-CON-5 — the media release has no decline path");
 });

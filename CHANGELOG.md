@@ -511,3 +511,95 @@ liability-waiver document, since `org_id` alone now returns whichever document p
 containing `v0.28.0`, `documentRoutes`, `resolveDocTokens`, `complianceFor`, `tokenRefusal`,
 `literalOrgNames` ✅ · migrations 0021/0022/0023 applied and verified against live D1 ✅ ·
 `node --test` **not run** — no new tests written.
+
+---
+
+## v0.30.0 — 2026-07-26 — Org scope enforced · capacity race closed · generic file uploads
+
+Absorbs the v0.29.0 patch set, which was written but never pasted (`HEAD` sat at `ea6d385`).
+Delivered as a ZIP for upload rather than paste blocks.
+
+### Closed
+- **F-11 — org scope was not enforced at the API layer.** `buildCtx` accepted any `X-Org-Id` with
+  no existence, `active` or `deleted_at` check, so the seven orgs deactivated by migration 0021
+  were fully operable by sending a header — and a malformed header fell back silently to org 1,
+  the live business. `buildCtx` now validates and sets `ctx.orgOk`; the router short-circuits to
+  **404** (not 403 — a deactivated org should be indistinguishable from one that never existed).
+  `listOrgs` filters to `active = 1`, so migration 0021 becomes visible in the switcher for the
+  first time: **3 orgs, not 10.**
+- **F-12 — unscoped bootstrap admin grant.** `SELECT ?1, id, 'admin' FROM orgs` now carries
+  `WHERE active = 1 AND deleted_at IS NULL`. A v0.1 artifact that survived 29 releases and seeded
+  exactly the role rows F-11 needed.
+- **F-11b — the literal-name guard scanned the narrowest set.** `documents.js` filtered its
+  party-name scan to active orgs, so a document naming a deactivated org published clean. Widened
+  to every non-deleted org. This is the one predicate in the release that goes wider, deliberately:
+  **a guard must scan the widest set** (standards §10 check 3).
+- **F-5 — capacity oversubscription race.** `waitlistGate` read the count ~55 lines and four D1
+  round trips before the INSERT, so two concurrent submits both passed. Capacity is now re-checked
+  *inside* a single atomic `INSERT…SELECT…WHERE`; the loser gets **409 `event_full`**. Same
+  reasoning as token consumption in `consent.js postSign`. A valid waitlist claim bypasses by
+  design. Residue named, not hidden: a losing race leaves an orphan team row — **R-24, 0.25d**.
+- **F-6 (partial) — `applyTierDiscount` called for the first time.** Built and tested in v0.26.0,
+  zero call sites for four releases. Wiring it at registration *alone* would have quoted a
+  discounted price and charged list price, because `retryPayment` recomputes from
+  `events.price_cents`. The quoted figure is therefore stored in `registrations.price_cents`
+  (0024) and checkout reads `COALESCE(r.price_cents, e.price_cents)`, so pre-0024 rows are
+  unaffected. `guardianGate` and `signerFor` remain uncalled — they need date-of-birth in the
+  registration payload, which is a design change, not a patch.
+- **F-16 (new) — the test suite was red at HEAD and nobody knew.** Four assertions in
+  `family.test.mjs` failed against shipped code. One asserted `{{MEDIA_OPTOUT_EMAIL}}`, retired
+  under D-CON-5. **One encoded the F-10 defect itself** — it expected `{{ENTITY}}` to render
+  "Boomtown Athletics, LLC" for a Match Point Social fixture with no `legal_entity`, which only
+  passed while the `||` fallback existed. F-10 was fixed in the code four releases ago and nobody
+  grepped the tests. Root cause is the same class as F-15: the previous release recorded
+  `node --test` **not run — no new tests written**. A gate you skip is a gate you do not have.
+
+### Added
+- **`worker/src/uploads.js` v1.0 — generic org-scoped file store.** R2 holds the bytes, D1 holds
+  the index; the same split `member_profiles.avatar_r2_key` has used since v0.5.0, generalised
+  rather than copied a fourth time. `POST/GET /api/uploads`, `GET/PATCH/DELETE /api/uploads/:id`,
+  `POST /api/uploads/:id/restore`. Server-side MIME allow-list, 10 MB cap, 2,000-file org quota
+  quoted rather than silently truncated, generated R2 keys (the filename never reaches the key),
+  soft delete with restore, audit row on every write.
+  **SVG and HTML are excluded from the allow-list** — an SVG served from our own origin is stored
+  XSS. Non-image/PDF types are served `Content-Disposition: attachment` with a sandbox CSP and
+  `nosniff`. Binding resolves `env.UPLOADS || env.AVATARS`, so no new bucket is required and the
+  deploy cannot fail on a missing binding.
+  Deliberately absent: no compliance, screening, clearance, expiry or approval columns. Those live
+  in an external system by owner decision (2026-07-26); a second store for one fact means two
+  records that drift.
+- **`web/admin-uploads.html` + `web/assets/admin-uploads.js` v1.0.** Drop zone as the single focal
+  point, per-file progress, skeleton rows, empty state that names the next action. Dragover changes
+  background only — a continuously-firing event gets no transform (§2). Progress is constant
+  motion, therefore `linear`. XHR rather than `fetch` because `fetch` has no upload progress.
+- **`admin-nav.js` v3.0** — Files added to the People group, beside Settings.
+- **Migration 0024** — `uploads` table; `registrations.price_cents`. Additive only. Reversal in
+  the file header. Ledger INSERT written against the live `schema_migrations` shape (`version` is
+  NOT NULL; there is no UNIQUE on `filename`, so `OR IGNORE` would not dedupe — a `NOT EXISTS`
+  guard does).
+- **`worker/test/documents.test.mjs` — 26 tests.** `documents.js` shipped in v0.28.0 with none.
+  Weighted toward refusals that must happen before a body is hashed and pinned: F-1 bracket
+  placeholders, every no-fallback token, per-org party substitution, and **the literal-name guard
+  against a DEACTIVATED org** — the F-11 regression test.
+- **`worker/test/uploads.test.mjs` — 27 tests.** Path traversal, null bytes, dotfiles, SVG/HTML
+  refusal, MIME parameter smuggling, header injection via filename, size boundaries, and the
+  fail-closed direction of every normaliser.
+
+### Gates
+`node --check` on all four changed modules ✅ · esbuild bundle **458,529 bytes** containing
+`v0.30.0`, `uploadRoutes`, `validateUploadRequest`, `applyTierDiscount`, `orgOk`, `safeFilename` ✅
+· `node --test` **167/167 pass** (was 163/167 at `ea6d385` — see F-16) ✅ · live D1 read before
+every proposed write ✅.
+
+**Call-site census** (standards §6.5, defining file excluded):
+`applyTierDiscount` **now has call sites** and leaves the standing list.
+`guardianGate` · `signerFor` · `complianceFor` · `nonCompliant` remain at **zero** — expected and
+scoped out of this release, not overlooked.
+
+### Known open
+- **F-6 remainder** — `guardianGate`, `signerFor` still uncalled.
+- **F-6b / F-14** — `complianceFor` blocked on the fail-closed sequencing decision.
+- **R-24 (new)** — orphan team row on a lost capacity race, 0.25d.
+- **R-23** — `waivers.js` and `documents.js` still hold two token maps to avoid a module cycle.
+- **F-7** N+1 in `events_admin.js` · **F-9** two entity names unverified · **F-13** hardcoded
+  email sender name.

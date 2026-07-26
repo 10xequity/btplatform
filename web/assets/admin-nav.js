@@ -11,6 +11,8 @@
    v2.10: Waivers (admin-waivers.html) added under People (v0.22.0) — publish waiver
    versions; every signature pins the version it was shown.
    v2.8: Waitlists (admin-waitlists.html) added after Registrations (v0.19.0).
+   v3.0: Files (admin-uploads.html) added to the People group beside Settings — the generic
+   upload library is an org-level utility, and Settings is where those already live (v0.30.0).
    v2.7: Point of Sale (admin-pos.html) added to the Money group (M15).
    v2.5: Marketing group (Marketing & Email → admin-marketing.html) between Money and People.
    v2.4 (shipped in v0.15.0): (1) MEMBER-VIEW ISOLATION — guard() now checks the caller's ROLE, not just the
@@ -62,6 +64,7 @@
     door:    I('<path d="M13 3h6v18h-6"/><path d="M13 21H4V3h9"/><circle cx="10.5" cy="12" r="1.2"/>'),
     back:    I('<path d="M19 12H5"/><path d="M11 18l-6-6 6-6"/>'),
     chevron: I('<path d="M15 6l-6 6 6 6"/>'),
+    files:   I('<path d="M13 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9z"/><path d="M13 3v6h6"/>'),
   };
 
   /* v0.7.0 rail styles: collapse mode + icon sizing + back bar (layers on admin.css) */
@@ -141,6 +144,7 @@
       { href: "admin-users.html#roles",   ico: "roles",   text: "Admins & Roles" },
       { href: "admin-security.html",      ico: "roles",   text: "Security & Recovery" },
       { href: "admin-waivers.html",       ico: "members", text: "Waivers" },
+      { href: "admin-uploads.html",       ico: "files",   text: "Files" },
       { href: "settings.html",            ico: "gear",    text: "Settings" },
     ]},
     { label: "Member site", key: "site", items: [

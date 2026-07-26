@@ -59,6 +59,7 @@
 import { refreshStandings } from "./tournaments.js";
 import { waitlistGate, markClaimed, offerNext, activeRegistrationCount, computeIsFull } from "./waitlists.js";
 import { pinFor, currentVersion } from "./waivers.js"; // v1.4 — one-way import, no cycle
+import { effectiveTierFor, applyTierDiscount } from "./tiers.js"; // v0.30.0 F-6 — tiers.js imports nothing, no cycle
 
 const SQUARE_VERSION = "2026-05-20";
 
@@ -205,11 +206,44 @@ async function submitRegistration(request, env, eventId) {
   }
 
   // Registration
-  const price = ev.price_cents || 0;
+  //
+  // F-6 (v0.30.0): applyTierDiscount shipped in v0.26.0 with zero call sites. This is the call site.
+  // The discounted figure is WRITTEN TO registrations.price_cents (migration 0024) rather than
+  // recomputed at checkout, because the grant can lapse between registering and paying — recomputing
+  // would quote one price on the confirmation screen and charge another at Square. The price the
+  // member was shown is the price that gets charged. retryPayment reads the stored value and falls
+  // back to events.price_cents when it is NULL, so the rows that predate this release are unaffected.
+  const listPrice = ev.price_cents || 0;
+  const tier = await effectiveTierFor(env, ev.org_id, contact.id);
+  const price = applyTierDiscount(listPrice, (tier && tier.discount_bps) || 0);
   let status = payMethod === "cash" ? "cash-pending" : (price === 0 ? "comped" : "pending");
+
+  // F-5 (v0.30.0): capacity is re-checked INSIDE the insert. A single INSERT...SELECT...WHERE is
+  // atomic, so exactly one of two concurrent submits sees changes === 1 — the same reasoning as the
+  // token consumption in consent.js postSign. waitlistGate read the count ~55 lines earlier with
+  // four D1 round trips in between, so both submits passed. The status list must stay identical to
+  // ACTIVE_REG_STATUSES in waitlists.js. A valid waitlist claim bypasses the check by design: it was
+  // deliberately admitted into a full event.
+  const claimBypass = wtoken ? 1 : 0;
   const rIns = await env.DB.prepare(
-    "INSERT INTO registrations (org_id, event_id, contact_id, team_id, status, payment_method, waiver_id) VALUES (?1,?2,?3,?4,?5,?6,?7)"
-  ).bind(ev.org_id, eventId, contact.id, teamId, status, price === 0 ? "comp" : payMethod, wIns.meta.last_row_id).run();
+    `INSERT INTO registrations (org_id, event_id, contact_id, team_id, status, payment_method, waiver_id, price_cents)
+     SELECT ?1,?2,?3,?4,?5,?6,?7,?8
+      WHERE ?9 = 1
+         OR (SELECT capacity FROM events WHERE id = ?2) IS NULL
+         OR (SELECT capacity FROM events WHERE id = ?2) <= 0
+         OR (SELECT COUNT(*) FROM registrations
+              WHERE event_id = ?2 AND deleted_at IS NULL
+                AND status IN ('pending','email-sent','paid','cash-pending','comped'))
+            < (SELECT capacity FROM events WHERE id = ?2)`
+  ).bind(ev.org_id, eventId, contact.id, teamId, status, price === 0 ? "comp" : payMethod,
+         wIns.meta.last_row_id, price, claimBypass).run();
+
+  if (!rIns.meta || rIns.meta.changes === 0) {
+    return json({
+      error: "This event filled while you were registering. Join the waitlist and we'll offer you the next open spot.",
+      event_full: true, waitlist_available: true,
+    }, 409);
+  }
   const regId = rIns.meta.last_row_id;
 
   // Custom field responses
@@ -669,7 +703,10 @@ export async function waiverExpirySweep(env) {
 async function retryPayment(env, ctx, regId) {
   const reg = await env.DB.prepare(
     `SELECT r.id, r.status, r.org_id, c.email, t.name AS team_name,
-            e.id AS event_id, e.name AS event_name, e.price_cents
+            e.id AS event_id, e.name AS event_name,
+            -- v0.30.0: the price the member was quoted wins. NULL on rows written before 0024,
+            -- where the event list price WAS the quoted price, so the fallback is exact.
+            COALESCE(r.price_cents, e.price_cents) AS price_cents
      FROM registrations r
      LEFT JOIN contacts c ON c.id = r.contact_id
      LEFT JOIN teams t ON t.id = r.team_id
