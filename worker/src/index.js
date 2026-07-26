@@ -1,12 +1,23 @@
 /**
  * Boomtown Platform — API Worker
- * Version: v0.24.0 · Date: 2026-07-26 · Modules 1–17
+ * Version: v0.26.0 · Date: 2026-07-26 · Modules 1–17
  *
- * v0.24.0 (2026-07-26, Build status): frontend-only release — assets/build-status.js is
- *   the single registry of module maturity (live / beta / wip / soon); both rails stamp a
- *   chip on unfinished items and each affected page carries a one-line notice. No worker
- *   logic changed and no migration: this bump exists so /api/health and the deployed site
- *   report the same version, which is how every paste is verified.
+ * v0.26.0 (2026-07-26, Tiers + hardening): NEW tiers.js — membership levels (Gymdesk-shaped),
+ *   grants, and bulk member actions. Migration 0018 adds membership_tiers, membership_grants,
+ *   schedule_views ownership + visibility, and orgs.timezone. Multi-tenant isolation fixes in
+ *   admin/facility/security/checkin; capability tokens in consent.js now fail closed and are
+ *   consumed atomically; calendar feeds emit floating wall-clock bound to a VTIMEZONE instead
+ *   of falsely stamping local times as UTC. Shared contactForSession replaces six copies.
+ *
+ * v0.25.0 (2026-07-26, Consent): NEW consent.js mounted after calendar. Teammate waiver
+ *   self-sign — a capability token (access_tokens.kind='waiver_sign', migration 0016)
+ *   emailed to a roster row lets a teammate sign for themselves, which creates the contact
+ *   the door gate has had nothing to check against since v0.23.0. Also the media-release
+ *   consent record (migration 0017) — waiver §6's written opt-out finally has somewhere
+ *   to live. /api/sign/:token is public: the token is the credential, there is no session.
+ *
+ * v0.24.0 (2026-07-26, Build status): frontend-only — assets/build-status.js is the single
+ *   registry of module maturity. Version bumped so /api/health and the site agree.
  *
  * v0.23.0 (2026-07-26, Waiver enforcement + calendar feeds):
  *   NEW calendar.js. GET /api/calendar/:token.ics is handled BEFORE the /api/ chain and
@@ -166,13 +177,32 @@ import { waitlistRoutes, wireWaitlists, waitlistSweep } from "./waitlists.js";
 import { pushRoutes, wirePush, pushPruneSweep } from "./push.js"; // v0.20.0 PWA web push
 import { waiverRoutes, wireWaivers } from "./waivers.js"; // v0.22.0 waiver versioning
 import { calendarRoutes, wireCalendar, icsFeed } from "./calendar.js"; // v0.23.0 iCal feeds
+import { consentRoutes, wireConsent } from "./consent.js"; // v0.25.0 teammate self-sign + media consent
+import { tiersRoutes, wireTiers } from "./tiers.js"; // v0.26.0 membership tiers, grants, bulk member actions
 import { waiverReminderSweep, waiverExpirySweep, sendEmail, escapeHtml } from "./registrations.js";
 
 const MAGIC_LINK_TTL_MIN = 15;
 const SESSION_TTL_DAYS = 30;
 
+/**
+ * The member record behind the current sign-in, scoped to the active org. Six modules had a
+ * private copy of this query (consent, member_portal, messages, profiles, registrations,
+ * calendar) with subtly different ORDER BY clauses. This is the shared one.
+ */
+async function contactForSession(env, ctx) {
+  if (!ctx || !ctx.userId) return null;
+  return env.DB.prepare(
+    `SELECT c.* FROM contacts c
+       JOIN users u ON lower(u.email) = lower(c.email)
+      WHERE u.id = ?1 AND u.deleted_at IS NULL
+        AND c.org_id = ?2 AND c.deleted_at IS NULL
+      ORDER BY c.user_id DESC, c.id ASC LIMIT 1`
+  ).bind(ctx.userId, ctx.orgId).first();
+}
+
 const wiredHelpers = {
   json,
+  contactForSession,
   audit: (env, ctx, action, entity, entityId, detail) =>
     audit(env, ctx.orgId, ctx.userId, action, entity, entityId, detail),
   isStaff,
@@ -202,12 +232,22 @@ wireWaitlists({ ...wiredHelpers, sendEmail, escapeHtml }); // sendEmail injected
 wirePush(wiredHelpers); // v0.20.0
 wireWaivers(wiredHelpers); // v0.22.0
 wireCalendar(wiredHelpers); // v0.23.0
+wireConsent(wiredHelpers); // v0.25.0
+wireTiers(wiredHelpers); // v0.26.0
 
 /** ctx carries the caller's session + selected org for role checks. */
 async function buildCtx(request, env) {
   const session = await currentSession(request, env);
   const orgId = Number(request.headers.get("X-Org-Id")) || 1;
-  return { session, orgId, userId: session ? session.user_id : null };
+  const userId = session ? session.user_id : null;
+  let role = null;
+  if (userId) {
+    const r = await env.DB.prepare(
+      "SELECT role FROM user_org_roles WHERE user_id=?1 AND org_id=?2 AND deleted_at IS NULL"
+    ).bind(userId, orgId).first();
+    role = r ? r.role : null;
+  }
+  return { session, orgId, userId, role };
 }
 
 async function isStaff(env, ctx, orgId = ctx.orgId) {
@@ -245,7 +285,7 @@ export default {
       } else if (url.pathname === "/api/orgs" && request.method === "GET") {
         res = await listOrgs(env);
       } else if (url.pathname === "/api/health") {
-        res = json({ ok: true, version: "v0.24.0" });
+        res = json({ ok: true, version: "v0.26.0" });
       } else if (url.pathname === "/api/webhooks/square" && request.method === "POST") {
         res = await membershipWebhook(request, env); // verifies signature; forwards payment.* to squareWebhook
       } else if (url.pathname.startsWith("/api/calendar/") && url.pathname.endsWith(".ics") && request.method === "GET") {
@@ -256,6 +296,8 @@ export default {
         const ctx = await buildCtx(request, env);
         res = (await waiverRoutes(request, env, url, ctx)) // v0.22.0 — /api/waiver/* + /api/admin/waivers/*
            || (await calendarRoutes(request, env, url, ctx)) // v0.23.0 — feed token mint/revoke
+           || (await consentRoutes(request, env, url, ctx)) // v0.25.0 — /api/sign/* + waiver links + media consent
+           || (await tiersRoutes(request, env, url, ctx)) // v0.26.0 — tiers, grants, bulk members
            || (await marketingRoutes(request, env, url, ctx))
            || (await messagesRoutes(request, env, url, ctx))
            || (await posRoutes(request, env, url, ctx))

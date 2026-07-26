@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<!-- Boomtown Platform — Calendar feeds · Version: v1.0 · Date: 2026-07-26 · Ships in: v0.26.0
+     R-08. The .ics feeds shipped in v0.23.0 and there has never been a button anywhere to fetch
+     a feed URL — they were console-only for three releases. This is that button.
+
+     The one hard UX constraint: the raw token is shown ONCE and is unrecoverable. The server
+     stores only a SHA, so GET can never rebuild the URL. That is deliberate (a feed URL is a
+     bearer credential), and it means this page has to make "copy it now" unmissable rather than
+     letting someone close the tab and assume they can come back for it. -->
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Calendar feeds — Boomtown Athletics</title>
+  <link rel="stylesheet" href="assets/tokens.css" />
+  <link rel="stylesheet" href="assets/app.css" />
+  <link rel="stylesheet" href="assets/admin.css?v=0.26.0" />
+  <style>
+    .cg { display: grid; gap: 16px; max-width: 760px; }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+    .card h2 { margin: 0 0 4px; font-size: 16px; }
+    .note { font-size: 13px; color: var(--text-dim); line-height: 1.55; }
+    label.fld { display: block; font-size: 13px; font-weight: 600; margin: 14px 0 5px; }
+    select, input[type=text] { width: 100%; box-sizing: border-box; min-height: 44px; padding: 8px 12px;
+      font-size: 15px; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 8px; }
+    :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+    .btn { min-height: 44px; padding: 0 16px; font-size: 15px; font-weight: 600; cursor: pointer;
+      background: var(--primary); color: var(--bg); border: 0; border-radius: 8px;
+      transition: transform 120ms cubic-bezier(.23,1,.32,1); }
+    .btn:active { transform: scale(.97); }
+    .btn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+    .btn.ghost { background: transparent; color: var(--text); border: 1px solid var(--border); }
+    .btn.danger { background: transparent; color: var(--danger); border: 1px solid var(--border); }
+    .status { display: flex; align-items: center; gap: 10px; font-size: 14px; margin: 10px 0 0; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-dim); flex: 0 0 8px; }
+    .dot.on { background: var(--positive); }
+    /* The once-only reveal. Amber border because this is a "act now" state, not a success state —
+       a green tick would imply the job is done when the URL still has to be copied. */
+    .reveal { margin: 14px 0 0; padding: 14px; border: 1px solid var(--warn); border-radius: 8px;
+      background: var(--surface-2); opacity: 0; transform: translateY(4px);
+      transition: opacity 200ms cubic-bezier(.23,1,.32,1), transform 200ms cubic-bezier(.23,1,.32,1); }
+    .reveal.shown { opacity: 1; transform: none; }
+    .reveal b { display: block; font-size: 14px; color: var(--warn); margin-bottom: 8px; }
+    .urlbox { display: flex; gap: 8px; align-items: stretch; }
+    .urlbox input { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+    .copied { font-size: 13px; color: var(--positive); margin: 8px 0 0; min-height: 18px; }
+    .msg { font-size: 14px; margin: 10px 0 0; min-height: 20px; }
+    .msg.bad { color: var(--danger); } .msg.good { color: var(--positive); }
+    .steps { font-size: 13px; color: var(--text-dim); line-height: 1.7; margin: 10px 0 0; padding-left: 18px; }
+    @media (prefers-reduced-motion: reduce) {
+      .btn { transition: none; } .btn:active { transform: none; }
+      .reveal { transition: opacity 150ms linear; transform: none; }
+    }
+  </style>
+</head>
+<body>
+  <header class="header chrome-glass">
+    <div class="wordmark"><a href="index.html" style="color:inherit;text-decoration:none">Boomtown <span>Athletics</span></a></div>
+    <div class="spacer"></div>
+  </header>
+
+  <div class="admin-layout">
+  <main class="main wide admin-main" id="app">
+    <div class="page-head"><h1>Calendar feeds</h1></div>
+    <p class="note" style="max-width:72ch;margin:0 0 18px">
+      A feed URL is a live subscription: whatever you publish shows up in Google Calendar, Apple
+      Calendar or Outlook within the hour, and cancelled events turn into cancellations rather
+      than vanishing. The link is a password — anyone holding it sees the calendar, so treat it
+      like one and create a new one if it leaks.
+    </p>
+
+    <div class="cg">
+      <div class="card">
+        <h2>Public events feed</h2>
+        <p class="note" style="margin:0">
+          Every published event for this organisation. Safe to put on the website or hand to a league.
+        </p>
+        <div class="status"><span class="dot" id="pubDot"></span><span id="pubState">Checking…</span></div>
+
+        <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn" id="pubMint" type="button">Create a feed link</button>
+          <button class="btn danger" id="pubRevoke" type="button" hidden>Turn off / replace</button>
+        </div>
+
+        <div class="reveal" id="pubReveal" hidden>
+          <b>Copy this now — it is shown once and cannot be recovered.</b>
+          <div class="urlbox">
+            <input type="text" id="pubUrl" readonly aria-label="Public feed URL" />
+            <button class="btn" id="pubCopy" type="button" style="flex:0 0 auto">Copy</button>
+          </div>
+          <p class="copied" id="pubCopied" role="status"></p>
+          <ol class="steps">
+            <li><b>Google Calendar:</b> Other calendars → + → From URL → paste → Add calendar.</li>
+            <li><b>Apple Calendar:</b> File → New Calendar Subscription → paste.</li>
+            <li><b>Outlook:</b> Add calendar → Subscribe from web → paste.</li>
+          </ol>
+        </div>
+        <p class="msg" id="pubMsg" role="alert"></p>
+      </div>
+
+      <div class="card">
+        <h2>Member feeds</h2>
+        <p class="note" style="margin:0 0 6px">
+          Each member gets their own link covering only what they are rostered on. They create it
+          themselves from their profile — staff cannot retrieve someone else's, by design.
+        </p>
+        <div class="status"><span class="dot" id="mineDot"></span><span id="mineState">Checking…</span></div>
+        <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn ghost" id="mineMint" type="button">Create mine</button>
+          <button class="btn danger" id="mineRevoke" type="button" hidden>Replace mine</button>
+        </div>
+        <div class="reveal" id="mineReveal" hidden>
+          <b>Copy this now — it is shown once and cannot be recovered.</b>
+          <div class="urlbox">
+            <input type="text" id="mineUrl" readonly aria-label="My feed URL" />
+            <button class="btn" id="mineCopy" type="button" style="flex:0 0 auto">Copy</button>
+          </div>
+          <p class="copied" id="mineCopied" role="status"></p>
+        </div>
+        <p class="msg" id="mineMsg" role="alert"></p>
+      </div>
+
+      <div class="card">
+        <h2>Time zone</h2>
+        <p class="note" style="margin:0">
+          Event times are stored as wall-clock — "6:00 PM" means 6:00 PM at the facility. This tells
+          calendar clients which wall clock that is. Get it wrong and every subscribed event lands
+          hours off.
+        </p>
+        <label class="fld" for="tz">Facility time zone</label>
+        <select id="tz">
+          <option value="America/Denver">Mountain — Denver / Aurora (current)</option>
+          <option value="America/Phoenix">Mountain, no DST — Phoenix</option>
+          <option value="America/Los_Angeles">Pacific — Los Angeles</option>
+          <option value="America/Chicago">Central — Chicago</option>
+          <option value="America/New_York">Eastern — New York</option>
+        </select>
+        <div style="margin-top:14px"><button class="btn" id="tzSave" type="button">Save time zone</button></div>
+        <p class="msg" id="tzMsg" role="alert"></p>
+      </div>
+    </div>
+  </main>
+  </div>
+
+  <script src="assets/config.js?v=0.26.0"></script>
+  <script src="assets/admin-nav.js?v=0.26.0" defer></script>
+  <script src="assets/build-status.js?v=0.26.0" defer></script>
+  <script>
+  document.addEventListener("DOMContentLoaded", function () {
+    "use strict";
+    var api = window.BT && window.BT.api;
+    if (!api) return;
+
+    function $(id) { return document.getElementById(id); }
+    function esc(s) {
+      return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+        return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+      });
+    }
+    function say(el, text, cls) { el.textContent = text || ""; el.className = "msg" + (cls ? " " + cls : ""); }
+
+    function show(revealEl, urlEl, url) {
+      urlEl.value = url;
+      revealEl.hidden = false;
+      // Two frames so the transition actually runs from the hidden state.
+      requestAnimationFrame(function () { requestAnimationFrame(function () { revealEl.classList.add("shown"); }); });
+      urlEl.focus(); urlEl.select();
+    }
+
+    function wireCopy(btnId, urlId, outId) {
+      $(btnId).onclick = async function () {
+        var url = $(urlId).value;
+        try {
+          await navigator.clipboard.writeText(url);
+          $(outId).textContent = "Copied. Paste it into your calendar app now.";
+        } catch (e) {
+          $(urlId).select();
+          $(outId).textContent = "Press Ctrl+C (or Cmd+C) to copy — the field is selected.";
+        }
+      };
+    }
+    wireCopy("pubCopy", "pubUrl", "pubCopied");
+    wireCopy("mineCopy", "mineUrl", "mineCopied");
+
+    function paintState(dotId, stateId, mintId, revokeId, d, labels) {
+      var on = !!(d && d.subscribed);
+      $(dotId).className = "dot" + (on ? " on" : "");
+      $(mintId).textContent = on ? labels.replace : labels.create;
+      $(revokeId).hidden = !on;
+      if (!on) { $(stateId).textContent = labels.off; return; }
+      var bits = ["Active"];
+      if (d.created_at) bits.push("created " + String(d.created_at).slice(0, 10));
+      if (d.last_used_at) bits.push("last fetched " + String(d.last_used_at).slice(0, 10));
+      else bits.push("never fetched yet");
+      if (d.use_count) bits.push(d.use_count + " fetches");
+      $(stateId).textContent = bits.join(" · ");
+    }
+
+    var PUB = { create: "Create a feed link", replace: "Create a new link", off: "No feed link yet" };
+    var MINE = { create: "Create mine", replace: "Create a new one", off: "You don't have a feed link yet" };
+
+    async function loadPublic() {
+      var r = await api("/api/admin/calendar");
+      if (!r.ok) { $("pubState").textContent = (r.data && r.data.error) || "Couldn't check."; return; }
+      paintState("pubDot", "pubState", "pubMint", "pubRevoke", r.data, PUB);
+    }
+    async function loadMine() {
+      var r = await api("/api/profile/calendar");
+      if (!r.ok) { $("mineState").textContent = (r.data && r.data.error) || "Couldn't check."; return; }
+      paintState("mineDot", "mineState", "mineMint", "mineRevoke", r.data, MINE);
+    }
+
+    function mintHandler(path, btnId, revealId, urlId, msgId, reload) {
+      return async function () {
+        var btn = $(btnId), was = btn.textContent;
+        // A replace silently kills the old link, so it gets a confirm. A first create does not.
+        if (!$(revealId + "").hidden || /new/i.test(was)) {
+          if (/new/i.test(was) && !window.confirm("The existing link stops working immediately and anyone using it loses the calendar. Create a new one?")) return;
+        }
+        btn.disabled = true; btn.textContent = "Creating…";
+        var r = await api(path, { method: "POST" });
+        btn.disabled = false; btn.textContent = was;
+        if (!r.ok || !r.data || !r.data.url) {
+          say($(msgId), (r.data && r.data.error) || "Couldn't create the link.", "bad");
+          return;
+        }
+        say($(msgId), "");
+        show($(revealId), $(urlId), r.data.url);
+        await reload();
+      };
+    }
+    $("pubMint").onclick = mintHandler("/api/admin/calendar", "pubMint", "pubReveal", "pubUrl", "pubMsg", loadPublic);
+    $("mineMint").onclick = mintHandler("/api/profile/calendar", "mineMint", "mineReveal", "mineUrl", "mineMsg", loadMine);
+
+    function revokeHandler(path, msgId, revealId, reload) {
+      return async function () {
+        if (!window.confirm("Turn the link off? Anyone subscribed stops receiving updates.")) return;
+        var r = await api(path, { method: "DELETE" });
+        if (!r.ok) { say($(msgId), (r.data && r.data.error) || "Couldn't turn it off.", "bad"); return; }
+        $(revealId).hidden = true; $(revealId).classList.remove("shown");
+        say($(msgId), "Turned off.", "good");
+        await reload();
+      };
+    }
+    $("pubRevoke").onclick = revokeHandler("/api/admin/calendar", "pubMsg", "pubReveal", loadPublic);
+    $("mineRevoke").onclick = revokeHandler("/api/profile/calendar", "mineMsg", "mineReveal", loadMine);
+
+    /* ---------- timezone ---------- */
+    async function loadTz() {
+      var r = await api("/api/admin/org");
+      var tz = r.ok && r.data && (r.data.timezone || (r.data.org && r.data.org.timezone));
+      if (tz) {
+        var opt = $("tz").querySelector('option[value="' + String(tz).replace(/"/g, "") + '"]');
+        if (opt) $("tz").value = tz;
+        else say($("tzMsg"), "Currently set to " + esc(tz) + ", which isn't in this list.", "");
+      }
+    }
+    $("tzSave").onclick = async function () {
+      var btn = $("tzSave"), was = btn.textContent;
+      btn.disabled = true; btn.textContent = "Saving…";
+      var r = await api("/api/admin/org", { method: "PUT", body: JSON.stringify({ timezone: $("tz").value }) });
+      btn.disabled = false; btn.textContent = was;
+      if (!r.ok) { say($("tzMsg"), (r.data && r.data.error) || "Couldn't save. This may need the v0.26.0 worker.", "bad"); return; }
+      say($("tzMsg"), "Saved. New calendar fetches use it within the hour; existing subscribers refresh on their own schedule.", "good");
+    };
+
+    loadPublic(); loadMine(); loadTz();
+  });
+  </script>
+</body>
+</html>

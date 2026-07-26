@@ -4,7 +4,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  escapeIcsText, foldIcsLine, toIcsUtc, icsUid, buildIcs, feedEtag, sha256Hex,
+  escapeIcsText, foldIcsLine, toIcsUtc, toIcsLocal, addWallHours, icsUid, buildIcs, feedEtag, sha256Hex,
+  icsVtimezone, DEFAULT_TZID, SUPPORTED_TZIDS,
 } from "../src/calendar.js";
 
 /* ---------- escapeIcsText (RFC 5545 §3.3.11) ---------- */
@@ -99,8 +100,10 @@ test("produces a well-formed VCALENDAR with CRLF endings", () => {
 
 test("carries the required VEVENT properties", () => {
   const ics = buildIcs([EV], { now: "2026-07-26T00:00:00Z" });
-  for (const k of ["BEGIN:VEVENT", "UID:", "DTSTAMP:", "DTSTART:20260801T160000Z",
-                   "DTEND:20260801T220000Z", "SUMMARY:Summer Slam", "STATUS:CONFIRMED",
+  for (const k of ["BEGIN:VEVENT", "UID:", "DTSTAMP:",
+                   "DTSTART;TZID=America/Denver:20260801T160000",
+                   "DTEND;TZID=America/Denver:20260801T220000",
+                   "SUMMARY:Summer Slam", "STATUS:CONFIRMED",
                    "END:VEVENT"]) {
     assert.ok(ics.includes(k), `missing ${k}`);
   }
@@ -120,8 +123,54 @@ test("status='cancelled' is treated the same as a soft delete", () => {
 
 test("a missing end time falls back to a 2h block rather than zero width", () => {
   const ics = buildIcs([{ ...EV, ends_at: null }], {});
-  assert.ok(ics.includes("DTSTART:20260801T160000Z"));
-  assert.ok(ics.includes("DTEND:20260801T180000Z"));
+  assert.ok(ics.includes("DTSTART;TZID=America/Denver:20260801T160000"));
+  assert.ok(ics.includes("DTEND;TZID=America/Denver:20260801T180000"));
+});
+
+test("event times are floating wall-clock bound to a VTIMEZONE, never stamped Z", () => {
+  // events.starts_at is naive Denver wall-clock. Emitting it as UTC shifted every
+  // subscribed event 6-7 hours early. Regression guard for that defect.
+  const ics = buildIcs([EV], { now: "2026-07-26T00:00:00Z" });
+  assert.ok(ics.includes("BEGIN:VTIMEZONE"), "TZID references need a VTIMEZONE to resolve");
+  assert.ok(ics.includes("TZID:America/Denver"));
+  assert.ok(!/DTSTART:\d{8}T\d{6}Z/.test(ics), "DTSTART must not claim UTC");
+  assert.ok(!/DTEND:\d{8}T\d{6}Z/.test(ics), "DTEND must not claim UTC");
+  assert.ok(/DTSTAMP:\d{8}T\d{6}Z/.test(ics), "DTSTAMP is a real instant and stays UTC");
+});
+
+test("toIcsLocal keeps wall-clock; addWallHours does not cross into UTC", () => {
+  assert.equal(toIcsLocal("2026-08-01 16:00:00"), "20260801T160000");
+  assert.equal(toIcsLocal("2026-08-01T16:00"), "20260801T160000");
+  assert.equal(toIcsLocal("nonsense"), null);
+  assert.equal(addWallHours("2026-08-01 16:00:00", 2), "20260801T180000");
+  assert.equal(addWallHours("2026-08-01 23:30:00", 2), "20260802T013000");
+});
+
+test("the calendar timezone is selectable and threads into DTSTART", () => {
+  const ics = buildIcs([EV], { now: "2026-07-26T00:00:00Z", tzid: "America/New_York" });
+  assert.ok(ics.includes("TZID:America/New_York"));
+  assert.ok(ics.includes("X-WR-TIMEZONE:America/New_York"));
+  assert.ok(ics.includes("DTSTART;TZID=America/New_York:20260801T160000"));
+  assert.ok(!ics.includes("America/Denver"), "a selected zone must not leave the default behind");
+});
+
+test("the default zone is Denver — the operating facility", () => {
+  assert.equal(DEFAULT_TZID, "America/Denver");
+  const ics = buildIcs([EV], { now: "2026-07-26T00:00:00Z" });
+  assert.ok(ics.includes("TZID:America/Denver"));
+});
+
+test("a zone with no DST emits a single STANDARD component", () => {
+  const b = icsVtimezone("America/Phoenix").join("|");
+  assert.ok(b.includes("TZID:America/Phoenix"));
+  assert.ok(!b.includes("BEGIN:DAYLIGHT"), "Phoenix does not observe DST");
+  assert.equal((b.match(/BEGIN:STANDARD/g) || []).length, 1);
+});
+
+test("an unsupported zone falls back to the default block rather than emitting nothing", () => {
+  const b = icsVtimezone("Mars/Olympus").join("|");
+  assert.ok(b.includes("TZID:America/Denver"), "fall back, never emit a dangling TZID reference");
+  assert.ok(SUPPORTED_TZIDS.includes("America/Denver"));
 });
 
 test("an event with an unparseable start is skipped, not emitted broken", () => {

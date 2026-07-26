@@ -125,7 +125,8 @@ async function tokenByRaw(env, raw) {
     `SELECT t.id, t.org_id, t.kind, t.team_member_id, t.contact_id, t.expires_at,
             t.revoked_at, t.deleted_at, t.use_count
        FROM access_tokens t
-      WHERE t.token_sha = ?1 AND t.kind = 'waiver_sign'`
+      WHERE t.token_sha = ?1 AND t.kind = 'waiver_sign'
+        AND t.revoked_at IS NULL AND t.deleted_at IS NULL`
   ).bind(sha).first();
 }
 
@@ -199,7 +200,9 @@ async function getSignPage(env, rawToken) {
   const email = normEmail(tm.member_email);
   const live = await liveWaiverForEmail(env, tok.org_id, email);
   const state = signState({ tokenRow: tok, waiverRow: live });
-  if (state === "not_found") return json({ state }, 404);
+  // Expired collapses into not_found on purpose: a distinguishable "expired" reply is an
+  // oracle that confirms the token hash was real. Unknown, revoked and expired look identical.
+  if (state === "not_found" || state === "expired") return json({ state: "not_found" }, 404);
 
   const ver = await activeWaiverVersion(env, tok.org_id);
   return json({
@@ -233,6 +236,12 @@ async function postSign(request, env, rawToken) {
     return json({ ok: true, already: true, expires_at: existing.expires_at });
   }
 
+  // The link must still be live to *create* a signature. signState fails closed on an
+  // unparseable expiry (parseTs), so a corrupt timestamp reads as expired rather than valid.
+  if (signState({ tokenRow: tok, waiverRow: null }) !== "ready") {
+    return json({ error: "This link isn't active." }, 404);
+  }
+
   const b = await request.json().catch(() => ({}));
   const sig = validateSignature(b.signature_name, tm.member_name);
   if (!sig.ok) return json({ error: sig.error }, 400);
@@ -242,9 +251,24 @@ async function postSign(request, env, rawToken) {
   if (!ver) return json({ error: "No waiver is published yet. Tell the front desk." }, 409);
   // The client tells us which version it rendered. If it doesn't match, the text changed
   // while the page was open and we refuse rather than pin a signature to text nobody saw.
-  if (b.version_id != null && Number(b.version_id) !== Number(ver.id)) {
+  // Omitting version_id used to skip this check entirely. The client must state what it
+  // rendered; a signature is only valid against text the signer actually saw.
+  if (b.version_id == null || Number(b.version_id) !== Number(ver.id)) {
     return json({ error: "The waiver was updated while this page was open. Reload and read it again.",
                   waiver_stale: true, current_version_id: ver.id }, 409);
+  }
+
+  // Atomic single-use consumption. D1 has no interactive transaction, but a conditional
+  // UPDATE is atomic on its own: exactly one concurrent request sees changes === 1.
+  // This has to sit after payload validation (a bad payload must not burn the link) and
+  // before the first write (so the loser of a race writes nothing).
+  const consumed = await env.DB.prepare(
+    `UPDATE access_tokens
+        SET revoked_at = datetime('now'), use_count = use_count + 1, last_used_at = datetime('now')
+      WHERE id = ?1 AND revoked_at IS NULL AND deleted_at IS NULL`
+  ).bind(tok.id).run();
+  if (!consumed.meta || consumed.meta.changes === 0) {
+    return json({ error: "This link isn't active." }, 404);
   }
 
   const contact = await findOrCreateContact(env, tok.org_id, email, tm.member_name);
@@ -265,10 +289,6 @@ async function postSign(request, env, rawToken) {
     `UPDATE team_members SET contact_id = ?2, updated_at = datetime('now')
       WHERE org_id = ?1 AND lower(member_email) = ?3 AND contact_id IS NULL AND deleted_at IS NULL`
   ).bind(tok.org_id, contact.id, email).run();
-
-  await env.DB.prepare(
-    "UPDATE access_tokens SET revoked_at = datetime('now'), use_count = use_count + 1, last_used_at = datetime('now') WHERE id = ?1"
-  ).bind(tok.id).run();
 
   await audit(env, { orgId: tok.org_id, userId: null }, "waiver.teammate_sign", "team_members", tm.id, {
     contact_id: contact.id, contact_created: contact.created, version_id: ver.id,

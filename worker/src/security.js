@@ -50,7 +50,7 @@ export async function securityRoutes(request, env, url, ctx) {
   const deny = await H.requireStaff(env, ctx); if (deny) return deny;
 
   if (p === "/api/admin/security/log" && m === "GET") return securityLog(env, url);
-  if (p === "/api/admin/security/deleted" && m === "GET") return deletedList(env, url);
+  if (p === "/api/admin/security/deleted" && m === "GET") return deletedList(env, ctx, url);
   if (p === "/api/admin/security/restore" && m === "POST") return restoreRow(request, env, ctx);
   if (p === "/api/admin/security/rescue-link" && m === "POST") return rescueLink(request, env, ctx);
   return null;
@@ -78,14 +78,14 @@ async function securityLog(env, url) {
   return H.json({ log: rows, next_before: rows.length === limit ? rows[rows.length - 1].id : null });
 }
 
-async function deletedList(env, url) {
+async function deletedList(env, ctx, url) {
   const entity = url.searchParams.get("entity") || "events";
   const cfg = RESTORE_WHITELIST[entity];
   if (!cfg) return H.json({ error: "That entity can't be viewed here." }, 400);
   const rows = (await env.DB.prepare(
     `SELECT id, ${cfg.label} AS label, ${cfg.extra} AS extra, deleted_at
-     FROM ${entity} WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC LIMIT 50`
-  ).all()).results;
+     FROM ${entity} WHERE org_id=?1 AND deleted_at IS NOT NULL ORDER BY deleted_at DESC LIMIT 50`
+  ).bind(ctx.orgId).all()).results;
   return H.json({ entity, rows });
 }
 
@@ -96,12 +96,14 @@ async function restoreRow(request, env, ctx) {
   const cfg = RESTORE_WHITELIST[entity];
   if (!cfg) return H.json({ error: "That entity can't be restored from here." }, 400);
   if (!id) return H.json({ error: "Missing id." }, 400);
-  const row = await env.DB.prepare(`SELECT id, deleted_at FROM ${entity} WHERE id=?1`).bind(id).first();
+  const row = await env.DB.prepare(
+    `SELECT id, deleted_at FROM ${entity} WHERE id=?1 AND org_id=?2`
+  ).bind(id, ctx.orgId).first();
   if (!row) return H.json({ error: "Row not found." }, 404);
   if (!row.deleted_at) return H.json({ error: "That row isn't deleted." }, 409);
   await env.DB.prepare(
-    `UPDATE ${entity} SET deleted_at=NULL, updated_at=datetime('now') WHERE id=?1`
-  ).bind(id).run();
+    `UPDATE ${entity} SET deleted_at=NULL, updated_at=datetime('now') WHERE id=?1 AND org_id=?2`
+  ).bind(id, ctx.orgId).run();
   await H.audit(env, ctx, "security.restore", entity, id, {});
   return H.json({ ok: true, entity, id });
 }

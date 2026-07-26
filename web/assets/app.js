@@ -34,6 +34,13 @@
   /* ---------- session ---------- */
   let bearer = sessionStorage.getItem("bt_token") || null;
 
+  /** HTML-escape anything that came from the server before it reaches innerHTML. */
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+    })[c]);
+  }
+
   async function api(path, opts = {}) {
     const headers = Object.assign({ "content-type": "application/json" }, opts.headers || {});
     if (bearer) headers["Authorization"] = "Bearer " + bearer;
@@ -151,7 +158,7 @@
     (meData.roles || []).forEach((r) => (roleByOrg[r.org_id] = r.role));
 
     orgSwitcher.hidden = false;
-    orgSwitcher.innerHTML = orgs.map((o) => `<option value="${o.id}">${o.name}</option>`).join("");
+    orgSwitcher.innerHTML = orgs.map((o) => `<option value="${Number(o.id)}">${esc(o.name)}</option>`).join("");
     const savedOrg = localStorage.getItem("bt_org");
     if (savedOrg && orgs.some((o) => String(o.id) === savedOrg)) orgSwitcher.value = savedOrg;
     else localStorage.setItem("bt_org", orgSwitcher.value);
@@ -170,8 +177,8 @@
           <span class="status ${status === "Live" ? "live" : "next"}">${status}</span>
         </a>`;
       render(`
-        <h2 style="margin:0 0 2px">${org ? org.name : ""}</h2>
-        <p style="margin:0;color:var(--text-muted)">Signed in as ${meData.user.email} \u00b7 <span class="role-pill">${role}</span></p>
+        <h2 style="margin:0 0 2px">${org ? esc(org.name) : ""}</h2>
+        <p style="margin:0;color:var(--text-muted)">Signed in as ${esc(meData.user.email)} \u00b7 <span class="role-pill">${esc(role)}</span></p>
         <div class="grid">
           ${card("schedule.html", "Schedule", "Every upcoming tournament, league night, and event.", "Live")}
           ${staff

@@ -296,3 +296,117 @@ SANDBOX), the rest finished.
 
 **Gates:** `node --check` 24/24 · tests **137/137** · esbuild 363 KB containing `v0.24.0` ·
 no SQL, so no migration dry-run required.
+
+## v0.25.0 — 2026-07-26 (Consent: teammate self-sign + media-release record)
+
+Two roadmap items in one release. Both answer "who agreed to what, and can we prove it."
+
+### A. Teammate waiver self-sign (roadmap R-03)
+Until now only the captain ever signed. Teammates were a name and an email on `team_members`
+— no contact row, no signature, no way to reach them again — so the door gate added in
+v0.23.0 had nothing to check them against, and the CRM held one row per team instead of four.
+
+- **NEW `worker/src/consent.js` v1.0**, mounted after `calendar.js`.
+  - `GET|POST /api/sign/:token` — public. The token IS the credential; no session.
+  - `POST /api/team-members/:id/waiver-link` — captain or staff mints and emails a link.
+  - `GET /api/team-members/:id/waiver-state` — has this person got a current waiver?
+- Signing finds-or-creates the contact, writes a `waivers` row **pinned to the active
+  `waiver_versions.id`**, links the roster row, and links every other unlinked roster row in
+  the org carrying the same email.
+- **NEW `web/sign.html` v1.0** — public sign page. Token lives in the URL **fragment**, not a
+  query string: fragments are not sent in the `Referer` header and do not reach access logs,
+  so a forwarded link leaks less.
+- Idempotent: a second submit on a live waiver returns ok without writing a duplicate.
+- Version-race guard: if the waiver text is republished while the page is open, the POST is
+  refused with `waiver_stale` rather than pinning a signature to text nobody read.
+- Token is revoked the instant the waiver is signed, and minting again rotates rather than
+  accumulating, so a forwarded old link dies the moment a new one is issued.
+- Nickname signatures are accepted with a `name_matched_roster: false` flag on the audit row.
+  Rejecting "Bobby" because the roster says "Robert" produces unsigned waivers, which is
+  strictly worse than a flagged one.
+
+**A real bug was caught by the new tests before release.** `signState` normalised timestamps
+with `replace(" ","T") + "Z"`, which turns an already-ISO value into `...12:00:00ZZ`.
+`Date.parse` returns `NaN`, every comparison against `NaN` is false, and **an expired token
+read as valid.** Replaced with `parseTs()`, which only appends `Z` when there is no timezone
+suffix, and which now **fails closed** — an unparseable expiry is treated as expired rather
+than as no-expiry. Two regression tests guard it.
+
+### B. Media-release consent record (D-WV-10 / handoff v2.6 §6B)
+Waiver §6 grants an irrevocable likeness release whose only decline path is a written
+request. The policy had nowhere to live, so an opt-out could be honoured once by whoever
+read the email and forgotten the next time someone picked photos.
+
+- **Migration 0017** (`media_consents`) — **applied live before this paste list was built**
+  (D-MIG-2). Dry-run first against a local replica; all six assertions fired.
+- History is preserved: withdrawing soft-deletes the opt-out row and writes a `restored` row
+  rather than editing in place. The partial unique index counts only live rows, so a future
+  opt-out still fits.
+- `reference` is **required** — a record with no pointer to the writing cannot be defended.
+- **NEW `web/admin-consent.html` v1.0** under People. Staff-only. There is deliberately **no
+  member-facing opt-out**; adding one would contradict D-WV-10, not implement it.
+- `optedOutContactIds()` exported for photo pickers to filter against.
+
+### Also
+- `web/assets/build-status.js` v1.0 → **v1.1** — registers the two new pages; teammate
+  self-sign and media consent flip from SOON to LIVE.
+- `web/assets/admin-nav.js` v2.11 → **v2.12** — Media consent added under People.
+- `worker/src/index.js` → **v0.25.0**.
+
+### Not in this release
+The calendar **subscribe UI** (roadmap R-08) was scoped into v0.25.0 and cut. The `.ics`
+feeds still have no button anywhere to fetch a feed URL. Moved to v0.26.0 — flagged rather
+than quietly dropped.
+
+**Gates:** `node --check` 25/25 worker + 3 web + 2 inline blocks ✅ · tests **160/160**
+(up from 137; 23 new) ✅ · esbuild containing `v0.25.0` ✅ · migration 0017 dry-run 6/6 ✅ ·
+applied live and verified in `sqlite_master` ✅
+
+## v0.26.0 — 2026-07-26 (Tiers, view gating, isolation hardening)
+**Migration 0018** (`membership_tiers`, `membership_grants`, `plans.tier_id`, `schedule_views.owner_org_id`/`visibility`/`min_tier_id`/`require_membership`, `orgs.timezone`). Dry-run 14/14 against a local replica.
+
+### Multi-tenant isolation (Critical/High)
+- `admin.js listUsers` scoped to the caller's admin orgs. It previously returned every user, email, TOTP state and role assignment on the platform to any single-org admin.
+- `facility.js` bookings: `createBooking` no longer accepts `org_id` from the request body (`Number(b.org_id) || 1`); `updateBooking`/`deleteBooking`/series operations scope by `ctx.orgId`; org is now immutable on update.
+- `security.js` deleted-list and restore scoped by `org_id` — staff could previously list and restore another tenant's soft-deleted contacts, registrations, teams and events.
+- `checkin.js myAttendance` scoped by `org_id`.
+
+### Capability tokens (`consent.js`)
+- `postSign` never called `signState`, so **revoked, soft-deleted and expired waiver tokens all still produced legally operative signatures.** Tokens now resolve only when live, and expiry is enforced on the write path.
+- Single-use consumption is now an atomic conditional `UPDATE` executed before the first write, replacing a read-check-then-write sequence that let concurrent submits both write a waiver.
+- The waiver version guard no longer skips when `version_id` is omitted or null.
+- `getSignPage` returns 404 for expired tokens instead of 200-with-state; a distinguishable response confirmed the token hash existed.
+
+### Calendar time zones
+- `calendar.js` was emitting `starts_at` with a trailing `Z`. Events are stored as naive facility wall-clock (the admin UI posts `date + " " + time`, and the worker stores it unmodified), so **every subscribed event landed 6–7 hours early.** Now emitted as floating wall-clock bound to a `VTIMEZONE` (`toIcsLocal`, `addWallHours`, `icsVtimezone`). `DTSTAMP` remains UTC, which is correct.
+- `profiles.js eventIcs` was already correct; the hardcoded zone is replaced so both paths read `orgs.timezone`.
+- Selectable zone (Denver, Phoenix, Los Angeles, Chicago, New York) via `GET/PUT /api/admin/org`, whitelisted server-side. Default `America/Denver`.
+
+### Fail-closed corrections
+- `waitlists.js offerExpired` returned `false` on an unparseable expiry, so a corrupt `offer_expires_at` meant a claim link that never expired. Now fails closed.
+- `facility.js` slot parsing: `Number("abc")` is `NaN`, and every `NaN` comparison in `validateSlot` was false, so non-numeric times passed validation and bound `NaN` into D1. Reuses the module's existing `num()` guard.
+- `reports.js sales`/`dashboard`: soft-deleted registrations were still summed into revenue.
+- `member_portal.js myAgreements`: soft-deleted contacts surfaced as agreement subjects.
+- Unguarded `JSON.parse` on `config_json` in `leagues_admin.js` and `tournaments.js` could 500 an entire endpoint from one malformed row.
+
+### New — membership levels (`tiers.js`)
+- Tiers are entitlements (rank, discount bps, guest passes, open-gym, booking window); plans stay billing products. A tier can be granted by subscription, manually, comped, staff, or sponsor.
+- `effectiveGrant` resolves the live tier by rank then recency, and **fails closed on corrupt dates.**
+- Tier delete is refused while live holders exist — inactivate instead of silently stripping entitlements.
+- Admin UI: `web/admin-tiers.html`.
+
+### New — schedule view ownership and visibility
+- `schedule_views.org_id` is a *content filter* (migration 0003: "NULL = all orgs"), not ownership. Scoping mutations by it would have made both seeded built-ins uneditable by every user. Ownership is the new `owner_org_id`; NULL means platform-global and admin-only.
+- `visibility` is `public | internal | staff`, enforced server-side in the feed, with optional membership-tier gating on top. Unknown values fail closed. Backfill preserves current access exactly.
+
+### New — bulk member actions (R-11)
+- `POST /api/admin/members/bulk`: add/remove tag, grant tier, unsubscribe/resubscribe, export CSV. Capped at 500 ids, org-scoped (foreign ids dropped and reported), audited as one row with the id list. Tag and grant writes use `env.DB.batch` rather than sequential awaits.
+- Selection column + fixed bulk bar in the members list.
+
+### Frontend
+- Stored XSS: `app.js` interpolated `org.name` and the signed-in email straight into `innerHTML`. Added `esc()`.
+- A `401` from any admin call now clears the dead token and redirects to `index.html?expired=1` instead of failing silently.
+- `R-08` shipped: `web/admin-calendar.html` — the subscribe UI the `.ics` feeds have lacked since v0.23.0. The feed token is shown once and unrecoverable, so the reveal is styled as an action state, not a success state.
+- Shared `contactForSession` in `index.js`; `ctx.role` resolved once per request.
+
+**Gates:** `node --check` 25 worker modules + 5 web assets + 2 inline blocks · `node --test` **207/207** (was 160) · esbuild 408 KB containing `v0.26.0`, `membership_tiers`, `toIcsLocal`, `canReadView`, `validateBulk` · migration 0018 dry-run 14/14.

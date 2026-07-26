@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<!-- Boomtown Platform — Membership levels · Version: v1.0 · Date: 2026-07-26 · Ships in: v0.26.0
+     A LEVEL (tier) is an entitlement: what a member gets. A PLAN (admin-plans.html) is how they
+     pay for it. Keeping them apart is what lets a comped coach hold All-Access without inventing
+     a $0 Square subscription, and what lets a schedule view ask "is this member at least Silver?".
+     Staff-only. Every grant is audited. -->
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Membership levels — Boomtown Athletics</title>
+  <link rel="stylesheet" href="assets/tokens.css" />
+  <link rel="stylesheet" href="assets/app.css" />
+  <link rel="stylesheet" href="assets/admin.css?v=0.26.0" />
+  <style>
+    .tg { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,360px); gap: 20px; align-items: start; }
+    @media (max-width: 980px) { .tg { grid-template-columns: 1fr; } }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+    .card h2 { margin: 0 0 4px; font-size: 16px; }
+    label.fld { display: block; font-size: 13px; font-weight: 600; margin: 14px 0 5px; }
+    .card input[type=text], .card input[type=number], .card input[type=date], .card select, .card textarea {
+      width: 100%; box-sizing: border-box; min-height: 44px; padding: 8px 12px; font-size: 15px;
+      background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 8px; }
+    .card textarea { min-height: 72px; resize: vertical; font-family: inherit; }
+    .card :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+    .btn { min-height: 44px; padding: 0 16px; font-size: 15px; font-weight: 600; cursor: pointer;
+      background: var(--primary); color: var(--bg); border: 0; border-radius: 8px;
+      transition: transform 120ms cubic-bezier(.23,1,.32,1); }
+    .btn:active { transform: scale(.97); }
+    .btn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+    .btn.ghost { background: transparent; color: var(--text); border: 1px solid var(--border); }
+    .btn.sm { min-height: 36px; font-size: 13px; padding: 0 12px; }
+    .btn.danger { background: transparent; color: var(--danger); border: 1px solid var(--border); }
+    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .tier { display: flex; gap: 14px; align-items: flex-start; padding: 14px 0; border-bottom: 1px solid var(--border); }
+    .tier:last-child { border-bottom: 0; }
+    .tier .body { flex: 1; min-width: 0; }
+    .tier .body b { font-size: 15px; display: block; }
+    .tier .body .meta { font-size: 13px; color: var(--text-dim); margin-top: 2px; }
+    .tier .body .perks { font-size: 13px; color: var(--text-dim); margin: 6px 0 0; padding-left: 18px; }
+    .chip { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px;
+      border: 1px solid var(--border); background: var(--surface-2); }
+    .chip.off { opacity: .6; }
+    .rank { flex: 0 0 44px; height: 44px; border-radius: 8px; display: grid; place-items: center;
+      background: var(--surface-2); border: 1px solid var(--border); font-weight: 700; font-size: 15px; }
+    .msg { font-size: 14px; margin: 10px 0 0; min-height: 20px; }
+    .msg.bad { color: var(--danger); } .msg.good { color: var(--positive); }
+    .note { font-size: 13px; color: var(--text-dim); line-height: 1.55; }
+    .cbx { display: flex; align-items: center; gap: 10px; margin: 12px 0 0; font-size: 14px; }
+    .cbx input { width: 20px; height: 20px; }
+    @media (prefers-reduced-motion: reduce) { .btn { transition: none; } .btn:active { transform: none; } }
+  </style>
+</head>
+<body>
+  <header class="header chrome-glass">
+    <div class="wordmark"><a href="index.html" style="color:inherit;text-decoration:none">Boomtown <span>Athletics</span></a></div>
+    <div class="spacer"></div>
+  </header>
+
+  <div class="admin-layout">
+  <main class="main wide admin-main" id="app">
+    <div class="page-head"><h1>Membership levels</h1></div>
+    <p class="note" style="max-width:72ch;margin:0 0 18px">
+      A level is what a member <em>gets</em>. A plan (under Money) is how they <em>pay</em> for it.
+      Keeping them separate means you can comp a coach to All-Access without pretending they bought
+      a subscription, and a gated schedule can ask "is this member at least Silver?" and get a real
+      answer. Higher rank outranks lower.
+    </p>
+
+    <div class="tg">
+      <div class="card">
+        <h2>Levels <span id="count" style="color:var(--text-dim);font-weight:400"></span></h2>
+        <p class="note" style="margin:0 0 4px">Ordered by rank, highest first.</p>
+        <div id="list"><p class="note">Loading…</p></div>
+      </div>
+
+      <div>
+        <div class="card">
+          <h2 id="formTitle">Add a level</h2>
+          <p class="note" style="margin:0">Entitlements are a small fixed set on purpose.</p>
+
+          <label class="fld" for="f_name">Name</label>
+          <input type="text" id="f_name" placeholder="All-Access" autocomplete="off" />
+
+          <div class="row2">
+            <div>
+              <label class="fld" for="f_rank">Rank</label>
+              <input type="number" id="f_rank" value="10" min="0" step="10" aria-describedby="rankHint" />
+            </div>
+            <div>
+              <label class="fld" for="f_discount">Discount %</label>
+              <input type="number" id="f_discount" value="0" min="0" max="100" step="0.5" />
+            </div>
+          </div>
+          <p class="note" id="rankHint" style="margin:4px 0 0">
+            Leave gaps (10, 20, 30) so you can slot a level in later without renumbering.
+          </p>
+
+          <div class="row2">
+            <div>
+              <label class="fld" for="f_guests">Guest passes / month</label>
+              <input type="number" id="f_guests" value="0" min="0" />
+            </div>
+            <div>
+              <label class="fld" for="f_window">Booking window (days)</label>
+              <input type="number" id="f_window" placeholder="org default" min="0" />
+            </div>
+          </div>
+
+          <label class="fld" for="f_perks">Perks (one per line)</label>
+          <textarea id="f_perks" placeholder="Unlimited open gym&#10;2 guest passes a month&#10;10% off tournaments"></textarea>
+
+          <div class="cbx">
+            <input type="checkbox" id="f_opengym" />
+            <label for="f_opengym" style="margin:0;font-weight:400">Open gym included</label>
+          </div>
+          <div class="cbx">
+            <input type="checkbox" id="f_public" checked />
+            <label for="f_public" style="margin:0;font-weight:400">Show on the public pricing page</label>
+          </div>
+          <div class="cbx">
+            <input type="checkbox" id="f_active" checked />
+            <label for="f_active" style="margin:0;font-weight:400">Active</label>
+          </div>
+
+          <div style="margin-top:16px;display:flex;gap:8px">
+            <button class="btn" id="save" type="button">Save level</button>
+            <button class="btn ghost" id="cancel" type="button" hidden>Cancel</button>
+          </div>
+          <p class="msg" id="msg" role="alert"></p>
+        </div>
+
+        <div class="card" style="margin-top:16px">
+          <h2>Grant a level</h2>
+          <p class="note" style="margin:0">For comped members, staff family, or sponsor arrangements.</p>
+
+          <label class="fld" for="g_q">Member</label>
+          <input type="text" id="g_q" placeholder="Search by name or email" autocomplete="off" />
+          <div id="g_results" style="margin-top:8px"></div>
+
+          <label class="fld" for="g_tier">Level</label>
+          <select id="g_tier"><option value="">Loading…</option></select>
+
+          <label class="fld" for="g_source">Reason</label>
+          <select id="g_source">
+            <option value="manual">Manual</option>
+            <option value="comp">Comped</option>
+            <option value="staff">Staff</option>
+            <option value="sponsor">Sponsor</option>
+          </select>
+
+          <label class="fld" for="g_ends">Ends (optional)</label>
+          <input type="date" id="g_ends" aria-describedby="endsHint" />
+          <p class="note" id="endsHint" style="margin:4px 0 0">Leave blank for open-ended.</p>
+
+          <label class="fld" for="g_note">Note (optional)</label>
+          <input type="text" id="g_note" placeholder="e.g. head coach, 2026 season" />
+
+          <div style="margin-top:16px"><button class="btn" id="grant" type="button" disabled>Grant level</button></div>
+          <p class="msg" id="gmsg" role="alert"></p>
+        </div>
+      </div>
+    </div>
+  </main>
+  </div>
+
+  <script src="assets/config.js?v=0.26.0"></script>
+  <script src="assets/admin-nav.js?v=0.26.0" defer></script>
+  <script src="assets/build-status.js?v=0.26.0" defer></script>
+  <script>
+  document.addEventListener("DOMContentLoaded", function () {
+    "use strict";
+    var api = window.BT && window.BT.api;
+    if (!api) return;
+
+    function esc(s) {
+      return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+        return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+      });
+    }
+    function $(id) { return document.getElementById(id); }
+    function say(el, text, cls) { el.textContent = text || ""; el.className = "msg" + (cls ? " " + cls : ""); }
+
+    var editing = null, tiers = [], picked = null;
+
+    /* ---------- levels ---------- */
+
+    function render() {
+      var host = $("list");
+      if (!tiers.length) {
+        host.innerHTML = '<p class="note">No levels yet. Add one on the right — most facilities start with two or three.</p>';
+        $("count").textContent = "";
+        return;
+      }
+      $("count").textContent = "(" + tiers.length + ")";
+      host.innerHTML = tiers.map(function (t) {
+        var perks = String(t.perks || "").split("\n").map(function (l) { return l.trim(); }).filter(Boolean);
+        var bits = [];
+        if (t.discount_bps) bits.push((t.discount_bps / 100) + "% off");
+        if (t.open_gym_included) bits.push("open gym");
+        if (t.guest_passes_per_month) bits.push(t.guest_passes_per_month + " guest/mo");
+        if (t.booking_window_days != null) bits.push("books " + t.booking_window_days + "d ahead");
+        return '<div class="tier">' +
+          '<div class="rank" title="Rank">' + esc(t.rank) + "</div>" +
+          '<div class="body"><b>' + esc(t.name) + "</b>" +
+            '<div class="meta"><code>' + esc(t.code) + "</code>" +
+              (bits.length ? " · " + esc(bits.join(" · ")) : "") +
+              " · " + esc(t.holders || 0) + " holder" + (Number(t.holders) === 1 ? "" : "s") +
+            "</div>" +
+            (perks.length ? '<ul class="perks">' + perks.map(function (p) { return "<li>" + esc(p) + "</li>"; }).join("") + "</ul>" : "") +
+          "</div>" +
+          '<div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">' +
+            '<span class="chip' + (t.active ? "" : " off") + '">' + (t.active ? "Active" : "Inactive") + "</span>" +
+            (t.visible_to_public ? '<span class="chip">Public</span>' : "") +
+            '<button class="btn ghost sm" data-edit="' + Number(t.id) + '" type="button">Edit</button>' +
+            '<button class="btn danger sm" data-del="' + Number(t.id) + '" type="button">Delete</button>' +
+          "</div>" +
+        "</div>";
+      }).join("");
+
+      Array.prototype.forEach.call(host.querySelectorAll("[data-edit]"), function (b) {
+        b.onclick = function () { startEdit(Number(b.getAttribute("data-edit"))); };
+      });
+      Array.prototype.forEach.call(host.querySelectorAll("[data-del]"), function (b) {
+        b.onclick = function () { del(Number(b.getAttribute("data-del"))); };
+      });
+    }
+
+    function fillTierSelect() {
+      $("g_tier").innerHTML = tiers.filter(function (t) { return t.active; })
+        .map(function (t) { return '<option value="' + Number(t.id) + '">' + esc(t.name) + "</option>"; }).join("")
+        || '<option value="">Add a level first</option>';
+    }
+
+    async function load() {
+      var r = await api("/api/admin/tiers");
+      if (!r.ok) { $("list").innerHTML = '<p class="note">' + esc((r.data && r.data.error) || "Couldn't load levels.") + "</p>"; return; }
+      tiers = (r.data && r.data.tiers) || [];
+      render(); fillTierSelect();
+    }
+
+    function readForm() {
+      var pct = Number($("f_discount").value || 0);
+      var win = $("f_window").value === "" ? null : Number($("f_window").value);
+      return {
+        name: $("f_name").value.trim(),
+        rank: Number($("f_rank").value || 0),
+        discount_bps: Math.round(Math.max(0, Math.min(100, pct)) * 100),
+        guest_passes_per_month: Number($("f_guests").value || 0),
+        booking_window_days: win,
+        perks: $("f_perks").value,
+        open_gym_included: $("f_opengym").checked ? 1 : 0,
+        visible_to_public: $("f_public").checked ? 1 : 0,
+        active: $("f_active").checked ? 1 : 0,
+      };
+    }
+
+    function startEdit(id) {
+      var t = tiers.filter(function (x) { return x.id === id; })[0];
+      if (!t) return;
+      editing = id;
+      $("formTitle").textContent = "Edit " + t.name;
+      $("f_name").value = t.name || "";
+      $("f_rank").value = t.rank || 0;
+      $("f_discount").value = (t.discount_bps || 0) / 100;
+      $("f_guests").value = t.guest_passes_per_month || 0;
+      $("f_window").value = t.booking_window_days == null ? "" : t.booking_window_days;
+      $("f_perks").value = t.perks || "";
+      $("f_opengym").checked = !!t.open_gym_included;
+      $("f_public").checked = !!t.visible_to_public;
+      $("f_active").checked = !!t.active;
+      $("cancel").hidden = false;
+      say($("msg"), "");
+      $("f_name").focus();
+    }
+
+    function resetForm() {
+      editing = null;
+      $("formTitle").textContent = "Add a level";
+      $("f_name").value = ""; $("f_rank").value = 10; $("f_discount").value = 0;
+      $("f_guests").value = 0; $("f_window").value = ""; $("f_perks").value = "";
+      $("f_opengym").checked = false; $("f_public").checked = true; $("f_active").checked = true;
+      $("cancel").hidden = true;
+    }
+
+    $("cancel").onclick = function () { resetForm(); say($("msg"), ""); };
+
+    $("save").onclick = async function () {
+      var body = readForm();
+      if (!body.name) { say($("msg"), "Give the level a name.", "bad"); $("f_name").focus(); return; }
+      var btn = $("save"), was = btn.textContent;
+      btn.disabled = true; btn.textContent = "Saving…";
+      var r = editing
+        ? await api("/api/admin/tiers/" + editing, { method: "PUT", body: JSON.stringify(body) })
+        : await api("/api/admin/tiers", { method: "POST", body: JSON.stringify(body) });
+      btn.disabled = false; btn.textContent = was;
+      if (!r.ok) { say($("msg"), (r.data && r.data.error) || "Couldn't save.", "bad"); return; }
+      say($("msg"), editing ? "Saved." : "Level added.", "good");
+      resetForm();
+      await load();
+    };
+
+    async function del(id) {
+      var t = tiers.filter(function (x) { return x.id === id; })[0];
+      if (!t) return;
+      if (!window.confirm('Delete "' + t.name + '"? Members holding it keep their history, but the level stops applying.')) return;
+      var r = await api("/api/admin/tiers/" + id, { method: "DELETE" });
+      if (!r.ok) { say($("msg"), (r.data && r.data.error) || "Couldn't delete.", "bad"); return; }
+      say($("msg"), "Deleted.", "good");
+      await load();
+    }
+
+    /* ---------- grant ---------- */
+
+    var searchTimer = null;
+    $("g_q").addEventListener("input", function () {
+      picked = null; $("grant").disabled = true;
+      clearTimeout(searchTimer);
+      var q = $("g_q").value.trim();
+      if (q.length < 2) { $("g_results").innerHTML = ""; return; }
+      searchTimer = setTimeout(async function () {
+        var r = await api("/api/admin/members?q=" + encodeURIComponent(q));
+        var rows = ((r.data && r.data.members) || []).slice(0, 8);
+        if (!rows.length) { $("g_results").innerHTML = '<p class="note">No matches.</p>'; return; }
+        $("g_results").innerHTML = rows.map(function (c) {
+          return '<button class="btn ghost sm" data-pick="' + Number(c.id) + '" type="button" ' +
+                 'style="display:block;width:100%;text-align:left;margin:4px 0">' +
+                 esc(c.full_name || "(no name)") + " · " + esc(c.email || "no email") + "</button>";
+        }).join("");
+        Array.prototype.forEach.call($("g_results").querySelectorAll("[data-pick]"), function (b) {
+          b.onclick = function () {
+            picked = Number(b.getAttribute("data-pick"));
+            $("g_results").innerHTML = '<p class="note">Selected: ' + esc(b.textContent) + "</p>";
+            $("grant").disabled = false;
+          };
+        });
+      }, 220);
+    });
+
+    $("grant").onclick = async function () {
+      if (!picked) return;
+      var tierId = Number($("g_tier").value);
+      if (!tierId) { say($("gmsg"), "Pick a level.", "bad"); return; }
+      var btn = $("grant"), was = btn.textContent;
+      btn.disabled = true; btn.textContent = "Granting…";
+      var r = await api("/api/admin/grants", { method: "POST", body: JSON.stringify({
+        contact_id: picked, tier_id: tierId, source: $("g_source").value,
+        ends_at: $("g_ends").value || null, note: $("g_note").value || null,
+      }) });
+      btn.textContent = was;
+      if (!r.ok) { btn.disabled = false; say($("gmsg"), (r.data && r.data.error) || "Couldn't grant.", "bad"); return; }
+      say($("gmsg"), "Granted.", "good");
+      $("g_q").value = ""; $("g_results").innerHTML = ""; $("g_note").value = ""; $("g_ends").value = "";
+      picked = null;
+      await load();
+    };
+
+    load();
+  });
+  </script>
+</body>
+</html>

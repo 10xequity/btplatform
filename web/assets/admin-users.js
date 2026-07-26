@@ -36,8 +36,13 @@
     const rows = r.data.members || [];
     document.getElementById("memberCount").textContent = `${r.data.total} member${r.data.total === 1 ? "" : "s"} in ${esc(orgName(currentOrg))}`;
     if (!rows.length) { wrap.innerHTML = `<div class="empty">No members yet — every registration adds one automatically.</div>`; return; }
-    wrap.innerHTML = `<table class="tbl"><thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>From</th><th>Email opt-in</th><th></th></tr></thead><tbody>
+    // v0.26.0 (R-11) — selection column + bulk bar. Segments existed in Marketing but never
+    // reached this list, so tagging forty people meant forty modals.
+    wrap.innerHTML = `<table class="tbl"><thead><tr>
+        <th style="width:36px"><input type="checkbox" id="bulkAll" aria-label="Select all shown" /></th>
+        <th>Name</th><th>Email</th><th>Phone</th><th>From</th><th>Email opt-in</th><th></th></tr></thead><tbody>
       ${rows.map(m => `<tr>
+        <td><input type="checkbox" class="bulkChk" value="${Number(m.id)}" aria-label="Select ${esc(m.full_name || m.email || ("member " + m.id))}" /></td>
         <td>${esc(m.full_name || "—")}</td><td>${esc(m.email || "—")}</td><td>${esc(m.phone || "—")}</td>
         <td>${esc([m.city, m.state].filter(Boolean).join(", ") || "—")}</td>
         <td>${m.unsubscribed ? '<span class="chip cancelled">Unsubscribed</span>' : '<span class="chip paid">Subscribed</span>'}</td>
@@ -45,6 +50,139 @@
     </tbody></table>`;
     wrap.querySelectorAll("[data-edit]").forEach(b =>
       b.addEventListener("click", () => memberModal(rows.find(m => m.id == b.dataset.edit))));
+    wireBulk(wrap);
+  }
+
+  /* ---------- bulk actions (R-11) ---------- */
+
+  function selectedIds() {
+    return Array.from(document.querySelectorAll(".bulkChk:checked")).map(c => Number(c.value));
+  }
+
+  function wireBulk(wrap) {
+    const all = wrap.querySelector("#bulkAll");
+    if (all) all.addEventListener("change", () => {
+      wrap.querySelectorAll(".bulkChk").forEach(c => { c.checked = all.checked; });
+      paintBulkBar();
+    });
+    wrap.querySelectorAll(".bulkChk").forEach(c => c.addEventListener("change", () => {
+      if (all && !c.checked) all.checked = false;
+      paintBulkBar();
+    }));
+    paintBulkBar();
+  }
+
+  function bulkBar() {
+    let bar = document.getElementById("bulkBar");
+    if (bar) return bar;
+    bar = document.createElement("div");
+    bar.id = "bulkBar";
+    bar.setAttribute("role", "region");
+    bar.setAttribute("aria-label", "Bulk actions");
+    // Fixed footer rather than a floating toast: it must not cover a row the user is reading,
+    // and it has to survive scrolling a long list.
+    bar.style.cssText = "position:fixed;left:0;right:0;bottom:0;z-index:40;display:none;gap:10px;" +
+      "align-items:center;flex-wrap:wrap;padding:12px 16px;background:var(--surface);" +
+      "border-top:1px solid var(--border);box-shadow:0 -2px 12px rgba(0,0,0,.18)";
+    bar.innerHTML = `
+      <strong id="bulkCount" style="font-size:14px"></strong>
+      <span class="spacer" style="flex:1"></span>
+      <input id="bulkTag" type="text" placeholder="tag name" aria-label="Tag name"
+             style="min-height:40px;max-width:170px;padding:6px 10px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px" />
+      <button class="btn ghost" id="bulkAddTag" type="button">Add tag</button>
+      <button class="btn ghost" id="bulkRemoveTag" type="button">Remove tag</button>
+      <select id="bulkTier" aria-label="Membership level"
+              style="min-height:40px;padding:6px 10px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px"></select>
+      <button class="btn ghost" id="bulkGrant" type="button">Grant level</button>
+      <button class="btn ghost" id="bulkUnsub" type="button">Unsubscribe</button>
+      <button class="btn ghost" id="bulkExport" type="button">Export CSV</button>
+      <button class="btn ghost" id="bulkClear" type="button">Clear</button>
+      <span id="bulkMsg" style="font-size:13px;min-width:120px"></span>`;
+    document.body.appendChild(bar);
+
+    const run = async (payload, label) => {
+      const ids = selectedIds();
+      if (!ids.length) return;
+      const msg = document.getElementById("bulkMsg");
+      msg.style.color = "var(--text-dim)";
+      msg.textContent = label + "…";
+      const r = await api("/api/admin/members/bulk", {
+        method: "POST", body: JSON.stringify(Object.assign({ contact_ids: ids }, payload)),
+      });
+      if (!r.ok) {
+        msg.style.color = "var(--danger)";
+        msg.textContent = (r.data && r.data.error) || "Failed.";
+        return;
+      }
+      msg.style.color = "var(--positive)";
+      msg.textContent = (r.data.changed || ids.length) + " updated" + (r.data.skipped ? ", " + r.data.skipped + " skipped" : "") + ".";
+      await loadMembers();
+    };
+
+    bar.querySelector("#bulkAddTag").addEventListener("click", () => {
+      const tag = document.getElementById("bulkTag").value.trim();
+      if (!tag) { document.getElementById("bulkTag").focus(); return; }
+      run({ action: "add_tag", tag }, "Tagging");
+    });
+    bar.querySelector("#bulkRemoveTag").addEventListener("click", () => {
+      const tag = document.getElementById("bulkTag").value.trim();
+      if (!tag) { document.getElementById("bulkTag").focus(); return; }
+      run({ action: "remove_tag", tag }, "Removing tag");
+    });
+    bar.querySelector("#bulkGrant").addEventListener("click", () => {
+      const tier_id = Number(document.getElementById("bulkTier").value);
+      if (!tier_id) { document.getElementById("bulkMsg").textContent = "No levels configured yet."; return; }
+      const n = selectedIds().length;
+      if (!confirm("Grant this level to " + n + " member" + (n === 1 ? "" : "s") + "?")) return;
+      run({ action: "grant_tier", tier_id }, "Granting");
+    });
+    bar.querySelector("#bulkUnsub").addEventListener("click", () => {
+      const n = selectedIds().length;
+      if (!confirm("Unsubscribe " + n + " member" + (n === 1 ? "" : "s") + " from marketing email? They stop receiving campaigns immediately.")) return;
+      run({ action: "unsubscribe" }, "Unsubscribing");
+    });
+    bar.querySelector("#bulkExport").addEventListener("click", async () => {
+      const ids = selectedIds();
+      if (!ids.length) return;
+      const r = await api("/api/admin/members/bulk", {
+        method: "POST", body: JSON.stringify({ action: "export", contact_ids: ids }),
+      });
+      if (!r.ok) { document.getElementById("bulkMsg").textContent = "Export failed."; return; }
+      const blob = new Blob([typeof r.data === "string" ? r.data : ""], { type: "text/csv" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "boomtown-members-" + new Date().toISOString().slice(0, 10) + ".csv";
+      a.click();
+      URL.revokeObjectURL(a.href);
+      document.getElementById("bulkMsg").textContent = ids.length + " exported.";
+    });
+    bar.querySelector("#bulkClear").addEventListener("click", () => {
+      document.querySelectorAll(".bulkChk, #bulkAll").forEach(c => { c.checked = false; });
+      paintBulkBar();
+    });
+    loadBulkTiers();
+    return bar;
+  }
+
+  async function loadBulkTiers() {
+    const sel = document.getElementById("bulkTier");
+    if (!sel) return;
+    const r = await api("/api/admin/tiers");
+    const tiers = (r.ok && r.data && r.data.tiers ? r.data.tiers : []).filter(t => t.active);
+    sel.innerHTML = tiers.length
+      ? tiers.map(t => `<option value="${Number(t.id)}">${esc(t.name)}</option>`).join("")
+      : `<option value="">No levels</option>`;
+  }
+
+  function paintBulkBar() {
+    const bar = bulkBar();
+    const n = selectedIds().length;
+    bar.style.display = n ? "flex" : "none";
+    document.body.style.paddingBottom = n ? "84px" : "";
+    if (n) {
+      document.getElementById("bulkCount").textContent = n + " selected";
+      document.getElementById("bulkMsg").textContent = "";
+    }
   }
 
   function memberModal(m) {

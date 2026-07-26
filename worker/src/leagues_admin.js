@@ -214,7 +214,7 @@ async function generateWeek(request, env, ctx, id) {
     "SELECT COALESCE(MAX(round),0) AS r FROM matches WHERE event_id=?1 AND deleted_at IS NULL"
   ).bind(id).first();
   const round = (maxRound.r || 0) + 1;
-  const cfg = JSON.parse(ev.config_json || "{}");
+  let cfg = {}; try { cfg = JSON.parse(ev.config_json || "{}") || {}; } catch { cfg = {}; }
   const pointsTo = Number(b.pointsTo) || cfg.pointsTo || 21;
   const cap = Number(b.cap) || cfg.cap || pointsTo + 2;
   const courts = Math.max(1, Number(b.courts) || ev.court_count || 4);

@@ -55,7 +55,7 @@ async function sales(env, ctx) {
      FROM events e
      LEFT JOIN programs p ON p.id = e.program_id
      LEFT JOIN (SELECT r.event_id, SUM(pm.amount_cents) AS card_cents
-                FROM payments pm JOIN registrations r ON r.id = pm.registration_id
+                FROM payments pm JOIN registrations r ON r.id = pm.registration_id AND r.deleted_at IS NULL
                 WHERE pm.status='COMPLETED' AND pm.deleted_at IS NULL GROUP BY r.event_id) sq ON sq.event_id = e.id
      LEFT JOIN (SELECT event_id, COUNT(*) AS n FROM registrations
                 WHERE status='paid' AND payment_method='cash' AND deleted_at IS NULL GROUP BY event_id) cash ON cash.event_id = e.id
@@ -94,7 +94,7 @@ async function dashboard(env, ctx) {
   const month = new Date().toISOString().slice(0, 7);
   const card = await env.DB.prepare(
     `SELECT COALESCE(SUM(pm.amount_cents),0) AS c FROM payments pm
-     JOIN registrations r ON r.id = pm.registration_id
+     JOIN registrations r ON r.id = pm.registration_id AND r.deleted_at IS NULL
      WHERE r.org_id=?1 AND pm.status='COMPLETED' AND pm.deleted_at IS NULL
        AND substr(pm.created_at,1,7)=?2`
   ).bind(org, month).first();

@@ -49,6 +49,7 @@
  */
 
 import { pinFor } from "./waivers.js"; // v1.3 — one-way import, no cycle
+import { orgTimezone, icsVtimezone } from "./calendar.js"; // v0.26.0 — one zone source, no cycle
 
 let H = null; // wired: { json, audit, isStaff, requireStaff, sendLoginLink }
 export function wireProfiles(helpers) { H = helpers; }
@@ -568,10 +569,14 @@ async function eventIcs(env, url) {
   const eventId = Number(url.searchParams.get("event_id"));
   if (!eventId) return new Response("Not found", { status: 404 });
   const e = await env.DB.prepare(
-    "SELECT id, name, starts_at, ends_at, location, status FROM events WHERE id=?1 AND deleted_at IS NULL AND status IN ('published','in_progress')"
+    "SELECT id, org_id, name, starts_at, ends_at, location, status FROM events WHERE id=?1 AND deleted_at IS NULL AND status IN ('published','in_progress')"
   ).bind(eventId).first();
   if (!e || !e.starts_at) return new Response("Not found", { status: 404 });
 
+  // v0.26.0 — the zone comes from the org, not a literal. This module already emitted the
+  // correct TZID form (events are stored as naive wall-clock); calendar.js was the one wrongly
+  // stamping them as UTC. Both now read the same source.
+  const tzid = await orgTimezone(env, e.org_id || 1);
   const dt = (s) => s.replace(/[-:]/g, "").replace(/\.\d+/, "").slice(0, 15);
   const start = dt(e.starts_at);
   const end = e.ends_at ? dt(e.ends_at) : dt(new Date(new Date(e.starts_at).getTime() + 2 * 3600_000).toISOString().slice(0, 19));
@@ -580,17 +585,12 @@ async function eventIcs(env, url) {
   const ics = [
     "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Boomtown Athletics//btplatform//EN",
     "CALSCALE:GREGORIAN", "METHOD:PUBLISH",
-    "BEGIN:VTIMEZONE", "TZID:America/Denver",
-    "BEGIN:DAYLIGHT", "TZOFFSETFROM:-0700", "TZOFFSETTO:-0600", "TZNAME:MDT",
-    "DTSTART:19700308T020000", "RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=2SU", "END:DAYLIGHT",
-    "BEGIN:STANDARD", "TZOFFSETFROM:-0600", "TZOFFSETTO:-0700", "TZNAME:MST",
-    "DTSTART:19701101T020000", "RRULE:FREQ=YEARLY;BYMONTH=11;BYDAY=1SU", "END:STANDARD",
-    "END:VTIMEZONE",
+    ...icsVtimezone(tzid),
     "BEGIN:VEVENT",
     `UID:event-${e.id}@boomtownvb.com`,
     `DTSTAMP:${new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d+/, "")}`,
-    `DTSTART;TZID=America/Denver:${start}`,
-    `DTEND;TZID=America/Denver:${end}`,
+    `DTSTART;TZID=${tzid}:${start}`,
+    `DTEND;TZID=${tzid}:${end}`,
     `SUMMARY:${esc(e.name)}`,
     e.location ? `LOCATION:${esc(e.location)}` : null,
     "END:VEVENT", "END:VCALENDAR",

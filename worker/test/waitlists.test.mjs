@@ -22,9 +22,12 @@ test("string capacity from the DB row still works", () => {
 });
 
 /* ---------- offerExpired ---------- */
-test("no expiry never expires; garbage dates fail open (not expired)", () => {
+test("no expiry never expires; an unparseable expiry FAILS CLOSED", () => {
   assert.equal(offerExpired("2026-07-25T12:00:00Z", null), false);
-  assert.equal(offerExpired("2026-07-25T12:00:00Z", "not-a-date"), false);
+  // Was false. A corrupt expires_at meant the claim link never expired — same fail-open
+  // class as the capability-token defect in handoff 2.8 section 2a.
+  assert.equal(offerExpired("2026-07-25T12:00:00Z", "not-a-date"), true);
+  assert.equal(offerExpired("2026-07-25T12:00:00Z", ""), false);
 });
 test("expiry boundary — expired only strictly after", () => {
   assert.equal(offerExpired("2026-07-25T12:00:00Z", "2026-07-25 12:00:00"), false);

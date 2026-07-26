@@ -94,6 +94,83 @@ export function toIcsUtc(v) {
   return new Date(t).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
 }
 
+/**
+ * The events table stores naive local wall-clock ("2026-08-01 16:00:00" = 4pm in Aurora).
+ * The admin UI builds it as `<input type=date> + " " + <input type=time>` and the worker
+ * stores that string untouched, so there is no timezone in it to honour. Emitting it with a
+ * trailing Z claims it is UTC and shifts every event 6-7 hours early in the subscriber's
+ * calendar. Format it floating and bind it to a VTIMEZONE instead. DTSTAMP stays UTC because
+ * that one really is an instant.
+ */
+export const DEFAULT_TZID = "America/Denver"; // Aurora, Colorado — the operating facility
+
+/** Read an org's IANA zone, falling back to the default. Never throws on a missing column. */
+export async function orgTimezone(env, orgId) {
+  try {
+    const r = await env.DB.prepare("SELECT timezone FROM orgs WHERE id=?1").bind(orgId).first();
+    return (r && r.timezone) || DEFAULT_TZID;
+  } catch { return DEFAULT_TZID; }
+}
+
+export function toIcsLocal(v) {
+  if (!v) return null;
+  const m = String(v).trim()
+    .match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?/);
+  if (!m) return null;
+  return `${m[1]}${m[2]}${m[3]}T${m[4]}${m[5]}${m[6] || "00"}`;
+}
+
+/**
+ * US DST rules per zone. Only the zones the facility plausibly operates in are enumerated —
+ * shipping a full tzdata table into a Worker to support four zones is not a trade worth making.
+ * An unlisted zone still works: it falls back to the Denver block and X-WR-TIMEZONE carries the
+ * real name, which every major client honours. Extend the table, don't special-case callers.
+ */
+const TZ_RULES = {
+  "America/Denver":      { std: "-0700", dst: "-0600", stdName: "MST", dstName: "MDT" },
+  "America/Phoenix":     { std: "-0700", dst: "-0700", stdName: "MST", dstName: "MST" }, // no DST
+  "America/Los_Angeles": { std: "-0800", dst: "-0700", stdName: "PST", dstName: "PDT" },
+  "America/Chicago":     { std: "-0600", dst: "-0500", stdName: "CST", dstName: "CDT" },
+  "America/New_York":    { std: "-0500", dst: "-0400", stdName: "EST", dstName: "EDT" },
+};
+
+export const SUPPORTED_TZIDS = Object.keys(TZ_RULES);
+
+/** VTIMEZONE block for a zone. TZID references do not resolve in strict clients without one. */
+export function icsVtimezone(tzid = DEFAULT_TZID) {
+  const r = TZ_RULES[tzid] || TZ_RULES[DEFAULT_TZID];
+  const zone = TZ_RULES[tzid] ? tzid : DEFAULT_TZID;
+  if (r.std === r.dst) {
+    // A zone with no DST needs one STANDARD component and no recurrence switching.
+    return [
+      "BEGIN:VTIMEZONE", `TZID:${zone}`,
+      "BEGIN:STANDARD", `TZOFFSETFROM:${r.std}`, `TZOFFSETTO:${r.std}`, `TZNAME:${r.stdName}`,
+      "DTSTART:19700101T000000", "END:STANDARD",
+      "END:VTIMEZONE",
+    ];
+  }
+  return [
+    "BEGIN:VTIMEZONE", `TZID:${zone}`,
+    "BEGIN:DAYLIGHT", `TZOFFSETFROM:${r.std}`, `TZOFFSETTO:${r.dst}`, `TZNAME:${r.dstName}`,
+    "DTSTART:19700308T020000", "RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=2SU", "END:DAYLIGHT",
+    "BEGIN:STANDARD", `TZOFFSETFROM:${r.dst}`, `TZOFFSETTO:${r.std}`, `TZNAME:${r.stdName}`,
+    "DTSTART:19701101T020000", "RRULE:FREQ=YEARLY;BYMONTH=11;BYDAY=1SU", "END:STANDARD",
+    "END:VTIMEZONE",
+  ];
+}
+
+/** Add hours to a wall-clock string without ever leaving wall-clock. */
+export function addWallHours(v, hours) {
+  const iso = toIcsLocal(v);
+  if (!iso) return null;
+  const d = new Date(Date.UTC(
+    +iso.slice(0, 4), +iso.slice(4, 6) - 1, +iso.slice(6, 8),
+    +iso.slice(9, 11), +iso.slice(11, 13), +iso.slice(13, 15)
+  ));
+  d.setUTCHours(d.getUTCHours() + hours);
+  return d.toISOString().slice(0, 19).replace(/[-:]/g, "");
+}
+
 /** Stable UID. Must not change between polls or clients duplicate the event. */
 export function icsUid(eventId, host) {
   return `bt-event-${eventId}@${host || "boomtown"}`;
@@ -108,6 +185,7 @@ export function buildIcs(events, opts = {}) {
   const host = opts.host || "boomtown";
   const appUrl = opts.appUrl || "";
   const stamp = toIcsUtc(opts.now || new Date().toISOString());
+  const tzid = opts.tzid || DEFAULT_TZID;
 
   const lines = [
     "BEGIN:VCALENDAR",
@@ -116,24 +194,25 @@ export function buildIcs(events, opts = {}) {
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
     `X-WR-CALNAME:${escapeIcsText(name)}`,
-    "X-WR-TIMEZONE:America/Denver",
+    `X-WR-TIMEZONE:${tzid}`,
     `X-PUBLISHED-TTL:PT${Math.round(FEED_MAX_AGE / 60)}M`,
     `REFRESH-INTERVAL;VALUE=DURATION:PT${Math.round(FEED_MAX_AGE / 60)}M`,
+    ...icsVtimezone(tzid),
   ];
 
   for (const e of events) {
-    const dtStart = toIcsUtc(e.starts_at);
+    const dtStart = toIcsLocal(e.starts_at);
     if (!dtStart) continue;                    // an event with no usable start is not an event
     // No end time → assume 2h so the block is visible rather than a zero-width sliver.
-    const dtEnd = toIcsUtc(e.ends_at)
-      || toIcsUtc(new Date(Date.parse(String(e.starts_at).replace(" ", "T") + "Z") + 2 * 3600e3).toISOString());
+    const dtEnd = toIcsLocal(e.ends_at) || addWallHours(e.starts_at, 2);
     const cancelled = !!e.deleted_at || e.status === "cancelled";
 
     lines.push("BEGIN:VEVENT");
     lines.push(`UID:${icsUid(e.id, host)}`);
     lines.push(`DTSTAMP:${stamp}`);
-    lines.push(`DTSTART:${dtStart}`);
-    if (dtEnd) lines.push(`DTEND:${dtEnd}`);
+    // TZID form, not Z — see the toIcsLocal comment. These are wall-clock, not instants.
+    lines.push(`DTSTART;TZID=${tzid}:${dtStart}`);
+    if (dtEnd) lines.push(`DTEND;TZID=${tzid}:${dtEnd}`);
     lines.push(`SUMMARY:${escapeIcsText((cancelled ? "CANCELLED — " : "") + (e.name || "Boomtown event"))}`);
     if (e.location) lines.push(`LOCATION:${escapeIcsText(e.location)}`);
     const bits = [];
@@ -320,6 +399,7 @@ export async function icsFeed(env, url, request) {
       calName: tok.kind === "calendar_public" ? "Boomtown Athletics — Events" : "Boomtown Athletics — My Schedule",
       host: url.hostname,
       appUrl: env.APP_URL || "",
+      tzid: await orgTimezone(env, tok.org_id),
     });
     return icsResponse(body, etag);
   } catch (e) {

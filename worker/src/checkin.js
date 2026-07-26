@@ -297,9 +297,9 @@ async function myAttendance(env, ctx) {
      FROM attendance a
      JOIN contacts c ON c.id = a.contact_id AND c.deleted_at IS NULL
      JOIN events e ON e.id = a.event_id AND e.deleted_at IS NULL
-     WHERE c.email = ?1 AND a.deleted_at IS NULL
+     WHERE c.email = ?1 AND a.org_id = ?2 AND a.deleted_at IS NULL
      ORDER BY a.checked_in_at DESC LIMIT 50`
-  ).bind(u.email.toLowerCase()).all()).results;
+  ).bind(u.email.toLowerCase(), ctx.orgId).all()).results;
   return json({ attendance: rows, total: rows.length });
 }
 

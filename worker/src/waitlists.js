@@ -44,7 +44,10 @@ export function computeIsFull(capacity, activeCount) {
 export function offerExpired(nowIso, expiresIso) {
   if (!expiresIso) return false;
   const now = Date.parse(nowIso), exp = Date.parse(expiresIso);
-  if (!Number.isFinite(now) || !Number.isFinite(exp)) return false;
+  // Fail closed. A corrupt expires_at previously read as "no expiry", so a claim link stayed
+  // live forever — same bug class as the token defect in handoff 2.8 §2a.
+  if (!Number.isFinite(exp)) return true;
+  if (!Number.isFinite(now)) return false;
   return now > exp;
 }
 

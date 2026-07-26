@@ -59,7 +59,7 @@ async function myAgreements(env, ctx) {
     `SELECT s.id, s.document_type, s.document_ref, s.version_id, s.signed_name, s.signed_at, s.on_behalf,
             sub.full_name AS subject_name
      FROM signatures s
-     JOIN contacts sub ON sub.id = s.subject_contact_id
+     JOIN contacts sub ON sub.id = s.subject_contact_id AND sub.deleted_at IS NULL
      WHERE s.org_id=?1 AND s.deleted_at IS NULL
        AND (s.subject_contact_id IN (${qs}) OR s.signer_contact_id IN (${qs}))
      ORDER BY s.signed_at DESC LIMIT 200`
@@ -69,7 +69,7 @@ async function myAgreements(env, ctx) {
   const waivers = (await env.DB.prepare(
     `SELECT w.id, w.contact_id, w.waiver_text_version, w.version_id, w.signed_at, w.expires_at, w.signature_name,
             c.full_name AS subject_name
-     FROM waivers w JOIN contacts c ON c.id = w.contact_id
+     FROM waivers w JOIN contacts c ON c.id = w.contact_id AND c.deleted_at IS NULL
      WHERE w.org_id=?1 AND w.deleted_at IS NULL AND w.contact_id IN (${qs})
      ORDER BY w.signed_at DESC LIMIT 200`
   ).bind(ctx.orgId, ...ids).all()).results;

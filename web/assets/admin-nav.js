@@ -1,5 +1,7 @@
 /* Boomtown Platform — Admin sidebar (shared)
-   Version: v2.11 · Date: 2026-07-26 · Ships in: v0.24.0
+   Version: v2.12 · Date: 2026-07-26 · Ships in: v0.25.0
+   v2.12: Media consent (admin-consent.html) added under People (v0.25.0) — where a
+   written media-release opt-out gets recorded. No self-serve equivalent, by design.
    v2.11: Build-status indicators (v0.24.0) — loads assets/build-status.js, which stamps a
    small BETA / WIP chip on any rail item whose module is not finished and puts a one-line
    banner at the top of that page. Adds "Build status" to the Sandbox group. The registry
@@ -127,7 +129,8 @@
     { label: "Money", key: "money", items: [
       { href: "admin-reports.html",       ico: "sales",  text: "Sales & Reports" },
       { href: "admin-pos.html",           ico: "sales",  text: "Point of Sale" },
-      { href: "admin-plans.html",         ico: "sales",  text: "Memberships" },
+      { href: "admin-plans.html",         ico: "sales",  text: "Membership Plans" },
+      { href: "admin-tiers.html",          ico: "roles",  text: "Membership Levels" },
     ]},
     { label: "Marketing", key: "mkt", items: [
       { href: "admin-marketing.html",     ico: "sales",  text: "Marketing & Email" },
@@ -138,6 +141,7 @@
       { href: "admin-users.html#roles",   ico: "roles",   text: "Admins & Roles" },
       { href: "admin-security.html",      ico: "roles",   text: "Security & Recovery" },
       { href: "admin-waivers.html",       ico: "members", text: "Waivers" },
+      { href: "admin-consent.html",       ico: "roles",   text: "Media consent" },
       { href: "settings.html",            ico: "gear",    text: "Settings" },
     ]},
     { label: "Member site", key: "site", items: [
@@ -145,6 +149,7 @@
       { href: "schedule.html",            ico: "sched", text: "Schedule Page" },
       { href: "leagues.html",             ico: "league", text: "Leagues Page" },
       { href: "admin-events.html#views",  ico: "embed", text: "Views & Embed" },
+      { href: "admin-calendar.html",       ico: "sched", text: "Calendar Feeds" },
     ]},
   ];
 
@@ -264,6 +269,16 @@
     if (orgId) headers["X-Org-Id"] = orgId;
     try {
       const resp = await fetch(API + path, Object.assign({}, opts, { headers, credentials: "include" }));
+      // v0.26.0 — a 401 means the session is gone (30-day expiry, or revoked). Previously this
+      // fell through as a generic error and buttons appeared to do nothing. Clear the dead
+      // credential and send the user somewhere that can fix it.
+      if (resp.status === 401 && !path.startsWith("/api/auth/")) {
+        try { sessionStorage.removeItem("bt_token"); localStorage.removeItem("bt_token"); } catch (e) {}
+        if (!/[?&]expired=1/.test(location.search)) {
+          location.href = "index.html?expired=1&from=" + encodeURIComponent(location.pathname.split("/").pop() || "");
+        }
+        return { ok: false, status: 401, data: { error: "Your session expired. Sign in again." } };
+      }
       const isCsv = (resp.headers.get("content-type") || "").includes("text/csv");
       return { ok: resp.ok, status: resp.status,
                data: isCsv ? await resp.text() : await resp.json().catch(() => ({})) };
@@ -380,7 +395,7 @@
       if (window.BT_STATUS || document.getElementById("bt-status-js")) return;
       var s = document.createElement("script");
       s.id = "bt-status-js";
-      s.src = "assets/build-status.js?v=0.24.0";
+      s.src = "assets/build-status.js?v=0.25.0";
       s.async = false;
       document.head.appendChild(s);
     } catch (e) { /* indicators are never load-blocking */ }

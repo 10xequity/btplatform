@@ -131,7 +131,7 @@ async function generateSchedule(request, env, ctx, eventId) {
   const deny = await requireStaff(env, ctx, ev.org_id);
   if (deny) return deny;
   const b = await request.json().catch(() => ({}));
-  const cfg = JSON.parse(ev.config_json || "{}");
+  let cfg = {}; try { cfg = JSON.parse(ev.config_json || "{}") || {}; } catch { cfg = {}; }
   const teams = (await env.DB.prepare("SELECT id FROM teams WHERE event_id=?1 AND deleted_at IS NULL ORDER BY id").bind(eventId).all()).results;
   const n = teams.length;
   const params = {

@@ -137,7 +137,7 @@ async function createBooking(request, env, ctx) {
   const b = await body(request);
   const v = validateSlot(b); if (v) return json({ error: v }, 400);
   if (!b.title || !String(b.title).trim()) return json({ error: "Give the booking a title." }, 400);
-  const org_id = Number(b.org_id) || 1;
+  const org_id = ctx.orgId; // never trust a client-supplied org_id (D-SEC-1)
   const space_ids = await resolveSpaces(env, b);
   if (!space_ids.length) return json({ error: "Pick at least one court or room (or a preset)." }, 400);
 
@@ -201,13 +201,15 @@ async function createBooking(request, env, ctx) {
 
 async function updateBooking(request, env, ctx, id) {
   const b = await body(request);
-  const row = await env.DB.prepare("SELECT * FROM space_bookings WHERE id=?1 AND deleted_at IS NULL").bind(id).first();
+  const row = await env.DB.prepare(
+    "SELECT * FROM space_bookings WHERE id=?1 AND org_id=?2 AND deleted_at IS NULL"
+  ).bind(id, ctx.orgId).first();
   if (!row) return json({ error: "Booking not found." }, 404);
 
   const scope = b.scope === "series" && row.series_id ? "series" : "one";
   const targets = scope === "one" ? [row] : (await env.DB.prepare(
-    "SELECT * FROM space_bookings WHERE series_id=?1 AND date>=?2 AND deleted_at IS NULL ORDER BY date"
-  ).bind(row.series_id, row.date).all()).results;
+    "SELECT * FROM space_bookings WHERE series_id=?1 AND org_id=?3 AND date>=?2 AND deleted_at IS NULL ORDER BY date"
+  ).bind(row.series_id, row.date, ctx.orgId).all()).results;
 
   // Merge changes over existing values (date changes apply to 'one' scope only).
   const start_min = b.start != null || b.start_min != null ? slot(b, row).start_min : row.start_min;
@@ -242,7 +244,7 @@ async function updateBooking(request, env, ctx, id) {
         poc_name=?12, poc_email=?13, poc_phone=?14, est_attendees=?15, notes=?16, updated_at=datetime('now')
        WHERE id=?17`
     ).bind(
-      b.org_id != null ? Number(b.org_id) : t.org_id,
+      t.org_id, // org is immutable on update; a booking cannot be moved between tenants
       b.title != null ? String(b.title).trim() : t.title,
       newDate || t.date, start_min, end_min,
       b.preset_id !== undefined ? (b.preset_id ? Number(b.preset_id) : null) : t.preset_id,
@@ -269,16 +271,18 @@ async function updateBooking(request, env, ctx, id) {
 }
 
 async function deleteBooking(env, ctx, id, scope) {
-  const row = await env.DB.prepare("SELECT * FROM space_bookings WHERE id=?1 AND deleted_at IS NULL").bind(id).first();
+  const row = await env.DB.prepare(
+    "SELECT * FROM space_bookings WHERE id=?1 AND org_id=?2 AND deleted_at IS NULL"
+  ).bind(id, ctx.orgId).first();
   if (!row) return json({ error: "Booking not found." }, 404);
   let n = 1;
   if (scope === "series" && row.series_id) {
     const res = await env.DB.prepare(
-      "UPDATE space_bookings SET deleted_at=datetime('now') WHERE series_id=?1 AND date>=?2 AND deleted_at IS NULL"
-    ).bind(row.series_id, row.date).run();
+      "UPDATE space_bookings SET deleted_at=datetime('now') WHERE series_id=?1 AND org_id=?3 AND date>=?2 AND deleted_at IS NULL"
+    ).bind(row.series_id, row.date, ctx.orgId).run();
     n = res.meta.changes;
   } else {
-    await env.DB.prepare("UPDATE space_bookings SET deleted_at=datetime('now') WHERE id=?1").bind(id).run();
+    await env.DB.prepare("UPDATE space_bookings SET deleted_at=datetime('now') WHERE id=?1 AND org_id=?2").bind(id, ctx.orgId).run();
   }
   await audit(env, ctx, "facility.delete", "space_bookings", id, { scope, rows: n });
   return json({ ok: true, deleted: n, scope });
@@ -394,9 +398,12 @@ function validateSlot(b) {
 }
 
 /** Normalizes {start:"18:00"|start_min} → minutes. */
+// Number("abc") is NaN, and NaN != null is true, so a non-numeric start_min sailed through
+// validateSlot (every NaN comparison is false) and got bound into a D1 query. num() is the
+// module's existing hoisted guard and returns null instead.
 function slot(b, fallback = {}) {
-  const start_min = b.start_min != null ? Number(b.start_min) : (b.start != null ? parseTime(b.start) : fallback.start_min);
-  const end_min = b.end_min != null ? Number(b.end_min) : (b.end != null ? parseTime(b.end) : fallback.end_min);
+  const start_min = b.start_min != null ? num(b.start_min) : (b.start != null ? parseTime(b.start) : fallback.start_min);
+  const end_min = b.end_min != null ? num(b.end_min) : (b.end != null ? parseTime(b.end) : fallback.end_min);
   return { date: b.date, start_min, end_min, is_closure: b.is_closure ? 1 : 0, share_ok: b.share_ok ? 1 : 0 };
 }
 

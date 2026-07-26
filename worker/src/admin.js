@@ -72,12 +72,21 @@ async function listUsers(env, ctx) {
   const gate = await requireAdmin(env, ctx);
   if (gate) return gate;
   const myOrgs = await adminOrgIds(env, ctx);
+  // Tenant isolation: an admin of one org must not enumerate the whole platform.
+  // Scope both the user set and the role set to orgs this caller actually administers.
+  if (!myOrgs.length) return json({ users: [], admin_org_ids: [] });
+  const ph = myOrgs.map((_, i) => `?${i + 1}`).join(",");
   const users = (await env.DB.prepare(
-    "SELECT id, email, display_name, totp_enabled, created_at FROM users WHERE deleted_at IS NULL ORDER BY id"
-  ).all()).results;
+    `SELECT DISTINCT u.id, u.email, u.display_name, u.totp_enabled, u.created_at
+       FROM users u
+       JOIN user_org_roles r ON r.user_id = u.id AND r.deleted_at IS NULL
+      WHERE r.org_id IN (${ph}) AND u.deleted_at IS NULL
+      ORDER BY u.id`
+  ).bind(...myOrgs).all()).results;
   const roles = (await env.DB.prepare(
-    "SELECT user_id, org_id, role FROM user_org_roles WHERE deleted_at IS NULL"
-  ).all()).results;
+    `SELECT user_id, org_id, role FROM user_org_roles
+      WHERE org_id IN (${ph}) AND deleted_at IS NULL`
+  ).bind(...myOrgs).all()).results;
   for (const u of users) {
     u.roles = roles.filter(r => r.user_id === u.id)
       .map(r => ({ org_id: r.org_id, role: r.role, editable: myOrgs.includes(r.org_id) }));
