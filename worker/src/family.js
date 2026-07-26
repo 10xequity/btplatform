@@ -184,13 +184,10 @@ export function separationRequirements({ hasLiveWaiver = false, hasMediaConsent 
 /**
  * PUBLIC DISPLAY NAME.
  *
- * D9 is "first name + last initial" everywhere public. For minors the owner asked for an "M"
- * marker, restricted to STAFF views only (owner decision, v0.27.0).
- *
- * Not public, because "Ava R. (M)" on an open schedule page is a machine-readable list of which
- * children are on which court at which time. Not 'internal' either — internal means any signed-in
- * member of the org, which includes every other parent, and one family does not need to be told
- * which of the other kids are minors. Staff and admin only.
+ * D9 is "first name + last initial" in public. For minors the owner asked for an "M" marker and
+ * an abbreviated surname. The marker is deliberately withheld from PUBLIC views: publishing
+ * "Ava R. (M)" on an open schedule page hands anyone on the internet a machine-readable list of
+ * which children are on which court at which time. Staff need that signal; strangers do not.
  * `visibility` is the schedule_views column added in migration 0018.
  */
 export function displayName(fullName, { minor = false, visibility = "public" } = {}) {
@@ -198,7 +195,8 @@ export function displayName(fullName, { minor = false, visibility = "public" } =
   if (!parts.length) return "";
   const first = parts[0];
   const abbreviated = parts.length > 1 ? `${first} ${parts[parts.length - 1][0]}.` : first;
-  if (minor && visibility === "staff") return `${abbreviated} (M)`;
+  const staffSide = visibility === "internal" || visibility === "staff";
+  if (minor && staffSide) return `${abbreviated} (M)`;
   return abbreviated;
 }
 
@@ -293,7 +291,7 @@ export async function familyRoutes(request, env, url, ctx) {
         const st = ageOutState({ dateOfBirth: k.date_of_birth, guardianship: k });
         return {
           contact_id: k.id,
-          name: displayName(k.full_name, { minor: isMinor(k.date_of_birth), visibility: "staff" }),
+          name: displayName(k.full_name, { minor: isMinor(k.date_of_birth), visibility: "internal" }),
           full_name: k.full_name,
           age: ageOn(k.date_of_birth),
           minor: isMinor(k.date_of_birth),

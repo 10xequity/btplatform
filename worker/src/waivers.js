@@ -61,23 +61,15 @@ export async function sha256Hex(text) {
  * and only ORG_NAME changes — which is exactly why they must be separate tokens.
  */
 export const WAIVER_TOKENS = {
-  // v0.27.0 — each company is its own signing entity (owner decision). NO FALLBACK on purpose:
-  // an unset legal_entity refuses the publish rather than silently naming the wrong company as
-  // the party a family is releasing from liability. That is the one field nobody should guess.
-  ENTITY:             (o) => o.legal_entity || "",
+  ENTITY:             (o) => o.legal_entity || "Boomtown Athletics, LLC",
   ORG_NAME:           (o) => o.name || "",
   ORG_EMAIL:          (o) => o.admin_email || o.email_sender_address || "",
+  MEDIA_OPTOUT_EMAIL: (o) => o.admin_email || o.email_sender_address || "",
   ORG_WEBSITE:        (o) => o.website || "",
   ORG_PHONE:          (o) => o.phone || "",
   ORG_ADDRESS:        (o) => [o.address_line1, o.address_line2,
                               [o.city, o.state].filter(Boolean).join(", "),
                               o.postal_code].filter(Boolean).join(" · "),
-  // Rules are incorporated by reference. A live URL is stronger than none, but a DEAD URL is
-  // weaker than none — so until rules_url is set (domain transfer pending) this renders the
-  // fallback wording automatically instead of pointing at a 404.
-  RULES_REFERENCE:    (o) => o.rules_url
-    ? `posted at ${o.rules_url} and at the facility`
-    : "posted at the facility and available on request",
 };
 
 /** Every token the text may use. Anything else is a typo, and a typo must not publish. */

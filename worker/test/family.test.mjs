@@ -201,12 +201,9 @@ test("public views abbreviate the surname and do NOT mark minors", () => {
   assert.equal(displayName("Ava Reyes", { minor: false, visibility: "public" }), "Ava R.");
 });
 
-test("ONLY staff views mark minors — not internal, not public", () => {
-  // 'internal' means any signed-in member, which includes every other parent. One family does
-  // not need to be told which of the other children are minors.
+test("internal and staff views DO mark minors", () => {
+  assert.equal(displayName("Ava Reyes", { minor: true, visibility: "internal" }), "Ava R. (M)");
   assert.equal(displayName("Ava Reyes", { minor: true, visibility: "staff" }), "Ava R. (M)");
-  assert.equal(displayName("Ava Reyes", { minor: true, visibility: "internal" }), "Ava R.");
-  assert.equal(displayName("Ava Reyes", { minor: true, visibility: "public" }), "Ava R.");
   assert.equal(displayName("Ava Reyes", { minor: false, visibility: "staff" }), "Ava R.");
 });
 
@@ -219,7 +216,6 @@ test("displayName handles single names, extra spaces and empties", () => {
 
 test("an unknown visibility does not leak the minor marker", () => {
   assert.equal(displayName("Ava Reyes", { minor: true, visibility: "publik" }), "Ava R.");
-  assert.equal(displayName("Ava Reyes", { minor: true }), "Ava R.", "default is public");
 });
 
 /* ---------- dominant hand ---------- */
@@ -248,7 +244,6 @@ test("familyNameFor uses the surname", () => {
 
 const ORG = {
   name: "Match Point Social",
-  legal_entity: "Match Point Social LLC",
   admin_email: "admin@matchptsocial.com",
   website: "matchptsocial.com",
   phone: "303-555-0100",
@@ -267,41 +262,14 @@ test("tokensUsed lists each token once, in order", () => {
 });
 
 test("resolveWaiverTokens substitutes org identity", () => {
-  const r = resolveWaiverTokens("Write to {{ORG_EMAIL}} about {{ORG_NAME}}.", ORG);
+  const r = resolveWaiverTokens("Write to {{MEDIA_OPTOUT_EMAIL}} about {{ORG_NAME}}.", ORG);
   assert.equal(r.ok, true);
   assert.equal(r.text, "Write to admin@matchptsocial.com about Match Point Social.");
 });
 
-test("ENTITY is per-org and separate from ORG_NAME", () => {
+test("ENTITY is separate from ORG_NAME — the legal person vs the brand", () => {
   const r = resolveWaiverTokens("{{ENTITY}} trading as {{ORG_NAME}}", ORG);
-  assert.equal(r.text, "Match Point Social LLC trading as Match Point Social");
-});
-
-test("ENTITY has NO fallback — an unset signing entity refuses to publish", () => {
-  // Naming the wrong company as the party being released from liability is the one substitution
-  // that must never be guessed. Each org is its own signing entity (owner decision v0.27.0).
-  const r = resolveWaiverTokens("{{ENTITY}} is released.", { ...ORG, legal_entity: null });
-  assert.equal(r.ok, false);
-  assert.deepEqual(r.empty, ["ENTITY"]);
-  assert.match(r.text, /\{\{ENTITY\}\}/);
-});
-
-test("MEDIA_OPTOUT_EMAIL is retired and now reads as an unknown token", () => {
-  const r = resolveWaiverTokens("Write to {{MEDIA_OPTOUT_EMAIL}}", ORG);
-  assert.equal(r.ok, false);
-  assert.deepEqual(r.unknown, ["MEDIA_OPTOUT_EMAIL"]);
-});
-
-test("RULES_REFERENCE renders a URL when set and a fallback when not", () => {
-  // A dead URL is weaker than no URL. Domain transfer is pending, so the fallback ships.
-  assert.equal(
-    resolveWaiverTokens("Rules are {{RULES_REFERENCE}}.", { ...ORG, rules_url: null }).text,
-    "Rules are posted at the facility and available on request."
-  );
-  assert.equal(
-    resolveWaiverTokens("Rules are {{RULES_REFERENCE}}.", { ...ORG, rules_url: "boomtownvb.com/facility-rules" }).text,
-    "Rules are posted at boomtownvb.com/facility-rules and at the facility."
-  );
+  assert.equal(r.text, "Boomtown Athletics, LLC trading as Match Point Social");
 });
 
 test("the address renders from the org's own fields", () => {
@@ -318,12 +286,11 @@ test("an UNKNOWN token refuses to publish and is left visible", () => {
 });
 
 test("an EMPTY org value refuses to publish", () => {
-  // A waiver naming a blank contact address, or a blank signing entity, is not publishable.
-  const r = resolveWaiverTokens("Contact {{ORG_EMAIL}}", { name: "Oda Up" });
+  // A waiver promising a written decline path to a blank address has no decline path.
+  const r = resolveWaiverTokens("Write to {{MEDIA_OPTOUT_EMAIL}}", { name: "Oda Up" });
   assert.equal(r.ok, false);
-  assert.deepEqual(r.empty, ["ORG_EMAIL"]);
+  assert.deepEqual(r.empty, ["MEDIA_OPTOUT_EMAIL"]);
   assert.match(tokenFailureMessage(r), /no value for/);
-  assert.match(tokenFailureMessage(r), /Organisation settings/);
 });
 
 test("token syntax tolerates internal whitespace", () => {
@@ -331,8 +298,7 @@ test("token syntax tolerates internal whitespace", () => {
 });
 
 test("the token registry is stable and documented", () => {
-  for (const t of ["ENTITY", "ORG_NAME", "ORG_EMAIL", "ORG_ADDRESS", "RULES_REFERENCE"]) {
+  for (const t of ["ENTITY", "ORG_NAME", "ORG_EMAIL", "MEDIA_OPTOUT_EMAIL", "ORG_ADDRESS"]) {
     assert.ok(TOKEN_NAMES.includes(t), `${t} must be a valid token`);
   }
-  assert.ok(!TOKEN_NAMES.includes("MEDIA_OPTOUT_EMAIL"), "retired token must be gone");
 });

@@ -494,18 +494,17 @@ export async function consentRoutes(request, env, url, ctx) {
   mt = p.match(/^\/api\/team-members\/(\d+)\/waiver-state$/);
   if (mt && m === "GET") return waiverState(env, ctx, Number(mt[1]));
 
-  // --- media consent: RETIRED in v0.27.0 (owner decision D-CON-5) ---
-  // The waiver now grants an unconditional likeness release with no decline path, so there is
-  // nothing for these routes to record. They answer 410 Gone rather than 404 so that a stale
-  // bookmark or cached admin page gets an explanation instead of looking like a broken deploy.
-  // The media_consents table (migration 0017) is left in place and dormant — it holds zero rows,
-  // and dropping a table to save nothing is not a trade worth making. The handler functions
-  // remain below, unreferenced, so reinstating this is a routing change rather than a rebuild.
-  if (p === "/api/admin/media-consent" || /^\/api\/admin\/media-consent\/\d+$/.test(p)) {
-    return json({
-      error: "Media consent recording was retired. The waiver grants an unconditional media and likeness release, so there is no opt-out to record.",
-      retired: true,
-    }, 410);
+  // --- staff: media consent ---
+  if (p === "/api/admin/media-consent") {
+    if (m === "GET")  return listMediaConsent(env, ctx);
+    if (m === "POST") return recordOptOut(request, env, ctx);
+    return json({ error: "Method not allowed." }, 405);
+  }
+  mt = p.match(/^\/api\/admin\/media-consent\/(\d+)$/);
+  if (mt) {
+    if (m === "GET")    return historyMediaConsent(env, ctx, Number(mt[1]));
+    if (m === "DELETE") return withdrawOptOut(request, env, ctx, Number(mt[1]));
+    return json({ error: "Method not allowed." }, 405);
   }
 
   return null; // not ours — fall through the chain
