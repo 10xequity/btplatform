@@ -1,6 +1,17 @@
 /**
  * Boomtown Platform — API Worker
- * Version: v0.26.0 · Date: 2026-07-26 · Modules 1–17
+ * Date: 2026-07-26 · Modules 1–18
+ *
+ * NO VERSION IN THIS HEADER, DELIBERATELY. It read v0.26.0 while the worker served v0.27.0 and
+ * that drift triggered a "the deploy is broken" investigation across two sessions. /api/health is
+ * the only honest source of the version. Do not reintroduce it here.
+ *
+ * v0.28.0 (2026-07-26, Documents): NEW documents.js — org-owned document library. Each org uploads
+ *   its own text; tokens resolve from the org profile at publish (D-DOC-5) with no fallback on
+ *   party identity (D-DOC-6). Fixes F-10: WAIVER_TOKENS.ENTITY fell back to a hardcoded company
+ *   name, so an org without a legal_entity published a release naming the wrong party.
+ *   Migrations 0021 (schema ledger + org scope), 0022 (legal entity short/verified), 0023
+ *   (documents, document_requirements, signatures.document_id).
  *
  * v0.26.0 (2026-07-26, Tiers + hardening): NEW tiers.js — membership levels (Gymdesk-shaped),
  *   grants, and bulk member actions. Migration 0018 adds membership_tiers, membership_grants,
@@ -180,6 +191,7 @@ import { calendarRoutes, wireCalendar, icsFeed } from "./calendar.js"; // v0.23.
 import { consentRoutes, wireConsent } from "./consent.js"; // v0.25.0 teammate self-sign + media consent
 import { tiersRoutes, wireTiers } from "./tiers.js"; // v0.26.0 membership tiers, grants, bulk member actions
 import { familyRoutes, wireFamily } from "./family.js"; // v0.27.0 guardians, minors, families
+import { documentRoutes, wireDocuments } from "./documents.js"; // v0.28.0 document library + requirements
 import { waiverReminderSweep, waiverExpirySweep, sendEmail, escapeHtml } from "./registrations.js";
 
 const MAGIC_LINK_TTL_MIN = 15;
@@ -236,6 +248,7 @@ wireCalendar(wiredHelpers); // v0.23.0
 wireConsent(wiredHelpers); // v0.25.0
 wireTiers(wiredHelpers); // v0.26.0
 wireFamily(wiredHelpers); // v0.27.0
+wireDocuments(wiredHelpers); // v0.28.0
 
 /** ctx carries the caller's session + selected org for role checks. */
 async function buildCtx(request, env) {
@@ -287,7 +300,7 @@ export default {
       } else if (url.pathname === "/api/orgs" && request.method === "GET") {
         res = await listOrgs(env);
       } else if (url.pathname === "/api/health") {
-        res = json({ ok: true, version: "v0.27.0" });
+        res = json({ ok: true, version: "v0.28.0" });
       } else if (url.pathname === "/api/webhooks/square" && request.method === "POST") {
         res = await membershipWebhook(request, env); // verifies signature; forwards payment.* to squareWebhook
       } else if (url.pathname.startsWith("/api/calendar/") && url.pathname.endsWith(".ics") && request.method === "GET") {
@@ -296,7 +309,8 @@ export default {
         res = await icsFeed(env, url, request);
       } else if (url.pathname.startsWith("/api/")) {
         const ctx = await buildCtx(request, env);
-        res = (await waiverRoutes(request, env, url, ctx)) // v0.22.0 — /api/waiver/* + /api/admin/waivers/*
+        res = (await documentRoutes(request, env, url, ctx)) // v0.28.0 — documents, versions, requirements, compliance
+           || (await waiverRoutes(request, env, url, ctx)) // v0.22.0 — /api/waiver/* + /api/admin/waivers/*
            || (await calendarRoutes(request, env, url, ctx)) // v0.23.0 — feed token mint/revoke
            || (await consentRoutes(request, env, url, ctx)) // v0.25.0 — /api/sign/* + waiver links + media consent
            || (await tiersRoutes(request, env, url, ctx)) // v0.26.0 — tiers, grants, bulk members

@@ -60,16 +60,37 @@ export async function sha256Hex(text) {
  * ("Match Point Social"). If the brands are DBAs of one LLC, ENTITY is the same in all four
  * and only ORG_NAME changes — which is exactly why they must be separate tokens.
  */
+/**
+ * v0.28.0 — F-10 fix. ENTITY previously fell back to a hardcoded "Boomtown Athletics, LLC", so any
+ * org with no legal_entity silently published a release running to Boomtown. D-ORG-1 exists to
+ * forbid exactly that: naming the wrong company as the party a family releases from liability is
+ * the one substitution that must never be guessed. Empty now means REFUSE, via resolveWaiverTokens.
+ *
+ * MEDIA_OPTOUT_EMAIL removed — the opt-out is retired (D-CON-5) and declining the release is
+ * declining the waiver (D-CON-6). Keeping the token permitted publishing a decline path that the
+ * platform answers with 410 Gone.
+ *
+ * ENTITY_SHORT added — the defined short form ("BT") was literal prose, so Match Point Social's
+ * waiver would define one abbreviation and then rely on another (F-8).
+ *
+ * R-23: documents.js DOC_TOKENS is a superset of this map. They are deliberately NOT cross-imported
+ * because documents.js already imports sha256Hex/tokensUsed/resignRequired from here, and importing
+ * back would create a module cycle whose const bindings are undefined at init. Until tokens.js is
+ * extracted, A CHANGE TO EITHER MAP MUST BE MADE IN BOTH.
+ */
 export const WAIVER_TOKENS = {
-  ENTITY:             (o) => o.legal_entity || "Boomtown Athletics, LLC",
-  ORG_NAME:           (o) => o.name || "",
-  ORG_EMAIL:          (o) => o.admin_email || o.email_sender_address || "",
-  MEDIA_OPTOUT_EMAIL: (o) => o.admin_email || o.email_sender_address || "",
-  ORG_WEBSITE:        (o) => o.website || "",
-  ORG_PHONE:          (o) => o.phone || "",
-  ORG_ADDRESS:        (o) => [o.address_line1, o.address_line2,
-                              [o.city, o.state].filter(Boolean).join(", "),
-                              o.postal_code].filter(Boolean).join(" · "),
+  ENTITY:            (o) => o.legal_entity || "",
+  ENTITY_SHORT:      (o) => o.legal_entity_short || "",
+  ORG_NAME:          (o) => o.name || "",
+  ORG_EMAIL:         (o) => o.admin_email || o.email_sender_address || "",
+  ORG_WEBSITE:       (o) => o.website || "",
+  ORG_PHONE:         (o) => o.phone || "",
+  ORG_ADDRESS:       (o) => [o.address_line1, o.address_line2,
+                             [o.city, o.state].filter(Boolean).join(", "),
+                             o.postal_code].filter(Boolean).join(" · "),
+  RULES_REFERENCE:   (o) => o.rules_url
+                              ? `available at ${o.rules_url}`
+                              : "posted at the facility and available on request",
 };
 
 /** Every token the text may use. Anything else is a typo, and a typo must not publish. */
@@ -91,9 +112,10 @@ export function tokensUsed(body) {
  * Returns { ok, text, unknown[], empty[] }.
  *   unknown — tokens the registry doesn't recognise (a typo like {{ORG_MAIL}})
  *   empty   — recognised tokens whose org value is blank
- * Both are refusal conditions at publish time. A waiver rendered with a literal
- * "{{MEDIA_OPTOUT_EMAIL}}" in §6, or with an empty one, has no working decline path — which is
- * the specific thing the text promises. Failing closed here is the whole point.
+ * Both are refusal conditions at publish time. A published version is hashed into body_sha and
+ * pinned to every signature against it, so a placeholder that reaches publish is permanent. A
+ * document naming the wrong legal entity is worse than one naming none (D-ORG-1). Failing closed
+ * here is the whole point.
  */
 export function resolveWaiverTokens(body, org) {
   const o = org || {};
@@ -170,6 +192,13 @@ export async function currentVersion(env, orgId) {
     `SELECT id, org_id, label, body, body_sha, material, status, published_at, notes
        FROM waiver_versions
       WHERE org_id = ?1 AND status = 'active' AND deleted_at IS NULL
+        -- v0.28.0: scope to the liability-waiver document. Before migration 0023 an org had one
+        -- waiver, so org_id alone was sufficient; now it would return whichever document was
+        -- published most recently. Legacy /api/waiver/* callers keep working; documents.js
+        -- currentDocVersion() handles the general multi-document case.
+        AND (document_id IS NULL OR document_id = (
+              SELECT d.id FROM documents d
+               WHERE d.org_id = ?1 AND d.slug = 'liability-waiver' AND d.deleted_at IS NULL))
       ORDER BY published_at DESC, id DESC LIMIT 1`
   ).bind(orgId).first();
 }
@@ -344,17 +373,22 @@ async function publishVersion(request, env, ctx) {
 
   // v0.27.0 — TOKEN RESOLUTION AT PUBLISH TIME, not at render time.
   //
-  // The submitted text may use {{ORG_NAME}}, {{MEDIA_OPTOUT_EMAIL}} and friends, so one canonical
-  // waiver serves every org. But what gets STORED is the resolved text, and body_sha pins it.
+  // The submitted text may use {{ENTITY}}, {{ORG_NAME}} and friends, so one canonical text serves
+  // every org. But what gets STORED is the resolved text, and body_sha pins it.
   // Resolving at render instead would mean a signed document changes retroactively the day
   // somebody edits an org's email — a signed legal record has to stay byte-reproducible.
   //
-  // Publish REFUSES on an unknown token or an org with a blank value. A waiver whose §6 promises
-  // a written decline path to a literal "{{MEDIA_OPTOUT_EMAIL}}" has no decline path at all, and
-  // that is precisely the clause the owner's decision rests on.
+  // Publish REFUSES on an unknown token or a blank org value.
+  //
+  // v0.28.0 — F-10, sharpened: this SELECT did not include legal_entity, so o.legal_entity was
+  // ALWAYS undefined and the old `|| "Boomtown Athletics, LLC"` fallback fired for EVERY org
+  // regardless of what migration 0020 put in the database. It was not "orgs missing an entity get
+  // a default" — no org could ever resolve its own entity. The column existed and nothing read it.
+  // Both halves are fixed: the fallback is gone and the columns are selected.
   const org = await env.DB.prepare(
     `SELECT id, name, website, admin_email, email_sender_address, phone,
-            address_line1, address_line2, city, state, postal_code
+            address_line1, address_line2, city, state, postal_code,
+            legal_entity, legal_entity_short, legal_entity_verified, rules_url
        FROM orgs WHERE id = ?1 AND deleted_at IS NULL`
   ).bind(ctx.orgId).first();
   if (!org) return H.json({ error: "Organization not found." }, 404);

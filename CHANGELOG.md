@@ -442,3 +442,72 @@ applied live and verified in `sqlite_master` ✅
 - `dominant_hand` (left/right/ambidextrous), whitelisted in the worker since SQLite cannot add a CHECK via ALTER. Free text here would reach the public player card.
 
 **Gates:** `node --check` 26 worker modules + inline blocks ✅ · `node --test` **245/245** (was 207) ✅ · esbuild 418 KB containing `v0.27.0`, `resolveWaiverTokens`, `validateBirthdate`, `displayName` ✅ · migration 0019 applied and verified live ✅
+
+---
+
+## v0.28.0 — 2026-07-26 · Documents
+
+Legal text stops being code. Each org owns its own documents; tokens fill from the org profile.
+
+### NEW `worker/src/documents.js` — org-owned document library
+- `documents` + `document_requirements` (migration 0023). An org may hold several signable
+  documents; each has versions, and one version at a time is *required* of a given audience.
+- **Two-phase tokens (D-DOC-5).** Org tokens resolve at **publish** and are hashed into `body_sha`;
+  signer tokens resolve at **render** and are never hashed. Resolving org tokens at render would
+  rewrite a signed document the day somebody edits a phone number; resolving signer tokens at
+  publish is impossible, because the signer is unknown.
+- **No fallback on party identity or mailing address (D-DOC-6).** `ENTITY`, `ENTITY_SHORT`,
+  `ORG_NAME`, `ORG_EMAIL`, `ORG_ADDRESS` refuse rather than guess. Cosmetic tokens may fall back.
+  `RULES_REFERENCE` falls back to "posted at the facility" because a dead URL is weaker than no URL.
+- **Publish refuses** on unknown tokens, on empty no-fallback tokens, and on bracket-style
+  placeholders (`[LIKE_THIS]`, `TBD`, `____`) that a `{{...}}`-only validator cannot see.
+- **Warns** when the text contains an org's literal name instead of a token — needs
+  `confirm_literal_names` to proceed, because "Boomtown Fieldhouse" may legitimately appear in
+  facility rules.
+- **Retroactive assignment** with a server-side dry run. Above 50 affected members the caller must
+  echo the count back, because `retroactive=1` locks the entire roster out of registration and
+  check-in until they re-sign.
+- **Compliance is computed, never stored (D-DOC-7).** One query drives the registration gate, the
+  check-in chip and the assignment preview, so the three cannot disagree.
+- Signatures are pinned permanently to the version and `body_sha` the signer saw, never re-pointed
+  (D-DOC-8). One active requirement per (org, document, audience), enforced by a partial unique
+  index rather than worker logic (D-DOC-9).
+
+### FIXED — F-10, P0, in shipped code
+`WAIVER_TOKENS.ENTITY` read `o.legal_entity || "Boomtown Athletics, LLC"`, **and
+`publishVersion`'s org query never selected `legal_entity` at all.** So `o.legal_entity` was always
+`undefined` and the hardcoded fallback fired for *every* org regardless of what migration 0020 put
+in the database. Not "orgs missing an entity get a default" — no org could ever resolve its own
+entity. D-ORG-1 has forbidden this for three releases while the code did the opposite. Both halves
+fixed: fallback removed, columns selected.
+
+`MEDIA_OPTOUT_EMAIL` removed — the opt-out is retired (D-CON-5) and declining the release is
+declining the waiver (D-CON-6). The token permitted publishing a decline path the platform answers
+with 410 Gone. `ENTITY_SHORT` and `RULES_REFERENCE` added. `currentVersion()` scoped to the
+liability-waiver document, since `org_id` alone now returns whichever document published last.
+
+### Migrations applied live and verified
+- **0021** — `schema_migrations` ledger created and backfilled. Twenty migrations had been applied
+  with no record in the database of which ran. Orgs 4–10 deactivated (`active=0`), none deleted;
+  every row in the platform belongs to org 1, so the reduction was cost-free and reversible.
+- **0022** — `legal_entity_short`, `legal_entity_verified`. Match Point Social and Queens Club
+  seeded with owner-supplied placeholder names at `verified=0`, so a guessed corporate identity is
+  visible rather than laundered into a signed document.
+- **0023** — document library. `signatures` was already document-agnostic, so this extends it
+  rather than adding a fourth signature table. `waivers` deprecated, not dropped.
+
+### Known open
+- **F-4** nothing in `worker/src/` reads `orgs.active` — confirmed by grep across all 27 modules.
+  The seven deactivated orgs are still selectable. Next release, 0.25d.
+- **`nonCompliant` and `currentDocVersion` are tree-shaken from the bundle** — exported, uncalled.
+  They are the v0.29.0 registration gate and check-in chip. Shipped dead until wired.
+- **R-23** `waivers.js` and `documents.js` hold two token maps deliberately, to avoid a module
+  cycle. A change to either must be made in both until `tokens.js` is extracted.
+- **F-5** capacity oversubscription race · **F-6** `guardianGate`/`signerFor`/`applyTierDiscount`
+  built and uncalled · **F-7** N+1 in `events_admin.js` · **F-9** two entity names unverified.
+- No tests for `documents.js` yet. Admin UI and multi-document `sign.html` not built.
+
+**Gates:** `node --check` on all three changed modules ✅ · esbuild bundle **441,832 bytes**
+containing `v0.28.0`, `documentRoutes`, `resolveDocTokens`, `complianceFor`, `tokenRefusal`,
+`literalOrgNames` ✅ · migrations 0021/0022/0023 applied and verified against live D1 ✅ ·
+`node --test` **not run** — no new tests written.
