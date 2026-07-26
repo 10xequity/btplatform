@@ -1,5 +1,9 @@
 /* Boomtown Platform — Message Reports (admin)
-   File: web/assets/admin-messages.js · Version: v1.0 · Date: 2026-07-24 · Ships in: v0.17.0
+   File: web/assets/admin-messages.js · Version: v1.1 · Date: 2026-07-25 · Ships in: v0.21.0
+   v1.1 (M16): one-click mute — every open report row gets "Mute sender 7d"
+   (or "Unmute" when they're already muted). Single tap, no prompt: POST
+   /api/admin/messages/mute {contact_id} then reload. Mute ≠ resolve — the
+   report stays open so the review trail is intact.
    GET /api/admin/messages/flags?status= → list; POST /api/admin/messages/flags/resolve.
    Uses BT_ADMIN helpers; errors always render through fail() (Back + Dashboard, standing
    rule 2). Staff-gated by admin-nav guard() + server requireStaff. */
@@ -30,13 +34,28 @@
         <div class="flag-quote">${esc(f.message_body || "(message no longer available)")}</div>
         ${f.reason ? `<p class="flag-reason">Reason: ${esc(f.reason)}</p>` : ""}
         ${f.resolution_note ? `<p class="flag-reason">Resolution: ${esc(f.resolution_note)}</p>` : ""}
+        ${f.sender_muted ? `<p class="flag-reason">Sender is muted.</p>` : ""}
         ${status === "open" ? `<div class="flag-actions">
           <button class="btn" data-resolve="${f.id}" type="button">Resolve</button>
           <button class="btn ghost" data-dismiss="${f.id}" type="button">Dismiss</button>
+          ${f.sender_contact_id ? `<button class="btn ghost" data-mute="${f.sender_contact_id}"
+            data-muted="${f.sender_muted ? 1 : 0}" type="button">${f.sender_muted ? "Unmute" : "Mute sender 7d"}</button>` : ""}
         </div>` : ""}
       </div>`).join("");
     $("flagList").querySelectorAll("[data-resolve]").forEach((b) => b.addEventListener("click", () => act(b.dataset.resolve, "resolved")));
     $("flagList").querySelectorAll("[data-dismiss]").forEach((b) => b.addEventListener("click", () => act(b.dataset.dismiss, "dismissed")));
+    $("flagList").querySelectorAll("[data-mute]").forEach((b) => b.addEventListener("click", () => muteSender(b)));
+  }
+
+  /* v1.1: one click, no prompt — mute is reversible and audited, so no friction. */
+  async function muteSender(btn) {
+    btn.disabled = true;
+    const muted = btn.dataset.muted === "1";
+    const r = await api(`/api/admin/messages/${muted ? "unmute" : "mute"}`, {
+      method: "POST", body: JSON.stringify({ contact_id: Number(btn.dataset.mute) }) });
+    btn.disabled = false;
+    if (!r.ok) return fail(r.data.error || "Couldn't update the mute.");
+    load();
   }
 
   async function act(id, newStatus) {
@@ -61,3 +80,4 @@
   guard().then(load);
 })();
 /* Changelog: v1.0 (2026-07-24) — initial Message Reports admin logic (M14 Phase B). */
+/* Changelog: v1.1 (2026-07-25) — one-click mute/unmute per report row (M16). */

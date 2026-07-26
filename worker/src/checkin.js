@@ -1,6 +1,12 @@
 /**
  * Boomtown Platform — Check-in & Attendance (Module 10)
- * File: worker/src/checkin.js · Version: v1.0 · Date: 2026-07-23 · Ships in: v0.9.0
+ * File: worker/src/checkin.js · Version: v1.1 · Date: 2026-07-25 · Ships in: v0.21.0
+ *
+ * v1.1 (2026-07-25, M16): balance-due at the door (Gymdesk pattern, standards §4) —
+ *   roster rows carry the team's registration id/status and a server-computed
+ *   balance_cents (event price when status is pending/email-sent/cash-pending;
+ *   0 for paid/comped/none). Event payload adds price_cents. balanceCents() is a
+ *   pure export for tests. Quick-resolve reuses POST /api/registrations/:id/mark-paid.
  *
  * Staff (door) routes:
  *   GET  /api/events/:id/roster            → every roster member: waiver flag + checked_in state
@@ -22,6 +28,14 @@
 
 let json, audit, isStaff, requireStaff;
 export function wireCheckin(h) { ({ json, audit, isStaff, requireStaff } = h); }
+
+/* v1.1: statuses that still owe money. comped/paid/cancelled owe nothing. */
+export const OWED_STATUSES = ["pending", "email-sent", "cash-pending"];
+export function balanceCents(regStatus, priceCents) {
+  if (!regStatus || !OWED_STATUSES.includes(String(regStatus))) return 0;
+  const p = Number(priceCents);
+  return Number.isFinite(p) && p > 0 ? Math.round(p) : 0;
+}
 
 export async function checkinRoutes(request, env, url, ctx) {
   const p = url.pathname, m = request.method;
@@ -55,6 +69,8 @@ async function roster(env, ctx, eventId) {
             t.id AS team_id, t.name AS team_name, t.level_num,
             (SELECT a.id FROM attendance a WHERE a.event_id=?1 AND a.team_member_id=tm.id AND a.deleted_at IS NULL LIMIT 1) AS attendance_id,
             (SELECT a.checked_in_at FROM attendance a WHERE a.event_id=?1 AND a.team_member_id=tm.id AND a.deleted_at IS NULL LIMIT 1) AS checked_in_at,
+            (SELECT r.id FROM registrations r WHERE r.event_id=?1 AND r.team_id=t.id AND r.status != 'cancelled' AND r.deleted_at IS NULL ORDER BY r.id LIMIT 1) AS reg_id,
+            (SELECT r.status FROM registrations r WHERE r.event_id=?1 AND r.team_id=t.id AND r.status != 'cancelled' AND r.deleted_at IS NULL ORDER BY r.id LIMIT 1) AS reg_status,
             EXISTS (SELECT 1 FROM contacts c JOIN waivers w ON w.contact_id=c.id AND w.deleted_at IS NULL AND w.expires_at > datetime('now')
                     WHERE c.org_id=tm.org_id AND c.deleted_at IS NULL
                       AND (c.id = tm.contact_id OR (tm.member_email IS NOT NULL AND c.email = tm.member_email))) AS waiver_ok
@@ -67,8 +83,9 @@ async function roster(env, ctx, eventId) {
     `SELECT id AS attendance_id, name_snapshot AS member_name, checked_in_at, method
      FROM attendance WHERE event_id=?1 AND team_member_id IS NULL AND deleted_at IS NULL ORDER BY checked_in_at`
   ).bind(eventId).all()).results;
+  for (const r of rows) r.balance_cents = balanceCents(r.reg_status, ev.price_cents);
   return json({
-    event: { id: ev.id, name: ev.name, starts_at: ev.starts_at, has_token: !!ev.checkin_token },
+    event: { id: ev.id, name: ev.name, starts_at: ev.starts_at, has_token: !!ev.checkin_token, price_cents: ev.price_cents || 0 },
     roster: rows, walkins,
     checked_in: rows.filter(r => r.attendance_id).length + walkins.length,
     total: rows.length,
@@ -200,3 +217,6 @@ async function myAttendance(env, ctx) {
   ).bind(u.email.toLowerCase()).all()).results;
   return json({ attendance: rows, total: rows.length });
 }
+
+/* Changelog: v1.1 (2026-07-25) — balanceCents()/OWED_STATUSES + reg balance on roster (M16).
+   v1.0 (2026-07-23) — initial check-in module. */

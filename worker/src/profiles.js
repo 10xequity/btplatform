@@ -1,6 +1,13 @@
 /**
  * Boomtown Platform — Member Profiles + Family Accounts module
- * File: worker/src/profiles.js · Version: v1.1 · Date: 2026-07-24 · Ships in: v0.17.0
+ * File: worker/src/profiles.js · Version: v1.2 · Date: 2026-07-25 · Ships in: v0.21.0
+ *
+ * v1.2 (2026-07-25, M16): NOTE ONLY, no code change — the legacy `profiles` table is
+ *   DEPRECATED as a write target. Member identity/visibility now lives on contacts +
+ *   member-portal rails; `profiles` remains read-compatible for the library tier
+ *   clauses until M17 (achievements/public standings) lands its own public-profile
+ *   surface, after which a cleanup migration will be specced (additive-only rule:
+ *   the table is never dropped in place, only superseded).
  *
  * v1.1 (v0.17.0): player-card fields for the M14B library — update() accepts positions,
  *   skill_level, gender_division, height_reach (migration 0011 columns); profileFields()

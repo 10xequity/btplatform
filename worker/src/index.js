@@ -1,7 +1,11 @@
 /**
  * Boomtown Platform — API Worker
- * Version: v0.20.0 · Date: 2026-07-25 · Modules 1–17
+ * Version: v0.21.0 · Date: 2026-07-25 · Modules 1–17
  *
+ * v0.21.0 (2026-07-25, M16): json() now sends Cache-Control: no-store on every API
+ *   response (browser HTTP heuristic cache served a stale /api/health after the v0.20.0
+ *   deploy — API data must never be cached; the SW static-shell cache is unaffected,
+ *   D-PWA-3 holds). Version bump only otherwise; routes unchanged.
  * v0.20.0 (2026-07-25): PWA + Web Push — push.js mounted before waitlists (subscribe/
  *   unsubscribe/status, public VAPID key, staff test-send; RFC 8291 aes128gcm + RFC 8292
  *   VAPID implemented on WebCrypto, zero deps). waitlists.js v1.1 sends a push alongside
@@ -221,7 +225,7 @@ export default {
       } else if (url.pathname === "/api/orgs" && request.method === "GET") {
         res = await listOrgs(env);
       } else if (url.pathname === "/api/health") {
-        res = json({ ok: true, version: "v0.20.0" });
+        res = json({ ok: true, version: "v0.21.0" });
       } else if (url.pathname === "/api/webhooks/square" && request.method === "POST") {
         res = await membershipWebhook(request, env); // verifies signature; forwards payment.* to squareWebhook
       } else if (url.pathname.startsWith("/api/")) {
@@ -500,7 +504,7 @@ function corsHeaders(origin, env) {
 function json(obj, status = 200) {
   return new Response(JSON.stringify(obj), {
     status,
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", "cache-control": "no-store" },
   });
 }
 

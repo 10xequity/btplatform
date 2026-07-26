@@ -1,5 +1,10 @@
 /* Boomtown Platform — Door Check-in
-   File: web/assets/admin-checkin.js · Version: v1.0 · Date: 2026-07-23 · Ships in: v0.9.0
+   File: web/assets/admin-checkin.js · Version: v1.1 · Date: 2026-07-25 · Ships in: v0.21.0
+   v1.1 (M16): balance-due chip (Gymdesk pattern) — a team that still owes shows
+   "Owes $X · mark paid" beside its team header; one tap → confirm → mark-paid
+   (cash-collected rail) → roster reloads. Chip lives on the header, not the player
+   card, because the registration (and the money) is per team — and player cards are
+   <button>s, so nesting another button would be invalid HTML and break keyboard nav.
    One tap = in, tap again = undo. Waiver flag = no valid waiver on file (spot it before they play).
    Search filters as you type. QR panel mints/rotates the public self-check-in token. */
 
@@ -59,7 +64,9 @@
       (byTeam[p.team_name] = byTeam[p.team_name] || []).push(p);
     }
     let html = Object.entries(byTeam).map(([team, ps]) => `
-      <div class="team-head">${esc(team)}</div>` + ps.map(p => `
+      <div class="team-head">${esc(team)}${ps[0] && ps[0].balance_cents > 0 ? `
+        <button class="owes-chip" type="button" data-reg="${ps[0].reg_id}"
+          data-amt="${ps[0].balance_cents}">Owes $${(ps[0].balance_cents / 100).toFixed(2)} · mark paid</button>` : ""}</div>` + ps.map(p => `
       <button class="ck-card${p.attendance_id ? " in" : ""}" data-tm="${p.team_member_id}"
         aria-pressed="${p.attendance_id ? "true" : "false"}">
         <div class="who"><div class="n">${esc(p.member_name)}${p.waiver_ok ? "" : `<span class="waiver-flag no">NO WAIVER</span>`}</div>
@@ -74,6 +81,19 @@
     }
     $("roster").innerHTML = html || `<p class="empty">${filter ? "No names match." : "No roster yet — teams appear here after registration."}</p>`;
     $("roster").querySelectorAll("[data-tm]").forEach(b => b.onclick = () => toggle(b));
+    $("roster").querySelectorAll("[data-reg]").forEach(b => b.onclick = () => resolveBalance(b));
+  }
+
+  /* v1.1: cash collected at the door — reuses the registrations mark-paid rail. */
+  async function resolveBalance(btn) {
+    const amt = (Number(btn.dataset.amt) / 100).toFixed(2);
+    if (!confirm(`Collected $${amt}? This marks the team's registration paid (cash).`)) return;
+    btn.disabled = true;
+    const r = await api(`/api/registrations/${btn.dataset.reg}/mark-paid`, { method: "POST" });
+    btn.disabled = false;
+    if (!r.ok) { say(r.data.error || "Couldn't mark it paid.", false); return; }
+    say("Paid — balance cleared.", true);
+    load();
   }
 
   async function toggle(btn) {
@@ -129,3 +149,6 @@
     $("status").innerHTML = `<p class="${ok ? "notice-ok" : "notice-err"}">${esc(text)}</p>`;
   }
 })();
+
+/* Changelog: v1.1 (2026-07-25) — balance-due chip on team headers + tap-to-resolve via mark-paid (M16).
+   v1.0 (2026-07-23) — initial door check-in. */

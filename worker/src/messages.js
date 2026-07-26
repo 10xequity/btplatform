@@ -1,6 +1,14 @@
 /**
  * Boomtown Platform — Messages, Relay & Player Library module (M14 Phase B)
- * File: worker/src/messages.js · Version: v1.0 · Date: 2026-07-24 · Ships in: v0.17.0
+ * File: worker/src/messages.js · Version: v1.1 · Date: 2026-07-25 · Ships in: v0.21.0
+ *
+ * v1.1 (2026-07-25, M16): one-click mute from Message Reports —
+ *   POST /api/admin/messages/mute   {contact_id, days?, reason?}  (default 7 days; 0 = until unmuted)
+ *   POST /api/admin/messages/unmute {contact_id}
+ *   member_mutes rows already hard-block sending at senderGate (shipped v0.17.0) —
+ *   this only adds the staff write path + sender_muted state on the flags list.
+ *   Pure exports muteUntilIso()/normalizeMuteBody() for tests. No schema change
+ *   (member_mutes verified live in sqlite_master 2026-07-25).
  *
  * Member-facing (magic-link/passkey session), mounted by worker/src/index.js:
  *   GET  /api/library/search?q=&position=&level=&gender=  → privacy-gated player library.
@@ -112,6 +120,8 @@ export async function messagesRoutes(request, env, url, ctx) {
   if (p === "/api/messages/unblock" && m === "POST") return setBlock(request, env, ctx, false);
   if (p === "/api/messages/hide" && m === "POST") return hideThread(request, env, ctx);
   if (p === "/api/messages/report" && m === "POST") return reportMessage(request, env, ctx);
+  if (p === "/api/admin/messages/mute" && m === "POST") return adminMute(request, env, ctx, true);
+  if (p === "/api/admin/messages/unmute" && m === "POST") return adminMute(request, env, ctx, false);
 
   if (p === "/api/admin/messages/flags" && m === "GET") return adminFlags(env, url, ctx);
   if (p === "/api/admin/messages/flags/resolve" && m === "POST") return adminResolveFlag(request, env, ctx);
@@ -395,6 +405,9 @@ async function adminFlags(env, url, ctx) {
   const rows = (await env.DB.prepare(
     `SELECT f.id, f.target_id AS message_id, f.reason, f.status, f.created_at, f.resolution_note,
             rep.full_name AS reporter_name, m.body AS message_body, snd.full_name AS sender_name,
+            snd.id AS sender_contact_id,
+            EXISTS (SELECT 1 FROM member_mutes mm WHERE mm.org_id = f.org_id AND mm.contact_id = snd.id
+                    AND mm.deleted_at IS NULL AND (mm.muted_until IS NULL OR mm.muted_until > datetime('now'))) AS sender_muted,
             m.thread_id
      FROM content_flags f
      JOIN contacts rep ON rep.id = f.reporter_contact_id
@@ -404,6 +417,52 @@ async function adminFlags(env, url, ctx) {
      ORDER BY f.created_at DESC LIMIT 200`
   ).bind(ctx.orgId, status).all()).results;
   return H.json({ flags: rows });
+}
+
+/* ---------------- v1.1: one-click mute (M16) ---------------- */
+
+/** Pure: mute expiry ISO from a day count. 0/blank = permanent (NULL). Clamped 1–365. */
+export function muteUntilIso(days, nowMs = Date.now()) {
+  const d = Number(days);
+  if (!Number.isFinite(d) || d <= 0) return null; // permanent until unmuted
+  const clamped = Math.min(365, Math.max(1, Math.round(d)));
+  return new Date(nowMs + clamped * 86400000).toISOString().replace("T", " ").slice(0, 19);
+}
+
+/** Pure: normalize the mute request body. */
+export function normalizeMuteBody(b) {
+  const contactId = Number(b && b.contact_id);
+  return {
+    contactId: Number.isInteger(contactId) && contactId > 0 ? contactId : null,
+    days: b && b.days !== undefined ? Number(b.days) : 7,
+    reason: String((b && b.reason) || "").trim().slice(0, 300) || null,
+  };
+}
+
+async function adminMute(request, env, ctx, mute) {
+  const denied = await H.requireStaff(env, ctx);
+  if (denied) return denied;
+  const b = normalizeMuteBody(await request.json().catch(() => ({})));
+  if (!b.contactId) return H.json({ error: "contact_id required." }, 400);
+  const contact = await env.DB.prepare(
+    "SELECT id, full_name FROM contacts WHERE id=?1 AND org_id=?2 AND deleted_at IS NULL"
+  ).bind(b.contactId, ctx.orgId).first();
+  if (!contact) return H.json({ error: "Member not found." }, 404);
+  if (mute) {
+    const until = muteUntilIso(b.days);
+    await env.DB.prepare(
+      "INSERT INTO member_mutes (org_id, contact_id, reason, muted_until, muted_by_user_id) VALUES (?1,?2,?3,?4,?5)"
+    ).bind(ctx.orgId, b.contactId, b.reason, until, ctx.userId).run();
+    await H.audit(env, ctx, "message.mute", "member_mutes", b.contactId, { days: b.days, until, reason: b.reason });
+    return H.json({ ok: true, muted: true, until,
+      message: until ? `${contact.full_name || "Member"} muted until ${until.slice(0, 10)}.`
+                     : `${contact.full_name || "Member"} muted until you unmute them.` });
+  }
+  await env.DB.prepare(
+    "UPDATE member_mutes SET deleted_at=datetime('now') WHERE org_id=?1 AND contact_id=?2 AND deleted_at IS NULL"
+  ).bind(ctx.orgId, b.contactId).run();
+  await H.audit(env, ctx, "message.unmute", "member_mutes", b.contactId, {});
+  return H.json({ ok: true, muted: false, message: `${contact.full_name || "Member"} can message again.` });
 }
 
 async function adminResolveFlag(request, env, ctx) {
@@ -489,3 +548,6 @@ async function ownContact(env, ctx) {
     "SELECT * FROM contacts WHERE org_id=?1 AND deleted_at IS NULL AND (user_id=?2 OR email=?3) ORDER BY user_id DESC LIMIT 1"
   ).bind(ctx.orgId, user.id, user.email).first();
 }
+
+/* Changelog: v1.1 (2026-07-25) — one-click mute routes + sender_muted on flags (M16).
+   v1.0 (2026-07-24) — initial messaging/relay module (M14 Phase B). */
