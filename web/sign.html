@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<!-- Boomtown Platform — Teammate waiver sign · Version: v1.0 · Date: 2026-07-26 · Ships in: v0.25.0
+     PUBLIC PAGE. The token in the URL fragment is the only credential; there is no session
+     and no sign-in. The fragment (#token) is used rather than a query string deliberately:
+     fragments are not sent to the server in the Referer header and do not land in access
+     logs, so a forwarded link leaks less. The page reads it in JS and posts it in the path. -->
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex, nofollow" />
+  <meta name="referrer" content="no-referrer" />
+  <title>Sign your waiver — Boomtown Athletics</title>
+  <link rel="stylesheet" href="assets/tokens.css" />
+  <link rel="stylesheet" href="assets/app.css" />
+  <style>
+    .sign-wrap { max-width: 720px; margin: 0 auto; padding: 24px 16px 64px; }
+    .sign-card { background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; padding: 20px; }
+    .sign-meta { font-size: 14px; color: var(--text-dim); margin: 0 0 18px; line-height: 1.6; }
+    .sign-meta b { color: var(--text); }
+    .waiver-box { max-height: 340px; overflow-y: auto; padding: 16px;
+      background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+      font-size: 14px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
+    .waiver-box:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+    label.fld { display: block; font-size: 14px; font-weight: 600; margin: 18px 0 6px; }
+    input[type=text] { width: 100%; box-sizing: border-box; min-height: 52px; padding: 0 14px;
+      font-size: 16px; background: var(--bg); color: var(--text);
+      border: 1px solid var(--border); border-radius: 8px; }
+    input[type=text]:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+    .chk { display: flex; gap: 12px; align-items: flex-start; margin: 16px 0;
+      min-height: 44px; font-size: 15px; line-height: 1.5; cursor: pointer; }
+    .chk input { width: 22px; height: 22px; margin-top: 2px; flex: none; accent-color: var(--primary); }
+    .chk input:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+    .btn-sign { width: 100%; min-height: 52px; font-size: 16px; font-weight: 700;
+      background: var(--primary); color: var(--bg); border: 0; border-radius: 8px;
+      cursor: pointer; transition: transform 120ms cubic-bezier(.23,1,.32,1); }
+    .btn-sign:active { transform: scale(.97); }
+    .btn-sign:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+    .btn-sign:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .err { color: var(--danger); font-size: 14px; margin: 10px 0 0; min-height: 20px; }
+    .ok-panel { text-align: center; padding: 32px 16px; }
+    .ok-panel h2 { margin: 0 0 8px; }
+    .hint { font-size: 13px; color: var(--text-dim); margin: 6px 0 0; line-height: 1.5; }
+    @media (prefers-reduced-motion: reduce) { .btn-sign { transition: none; } .btn-sign:active { transform: none; } }
+  </style>
+</head>
+<body>
+  <header class="header chrome-glass">
+    <div class="wordmark">Boomtown <span>Athletics</span></div>
+  </header>
+
+  <main class="sign-wrap" id="app" aria-live="polite">
+    <p class="sign-meta">Loading…</p>
+  </main>
+
+  <script src="assets/config.js?v=0.25.0"></script>
+  <script>
+  (function () {
+    "use strict";
+    var API = (window.BT_CONFIG && window.BT_CONFIG.apiBase) || "";
+    var app = document.getElementById("app");
+    var esc = function (s) {
+      return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+        return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+      });
+    };
+    var token = (location.hash || "").replace(/^#/, "").trim();
+
+    function panel(title, body) {
+      app.innerHTML = '<div class="sign-card ok-panel"><h2>' + esc(title) + "</h2>" +
+        '<p class="sign-meta" style="margin:0">' + body + "</p></div>";
+    }
+
+    if (!/^[0-9a-f]{64}$/.test(token)) {
+      panel("This link isn't valid",
+        "Ask your team captain to send you a new waiver link. If you typed or edited the address, use the original link from your email instead.");
+      return;
+    }
+
+    fetch(API + "/api/sign/" + token, { headers: { Accept: "application/json" } })
+      .then(function (r) { return r.json().then(function (d) { return { s: r.status, d: d }; }); })
+      .then(render)
+      .catch(function () {
+        panel("Couldn't load", "Something went wrong reaching Boomtown. Check your connection and reload.");
+      });
+
+    function render(res) {
+      var d = res.d || {};
+      if (d.state === "not_found" || res.s === 404) {
+        return panel("This link isn't active",
+          "It may have already been used, or replaced by a newer one. Ask your captain to resend it.");
+      }
+      if (d.state === "expired") {
+        return panel("This link has expired",
+          "Waiver links are good for 30 days. Ask your captain to send a fresh one.");
+      }
+      if (d.state === "already_signed") {
+        return panel("You're all set",
+          "Your waiver is already on file" +
+          (d.expires_at ? " and valid until <b>" + esc(String(d.expires_at).slice(0, 10)) + "</b>" : "") +
+          ". Nothing else to do — see you at the gym.");
+      }
+      if (!d.waiver) {
+        return panel("Not ready yet",
+          "The waiver hasn't been published yet. Please check back, or ask the front desk.");
+      }
+
+      app.innerHTML =
+        '<h1 style="margin:0 0 4px">Sign your waiver</h1>' +
+        '<p class="sign-meta">You\'re on the roster for <b>' + esc(d.team_name) + "</b> — " +
+          esc(d.event_name) +
+          (d.starts_at ? " on <b>" + esc(String(d.starts_at).slice(0, 10)) + "</b>" : "") +
+          ".<br>Everyone playing needs a current waiver on file before check-in.</p>" +
+        '<div class="sign-card">' +
+          '<h2 style="margin:0 0 10px;font-size:18px">Waiver (' + esc(d.waiver.label) + ")</h2>" +
+          '<div class="waiver-box" tabindex="0" role="region" aria-label="Waiver text — scrollable">' +
+            esc(d.waiver.body) +
+          "</div>" +
+          '<label class="fld" for="sigName">Your full legal name</label>' +
+          '<input type="text" id="sigName" autocomplete="name" spellcheck="false" ' +
+            'aria-describedby="sigHint" value="' + esc(d.member_name || "") + '" />' +
+          '<p class="hint" id="sigHint">Typing your name here is your signature. ' +
+            "Use your legal name even if you're on the roster under a nickname.</p>" +
+          '<label class="chk"><input type="checkbox" id="guardian" />' +
+            "<span>I'm signing as the parent or guardian of a participant under 18.</span></label>" +
+          '<label class="chk"><input type="checkbox" id="agree" />' +
+            "<span>I've read the waiver above and I accept it.</span></label>" +
+          '<button class="btn-sign" id="go" type="button" disabled>Sign waiver</button>' +
+          '<p class="err" id="err" role="alert"></p>' +
+        "</div>";
+
+      var agree = document.getElementById("agree");
+      var go = document.getElementById("go");
+      var err = document.getElementById("err");
+      agree.addEventListener("change", function () { go.disabled = !agree.checked; });
+
+      go.addEventListener("click", function () {
+        err.textContent = "";
+        go.disabled = true;
+        go.textContent = "Signing…";
+        fetch(API + "/api/sign/" + token, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            signature_name: document.getElementById("sigName").value,
+            guardian: document.getElementById("guardian").checked,
+            agree: true,
+            version_id: d.waiver.version_id,
+          }),
+        })
+        .then(function (r) { return r.json().then(function (j) { return { s: r.status, j: j }; }); })
+        .then(function (res2) {
+          if (res2.j && res2.j.ok) {
+            return panel("Signed — thank you",
+              "Your waiver is on file" +
+              (res2.j.expires_at ? " until <b>" + esc(String(res2.j.expires_at).slice(0, 10)) + "</b>" : "") +
+              ". You're clear to check in.");
+          }
+          err.textContent = (res2.j && res2.j.error) || "Couldn't save that. Try again.";
+          go.disabled = false;
+          go.textContent = "Sign waiver";
+          document.getElementById("sigName").focus();
+        })
+        .catch(function () {
+          err.textContent = "Couldn't reach Boomtown. Check your connection and try again.";
+          go.disabled = false;
+          go.textContent = "Sign waiver";
+        });
+      });
+    }
+  })();
+  </script>
+</body>
+</html>
+<!-- Changelog: v1.0 (2026-07-26) — initial public teammate waiver-sign page (v0.25.0). -->

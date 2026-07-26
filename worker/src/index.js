@@ -1,12 +1,16 @@
 /**
  * Boomtown Platform — API Worker
- * Version: v0.24.0 · Date: 2026-07-26 · Modules 1–17
+ * Version: v0.25.0 · Date: 2026-07-26 · Modules 1–17
  *
- * v0.24.0 (2026-07-26, Build status): frontend-only release — assets/build-status.js is
- *   the single registry of module maturity (live / beta / wip / soon); both rails stamp a
- *   chip on unfinished items and each affected page carries a one-line notice. No worker
- *   logic changed and no migration: this bump exists so /api/health and the deployed site
- *   report the same version, which is how every paste is verified.
+ * v0.25.0 (2026-07-26, Consent): NEW consent.js mounted after calendar. Teammate waiver
+ *   self-sign — a capability token (access_tokens.kind='waiver_sign', migration 0016)
+ *   emailed to a roster row lets a teammate sign for themselves, which creates the contact
+ *   the door gate has had nothing to check against since v0.23.0. Also the media-release
+ *   consent record (migration 0017) — waiver §6's written opt-out finally has somewhere
+ *   to live. /api/sign/:token is public: the token is the credential, there is no session.
+ *
+ * v0.24.0 (2026-07-26, Build status): frontend-only — assets/build-status.js is the single
+ *   registry of module maturity. Version bumped so /api/health and the site agree.
  *
  * v0.23.0 (2026-07-26, Waiver enforcement + calendar feeds):
  *   NEW calendar.js. GET /api/calendar/:token.ics is handled BEFORE the /api/ chain and
@@ -166,6 +170,7 @@ import { waitlistRoutes, wireWaitlists, waitlistSweep } from "./waitlists.js";
 import { pushRoutes, wirePush, pushPruneSweep } from "./push.js"; // v0.20.0 PWA web push
 import { waiverRoutes, wireWaivers } from "./waivers.js"; // v0.22.0 waiver versioning
 import { calendarRoutes, wireCalendar, icsFeed } from "./calendar.js"; // v0.23.0 iCal feeds
+import { consentRoutes, wireConsent } from "./consent.js"; // v0.25.0 teammate self-sign + media consent
 import { waiverReminderSweep, waiverExpirySweep, sendEmail, escapeHtml } from "./registrations.js";
 
 const MAGIC_LINK_TTL_MIN = 15;
@@ -202,6 +207,7 @@ wireWaitlists({ ...wiredHelpers, sendEmail, escapeHtml }); // sendEmail injected
 wirePush(wiredHelpers); // v0.20.0
 wireWaivers(wiredHelpers); // v0.22.0
 wireCalendar(wiredHelpers); // v0.23.0
+wireConsent(wiredHelpers); // v0.25.0
 
 /** ctx carries the caller's session + selected org for role checks. */
 async function buildCtx(request, env) {
@@ -245,7 +251,7 @@ export default {
       } else if (url.pathname === "/api/orgs" && request.method === "GET") {
         res = await listOrgs(env);
       } else if (url.pathname === "/api/health") {
-        res = json({ ok: true, version: "v0.24.0" });
+        res = json({ ok: true, version: "v0.25.0" });
       } else if (url.pathname === "/api/webhooks/square" && request.method === "POST") {
         res = await membershipWebhook(request, env); // verifies signature; forwards payment.* to squareWebhook
       } else if (url.pathname.startsWith("/api/calendar/") && url.pathname.endsWith(".ics") && request.method === "GET") {
@@ -256,6 +262,7 @@ export default {
         const ctx = await buildCtx(request, env);
         res = (await waiverRoutes(request, env, url, ctx)) // v0.22.0 — /api/waiver/* + /api/admin/waivers/*
            || (await calendarRoutes(request, env, url, ctx)) // v0.23.0 — feed token mint/revoke
+           || (await consentRoutes(request, env, url, ctx)) // v0.25.0 — /api/sign/* + waiver links + media consent
            || (await marketingRoutes(request, env, url, ctx))
            || (await messagesRoutes(request, env, url, ctx))
            || (await posRoutes(request, env, url, ctx))

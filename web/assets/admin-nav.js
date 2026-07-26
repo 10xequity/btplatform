@@ -1,5 +1,7 @@
 /* Boomtown Platform — Admin sidebar (shared)
-   Version: v2.11 · Date: 2026-07-26 · Ships in: v0.24.0
+   Version: v2.12 · Date: 2026-07-26 · Ships in: v0.25.0
+   v2.12: Media consent (admin-consent.html) added under People (v0.25.0) — where a
+   written media-release opt-out gets recorded. No self-serve equivalent, by design.
    v2.11: Build-status indicators (v0.24.0) — loads assets/build-status.js, which stamps a
    small BETA / WIP chip on any rail item whose module is not finished and puts a one-line
    banner at the top of that page. Adds "Build status" to the Sandbox group. The registry
@@ -138,6 +140,7 @@
       { href: "admin-users.html#roles",   ico: "roles",   text: "Admins & Roles" },
       { href: "admin-security.html",      ico: "roles",   text: "Security & Recovery" },
       { href: "admin-waivers.html",       ico: "members", text: "Waivers" },
+      { href: "admin-consent.html",       ico: "roles",   text: "Media consent" },
       { href: "settings.html",            ico: "gear",    text: "Settings" },
     ]},
     { label: "Member site", key: "site", items: [
@@ -380,7 +383,7 @@
       if (window.BT_STATUS || document.getElementById("bt-status-js")) return;
       var s = document.createElement("script");
       s.id = "bt-status-js";
-      s.src = "assets/build-status.js?v=0.24.0";
+      s.src = "assets/build-status.js?v=0.25.0";
       s.async = false;
       document.head.appendChild(s);
     } catch (e) { /* indicators are never load-blocking */ }

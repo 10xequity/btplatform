@@ -1,5 +1,5 @@
 /* Boomtown Platform — Build Status indicators (shared)
-   File: web/assets/build-status.js · Version: v1.0 · Date: 2026-07-26 · Ships in: v0.24.0
+   File: web/assets/build-status.js · Version: v1.1 · Date: 2026-07-26 · Ships in: v0.25.0
 
    WHY THIS EXISTS
    Testers are about to be pointed at a site where some screens are finished, some work
@@ -59,6 +59,8 @@
     "admin-waivers.html":       { s: "beta", n: "Versioning, publishing and signature pinning are finished and tested. The live text is still the v1 legacy placeholder — waiver v2 is drafted and waiting on one email address before it can be published." },
     "settings.html":            { s: "live" },
     "admin-buildstatus.html":   { s: "live" },
+    "admin-consent.html":       { s: "live" },   /* v0.25.0 */
+    "sign.html":                { s: "live" },   /* v0.25.0 — public, token-gated */
 
     /* --- Member site --- */
     "index.html":               { s: "live" },
@@ -93,10 +95,10 @@
       n: "SANDBOX across the whole platform. Switching to production is the owner's call and is a deliberate, separate step." },
     { name: "SMS",                            s: "soon", area: "Marketing",
       n: "Phase 3. Needs Twilio plus A2P 10DLC registration and its own opt-in, which can never be bundled with the email consent." },
-    { name: "Teammate self-sign links",       s: "soon", area: "People",
-      n: "Today only the captain signs a waiver; teammates are just a name and an email. Next build." },
-    { name: "Media-release opt-out record",   s: "soon", area: "People",
-      n: "The waiver names a written opt-out path, but the platform has nowhere to record that a family used it." },
+    { name: "Teammate self-sign links",       s: "live", area: "People",
+      n: "Captains and staff can send a roster member a waiver link. Signing creates their contact record, so the door gate finally has something to check them against. The email itself still won't arrive until Brevo is connected — copy the link from the button instead." },
+    { name: "Media-release opt-out record",   s: "live", area: "People",
+      n: "Staff record a written opt-out under People → Media consent. Keeps history; withdrawing does not erase that it existed. No self-serve opt-out, by design." },
     { name: "Promo redemption at checkout",   s: "soon", area: "Money",
       n: "Promos exist and work admin-side; the public checkout has no code box yet." },
     { name: "Achievements & public standings",s: "soon", area: "Run events", n: "M17. Spec approved, queued behind the format engine." },
