@@ -1,0 +1,129 @@
+# Boomtown Platform — Worker deploy, gated
+# Version: v0.3.0 · Date: 2026-07-27
+# Supersedes: v0.2.2 (2026-07-21)
+#
+# WHAT CHANGED AND WHY
+# --------------------
+# v0.2.2 ran ONE of twenty test files (`worker/test/scheduler.test.mjs`) and deployed
+# unconditionally. It stayed green for 31 consecutive runs while covering 5% of the suite,
+# and on 2026-07-27 run #31 successfully deployed v0.32.0 against a schema missing
+# migration 0025. That is failure class 3 from library §2: a guard narrower than the thing
+# it guards is worse than no guard, because it reports clean.
+#
+# Three additions:
+#   1. FULL test suite — `node --test test/*.mjs` (standing rule 7). The glob is required;
+#      `node --test test/` alone fails with MODULE_NOT_FOUND.
+#   2. PRE-deploy schema gate — refuses to deploy when the repo carries a migration D1 has
+#      not applied. Fails closed if D1 cannot be read at all.
+#   3. POST-deploy version parity — asserts /api/health matches the version string in
+#      worker/src/index.js, with a cache buster. A cached 200 that agrees with your notes
+#      is more dangerous than a 500; the first health read on 2026-07-27 returned a stale
+#      v0.31.0 and nearly concealed the break.
+#
+# TOKEN SCOPE — READ THIS BEFORE THE FIRST RUN
+# CLOUDFLARE_API_TOKEN must now carry **D1:Read** in addition to Workers Scripts:Edit,
+# and CLOUDFLARE_ACCOUNT_ID must be set. Without both, the schema gate fails closed and
+# nothing deploys. That is intended; widen the token rather than removing the gate.
+
+name: Deploy Worker
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "worker/**"
+      - "wrangler.toml"
+      - "db/migrations/**"
+      - ".github/workflows/deploy-worker.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-worker
+  cancel-in-progress: false
+
+env:
+  D1_NAME: boomtown-prod
+  HEALTH_URL: https://boomtown-api.vvisuth.workers.dev/api/health
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 1. GATE — everything that can say "no" runs before anything is deployed.
+  # ---------------------------------------------------------------------------
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Syntax check every worker module
+        run: |
+          set -euo pipefail
+          for f in worker/src/*.js; do node --check "$f"; done
+          echo "node --check: $(ls worker/src/*.js | wc -l) modules OK"
+
+      - name: Full test suite
+        working-directory: worker
+        run: node --test test/*.mjs
+
+      - name: Read highest applied migration from live D1
+        id: d1
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4 d1 execute "$D1_NAME" --remote --json \
+            --command "SELECT MAX(CAST(version AS INTEGER)) AS applied FROM schema_migrations;" \
+            > d1.json || { echo "::error::D1 read failed. Check CLOUDFLARE_API_TOKEN has D1:Read and CLOUDFLARE_ACCOUNT_ID is set."; exit 1; }
+          APPLIED=$(node -e '
+            const j=JSON.parse(require("fs").readFileSync("d1.json","utf8"));
+            const rows=(Array.isArray(j)?j:[j]).flatMap(r=>r.results||[]);
+            const v=rows.length?rows[0].applied:null;
+            if(v===null||v===undefined) process.exit(1);
+            process.stdout.write(String(v));
+          ')
+          echo "applied=$APPLIED" >> "$GITHUB_OUTPUT"
+          echo "D1 highest applied migration: $APPLIED"
+
+      - name: Schema gate — block if code is ahead of schema
+        run: node worker/scripts/schema-gate.mjs --applied "${{ steps.d1.outputs.applied }}"
+
+  # ---------------------------------------------------------------------------
+  # 2. DEPLOY — only reachable when the gate is green.
+  # ---------------------------------------------------------------------------
+  deploy:
+    needs: gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Expected version from source
+        id: want
+        run: |
+          set -euo pipefail
+          V=$(grep -oE 'version: "v[0-9]+\.[0-9]+\.[0-9]+"' worker/src/index.js \
+              | head -1 | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+')
+          test -n "$V" || { echo "::error::No version string found in worker/src/index.js"; exit 1; }
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "expecting $V"
+
+      - name: Deploy boomtown-api
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+      - name: Version parity — /api/health must match the source
+        run: |
+          set -euo pipefail
+          WANT='${{ steps.want.outputs.version }}'
+          for i in 1 2 3 4 5 6; do
+            BODY=$(curl -fsS -H 'Cache-Control: no-cache' "$HEALTH_URL?ci=$GITHUB_RUN_ID-$i" || echo '')
+            echo "attempt $i: $BODY"
+            case "$BODY" in *"\"$WANT\""*) echo "PARITY OK — health serves $WANT"; exit 0;; esac
+            sleep 10
+          done
+          echo "::error::Deployed but /api/health never reported $WANT. Propagation stall or a wrangler.toml route mismatch — investigate before shipping anything else."
+          exit 1
