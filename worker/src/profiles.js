@@ -50,6 +50,7 @@
 
 import { pinFor } from "./waivers.js"; // v1.3 — one-way import, no cycle
 import { orgTimezone, icsVtimezone } from "./calendar.js"; // v0.26.0 — one zone source, no cycle
+import { guardianGate, contactWithDob } from "./family.js"; // v0.32.0 — one age rule; family.js imports only crypto.js, no cycle
 
 let H = null; // wired: { json, audit, isStaff, requireStaff, sendLoginLink }
 export function wireProfiles(helpers) { H = helpers; }
@@ -461,6 +462,21 @@ async function addChild(request, env, ctx) {
   if (age >= 18) return H.json({ error: "They're 18 or older — they can create their own account with their email instead." }, 400);
 
   const self = await ownContact(env, ctx);
+
+  // v0.32.0 — the second defect recorded in context §5: addChild never checked the PARENT's own
+  // age, while guardianGate did. Two implementations of one rule and the live one was the weaker.
+  // This is now the same call the registration path and the invite claim make.
+  const selfDob = await contactWithDob(env, ctx.orgId, self.id);
+  const gate = guardianGate({
+    dateOfBirth: dob,
+    guardian: { id: self.id, date_of_birth: selfDob ? selfDob.date_of_birth : null },
+  });
+  if (!gate.ok) {
+    // D-MIN-11: a blank guardian DOB is something to collect, not a wall. The member portal
+    // already has a signed-in adult, so it asks inline rather than minting an invitation.
+    return H.json({ error: gate.error, reason: gate.reason, need_guardian_dob: true }, gate.status);
+  }
+
   const ins = await env.DB.prepare(
     "INSERT INTO contacts (org_id, full_name) VALUES (?1, ?2)"
   ).bind(ctx.orgId, name).run();

@@ -1,6 +1,11 @@
 /**
  * Boomtown Platform — Registration + Square + Captain-scoring routes
- * Version: v1.5 · Date: 2026-07-26 · Modules 4 + 8 · Ships in: v0.23.0
+ * Version: v1.6 · Date: 2026-07-26 · Modules 4 + 8 · Ships in: v0.32.0
+ *
+ * v1.6 (2026-07-26, minors): submitRegistration is age-aware for the first time. Before v0.32.0
+ *   this file contained zero matches for date_of_birth, guardian or minor across 49 KB — a
+ *   participant of any age could be registered with no adult attached. D-MIN-9 + D-MIN-11, and
+ *   the owner chose option B: registration itself is blocked, not merely account activation.
  *
  * v1.5 (2026-07-26): + waiverExpirySweep() — emails a member ~30 days before their waiver
  *   lapses. Calendar-driven, one notice per waiver row ever (dedupe on waiver_id, not on a
@@ -61,6 +66,9 @@ import { waitlistGate, markClaimed, offerNext, activeRegistrationCount, computeI
 import { pinFor, currentVersion } from "./waivers.js"; // v1.4 — one-way import, no cycle
 import { effectiveTierFor, applyTierDiscount } from "./tiers.js"; // v0.30.0 F-6 — tiers.js imports nothing, no cycle
 import { senderIdentity } from "./orgs.js"; // v0.31.0 F-13 — orgs.js imports nothing, no cycle
+// v0.32.0 — family.js imports only crypto.js, so this is one-way and cycle-free. These are the
+// call sites F-6/F-17 recorded as missing since v0.27.0: built, tested, never invoked.
+import { validateBirthdate, guardianGate, guardianshipFor, mintGuardianInvite } from "./family.js";
 
 const SQUARE_VERSION = "2026-05-20";
 
@@ -138,6 +146,75 @@ async function submitRegistration(request, env, eventId) {
   if (!b.captain_name || !String(b.captain_name).trim()) return json({ error: "Captain name is required." }, 400);
   if (!b.waiver_accepted || !b.waiver_signature) return json({ error: "The waiver must be accepted and signed to register." }, 400);
 
+  /* ---------------- age gate (v0.32.0, D-MIN-9 / D-MIN-11, owner option B) ----------------
+     Runs BEFORE the waiver pin, the capacity gate and every write. The order is the point: the
+     reverse — create the registration, then ask about age — means a minor is already registered
+     by the time an adult appears, which is the failure family.js exists to prevent.
+
+     NOTE ON SCOPE, stated so it is not mistaken for coverage: this gates the REGISTRANT (the
+     captain submitting the form). Team members are name+email rows with no date of birth and are
+     not gated here. Extending the gate to a roster is a separate decision, not an oversight. */
+  const dobCheck = validateBirthdate(b.date_of_birth);
+  if (!dobCheck.ok) return json({ error: dobCheck.error, need_date_of_birth: true }, 400);
+
+  if (dobCheck.minor) {
+    // Find-or-create the contact first. D-MIN-9: the account IS created, it just is not active.
+    let mc = await env.DB.prepare(
+      "SELECT id, activation_state FROM contacts WHERE org_id=?1 AND email=?2 AND deleted_at IS NULL"
+    ).bind(ev.org_id, email).first();
+    if (!mc) {
+      const ins = await env.DB.prepare(
+        "INSERT INTO contacts (org_id, email, full_name, phone, activation_state) VALUES (?1,?2,?3,?4,'pending_guardian')"
+      ).bind(ev.org_id, email, b.captain_name, b.captain_phone || null).run();
+      mc = { id: ins.meta.last_row_id, activation_state: "pending_guardian" };
+    }
+    await env.DB.prepare(
+      `INSERT INTO member_profiles (org_id, contact_id, date_of_birth, visibility, show_instagram)
+       VALUES (?1, ?2, ?3, 'private', 0)
+       ON CONFLICT(org_id, contact_id) DO UPDATE SET date_of_birth = excluded.date_of_birth,
+                                                     updated_at = datetime('now')`
+    ).bind(ev.org_id, mc.id, b.date_of_birth).run();
+
+    // ONE age rule, not a second hand-rolled one. guardianGate decides; this file only reacts.
+    // It also catches the case a bespoke `if (link)` would wave through: a linked "guardian" who
+    // is not themselves a recorded adult.
+    const link = await guardianshipFor(env, ev.org_id, mc.id);
+    const gate = guardianGate({
+      dateOfBirth: b.date_of_birth,
+      guardian: link ? { id: link.guardian_contact_id, date_of_birth: link.guardian_dob } : null,
+    });
+    if (gate.ok) {
+      await env.DB.prepare(
+        "UPDATE contacts SET activation_state='active', updated_at=datetime('now') WHERE id=?1 AND org_id=?2"
+      ).bind(mc.id, ev.org_id).run();
+    } else {
+      // Blocked (option B). Mint the invitation and hand back the link IN THE RESPONSE.
+      // Brevo is paused, so an emailed-only invite would be a block with no key. The on-screen
+      // link is the primary channel and email is the enhancement, never the other way round.
+      await env.DB.prepare(
+        "UPDATE contacts SET activation_state='pending_guardian', updated_at=datetime('now') WHERE id=?1 AND org_id=?2"
+      ).bind(mc.id, ev.org_id).run();
+      const inv = await mintGuardianInvite(env, ev.org_id, mc.id, `event:${eventId}`);
+      const base = (env.APP_URL || "").replace(/\/+$/, "");
+      await audit(env, { orgId: ev.org_id, userId: null }, "family.guardian_invite_issued", "contacts", mc.id,
+        { event: eventId, age: dobCheck.age });
+      return json({
+        error: gate.reason === "guardian_is_minor"
+          ? gate.error
+          : "This participant is under 18, so a parent or guardian has to complete their own account first. Send them the link below — registration finishes once they confirm.",
+        guardian_required: true,
+        reason: gate.reason,
+        age: dobCheck.age,
+        contact_id: mc.id,
+        // FRAGMENT, not a query string. A capability token in ?t= lands in server access logs
+        // and in the Referer header of every outbound link on the page. sign.html already
+        // established this pattern in v0.25.0 for the same reason.
+        invite_url: `${base}/guardian-complete.html#t=${inv.token}`,
+        invite_expires_at: inv.expires_at,
+      }, 409);
+    }
+  }
+
   // v1.4 — resolve the waiver version BEFORE anything is written. If the browser rendered an
   // older version than the one now active, refuse: recording consent to text the signer never
   // read is the one failure mode waiver versioning exists to prevent.
@@ -183,6 +260,15 @@ async function submitRegistration(request, env, eventId) {
     ).bind(ev.org_id, email, b.captain_name, b.captain_phone || null, b.city || null, b.state || null, b.instagram || null).run();
     contact = { id: ins.meta.last_row_id };
   }
+
+  // v0.32.0 — record the date of birth for every registrant, not only minors. ageOn() reads it
+  // at render time; nothing stores an is_minor boolean, which would be correct until a birthday.
+  await env.DB.prepare(
+    `INSERT INTO member_profiles (org_id, contact_id, date_of_birth, visibility)
+     VALUES (?1, ?2, ?3, 'members')
+     ON CONFLICT(org_id, contact_id) DO UPDATE SET date_of_birth = excluded.date_of_birth,
+                                                   updated_at = datetime('now')`
+  ).bind(ev.org_id, contact.id, b.date_of_birth).run();
 
   // Waiver (annual) — v1.4: pinned to the exact published version the form rendered.
   const expires = new Date(Date.now() + 365 * 86400000).toISOString();

@@ -1,6 +1,6 @@
 /**
  * Boomtown Platform — Families, guardians and minors
- * File: worker/src/family.js · Version: v1.0 · Date: 2026-07-26 · Ships in: v0.27.0
+ * File: worker/src/family.js · Version: v1.1 · Date: 2026-07-26 · Ships in: v0.32.0
  *
  * WHY GUARDIAN-FIRST, AND WHY IT IS NOT NEGOTIABLE
  * A minor cannot form a binding waiver. If a 15-year-old completes registration and signs, the
@@ -26,6 +26,8 @@
  * separation_choice / separated_at. member_profiles.date_of_birth already existed.
  */
 
+import { sha256Hex, randomToken } from "./crypto.js"; // leaf; consent.js imports THIS file, so it cannot be the source
+
 let H = null; // wired: { json, audit, requireStaff, contactForSession }
 export function wireFamily(helpers) { H = helpers; }
 
@@ -35,6 +37,28 @@ export const AGE_OF_MAJORITY = 18;
 export const DOMINANT_HANDS = ["left", "right", "ambidextrous"];
 
 export const SEPARATION_CHOICES = ["kept", "separated"];
+
+/** D-MIN-9 / migration 0025. A contact is 'active' or waiting on a linked adult. */
+export const ACTIVATION_STATES = ["active", "pending_guardian"];
+
+/** How long a guardian invitation stays usable. Long enough to hand a phone to a parent later. */
+export const GUARDIAN_INVITE_TTL_DAYS = 14;
+
+/**
+ * The certification a guardian types their name against (D-MIN-11).
+ *
+ * IT DELIBERATELY NAMES NO ORGANISATION. Standards §8 forbids an org name, entity, address or
+ * email as a literal in anything a member reads, and F-8, F-10, F-13 and F-13b are four separate
+ * costumes of that same defect. A string with no party identity in it cannot become a fifth.
+ * The wording is about the signer's own statement, which is what is actually being attested.
+ *
+ * Changing this string changes its hash, which is the point: every stored certification pins the
+ * exact wording that was on screen, the same way D-DOC-8 pins a signature to a body_sha.
+ */
+export const GUARDIAN_CERTIFICATION_TEXT =
+  "I confirm that I am the parent or legal guardian of the participant named above, " +
+  "that I am 18 years of age or older, and that the information I have entered is " +
+  "accurate and complete to the best of my knowledge.";
 
 /* ==================== pure logic (unit-tested) ==================== */
 
@@ -107,7 +131,9 @@ export function guardianGate({ dateOfBirth, guardian = null, now = new Date() })
   if (!guardian) {
     return {
       ok: false, minor: true, age: check.age, reason: "guardian_required", status: 409,
-      error: "This participant is under 18. A parent or guardian has to create or sign in to their own account first — they sign the waiver and the child's profile is created under their family.",
+      // D-MIN-8 struck the "they sign the waiver" clause: there is no waiver gate anywhere.
+      // The requirement is a linked adult account, not a signature.
+      error: "This participant is under 18. A parent or guardian has to create or sign in to their own account first, and the child's profile is created under their family.",
     };
   }
   // The guardian's own age is checked the same way, and fails closed for the same reason.
@@ -242,7 +268,72 @@ export async function guardianshipFor(env, orgId, minorContactId) {
   ).bind(orgId, minorContactId).first();
 }
 
+
+/* ==================== guardian invitations (D-MIN-11) ==================== */
+
+/**
+ * Mint a single-use invitation for the adult who will claim a pending minor.
+ *
+ * Reuses the shape consent.js proved for waiver_sign tokens: 32 random bytes, only the SHA
+ * stored, expiring, revoked on use. The raw token is returned ONCE and never persisted.
+ *
+ * Re-minting revokes any live invite for the same minor first. Migration 0025 backs that with a
+ * partial unique index, so a race that slips past this still cannot leave two live invites.
+ */
+export async function mintGuardianInvite(env, orgId, minorContactId, label = null) {
+  await env.DB.prepare(
+    `UPDATE access_tokens SET revoked_at = datetime('now')
+      WHERE org_id = ?1 AND kind = 'guardian_invite' AND contact_id = ?2
+        AND revoked_at IS NULL AND deleted_at IS NULL`
+  ).bind(orgId, minorContactId).run();
+
+  const raw = randomToken();
+  const expires = new Date(Date.now() + GUARDIAN_INVITE_TTL_DAYS * 86_400_000).toISOString();
+  await env.DB.prepare(
+    `INSERT INTO access_tokens (org_id, kind, token_sha, contact_id, label, expires_at)
+     VALUES (?1, 'guardian_invite', ?2, ?3, ?4, ?5)`
+  ).bind(orgId, await sha256Hex(raw), minorContactId, label, expires).run();
+
+  return { token: raw, expires_at: expires };
+}
+
+/**
+ * Resolve an invite token to its pending minor. Fails closed on every unhappy path and returns
+ * the SAME shape for "wrong token" and "expired token" reasons the caller can distinguish, but
+ * never leaks whether a token merely expired versus never existed to an unauthenticated caller.
+ */
+export async function loadGuardianInvite(env, rawToken) {
+  const raw = String(rawToken || "").trim();
+  if (!/^[a-f0-9]{32,64}$/.test(raw)) return { ok: false, status: 404, error: "This invitation link isn't valid." };
+  const row = await env.DB.prepare(
+    `SELECT t.id, t.org_id, t.contact_id, t.expires_at, t.revoked_at, t.use_count,
+            c.full_name, c.email, c.activation_state, mp.date_of_birth
+       FROM access_tokens t
+       JOIN contacts c ON c.id = t.contact_id AND c.deleted_at IS NULL
+       LEFT JOIN member_profiles mp ON mp.contact_id = c.id AND mp.deleted_at IS NULL
+      WHERE t.token_sha = ?1 AND t.kind = 'guardian_invite' AND t.deleted_at IS NULL`
+  ).bind(await sha256Hex(raw)).first();
+
+  if (!row) return { ok: false, status: 404, error: "This invitation link isn't valid." };
+  if (row.revoked_at) return { ok: false, status: 410, error: "This invitation has already been used." };
+  if (row.expires_at && row.expires_at < new Date().toISOString()) {
+    return { ok: false, status: 410, error: "This invitation has expired. Ask for a new one.", expired: true };
+  }
+  return { ok: true, token_id: row.id, invite: row };
+}
+
+/** Burn the token. Same atomic single-shot UPDATE consent.js:284 uses — the WHERE clause is the lock. */
+export async function consumeGuardianInvite(env, tokenId) {
+  const res = await env.DB.prepare(
+    `UPDATE access_tokens
+        SET revoked_at = datetime('now'), use_count = use_count + 1, last_used_at = datetime('now')
+      WHERE id = ?1 AND revoked_at IS NULL`
+  ).bind(tokenId).run();
+  return (res.meta && res.meta.changes) === 1;
+}
+
 /* ==================== routes ==================== */
+
 
 export async function familyRoutes(request, env, url, ctx) {
   const p = url.pathname, m = request.method;
@@ -358,6 +449,121 @@ export async function familyRoutes(request, env, url, ctx) {
       { choice, minor_contact_id: g.minor_contact_id, resign: requirements.resign });
 
     return json({ ok: true, choice, requirements });
+  }
+
+  /* ---- guardian invitation: read (public — the token IS the credential) ---- */
+  if ((p.match(/^\/api\/guardian-invite\/[a-f0-9]{32,64}$/)) && m === "GET") {
+    const res = await loadGuardianInvite(env, p.split("/").pop());
+    if (!res.ok) return json({ error: res.error, expired: !!res.expired }, res.status);
+    const inv = res.invite;
+    // Deliberately narrow: enough for the adult to recognise the child, nothing more. No email,
+    // no address, no other family members. An invite link is not an account.
+    return json({
+      ok: true,
+      participant: {
+        full_name: inv.full_name,
+        age: ageOn(inv.date_of_birth),
+        minor: isMinor(inv.date_of_birth),
+        activation_state: inv.activation_state,
+      },
+      certification_text: GUARDIAN_CERTIFICATION_TEXT,
+      already_active: inv.activation_state === "active",
+    });
+  }
+
+  /* ---- guardian invitation: claim + certify ---- */
+  if ((p.match(/^\/api\/guardian-invite\/[a-f0-9]{32,64}\/claim$/)) && m === "POST") {
+    if (!ctx.session) return json({ error: "Create your own account or sign in first, then open this link again." }, 401);
+
+    const token = p.split("/")[3];
+    const b = await request.json().catch(() => ({}));
+    const typedName = String(b.certified_name || "").trim().slice(0, 120);
+    const guardianDob = String(b.guardian_date_of_birth || "").trim();
+
+    if (b.certified !== true) return json({ error: "Tick the confirmation box to continue." }, 400);
+    if (!typedName || typedName.split(/\s+/).length < 2) return json({ error: "Type your full legal name." }, 400);
+
+    const res = await loadGuardianInvite(env, token);
+    if (!res.ok) return json({ error: res.error, expired: !!res.expired }, res.status);
+    const inv = res.invite;
+
+    const self = await H.contactForSession(env, ctx);
+    if (!self) return json({ error: "Your account has no contact record in this organization yet." }, 409);
+    if (self.id === inv.contact_id) return json({ error: "A participant can't be their own guardian." }, 409);
+    if (inv.org_id !== ctx.orgId) return json({ error: "This invitation isn't valid here." }, 404);
+
+    // The guardian's own date of birth. Accept it here if it is missing, because D-MIN-11 says a
+    // blank DOB is a thing to collect, not a wall to hit.
+    let dob = self.date_of_birth || null;
+    if (!dob && guardianDob) {
+      const vb = validateBirthdate(guardianDob);
+      if (!vb.ok) return json({ error: vb.error }, 400);
+      await env.DB.prepare(
+        `INSERT INTO member_profiles (org_id, contact_id, date_of_birth, visibility)
+         VALUES (?1, ?2, ?3, 'members')
+         ON CONFLICT(org_id, contact_id) DO UPDATE SET date_of_birth = excluded.date_of_birth,
+                                                       updated_at = datetime('now')`
+      ).bind(ctx.orgId, self.id, guardianDob).run();
+      dob = guardianDob;
+    }
+    if (!dob) return json({ error: "Enter your own date of birth to continue.", need_guardian_dob: true }, 400);
+
+    // ONE age rule for the whole platform. guardianGate already refuses a guardian who is not a
+    // recorded adult; this is the call site it has been missing since v0.27.0 (F-6, F-17).
+    const gate = guardianGate({
+      dateOfBirth: inv.date_of_birth,
+      guardian: { id: self.id, date_of_birth: dob },
+    });
+    if (!gate.ok) return json({ error: gate.error, reason: gate.reason }, gate.status);
+
+    // Burn the token BEFORE writing. If two tabs race, exactly one wins the UPDATE.
+    if (!(await consumeGuardianInvite(env, res.token_id))) {
+      return json({ error: "This invitation has already been used." }, 410);
+    }
+
+    const sha = await sha256Hex(GUARDIAN_CERTIFICATION_TEXT);
+    await env.DB.prepare(
+      `INSERT INTO guardianships
+         (org_id, guardian_contact_id, minor_contact_id,
+          certified_by_contact_id, certified_at, certified_name, certification_sha)
+       VALUES (?1, ?2, ?3, ?2, datetime('now'), ?4, ?5)
+       ON CONFLICT(org_id, guardian_contact_id, minor_contact_id) DO UPDATE SET
+          status = 'active', deleted_at = NULL,
+          certified_by_contact_id = excluded.certified_by_contact_id,
+          certified_at = excluded.certified_at,
+          certified_name = excluded.certified_name,
+          certification_sha = excluded.certification_sha,
+          updated_at = datetime('now')`
+    ).bind(ctx.orgId, self.id, inv.contact_id, typedName, sha).run();
+
+    // Family: reuse the guardian's if they have one, otherwise create it. familyNameFor already
+    // owns the naming so two callers cannot drift apart on it.
+    let familyId = self.family_id || null;
+    if (!familyId) {
+      const f = await env.DB.prepare(
+        "INSERT INTO families (org_id, name, primary_contact_id) VALUES (?1, ?2, ?3)"
+      ).bind(ctx.orgId, familyNameFor(self.full_name), self.id).run();
+      familyId = f.meta.last_row_id;
+      await env.DB.prepare("UPDATE contacts SET family_id=?1, updated_at=datetime('now') WHERE id=?2")
+        .bind(familyId, self.id).run();
+    }
+
+    // D-MIN-9 satisfied: an adult account exists and is linked, so the minor activates.
+    await env.DB.prepare(
+      `UPDATE contacts SET activation_state = 'active', family_id = ?1, updated_at = datetime('now')
+        WHERE id = ?2 AND org_id = ?3`
+    ).bind(familyId, inv.contact_id, ctx.orgId).run();
+
+    await H.audit(env, ctx, "family.guardian_certified", "contacts", inv.contact_id, {
+      guardian_contact_id: self.id, certified_name: typedName, certification_sha: sha,
+    });
+
+    return json({
+      ok: true,
+      participant: { contact_id: inv.contact_id, full_name: inv.full_name },
+      family_id: familyId,
+      message: "Account confirmed. The participant can be registered now.",
+    });
   }
 
   return null;

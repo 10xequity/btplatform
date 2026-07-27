@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<!-- Boomtown Platform — Guardian account completion · Version: v1.0 · Date: 2026-07-26 · Ships in: v0.32.0
+     D-MIN-11. A participant under 18 cannot register (owner option B, 2026-07-26); this is the
+     page that lifts the block. The adult confirms their own account, supplies their own date of
+     birth if it is not on file, and certifies that what they entered is accurate.
+
+     PUBLIC SHELL, AUTHENTICATED ACTION. The token in the fragment identifies WHICH pending
+     participant this is about, so the page can render before sign-in. Claiming still requires a
+     real session — a link alone must never be able to attach an adult to a child.
+
+     The fragment (#t=) is used rather than ?t= deliberately: fragments are not sent in the
+     Referer header and do not land in access logs. Same reasoning as sign.html.
+
+     NO ORGANISATION NAME APPEARS ON THIS PAGE. Standards §8, and F-8/F-10/F-13/F-13b are four
+     costumes of the same defect. A page with no party identity in it cannot become a fifth. -->
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex, nofollow" />
+  <meta name="referrer" content="no-referrer" />
+  <title>Confirm a young participant's account</title>
+  <link rel="stylesheet" href="assets/tokens.css" />
+  <link rel="stylesheet" href="assets/app.css" />
+  <style>
+    .g-wrap { max-width: 620px; margin: 0 auto; padding: 24px 16px 64px; }
+    .g-card { background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; padding: 20px; }
+    .g-who { background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px;
+      padding: 14px 16px; margin: 0 0 20px; }
+    .g-who b { font-size: 18px; display: block; line-height: 1.25; }
+    .g-who span { font-size: 14px; color: var(--text-dim); }
+    .g-cert { background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+      padding: 14px 16px; font-size: 14px; line-height: 1.6; margin: 18px 0 12px; }
+    label.fld { display: block; font-size: 14px; font-weight: 600; margin: 18px 0 6px; }
+    input[type=text], input[type=date] { width: 100%; box-sizing: border-box; min-height: 52px;
+      padding: 0 14px; font-size: 16px; background: var(--bg); color: var(--text);
+      border: 1px solid var(--border); border-radius: 8px; }
+    input:focus-visible, button:focus-visible, a:focus-visible {
+      outline: 2px solid var(--primary); outline-offset: 2px; }
+    .g-check { display: flex; gap: 12px; align-items: flex-start; margin: 14px 0 4px; }
+    .g-check input { width: 22px; height: 22px; min-width: 22px; margin-top: 2px; }
+    .g-check label { font-size: 15px; line-height: 1.5; }
+    .btn.primary { width: 100%; min-height: 52px; font-size: 16px; margin-top: 20px; }
+    .help-text { font-size: 13px; color: var(--text-dim); margin: 6px 0 0; line-height: 1.5; }
+    .msg { margin-top: 16px; font-size: 15px; line-height: 1.5; border-radius: 8px; padding: 12px 14px; }
+    .msg.err { color: var(--danger); border: 1px solid var(--danger); }
+    .msg.ok { color: var(--positive); border: 1px solid var(--positive); }
+    /* Occasional-frequency screen (standards §2): a short fade, no movement, nothing over 240ms. */
+    .g-card { animation: gIn 200ms cubic-bezier(0.23, 1, 0.32, 1) both; }
+    @keyframes gIn { from { opacity: 0 } to { opacity: 1 } }
+    @media (prefers-reduced-motion: reduce) { .g-card { animation-duration: 1ms } }
+  </style>
+</head>
+<body>
+  <main class="g-wrap">
+    <h1 style="font-size:22px;line-height:1.25;margin:0 0 4px">Confirm this account</h1>
+    <p class="help-text" style="margin:0 0 18px">
+      Someone under 18 tried to register and needs a parent or guardian to confirm their account first.
+    </p>
+    <div class="g-card" id="card" aria-live="polite">
+      <p class="help-text">Loading…</p>
+    </div>
+  </main>
+  <script src="assets/config.js" defer></script>
+  <script src="assets/guardian-complete.js" defer></script>
+</body>
+</html>

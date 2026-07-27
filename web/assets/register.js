@@ -158,6 +158,12 @@
         <div class="field"><label for="state">State</label><input id="state" /></div>
       </div>
       <div class="field"><label for="instagram">Instagram handle(s) <span style="opacity:.7">(optional)</span></label><input id="instagram" placeholder="@yourteam" /></div>
+      <div class="field">
+        <label for="dob">Your date of birth *</label>
+        <input id="dob" type="date" autocomplete="bday" required
+               aria-describedby="dobHelp" max="${new Date().toISOString().slice(0, 10)}" />
+        <p class="help-text" id="dobHelp">Under 18? A parent or guardian confirms their own account first — we'll give you a link to send them.</p>
+      </div>
       ${customFields.map(fieldHtml).join("")}
       <h2 style="font-size:1rem">Waiver <span style="opacity:.7;font-weight:400">(${esc(waiver.label)})</span> *</h2>
       <div class="waiver-box" id="waiverBox" tabindex="0" role="region" aria-label="Waiver text — scroll to read in full">${esc(waiver.body)}</div>
@@ -203,6 +209,7 @@
     const $ = (id) => document.getElementById(id);
     const msg = $("msg");
     const show = (text, ok) => { msg.className = "msg " + (ok ? "ok" : "err"); msg.innerHTML = text; };
+    if (!$("dob").value) { show("Enter your date of birth.", false); $("dob").focus(); return; }
     if (!$("waiverAccept").checked || !$("waiverSig").value.trim()) { show("Please accept the waiver and type your name to sign it.", false); return; }
 
     const teammates = [];
@@ -219,6 +226,7 @@
       email: $("email").value, team_level: $("level").value, gender_division: $("division").value,
       team_name: $("teamName").value, captain_name: $("captainName").value, captain_phone: $("captainPhone").value,
       teammates, city: $("city").value, state: $("state").value, instagram: $("instagram").value,
+      date_of_birth: $("dob").value, // v0.32.0 — the gate runs server-side; this is only the input
       waiver_accepted: true, waiver_signature: $("waiverSig").value,
       waiver_version_id: waiver.id, // v0.5.0 — pins the signature to the text rendered above
       payment_method: payEl ? payEl.value : "square", custom,
@@ -231,6 +239,26 @@
     if (!r.ok) {
       if (r.data && r.data.event_full && r.data.waitlist_available) { // filled up between load and submit
         show(`${esc(r.data.error)} <a href="register.html?event=${encodeURIComponent(eventId)}">Join the waitlist →</a>`, false);
+        return;
+      }
+      if (r.data && r.data.guardian_required && r.data.invite_url) { // v0.32.0 — D-MIN-11
+        const u = r.data.invite_url;
+        show(
+          `${esc(r.data.error)}
+           <div class="field" style="margin-top:12px">
+             <label for="inviteUrl">Parent or guardian link</label>
+             <input id="inviteUrl" readonly value="${esc(u)}" aria-describedby="inviteHelp" />
+             <p class="help-text" id="inviteHelp">Text or email this to them. It works once and expires in 14 days.</p>
+           </div>
+           <button id="copyInvite" class="btn" type="button" style="margin-right:8px">Copy link</button>
+           <a class="btn ghost" href="${esc(u)}">Open it here</a>`,
+          false
+        );
+        const c = document.getElementById("copyInvite");
+        if (c) c.onclick = async () => {
+          try { await navigator.clipboard.writeText(u); c.textContent = "Copied"; }
+          catch { document.getElementById("inviteUrl").select(); c.textContent = "Press Ctrl/Cmd+C"; }
+        };
         return;
       }
       if (r.data && r.data.waiver_stale) { // v0.5.0: organizer published new text mid-form

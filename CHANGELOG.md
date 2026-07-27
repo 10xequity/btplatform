@@ -646,3 +646,55 @@ have the settings screen report ready while publish refuses.
 half already exists — `registrations.js` writes a `cash_pending` notifications row — so what
 remains is a queue screen, and it is independent of everything above. Moved to v0.31.1 to keep the
 release at two complete items rather than three partial ones.
+
+---
+
+## v0.32.0 — 2026-07-26 — Minors: age-aware registration, guardian invitation, certification
+
+**Migration 0025 — required. The release is not shipped until `SELECT COUNT(*) FROM schema_migrations` reads 25.**
+
+`registrations.js` is age-aware for the first time. Before this release the file held **zero**
+matches for `date_of_birth`, `guardian` or `minor` across 49 KB, so a participant of any age
+could be registered with no adult attached.
+
+- **D-MIN-9** — a minor's account is created but not activated. New `contacts.activation_state`
+  (`active` | `pending_guardian`).
+- **D-MIN-11** *(new, owner 2026-07-26)* — a blank guardian date of birth is not a form error.
+  The registrant is given an invitation link for the parent, the parent completes their own
+  account and certifies the information, and the block lifts.
+- **Owner option B** — registration **itself** is blocked, not merely account activation. A minor
+  without a certified guardian cannot be registered for anything.
+- **D-MIN-8 in force** — the `guardian_required` copy no longer says the guardian signs a waiver.
+  There is no waiver gate anywhere. A test asserts the word cannot come back.
+- **D-MIN-10** unchanged — the 18th-birthday keep-or-separate prompt stays.
+
+**The invitation link is rendered on screen, not only emailed.** Brevo is paused; an emailed-only
+invite would be a block with no key. Email is the enhancement, the on-screen link is the channel.
+The token travels in the URL **fragment**, never a query string, so it stays out of access logs
+and `Referer` headers — the same reasoning `sign.html` used in v0.25.0.
+
+**F-6 closed.** `guardianGate` had zero call sites since v0.27.0. It now has six, and it is the
+only age rule in the codebase: the public registration path, `profiles.js:addChild` and the invite
+claim all call the same function. `addChild` previously never checked the parent's own age while
+`guardianGate` did — two implementations of one rule, and the live one was the weaker.
+
+**NEW `worker/src/crypto.js`** — a leaf module holding `sha256Hex` and `randomToken`.
+`family.js` needed a hash and `consent.js` already imports `family.js`, so importing back would
+have created the exact cycle R-23 documents. **F-20 *(new)*: `sha256Hex` is defined four times —
+`consent.js`, `calendar.js`, `uploads.js`, `waivers.js`. `crypto.js` is the destination; collapsing
+the other four is a separate pass.**
+
+**`access_tokens` was rebuilt** to widen its `kind` CHECK for `guardian_invite`. SQLite cannot
+ALTER a CHECK. The table held **0 rows** — verified live before the migration was written — so the
+rebuild moved no data. All three indexes are recreated in 0025, plus a partial unique index that
+makes two live invites for one minor impossible.
+
+**Tests: 340 pass / 0 fail** across 20 files, up from 323. Bundle 483,736 bytes.
+
+**Deferred on purpose, named so they are not lost:** `complianceFor` / `nonCompliant` as a
+non-blocking indicator (F-6b / F-14) and F-18's duplicate `GET /api/family` → v0.33.0. Four items
+in one release is how uncalled code ships here.
+
+**Known boundary, stated so it is not mistaken for coverage:** the gate covers the **registrant**.
+Team members are name+email rows with no date of birth and are not gated. Extending it to a roster
+is a decision, not an oversight.

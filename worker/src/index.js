@@ -6,6 +6,15 @@
  * that drift triggered a "the deploy is broken" investigation across two sessions. /api/health is
  * the only honest source of the version. Do not reintroduce it here.
  *
+ * v0.32.0 (2026-07-26, Minors): registrations.js becomes age-aware — it held zero matches for
+ *   date_of_birth, guardian or minor across 49 KB, so a participant of any age could be
+ *   registered with no adult attached. D-MIN-9 (account created, not activated), D-MIN-11 (a
+ *   blank guardian DOB mints an invitation rather than throwing a form error) and owner option B
+ *   (registration itself is blocked, not merely activation). NEW crypto.js leaf so family.js can
+ *   hash without importing consent.js, which imports family.js. Migration 0025:
+ *   contacts.activation_state, guardianship certification columns, access_tokens rebuilt (0 rows)
+ *   to admit kind='guardian_invite'. Closes F-6 and eight of the ten symbols on the F-17 census.
+ *
  * v0.28.0 (2026-07-26, Documents): NEW documents.js — org-owned document library. Each org uploads
  *   its own text; tokens resolve from the org profile at publish (D-DOC-5) with no fallback on
  *   party identity (D-DOC-6). Fixes F-10: WAIVER_TOKENS.ENTITY fell back to a hardcoded company
@@ -312,7 +321,7 @@ export default {
       } else if (url.pathname === "/api/orgs" && request.method === "GET") {
         res = await listOrgs(env);
       } else if (url.pathname === "/api/health") {
-        res = json({ ok: true, version: "v0.31.0" });
+        res = json({ ok: true, version: "v0.32.0" });
       } else if (url.pathname === "/api/webhooks/square" && request.method === "POST") {
         res = await membershipWebhook(request, env); // verifies signature; forwards payment.* to squareWebhook
       } else if (url.pathname.startsWith("/api/calendar/") && url.pathname.endsWith(".ics") && request.method === "GET") {
