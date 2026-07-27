@@ -87,11 +87,14 @@ export function buildLibraryWhere(filter) {
 
 /** Relay email body. Contains the sender's NAME and the message text only — never an
  *  email address; replies happen in the member inbox. */
-export function relayEmailHtml(senderName, bodyText, inboxUrl) {
-  const name = escapeHtml(String(senderName || "A Boomtown member"));
+export function relayEmailHtml(senderName, bodyText, inboxUrl, orgName = null) {
+  // F-13b (v0.31.0): the org name was a literal in member-read body text and in the fallback
+  // sender label. Standards §8 — it comes from the org profile or the sentence omits it.
+  const org = escapeHtml(String(orgName || "").trim());
+  const name = escapeHtml(String(senderName || "A member"));
   const text = escapeHtml(String(bodyText || "")).replace(/\n/g, "<br>");
   return `<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;color:#111">
-    <p><strong>${name}</strong> sent you a message on Boomtown Athletics:</p>
+    <p><strong>${name}</strong> sent you a message${org ? " on " + org : ""}:</p>
     <blockquote style="margin:12px 0;padding:12px 16px;border-left:3px solid #E4B33C;background:#f6f6f4">${text}</blockquote>
     <p><a href="${inboxUrl}" style="color:#8a6d1a">Open your inbox to reply</a> — replies stay inside
     the platform, so your email address is never shared.</p>
@@ -524,7 +527,7 @@ async function blockedEitherWay(env, orgId, a, b) {
 
 /** Notification row + relay email (never exposes an address). Returns "email" | "sandbox". */
 async function notifyAndRelay(env, ctx, me, to, threadId, body) {
-  const senderName = me.full_name || "A Boomtown member";
+  const senderName = me.full_name || "A member";
   const preview = String(body).slice(0, 140);
   await env.DB.prepare(
     `INSERT INTO notifications (org_id, kind, target, contact_id, title, body, link, payload_json, sent_at)
@@ -533,8 +536,11 @@ async function notifyAndRelay(env, ctx, me, to, threadId, body) {
          "member-inbox.html", JSON.stringify({ thread_id: threadId })).run();
   if (!to.email) return "sandbox";
   const inboxUrl = (env.SITE_ORIGIN || "https://10xequity.github.io/btplatform/web") + "/member-inbox.html";
-  const ok = await sendEmail(env, to.email, `New message from ${senderName} — Boomtown Athletics`,
-    relayEmailHtml(senderName, body, inboxUrl));
+  // F-13 (v0.31.0): ctx.orgId reaches both the sender identity and the body, so a Queens Club
+  // relay is branded Queens Club rather than Boomtown.
+  const orgRow = await env.DB.prepare("SELECT name FROM orgs WHERE id = ?1").bind(ctx.orgId).first();
+  const ok = await sendEmail(env, to.email, `New message from ${senderName}`,
+    relayEmailHtml(senderName, body, inboxUrl, orgRow && orgRow.name), ctx.orgId);
   return ok ? "email" : "sandbox";
 }
 

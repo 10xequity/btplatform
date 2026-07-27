@@ -603,3 +603,46 @@ scoped out of this release, not overlooked.
 - **R-23** — `waivers.js` and `documents.js` still hold two token maps to avoid a module cycle.
 - **F-7** N+1 in `events_admin.js` · **F-9** two entity names unverified · **F-13** hardcoded
   email sender name.
+
+## v0.31.0 — 2026-07-26 — Documents UI, organisation identity, F-13
+
+**Documents version editor.** `web/admin-documents.html` + `admin-documents.js`. Create a
+document, write a version with tokens, publish, assign. Token palette in the right rail, grouped
+Org / Signer, insert at cursor in one click with no animation of any kind — standards §2 puts a
+100+/day action in the never-animate row. Live preview and the token chips are rendered from the
+server's own `resolveDocTokens` and its widest-set literal-name scan, debounced 300 ms, so the
+editor cannot tell the author a document is clean and then have publish refuse it. Publishing with
+a literal organisation name in the body requires a typed reason of at least 10 characters
+(standards §7.3), written to `audit_log`. The assign dialog states the affected count under each
+radio from two server-side dry runs; typed confirmation appears only above 50 records.
+
+**New endpoints on `documents.js`.** `GET /api/admin/documents/tokens` and
+`POST /api/admin/documents/preview`. Added specifically so the client holds no token map: R-23
+already records two deliberate copies in the worker, and a third in JavaScript would be the copy
+that lies. Both are numeric-safe against `matchId`, which requires `^\d+$`.
+
+**Organisation settings.** `worker/src/orgs.js`, `web/admin-org-settings.html` +
+`admin-org-settings.js`. The screen that fills in the five no-fallback tokens, so a publish
+refusal is now actionable. No migration — every column already existed. Writes go through an
+explicit allow-list; `legal_entity_verified` is not in it and is set only through
+`POST /api/admin/org/verify-entity`, which demands a typed source. Editing `legal_entity` or
+`legal_entity_short` clears the verification, and the warning appears while typing rather than
+after saving. Admins can reactivate an organisation that v0.30.0 removed from the switcher —
+audited, reason required, `active` flag only, nothing dropped.
+
+**F-13 closed, and found to be wider than recorded.** The roadmap listed four hardcoded sender
+names. The census found seven more literals in text members actually read: the magic-link subject
+in `index.js`, two subject lines in `registrations.js`, the message-relay subject and body in
+`messages.js`, the relay's fallback sender label, and a waiver-expiry sentence. `sendEmail()` and
+`sendBrevoEmail()` now take an optional `orgId` and resolve through one function,
+`orgs.senderIdentity()`, which returns **null** rather than inventing a name — the opposite of the
+F-10 shape. A null sender is a refusal, not a guess. Recorded as F-13b.
+
+**Tests.** `worker/test/orgs.test.mjs`, 24 tests. Full suite 323 pass / 0 fail. One test asserts
+that `PUBLISH_CRITICAL` equals `documents.NO_FALLBACK` exactly, because a drift between them would
+have the settings screen report ready while publish refuses.
+
+**Deferred out of this release.** Requirement 9's cash-payment admin surface. The notification
+half already exists — `registrations.js` writes a `cash_pending` notifications row — so what
+remains is a queue screen, and it is independent of everything above. Moved to v0.31.1 to keep the
+release at two complete items rather than three partial ones.

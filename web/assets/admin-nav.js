@@ -144,7 +144,9 @@
       { href: "admin-users.html#roles",   ico: "roles",   text: "Admins & Roles" },
       { href: "admin-security.html",      ico: "roles",   text: "Security & Recovery" },
       { href: "admin-waivers.html",       ico: "members", text: "Waivers" },
+      { href: "admin-documents.html",     ico: "files",   text: "Documents" },
       { href: "admin-uploads.html",       ico: "files",   text: "Files" },
+      { href: "admin-org-settings.html",  ico: "gear",    text: "Organization" },
       { href: "settings.html",            ico: "gear",    text: "Settings" },
     ]},
     { label: "Member site", key: "site", items: [

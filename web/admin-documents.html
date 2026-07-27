@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<!-- Boomtown Platform — Documents (version editor) · Version: v1.0 · Date: 2026-07-26 · Ships in: v0.31.0
+     The screen that makes an org's own legal text org-owned DATA rather than code. Create a
+     document, write a version using tokens, see it resolved for the current org, publish, then
+     decide who it applies to.
+
+     DESIGN NOTES — standards §1–§3 and §9.3, which are the codified output of
+     /emil-design-eng and /visual-design-principles. §9.3 decides the contested choices so a
+     build session does not relitigate them.
+
+       HIERARCHY, three tiers (§1). Tier 1 is the editor textarea — it is the largest surface and
+       the only place typing happens. Tier 2 is the live preview beside it and the version list
+       below. Tier 3 is the document rail and the palette: present, quiet, never competing.
+
+       MOTION (§2, frequency table). Token insertion happens 100+ times while drafting a document,
+       so it has NO animation of any kind — not a flash, not a scroll-into-view. A repeated action
+       that animates reads as lag. The assign modal is occasional, so it gets the standard
+       200–240ms ease-out enter from scale(0.97). The radios inside it are high-frequency within
+       that modal and are therefore static.
+
+       THE BLOCKED PUBLISH BUTTON (§9.3). A disabled button with no explanation is
+       indistinguishable from a broken one, so the reason is rendered beside it and names the
+       token. The same blocker appears as an inline danger chip WHILE TYPING, so the author meets
+       it during authoring instead of being ambushed at publish.
+
+       CLICK BUDGET (§3, requirement 19): insert a token = 1. Publish a version = 2 (Publish,
+       confirm). Assign to everyone = 3.
+
+     No hardcoded hex. tokens.css owns colour. -->
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Documents — Boomtown Platform</title>
+  <script>document.documentElement.dataset.theme = localStorage.getItem("bt_theme") || "dark";</script>
+  <link rel="stylesheet" href="assets/tokens.css" />
+  <link rel="stylesheet" href="assets/app.css" />
+  <link rel="stylesheet" href="assets/admin.css?v=0.31.0" />
+  <style>
+    .dc-wrap { max-width: 1400px; margin: 0 auto; padding: 16px; }
+    .dc-h1 { font-size: 28px; margin: 8px 0 4px; }
+    .dc-sub { color: var(--text-dim, var(--text-muted)); margin: 0 0 24px; max-width: 68ch; }
+
+    /* Publish-readiness banner. Sits above everything because it governs whether the primary
+       action on this page can complete at all. */
+    .dc-gate {
+      border: 1px solid var(--warn, #9A6A00); border-radius: 10px;
+      background: var(--surface); padding: 12px 16px; margin-bottom: 24px;
+      display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap;
+    }
+    .dc-gate.ok { border-color: var(--positive); }
+    .dc-gate b { display: block; font-size: 15px; margin-bottom: 4px; }
+    .dc-gate p { margin: 0; font-size: 14px; color: var(--text-dim, var(--text-muted)); max-width: 70ch; }
+    .dc-gate a { color: var(--primary); }
+
+    .dc-grid { display: grid; grid-template-columns: 240px minmax(0, 1fr) 260px; gap: 24px; align-items: start; }
+    @media (max-width: 1100px) { .dc-grid { grid-template-columns: 1fr; } }
+
+    /* ---- tier 3: document rail ---- */
+    .dc-rail h2, .dc-pal h2 { font-size: 13px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.04em; color: var(--text-dim, var(--text-muted)); margin: 0 0 8px; }
+    .dc-doclist { display: grid; gap: 4px; }
+    .dc-doc {
+      display: block; width: 100%; text-align: left; font: inherit; font-size: 15px;
+      padding: 12px; min-height: 44px; cursor: pointer; color: var(--text);
+      background: none; border: 1px solid transparent; border-radius: 8px;
+    }
+    .dc-doc:hover { background: var(--surface); }
+    .dc-doc[aria-current="true"] { background: var(--surface-2, var(--surface-raised)); border-color: var(--border); font-weight: 600; }
+    .dc-doc:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+    .dc-doc .meta { display: block; font-size: 12px; font-weight: 400; color: var(--text-dim, var(--text-muted)); margin-top: 2px; }
+
+    /* ---- tier 1 + 2: editor and preview, side by side ---- */
+    .dc-editor { min-width: 0; }
+    .dc-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 16px; }
+    .dc-field { display: flex; flex-direction: column; gap: 4px; min-width: 160px; flex: 1 1 160px; }
+    .dc-field label { font-size: 14px; font-weight: 600; }          /* labels ABOVE inputs, §3 */
+    .dc-field input, .dc-field select, .dc-field textarea {
+      font: inherit; min-height: 44px; padding: 10px 12px; color: var(--text);
+      background: var(--surface-2, var(--surface-raised));
+      border: 1px solid var(--border); border-radius: 8px; width: 100%;
+    }
+    .dc-field .hint { font-size: 12px; color: var(--text-dim, var(--text-muted)); }
+
+    .dc-panes { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media (max-width: 860px) { .dc-panes { grid-template-columns: 1fr; } }
+    .dc-pane { min-width: 0; }
+    .dc-pane > .cap { font-size: 13px; font-weight: 700; margin-bottom: 4px; display: flex;
+      justify-content: space-between; align-items: baseline; gap: 8px; }
+    .dc-pane > .cap span { font-weight: 400; color: var(--text-dim, var(--text-muted)); font-size: 12px; }
+    #body {
+      min-height: 420px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 14px; line-height: 1.5; resize: vertical;
+    }
+    .dc-preview {
+      min-height: 420px; max-height: 60vh; overflow: auto; padding: 12px;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+      font-size: 14px; line-height: 1.5; white-space: pre-wrap; word-break: break-word;
+    }
+    .dc-preview mark { background: transparent; color: var(--danger); font-weight: 700; }
+
+    /* ---- inline token chips: the blocker is visible WHILE TYPING (§9.3) ---- */
+    .dc-chips { display: flex; gap: 4px; flex-wrap: wrap; margin: 8px 0 0; min-height: 24px; }
+    .dc-chip { display: inline-flex; align-items: center; gap: 4px; border-radius: 999px;
+      padding: 3px 10px; font-size: 12px; font-weight: 700; border: 1px solid var(--border);
+      background: var(--surface-2, var(--surface-raised)); }
+    .dc-chip.bad { color: var(--danger); border-color: var(--danger); }
+    .dc-chip.warn { color: var(--warn, #9A6A00); border-color: var(--warn, #9A6A00); }
+    .dc-chip.ok { color: var(--positive); }
+
+    /* ---- publish bar: reason named BESIDE the disabled button (§9.3) ---- */
+    .dc-actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 16px; }
+    .dc-why { font-size: 14px; color: var(--danger); max-width: 60ch; }
+    .dc-why.warn { color: var(--warn, #9A6A00); }
+
+    /* ---- tier 3: token palette. Right rail, grouped, ONE CLICK, NO ANIMATION (§9.3) ---- */
+    .dc-pal { position: sticky; top: 16px; }
+    .dc-palgroup { margin-bottom: 16px; }
+    .dc-palgroup > .t { font-size: 12px; font-weight: 700; color: var(--text-dim, var(--text-muted)); margin-bottom: 4px; }
+    .dc-tok {
+      display: block; width: 100%; text-align: left; font: inherit; font-size: 13px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      min-height: 44px; padding: 8px 12px; margin-bottom: 4px; cursor: pointer;
+      background: var(--surface); color: var(--text);
+      border: 1px solid var(--border); border-radius: 8px;
+      /* §2 frequency table: 100+ inserts per drafting session. NO transition, NO transform,
+         not even on :active. A repeated action that animates reads as lag. */
+    }
+    .dc-tok:hover { border-color: var(--primary); }
+    .dc-tok:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+    .dc-tok .d { display: block; font-family: inherit; font-size: 11px; color: var(--text-dim, var(--text-muted)); margin-top: 2px; font-weight: 400; }
+    .dc-tok.nofb { border-left: 3px solid var(--warn, #9A6A00); }
+
+    /* ---- version history ---- */
+    .dc-vers { margin-top: 32px; }
+    .dc-table { width: 100%; border-collapse: collapse; }
+    .dc-table th, .dc-table td { text-align: left; padding: 12px 8px; border-top: 1px solid var(--border); font-size: 15px; vertical-align: top; }
+    .dc-table th { font-size: 13px; font-weight: 700; color: var(--text-dim, var(--text-muted)); border-top: 0; }
+    .dc-sha { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; color: var(--text-dim, var(--text-muted)); }
+    .dc-status { display: inline-block; border-radius: 999px; padding: 3px 10px; font-size: 12px; font-weight: 700;
+      background: var(--surface-2, var(--surface-raised)); border: 1px solid var(--border); }
+    .dc-status.active { color: var(--positive); border-color: var(--positive); }
+
+    .btn-min { min-height: 44px; min-width: 44px; padding: 10px 16px; font: inherit; font-size: 15px;
+      background: none; border: 1px solid var(--border); border-radius: 8px; color: var(--text); cursor: pointer; }
+    .btn-min.primary { background: var(--primary); border-color: var(--primary); color: var(--bg); font-weight: 700; }
+    .btn-min:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-min:active:not(:disabled) { transform: scale(0.97); }       /* §2 press feedback, 1 per action */
+    .btn-min:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+    .dc-empty { padding: 32px 16px; text-align: center; color: var(--text-dim, var(--text-muted)); }
+    .dc-empty b { color: var(--text); display: block; font-size: 18px; margin-bottom: 4px; }
+    .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+    /* ---- assign modal: occasional, so it animates (§9.3) ---- */
+    .dc-radio { display: block; border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px;
+      margin-bottom: 8px; cursor: pointer; background: var(--surface); }
+    .dc-radio:has(input:checked) { border-color: var(--primary); background: var(--surface-2, var(--surface-raised)); }
+    .dc-radio input { margin-right: 8px; }                          /* the radio itself: NO animation */
+    .dc-radio b { font-size: 15px; }
+    .dc-radio .csq { display: block; font-size: 13px; color: var(--text-dim, var(--text-muted)); margin-top: 4px; margin-left: 24px; }
+    .dc-radio .csq.danger { color: var(--danger); font-weight: 600; }
+
+    @media (prefers-reduced-motion: reduce) {
+      .btn-min:active:not(:disabled) { transform: none; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app" class="admin-shell">
+    <main class="admin-main dc-wrap">
+      <h1 class="dc-h1">Documents</h1>
+      <p class="dc-sub">
+        Waivers, policies and consents, written by you and owned by this organization. Use tokens
+        like <code>{{ENTITY}}</code> so the same text publishes correctly for every company —
+        never type a company name into the body.
+      </p>
+
+      <div class="dc-gate" id="gate" hidden></div>
+
+      <div class="dc-grid">
+        <!-- tier 3: document rail -->
+        <aside class="dc-rail">
+          <h2>Documents</h2>
+          <div class="dc-doclist" id="docs"></div>
+          <button class="btn-min" id="newDoc" type="button" style="margin-top:8px; width:100%;">+ New document</button>
+        </aside>
+
+        <!-- tier 1 + 2: editor and preview -->
+        <section class="dc-editor" aria-labelledby="edTitle">
+          <h2 id="edTitle" class="sr-only">Version editor</h2>
+          <div class="dc-row">
+            <div class="dc-field" style="flex:0 0 140px;">
+              <label for="label">Version label</label>
+              <input id="label" type="text" maxlength="40" placeholder="v2" />
+            </div>
+            <div class="dc-field" style="flex:0 0 200px;">
+              <label for="material">Change type</label>
+              <select id="material">
+                <option value="1" selected>Material — everyone re-signs</option>
+                <option value="0">Minor — existing signatures stand</option>
+              </select>
+            </div>
+            <div class="dc-field">
+              <label for="notes">Note (optional)</label>
+              <input id="notes" type="text" maxlength="200" placeholder="What changed and why" />
+            </div>
+          </div>
+
+          <div class="dc-panes">
+            <div class="dc-pane">
+              <div class="cap"><label for="body">Document text</label><span id="charCount">0 characters</span></div>
+              <textarea id="body" spellcheck="true" aria-describedby="chips"></textarea>
+            </div>
+            <div class="dc-pane">
+              <div class="cap">Preview <span id="previewOrg"></span></div>
+              <div class="dc-preview" id="preview" aria-live="polite"></div>
+            </div>
+          </div>
+
+          <div class="dc-chips" id="chips" aria-live="polite"></div>
+
+          <div class="dc-actions">
+            <button class="btn-min primary" id="publish" type="button">Publish version</button>
+            <button class="btn-min" id="draft" type="button">Save as draft</button>
+            <span class="dc-why" id="why"></span>
+          </div>
+
+          <div class="dc-vers">
+            <h2 style="font-size:18px; margin:0 0 8px;">Version history</h2>
+            <div id="versions"></div>
+          </div>
+        </section>
+
+        <!-- tier 3: token palette -->
+        <aside class="dc-pal">
+          <h2>Insert a token</h2>
+          <div id="palette"></div>
+          <p style="font-size:12px; color:var(--text-dim, var(--text-muted)); line-height:1.5;">
+            Tokens with a gold edge have no fallback — publishing refuses if the organization
+            profile leaves them empty.
+          </p>
+        </aside>
+      </div>
+    </main>
+  </div>
+
+  <script src="assets/config.js?v=0.31.0"></script>
+  <script src="assets/admin-nav.js?v=0.31.0"></script>
+  <script src="assets/admin-documents.js?v=0.31.0" defer></script>
+</body>
+</html>

@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<!-- Boomtown Platform — Organization settings · Version: v1.0 · Date: 2026-07-26 · Ships in: v0.31.0
+     Where the document tokens get their values, and where the email sender name comes from.
+     Until this screen existed, {{ENTITY}} and friends could refuse a publish with no way to fix it.
+
+     DESIGN NOTES (standards §1–§3, the codified output of /visual-design-principles and
+     /emil-design-eng)
+       HIERARCHY, three tiers. Tier 1 is the "Legal identity" card — it is first, it carries the
+       readiness summary, and it is the only group whose emptiness stops a publish. Tier 2 is
+       contact and address. Tier 3 is branding and the deactivated-orgs list, which most sessions
+       never touch.
+       MOTION. Saving is occasional, so the confirmation is a standard fade. Field-level
+       validation is per-keystroke and therefore silent — no shake, no colour transition on a
+       continuously firing event (§2).
+       The verified checkbox is NOT a checkbox. Standards §7.3: a claim about the world takes a
+       typed source, because a checkbox acquires a habit and the habit is what makes the claim
+       worthless. -->
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Organization settings — Boomtown Platform</title>
+  <script>document.documentElement.dataset.theme = localStorage.getItem("bt_theme") || "dark";</script>
+  <link rel="stylesheet" href="assets/tokens.css" />
+  <link rel="stylesheet" href="assets/app.css" />
+  <link rel="stylesheet" href="assets/admin.css?v=0.31.0" />
+  <style>
+    .og-wrap { max-width: 900px; margin: 0 auto; padding: 16px; }
+    .og-h1 { font-size: 28px; margin: 8px 0 4px; }
+    .og-sub { color: var(--text-dim, var(--text-muted)); margin: 0 0 24px; max-width: 68ch; }
+
+    .og-card { border: 1px solid var(--border); border-radius: 10px; background: var(--surface);
+      padding: 16px; margin-bottom: 24px; }
+    .og-card > h2 { font-size: 18px; margin: 0 0 4px; }
+    .og-card > .why { font-size: 14px; color: var(--text-dim, var(--text-muted)); margin: 0 0 16px; max-width: 66ch; }
+    .og-card.critical { border-left: 3px solid var(--primary); }
+
+    .og-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+    .og-field { display: flex; flex-direction: column; gap: 4px; }
+    .og-field.wide { grid-column: 1 / -1; }
+    .og-field label { font-size: 14px; font-weight: 600; }         /* labels ABOVE inputs, §3 */
+    .og-field input, .og-field select {
+      font: inherit; min-height: 44px; padding: 10px 12px; color: var(--text);
+      background: var(--surface-2, var(--surface-raised));
+      border: 1px solid var(--border); border-radius: 8px; width: 100%;
+    }
+    .og-field .hint { font-size: 12px; color: var(--text-dim, var(--text-muted)); }
+    .og-field .err { font-size: 12px; color: var(--danger); }      /* errors UNDER the field, §3 */
+    .og-field .tok { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 11px; color: var(--text-dim, var(--text-muted)); }
+
+    .og-ready { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+    .og-pill { border-radius: 999px; padding: 3px 10px; font-size: 12px; font-weight: 700;
+      border: 1px solid var(--border); background: var(--surface-2, var(--surface-raised)); }
+    .og-pill.missing { color: var(--danger); border-color: var(--danger); }
+    .og-pill.ok { color: var(--positive); border-color: var(--positive); }
+
+    .og-verify { border: 1px solid var(--border); border-radius: 8px; padding: 12px;
+      background: var(--surface-2, var(--surface-raised)); margin-top: 12px; }
+    .og-verify b { font-size: 15px; }
+    .og-verify p { font-size: 13px; color: var(--text-dim, var(--text-muted)); margin: 4px 0 8px; max-width: 62ch; }
+    .og-verify.done { border-color: var(--positive); }
+
+    .og-bar { position: sticky; bottom: 0; background: var(--bg); border-top: 1px solid var(--border);
+      padding: 12px 0; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+    .og-said { font-size: 14px; }
+    .og-said.ok { color: var(--positive); }
+    .og-said.bad { color: var(--danger); }
+
+    .og-table { width: 100%; border-collapse: collapse; }
+    .og-table th, .og-table td { text-align: left; padding: 12px 8px; border-top: 1px solid var(--border); font-size: 15px; }
+    .og-table th { font-size: 13px; font-weight: 700; color: var(--text-dim, var(--text-muted)); border-top: 0; }
+    .og-table tr.off td { opacity: 0.6; }
+
+    .btn-min { min-height: 44px; min-width: 44px; padding: 10px 16px; font: inherit; font-size: 15px;
+      background: none; border: 1px solid var(--border); border-radius: 8px; color: var(--text); cursor: pointer; }
+    .btn-min.primary { background: var(--primary); border-color: var(--primary); color: var(--bg); font-weight: 700; }
+    .btn-min:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-min:active:not(:disabled) { transform: scale(0.97); }
+    .btn-min:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+    .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+    @media (prefers-reduced-motion: reduce) { .btn-min:active:not(:disabled) { transform: none; } }
+  </style>
+</head>
+<body>
+  <div id="app" class="admin-shell">
+    <main class="admin-main og-wrap">
+      <h1 class="og-h1">Organization settings</h1>
+      <p class="og-sub">
+        These fields fill in every document token and every email sender name for the organization
+        you're currently switched into. Nothing here is shared between companies.
+      </p>
+
+      <!-- tier 1 -->
+      <section class="og-card critical" aria-labelledby="legalH">
+        <h2 id="legalH">Legal identity</h2>
+        <p class="why">
+          Five of these have no fallback. If one is empty, publishing a document refuses rather
+          than guessing — a guessed party name in a signed release names the wrong company.
+        </p>
+        <div class="og-ready" id="ready"></div>
+        <div class="og-grid">
+          <div class="og-field wide">
+            <label for="f_name">Organization name</label>
+            <input id="f_name" data-f="name" type="text" maxlength="200" />
+            <span class="tok">{{ORG_NAME}}</span><span class="err" data-e="name"></span>
+          </div>
+          <div class="og-field">
+            <label for="f_legal_entity">Legal entity name</label>
+            <input id="f_legal_entity" data-f="legal_entity" type="text" maxlength="200"
+                   placeholder="Boomtown Athletics, LLC" />
+            <span class="tok">{{ENTITY}}</span><span class="err" data-e="legal_entity"></span>
+          </div>
+          <div class="og-field">
+            <label for="f_legal_entity_short">Short entity name</label>
+            <input id="f_legal_entity_short" data-f="legal_entity_short" type="text" maxlength="120"
+                   placeholder="Boomtown" />
+            <span class="tok">{{ENTITY_SHORT}}</span><span class="err" data-e="legal_entity_short"></span>
+          </div>
+        </div>
+        <div class="og-verify" id="verify"></div>
+      </section>
+
+      <!-- tier 2 -->
+      <section class="og-card" aria-labelledby="contactH">
+        <h2 id="contactH">Contact and address</h2>
+        <p class="why">The postal address is required on marketing email by law, and it is what
+          <code>{{ORG_ADDRESS}}</code> resolves to.</p>
+        <div class="og-grid">
+          <div class="og-field">
+            <label for="f_admin_email">Contact email</label>
+            <input id="f_admin_email" data-f="admin_email" type="email" maxlength="200" />
+            <span class="tok">{{ORG_EMAIL}}</span><span class="err" data-e="admin_email"></span>
+          </div>
+          <div class="og-field">
+            <label for="f_phone">Phone</label>
+            <input id="f_phone" data-f="phone" type="tel" maxlength="40" />
+            <span class="tok">{{ORG_PHONE}}</span><span class="err" data-e="phone"></span>
+          </div>
+          <div class="og-field wide">
+            <label for="f_address_line1">Street address</label>
+            <input id="f_address_line1" data-f="address_line1" type="text" maxlength="200" />
+            <span class="tok">{{ORG_ADDRESS}}</span><span class="err" data-e="address_line1"></span>
+          </div>
+          <div class="og-field wide">
+            <label for="f_address_line2">Address line 2</label>
+            <input id="f_address_line2" data-f="address_line2" type="text" maxlength="200" />
+            <span class="err" data-e="address_line2"></span>
+          </div>
+          <div class="og-field">
+            <label for="f_city">City</label>
+            <input id="f_city" data-f="city" type="text" maxlength="120" />
+            <span class="err" data-e="city"></span>
+          </div>
+          <div class="og-field">
+            <label for="f_state">State</label>
+            <input id="f_state" data-f="state" type="text" maxlength="60" />
+            <span class="tok">{{GOVERNING_STATE}}</span><span class="err" data-e="state"></span>
+          </div>
+          <div class="og-field">
+            <label for="f_postal_code">Postal code</label>
+            <input id="f_postal_code" data-f="postal_code" type="text" maxlength="20" />
+            <span class="err" data-e="postal_code"></span>
+          </div>
+        </div>
+      </section>
+
+      <section class="og-card" aria-labelledby="mailH">
+        <h2 id="mailH">Email sender</h2>
+        <p class="why">
+          What recipients see in the From line. Leave the name blank to use the organization name.
+          Until this release every organization sent under one hardcoded name.
+        </p>
+        <div class="og-grid">
+          <div class="og-field">
+            <label for="f_email_sender_name">Sender name</label>
+            <input id="f_email_sender_name" data-f="email_sender_name" type="text" maxlength="120" />
+            <span class="hint" id="senderPreview"></span><span class="err" data-e="email_sender_name"></span>
+          </div>
+          <div class="og-field">
+            <label for="f_email_sender_address">Sender address</label>
+            <input id="f_email_sender_address" data-f="email_sender_address" type="email" maxlength="200" />
+            <span class="hint">Must be on a domain verified with the mail provider.</span>
+            <span class="err" data-e="email_sender_address"></span>
+          </div>
+        </div>
+      </section>
+
+      <!-- tier 3 -->
+      <section class="og-card" aria-labelledby="webH">
+        <h2 id="webH">Web and rules</h2>
+        <div class="og-grid">
+          <div class="og-field">
+            <label for="f_website">Website</label>
+            <input id="f_website" data-f="website" type="url" maxlength="300" placeholder="https://" />
+            <span class="tok">{{ORG_WEBSITE}}</span><span class="err" data-e="website"></span>
+          </div>
+          <div class="og-field">
+            <label for="f_rules_url">Rules page</label>
+            <input id="f_rules_url" data-f="rules_url" type="url" maxlength="300" placeholder="https://" />
+            <span class="tok">{{RULES_REFERENCE}} · falls back to "posted at the facility"</span>
+            <span class="err" data-e="rules_url"></span>
+          </div>
+          <div class="og-field wide">
+            <label for="f_logo_url">Logo URL</label>
+            <input id="f_logo_url" data-f="logo_url" type="url" maxlength="500" placeholder="https://" />
+            <span class="err" data-e="logo_url"></span>
+          </div>
+        </div>
+      </section>
+
+      <section class="og-card" id="allOrgsCard" hidden aria-labelledby="allH">
+        <h2 id="allH">All organizations</h2>
+        <p class="why">
+          Deactivated organizations are hidden from the switcher but never deleted — their records
+          stay linked. This is the only way to bring one back.
+        </p>
+        <div id="allOrgs"></div>
+      </section>
+
+      <div class="og-bar">
+        <button class="btn-min primary" id="save" type="button">Save changes</button>
+        <span class="og-said" id="said" aria-live="polite"></span>
+      </div>
+    </main>
+  </div>
+
+  <script src="assets/config.js?v=0.31.0"></script>
+  <script src="assets/admin-nav.js?v=0.31.0"></script>
+  <script src="assets/admin-org-settings.js?v=0.31.0" defer></script>
+</body>
+</html>

@@ -469,6 +469,63 @@ export async function documentRoutes(request, env, url, ctx) {
     }, 201);
   }
 
+  /* ---------- staff: token registry and dry-run preview (v0.31.0) ----------
+
+     WHY THE CLIENT DOES NOT RESOLVE TOKENS ITSELF
+     R-23 already records that `waivers.js` and `documents.js` hold two token maps deliberately,
+     to avoid a module cycle, and that a change to either must be made in both. A hand-written
+     copy in admin-documents.js would have made a THIRD, in a different language, maintained by a
+     different habit — and the client's copy is the one that tells the author "this will publish
+     cleanly" right before the server disagrees.
+
+     So the editor asks the server. The preview is the real `resolveDocTokens` and the real
+     literal-name scan, debounced client-side. Cost: one small request per pause in typing on a
+     staff-only screen. That is the cheaper side of the trade by a wide margin — the alternative
+     is a preview that can lie, on the one screen whose output gets hashed and pinned forever. */
+
+  if (p === "/api/admin/documents/tokens" && m === "GET") {
+    const deny = await H.requireStaff(env, ctx); if (deny) return deny;
+    const org = await orgProfile(env, ctx.orgId);
+    return H.json({
+      tokens: DOC_TOKEN_NAMES.map((name) => ({
+        name,
+        no_fallback: NO_FALLBACK.includes(name),
+        // The resolved value for THIS org, so the palette can show what each token will become.
+        sample: String(DOC_TOKENS[name](org || {}) ?? ""),
+      })),
+      no_fallback: NO_FALLBACK,
+      org_name: org?.name || null,
+      legal_entity_verified: Number(org?.legal_entity_verified || 0) === 1,
+    });
+  }
+
+  if (p === "/api/admin/documents/preview" && m === "POST") {
+    const deny = await H.requireStaff(env, ctx); if (deny) return deny;
+    const b = await request.json().catch(() => ({}));
+    const template = String(b?.body ?? "").replace(/\r\n/g, "\n");
+    const org = await orgProfile(env, ctx.orgId);
+    const res = resolveDocTokens(template, org);
+
+    // Same widest-set scan the publish path runs (standards §8 check 3, F-11). Surfaced here so
+    // the author sees it while typing rather than as a 409 after clicking Publish.
+    const allOrgs = await env.DB.prepare(
+      `SELECT name, legal_entity FROM orgs WHERE deleted_at IS NULL`
+    ).all();
+    const literals = literalOrgNames(res.text, allOrgs.results || []);
+
+    return H.json({
+      ok: res.ok,
+      text: res.text,
+      unknown: res.unknown,
+      empty: res.empty,
+      bad_placeholder: res.badPlaceholder,
+      literal_names: literals,
+      refusal: res.ok ? null : tokenRefusal(res),
+      entity_unverified: Number(org?.legal_entity_verified || 0) === 0,
+      length: res.text.length,
+    });
+  }
+
   /* ---------- staff: requirements ---------- */
 
   if (p === "/api/admin/requirements/preview" && m === "POST") {

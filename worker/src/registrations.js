@@ -60,6 +60,7 @@ import { refreshStandings } from "./tournaments.js";
 import { waitlistGate, markClaimed, offerNext, activeRegistrationCount, computeIsFull } from "./waitlists.js";
 import { pinFor, currentVersion } from "./waivers.js"; // v1.4 — one-way import, no cycle
 import { effectiveTierFor, applyTierDiscount } from "./tiers.js"; // v0.30.0 F-6 — tiers.js imports nothing, no cycle
+import { senderIdentity } from "./orgs.js"; // v0.31.0 F-13 — orgs.js imports nothing, no cycle
 
 const SQUARE_VERSION = "2026-05-20";
 
@@ -412,12 +413,15 @@ async function remind(env, ctx, regId) {
 
   await env.DB.prepare("UPDATE registrations SET last_reminded_at=datetime('now') WHERE id=?1").bind(regId).run();
 
-  if (env.BREVO_API_KEY) {
+  // F-13 (v0.31.0): reg.ev_org is the org that owns this event, so this path can name itself
+  // correctly. Resolved before the request is built — a null sender is a refusal, not a guess.
+  const mailFrom = await senderIdentity(env, reg.ev_org);
+  if (env.BREVO_API_KEY && mailFrom) {
     const resp = await fetch("https://api.brevo.com/v3/smtp/email", {
       method: "POST",
       headers: { "api-key": env.BREVO_API_KEY, "content-type": "application/json" },
       body: JSON.stringify({
-        sender: { name: "Boomtown Athletics", email: env.SENDER_EMAIL || "no-reply@boomtownvb.com" },
+        sender: mailFrom,
         to: [{ email: reg.email }],
         subject: `Payment reminder — ${reg.event_name}`,
         htmlContent: `<p>Hi! Your team <strong>${reg.team_name}</strong> is registered for <strong>${reg.event_name}</strong>, but payment hasn't come through yet.</p><p><a href="${reg.checkout_url}">Complete your payment here</a> to lock in your spot.</p>`,
@@ -590,14 +594,22 @@ export function escapeHtml(s) {
 }
 
 /** Shared Brevo sender. Returns true on success, false in sandbox mode or on failure. */
-export async function sendEmail(env, to, subject, htmlContent) {
+export async function sendEmail(env, to, subject, htmlContent, orgId = null) {
   if (!env.BREVO_API_KEY) return false; // sandbox: caller decides what to surface
+  // F-13 (v0.31.0). This function had no idea which organisation it was sending for, so the
+  // sender was a literal and every Queens Club registrant received Boomtown-branded email.
+  // Patching the literal at each call site would have left the next caller free to type a
+  // fifth one, so the literal is deleted and replaced by one resolver (orgs.js).
+  // orgId is optional for backward compatibility with callers that have no org in scope;
+  // those resolve through deployment config, which is not a company name in source.
+  const who = await senderIdentity(env, orgId);
+  if (!who) return false;
   try {
     const resp = await fetch("https://api.brevo.com/v3/smtp/email", {
       method: "POST",
       headers: { "api-key": env.BREVO_API_KEY, "content-type": "application/json" },
       body: JSON.stringify({
-        sender: { name: "Boomtown Athletics", email: env.SENDER_EMAIL || "no-reply@boomtownvb.com" },
+        sender: who,
         to: [{ email: to }],
         subject,
         htmlContent,
@@ -684,9 +696,9 @@ export async function waiverExpirySweep(env) {
   let sent = 0;
   for (const r of rows) {
     const on = String(r.expires_at || "").replace("T", " ").slice(0, 10);
-    const ok = await sendEmail(env, r.email, "Your Boomtown waiver expires soon",
+    const ok = await sendEmail(env, r.email, "Your waiver expires soon",
       `<p>Hi ${escapeHtml(r.name || "there")} — your signed waiver expires on <strong>${escapeHtml(on)}</strong>.</p>` +
-      `<p>Waivers run for one year and don't renew automatically. After that date you won't be able to register for or play in a Boomtown event until you sign a new one.</p>` +
+      `<p>Waivers run for one year and don't renew automatically. After that date you won't be able to register for or play until you sign a new one.</p>` +
       `<p><a href="${env.APP_URL}/profile.html">Sign in and re-sign now</a> — it takes about a minute.</p>`);
     await env.DB.prepare(
       "INSERT INTO notifications (org_id, kind, target, contact_id, title, body, payload_json, sent_at) VALUES (?1,'waiver_expiring',?2,?3,?4,?5,?6,datetime('now'))"
@@ -829,7 +841,7 @@ async function inviteTeammate(env, ctx, tmId) {
   if (!tm.member_email) return json({ error: "No email on file for this teammate. Ask them to register or give you their email." }, 400);
 
   const col = tm.invited_at ? "reminded_at" : "invited_at";
-  const ok = await sendEmail(env, tm.member_email, `You're on ${tm.team_name} — Boomtown Athletics`,
+  const ok = await sendEmail(env, tm.member_email, `You're on ${tm.team_name}`,
     `<p>Hi ${escapeHtml(tm.member_name || "there")} — you're on the roster for <strong>${escapeHtml(tm.team_name)}</strong> (${escapeHtml(tm.event_name)}).</p>` +
     `<p><a href="${env.APP_URL}/">Sign in with this email</a> to see your schedule, results, and reminders.</p>`);
   await env.DB.prepare(
