@@ -1,18 +1,26 @@
 /* Boomtown Platform — Design Tokens
-   Version: v0.2.1 · Date: 2026-07-24 (v0.1 base 2026-07-21 + recovered v0.2 contrast fixes, see foot of file)
-   Source of truth: design spec §4. Dark = black/gold (first-class). Light = white/navy + yellow. */
+   Version: v0.3.0 · Date: 2026-07-27 (v0.1 base 2026-07-21 · v0.2.1 contrast recovery · v0.3.0 F-23)
+   THIS FILE IS THE SOURCE OF TRUTH for colour, shape, type and motion. Nothing overrides it.
+   Cited by: docs/2026-07-21_design-handoff_v0.1.md · 2026-07-27_standards_v0.32.1-r1.md §1
+   (v0.2.1 pointed at "design spec §4" — boomtown-design-spec_v0_1/_v0_2 were deleted, see
+    library_v1_0 §3. A citation to a deleted file is worse than no citation. Removed.)
+   Dark = black/gold (first-class). Light = white/navy + yellow. Requirement 13. */
 
 :root {
   /* Light theme */
   --bg: #FFFFFF;
   --surface: #F7F7F5;
   --surface-raised: #FFFFFF;
+  --surface-2: #EFEEEA;      /* v0.3.0 F-23 — inset/secondary surface, sits just under --surface */
   --text: #101418;
   --text-muted: #5A6270;
   --primary: #1B2A4A;
   --primary-contrast: #FFFFFF;
   --accent: #E6B800;
   --positive: #1F7A4D;
+  --warn: #8F6200;           /* v0.3.0 F-23 — see the contrast note at the foot of this file */
+  --warning: var(--warn);    /* v0.3.0 F-23 — alias; 14 call sites spell it this way */
+  --text-dim: var(--text-muted); /* v0.3.0 F-23 — alias; 61 call sites, third spelling of muted */
   --danger: #B3261E;
   --border: #E3E2DD;
 
@@ -36,12 +44,17 @@
   --bg: #0B0B0D;
   --surface: #141417;
   --surface-raised: #1B1B1F;
+  --surface-2: #1B1B1F;      /* v0.3.0 F-23 — matches both prior fallbacks (--surface-raised, #1C1C21) */
   --text: #F2F0EA;
   --text-muted: #A8A49A;
   --primary: #D4AF37;
   --primary-contrast: #0B0B0D;
   --accent: #D4AF37;
   --positive: #4CC38A;
+  --warn: #E8B54A;           /* v0.3.0 F-23 — already shipped as an inline fallback; 10.43:1 on --bg */
+  --warning: var(--warn);    /* re-declared, not inherited: a nested data-theme scope would
+                                otherwise inherit the value already computed on an ancestor */
+  --text-dim: var(--text-muted); /* re-declared for the same reason */
   --danger: #F2555A;
   --border: #26262B;
 }
@@ -93,3 +106,48 @@ input::placeholder, textarea::placeholder { color: var(--text-muted); opacity: 1
 a { color: var(--primary); }
 a:visited { color: var(--primary); }
 body { font-size: 17px; }
+
+/* ============================================================
+   v0.3.0 additions · 2026-07-27 · Ships in: v0.33.0 · Closes F-23
+   FOUR TOKENS WERE REFERENCED 126 TIMES AND DEFINED ZERO TIMES.
+   Measured at 40ed3b6 across 23 files. 36 of those declarations were being SILENTLY
+   DROPPED — a var() with no fallback naming an undefined property is invalid at
+   computed-value time, so the whole declaration is discarded:
+     --text-dim   61 uses · 34x chained to var(--text-muted) OK, 23x NO fallback,
+                  4x #A8A49A (the DARK muted value, hardcoded, never themed).
+                  The 23 dropped ones render secondary text at FULL --text emphasis.
+                  That is a flat-hierarchy defect on 23 sites, not a colour nit.
+     --surface-2  32 uses · 13x fell back to var(--surface-raised), 13x to #1C1C21,
+                  5x had NO fallback (declaration invalid at computed-value time and
+                  silently DROPPED), 1x to transparent.
+     --warn       19 uses · 8x NO fallback, 5x #9A6A00, 4x #e6a23c, 2x #E8B54A.
+     --warning    14 uses · all #e6a23c. Same role, second spelling. Now an alias.
+   Four amber hexes served one semantic role. Every hardcoded-dark fallback stopped
+   theming, so those sites stayed dark in light mode; and `var(--warn, #E8B54A)`
+   REPORTED as tokenised while BEHAVING as hardcoded — library_v1_0 §2 failure class 3,
+   a guard narrower than the thing it guards.
+
+   No new hue is introduced. --warn/--surface-2 were already shipping as inline fallbacks;
+   --warning and --text-dim are pure aliases of tokens that already existed.
+
+   CONTRAST, computed not assumed (WCAG 2.1 relative luminance):
+     --warn LIGHT  #8F6200 on #FFFFFF 5.36:1 · on --surface 5.00:1 · on --surface-2 4.62:1  all AA
+     --warn DARK   #E8B54A on --bg 10.43:1 · on --surface 9.75:1                            all AA
+     --surface-2   --text 15.93:1 light / 15.07:1 dark · --text-muted 5.30:1 / 6.90:1        all AA
+     --text-dim    aliases --text-muted: 6.15:1 light / 7.90:1 dark on --bg               all AA
+                   (its 4 hardcoded #A8A49A uses were 3.25:1 on light --bg — an AA FAIL)
+   #8F6200 rather than the previously shipped #9A6A00: that value is 4.41:1 on --surface
+   and 4.08:1 on --surface-2, i.e. it FAILED AA on the two surfaces warn chips actually
+   sit on. #8F6200 is the smallest change that clears 4.5:1 on all three. The dark value
+   #E8B54A is kept unchanged.
+
+   MIGRATION: none. Defining the tokens fixes all 126 call sites with zero markup edits,
+   including the 36 that were being dropped. The now-redundant inline fallbacks are
+   harmless; deleting them is optional cleanup, deliberately NOT in this release so the
+   diff stays one file.
+
+   NOT CHANGED HERE: the focus-ring conflict (F-24). docs/2026-07-21_design-handoff_v0.1.md
+   specifies 2px --accent at 2px offset on any focusable; the v0.2.1 block below sets form
+   controls to --primary at 1px. Invisible in dark (both #D4AF37), divergent in light.
+   That needs an owner decision, so it is left alone rather than guessed at.
+   ============================================================ */

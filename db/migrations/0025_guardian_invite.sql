@@ -1,7 +1,8 @@
 -- Boomtown Platform — Migration 0025
 -- File: 0025_guardian_invite.sql · Version: v1.0 · Date: 2026-07-26 · Ships in: v0.32.0
--- STATUS: NOT YET APPLIED
---   ^ Change this line to "STATUS: APPLIED 2026-07-26" the moment it runs. A stale
+-- STATUS: APPLIED 2026-07-27 16:41:27 UTC (schema_migrations version '0025')
+--   ^ Applied via Cloudflare MCP, statement by statement, preconditions re-verified at write
+--     time. Do NOT re-run. A stale
 --     NOT-YET-APPLIED on an applied migration is a double-application hazard (0021 carried
 --     a wrong one for five releases).
 --
