@@ -1,5 +1,6 @@
 /* Boomtown Platform — Design Tokens
-   Version: v0.3.0 · Date: 2026-07-27 (v0.1 base 2026-07-21 · v0.2.1 contrast recovery · v0.3.0 F-23)
+   Version: v0.4.0 · Date: 2026-07-29 (v0.1 base 2026-07-21 · v0.2.1 contrast recovery · v0.3.0 F-23
+    · v0.4.0 F-35 focus-ring scope + F-36 body-size reconciliation)
    THIS FILE IS THE SOURCE OF TRUTH for colour, shape, type and motion. Nothing overrides it.
    Cited by: docs/2026-07-21_design-handoff_v0.1.md · 2026-07-27_standards_v0.32.1-r1.md §1
    (v0.2.1 pointed at "design spec §4" — boomtown-design-spec_v0_1/_v0_2 were deleted, see
@@ -17,6 +18,8 @@
   --primary: #1B2A4A;
   --primary-contrast: #FFFFFF;
   --accent: #E6B800;
+  --focus-ring: #1B2A4A;      /* v0.4.0 F-35 — = --primary. Declared literally, not var(--primary),
+                                 so the dark override cannot silently inherit a gold ring. */
   --positive: #1F7A4D;
   --warn: #8F6200;           /* v0.3.0 F-23 — see the contrast note at the foot of this file */
   --warning: var(--warn);    /* v0.3.0 F-23 — alias; 14 call sites spell it this way */
@@ -30,7 +33,7 @@
 
   /* Type — spec: Inter or system stack, body ≥16px, WCAG AA */
   --font: "Inter", -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --font-size-body: 16px;
+  --font-size-body: 17px;    /* v0.4.0 F-36 — was 16px while `body` set 17px. See the foot of this file. */
 
   /* Motion — emil-design-eng: ≤300ms, strong ease-out, no ease-in, reduced-motion respected */
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
@@ -50,6 +53,8 @@
   --primary: #D4AF37;
   --primary-contrast: #0B0B0D;
   --accent: #D4AF37;
+  --focus-ring: #F2F0EA;     /* v0.4.0 F-35 — = --text. NOT gold: --primary and --accent both
+                                resolve to #D4AF37 here, so a themed ring would vanish on gold chrome. */
   --positive: #4CC38A;
   --warn: #E8B54A;           /* v0.3.0 F-23 — already shipped as an inline fallback; 10.43:1 on --bg */
   --warning: var(--warn);    /* re-declared, not inherited: a nested data-theme scope would
@@ -99,13 +104,16 @@ input, select, textarea {
 [data-theme="dark"] { color-scheme: dark; }
 [data-theme="light"] { color-scheme: light; }
 select option { background: var(--surface); color: var(--text); }
-input:focus-visible, select:focus-visible, textarea:focus-visible {
-  outline: 2px solid var(--primary); outline-offset: 1px;
+/* v0.4.0 F-35 — was `input, select, textarea` only, so buttons and links on 26 of 38
+   focusable-bearing pages had NO styled ring and fell through to the UA default.
+   Bare selector is the floor for every focusable; 2px/2px matches the design handoff. */
+:focus-visible {
+  outline: 2px solid var(--focus-ring); outline-offset: 2px;
 }
 input::placeholder, textarea::placeholder { color: var(--text-muted); opacity: 1; }
 a { color: var(--primary); }
 a:visited { color: var(--primary); }
-body { font-size: 17px; }
+body { font-size: var(--font-size-body); } /* v0.4.0 F-36 — was a bare 17px, divergent from the token */
 
 /* ============================================================
    v0.3.0 additions · 2026-07-27 · Ships in: v0.33.0 · Closes F-23
@@ -150,4 +158,64 @@ body { font-size: 17px; }
    specifies 2px --accent at 2px offset on any focusable; the v0.2.1 block below sets form
    controls to --primary at 1px. Invisible in dark (both #D4AF37), divergent in light.
    That needs an owner decision, so it is left alone rather than guessed at.
+   ============================================================ */
+
+/* ============================================================
+   v0.4.0 additions · 2026-07-29 · Ships in: v0.33.2 · Closes F-35, F-36
+
+   F-35 — THE FOCUS RING COVERED 3 ELEMENT TYPES OUT OF EVERY FOCUSABLE.
+   v0.2.1 shipped `input, select, textarea:focus-visible`. Measured at abdc64f across the
+   39 HTML files in web/ (all 39 link this file):
+     38 files contain a focusable (<button>, <a href>, <input>, <select>)
+     13 files declare their own :focus-visible rule
+     26 files declare none — their buttons and links fell through to the UA default ring
+   A rule that styles 3 element types while the spec says "any focusable" is
+   library_v1_0 §2 failure class 3: a guard narrower than the thing it guards. It reported
+   as "focus ring: shipped" for four releases.
+
+   The recorded F-24 framing was also wrong on the facts. It read the v0.2.1 rule as
+   "--primary 1px" — but that rule is `outline: 2px solid var(--primary); outline-offset: 1px`.
+   The ring was ALREADY 2px; the 1px was the OFFSET. Width was never in conflict with
+   docs/2026-07-21_design-handoff_v0.1.md. The two real deltas were colour and scope.
+
+   F-35 IS NOT FULLY CLOSED BY THIS FILE. The 13 page-level rules override this one on
+   specificity and still name --primary or --accent, which BOTH resolve to #D4AF37 in dark
+   mode. 22 declarations, 6 conventions, measured at abdc64f:
+     15x  outline: 2px solid var(--primary);  outline-offset: 2px
+      2x  outline: 2px solid var(--accent, #D4AF37);          (no offset)
+      2x  outline: 2px solid var(--accent);   outline-offset: 1px
+      1x  outline: 2px solid var(--accent, #D4AF37); outline-offset: 2px
+      1x  outline: 2px solid var(--accent);   outline-offset: 2px
+      1x  outline: 2px solid var(--accent);   outline-offset: -2px
+   The two `var(--accent, #D4AF37)` sites are the F-23 pattern again: tokenised in
+   appearance, hardcoded-dark in behaviour. Sweeping those 13 files to var(--focus-ring)
+   is v0.33.3, deliberately NOT bundled here — this pipeline has lost files on three
+   separate multi-file uploads (40ed3b6, be87230, 73f6b37), so this release stays at
+   two files so its diff can be verified by blob SHA at a glance.
+   worker/test/tokens.test.mjs ratchets that count: it fails if it exceeds 20.
+
+   CONTRAST, computed not assumed. WCAG 2.1 SC 1.4.11 requires >=3:1 for non-text UI
+   components; relative luminance per the WCAG definition (threshold 0.03928):
+     LIGHT  #1B2A4A on --bg #FFFFFF          14.22:1
+            #1B2A4A on --surface #F7F7F5     13.26:1
+     DARK   #F2F0EA on --bg #0B0B0D          17.26:1
+            #F2F0EA on --surface #141417     16.13:1
+            #F2F0EA on --surface-raised / --surface-2 #1B1B1F   15.07:1
+   All four clear 3:1 by more than 4x, so the ring survives --surface-raised and the
+   translucent .chrome-glass background as well. NO NEW HUE: light reuses --primary,
+   dark reuses --text. The values are written as literals rather than var(--primary) /
+   var(--text) so that a future edit to either cannot silently reintroduce a gold ring.
+
+   F-36 — `--font-size-body: 16px` AND `body { font-size: 17px }` COEXISTED IN THIS FILE.
+   Any component sized from the token rendered 16px inside a 17px document. The v0.2.1
+   block states the 17px was deliberate ("Base text 17px on member pages for readability"),
+   which makes the token the stale value, not the rule. Fixed in the direction that cannot
+   diverge again: token = 17px, and `body` now READS the token instead of restating it.
+
+   MIGRATION: none. No markup changes. The 13 page-level rules are unaffected by this
+   release and continue to work; they are simply still gold in dark mode until v0.33.3.
+
+   NOT CHANGED HERE: outline-offset on the 3 admin-facility.html rules (-2px and 1px) is
+   deliberate inset styling on a dense court grid, not drift. Confirm with the owner before
+   normalising it — a 2px outset ring on .fc-block would overlap adjacent blocks.
    ============================================================ */
