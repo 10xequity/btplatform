@@ -1,6 +1,18 @@
 /**
  * Boomtown Platform — Registration + Square + Captain-scoring routes
- * Version: v1.7 · Date: 2026-07-29 · Modules 4 + 8 · Ships in: v0.34.0
+ * Version: v1.8 · Date: 2026-07-29 · Modules 4 + 8 · Ships in: v0.35.0
+ *
+ * v1.8 (2026-07-29, v0.35.0): F-27 CLOSED — waiverReminderSweep's NOT EXISTS was a third
+ *   hand-rolled copy of "has a live waiver" and it carried F-26 verbatim: `c.email =
+ *   tm.member_email` is case-SENSITIVE in SQLite, and there was no contact_id branch at
+ *   all. A captain-entered `Jane@X.com` against a contact `jane@x.com`, or a linked member
+ *   whose waiver sits under a different email, was nagged daily despite a live waiver.
+ *   Both halves now come from checkin.js's exported WAIVER_IDENTITY_MATCH +
+ *   WAIVER_LIVE_PREDICATE — the same pair the door roster uses, so the sweep chases
+ *   exactly the people the door flags. Correction for the record: v1.2's header (and
+ *   checkin.js v1.3's F-27 note) said this function lived in waivers.js; it has always
+ *   been here. Org scope (`c.org_id = e.org_id`) is unchanged — the canonical pair
+ *   deliberately does not carry org, callers do.
  *
  * v1.7 (2026-07-29, v0.34.0): Option A testability — REMINDABLE_STATUSES + canRemind()
  *   extracted from two inline duplicates (remind, retryPayment) and exported;
@@ -75,6 +87,8 @@ import { senderIdentity } from "./orgs.js"; // v0.31.0 F-13 — orgs.js imports 
 // v0.32.0 — family.js imports only crypto.js, so this is one-way and cycle-free. These are the
 // call sites F-6/F-17 recorded as missing since v0.27.0: built, tested, never invoked.
 import { validateBirthdate, guardianGate, guardianshipFor, mintGuardianInvite } from "./family.js";
+// v1.8 F-27 — checkin.js has ZERO static imports (wire pattern), so this is one-way, no cycle.
+import { WAIVER_LIVE_PREDICATE, WAIVER_IDENTITY_MATCH } from "./checkin.js";
 
 const SQUARE_VERSION = "2026-05-20";
 
@@ -731,8 +745,9 @@ export async function waiverReminderSweep(env) {
      WHERE tm.deleted_at IS NULL AND tm.member_email IS NOT NULL
        AND NOT EXISTS (SELECT 1 FROM waivers w
                        JOIN contacts c ON c.id = w.contact_id AND c.deleted_at IS NULL
-                       WHERE c.org_id = e.org_id AND c.email = tm.member_email
-                         AND w.deleted_at IS NULL AND w.expires_at > datetime('now'))
+                       WHERE c.org_id = e.org_id
+                         AND ${WAIVER_IDENTITY_MATCH("tm.contact_id", "tm.member_email")}
+                         AND ${WAIVER_LIVE_PREDICATE})
        AND NOT EXISTS (SELECT 1 FROM notifications n
                        WHERE n.kind = 'waiver_reminder'
                          AND n.created_at > datetime('now', '-2 days')

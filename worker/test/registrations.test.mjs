@@ -1,6 +1,6 @@
 /**
  * Boomtown Platform — registration pure-helper tests
- * File: worker/test/registrations.test.mjs · Version: v1.0 · Date: 2026-07-29 · Ships in: v0.34.0
+ * File: worker/test/registrations.test.mjs · Version: v1.1 · Date: 2026-07-29 · Ships in: v0.35.0
  *
  * First coverage for a 54 KB module. Scope is deliberately what v1.7 made pure and exported —
  * the status gate shared by remind/rerun, the webhook signature comparison, and escapeHtml —
@@ -13,6 +13,8 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import {
   REMINDABLE_STATUSES, canRemind, timingSafeEqual, escapeHtml,
 } from "../src/registrations.js";
@@ -65,4 +67,37 @@ test("escapeHtml: null/undefined coerce to safe strings rather than crashing an 
   assert.equal(typeof escapeHtml(null), "string");
   assert.equal(typeof escapeHtml(undefined), "string");
   assert.ok(!escapeHtml(null).includes("<"));
+});
+
+/* ---------- F-27 — the sweep must borrow the door's waiver predicate, not restate it ---------- */
+
+test("F-27: waiverReminderSweep builds its waiver check from the canonical pair", () => {
+  const src = readFileSync(
+    fileURLToPath(new URL("../src/registrations.js", import.meta.url)), "utf8");
+  const start = src.indexOf("export async function waiverReminderSweep");
+  assert.ok(start > -1, "waiverReminderSweep not found — if it moved, move this guard with it");
+  const end = src.indexOf("export ", start + 1);
+  const fn = src.slice(start, end > -1 ? end : undefined);
+
+  // Scope: ONLY this function. registrations.js has other lawful email compares (the 48h
+  // dedupe round-trips tm.member_email against its own stored payload), and checkin.test.mjs
+  // already guards the helpers' own definitions — re-testing them here is F-16's second door.
+  assert.ok(fn.includes("WAIVER_IDENTITY_MATCH"),
+    "sweep no longer uses the canonical identity match (F-27 regression)");
+  assert.ok(fn.includes("WAIVER_LIVE_PREDICATE"),
+    "sweep no longer uses the canonical liveness predicate (F-27 regression)");
+
+  // The exact defect shape: a bare compare against the contacts email column.
+  const BARE_CONTACT_EMAIL = /c\.email\s*=/;
+  assert.equal(BARE_CONTACT_EMAIL.test(fn), false,
+    "raw case-sensitive c.email compare reintroduced in waiverReminderSweep (F-26/F-27)");
+});
+
+test("F-27: the guard above can actually fail (negative control)", () => {
+  // Library §2 failure class 3: a guard that cannot fail reports clean.
+  const BARE_CONTACT_EMAIL = /c\.email\s*=/;
+  assert.ok(BARE_CONTACT_EMAIL.test("WHERE c.org_id = e.org_id AND c.email = tm.member_email"),
+    "must flag the exact pre-v1.8 defect");
+  assert.equal(BARE_CONTACT_EMAIL.test("AND lower(c.email) = lower(tm.member_email)"), false,
+    "must not flag the canonical lowered form");
 });

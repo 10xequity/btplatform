@@ -1,6 +1,6 @@
 /**
  * Boomtown Platform — Check-in & Attendance (Module 10)
- * File: worker/src/checkin.js · Version: v1.3 · Date: 2026-07-29 · Ships in: v0.33.1
+ * File: worker/src/checkin.js · Version: v1.4 · Date: 2026-07-29 · Ships in: v0.35.0
  *
  * v1.3 (2026-07-29, D-MIN-8 OVERRIDES D-WV-7): the hard waiver gate is REMOVED.
  *   Owner decision 2026-07-29: "no gating." D-MIN-8 ("no waiver gating anywhere",
@@ -51,9 +51,11 @@
  *
  * Data: attendance table (migration 0006).
  *
- * NOT VERIFIED IN THIS RELEASE: waivers.js waiverReminderSweep is a THIRD implementation
- * of the same predicate. v1.2's header claimed this file "mirrors" it; that claim was not
- * checked and is not checked here either. Logged as F-27 rather than assumed equivalent.
+ * F-27 CLOSED in v0.35.0: waiverReminderSweep (registrations.js — NOT waivers.js, the
+ * v1.2 claim named the wrong file) was read and it did NOT mirror this predicate: its
+ * email compare was case-sensitive (F-26's exact defect, third site) and it had no
+ * contact_id branch. registrations.js v1.8 now builds its NOT EXISTS from the two
+ * exports below; registrations.test.mjs guards against a raw compare returning.
  */
 
 let json, audit, isStaff, requireStaff;
@@ -341,6 +343,9 @@ async function myAttendance(env, ctx) {
 }
 
 /* Changelog:
+   v1.4 (2026-07-29) — comment-only: F-27 note corrected (the sweep lives in
+     registrations.js, not waivers.js) and closed — registrations.js v1.8 now imports
+     WAIVER_IDENTITY_MATCH + WAIVER_LIVE_PREDICATE from here. No behaviour change.
    v1.3 (2026-07-29) — D-MIN-8 overrides D-WV-7: hard waiver gate removed (3x 409 sites,
      waiverGateDecision, OVERRIDE_MIN_CHARS). Replaced with waiverAdvisory(), a
      non-blocking chip payload carried on the roster, both staff paths and the public
