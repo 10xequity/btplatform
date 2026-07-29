@@ -1,6 +1,6 @@
 /**
  * Boomtown Platform — families, minors and waiver-token tests
- * File: worker/test/family.test.mjs · Version: v1.0 · Date: 2026-07-26 · Ships in: v0.27.0
+ * File: worker/test/family.test.mjs · Version: v1.1 · Date: 2026-07-29 · Ships in: v0.27.0 (v1.1 additions: v0.34.0)
  *
  * The fail-closed direction is asserted explicitly throughout. An unknown age must never resolve
  * to "adult", because the consequence is a minor signing their own waiver — a void document that
@@ -11,6 +11,7 @@ import assert from "node:assert/strict";
 import {
   ageOn, isMinor, validateBirthdate, guardianGate, signerFor, ageOutState,
   separationRequirements, displayName, normalizeDominantHand, familyNameFor,
+  validateAgeOutPayload, SEPARATION_CHOICES,
   AGE_OF_MAJORITY, DOMINANT_HANDS,
 } from "../src/family.js";
 import {
@@ -332,4 +333,40 @@ test("the token registry is stable and documented", () => {
   // accident, and this line is what says so.
   assert.ok(!TOKEN_NAMES.includes("MEDIA_OPTOUT_EMAIL"),
     "MEDIA_OPTOUT_EMAIL is retired under D-CON-5 — the media release has no decline path");
+});
+
+/* ---------- validateAgeOutPayload — v1.1, guards the merged v0.34.0 endpoint ---------- */
+
+test("age-out payload: guardianship_id is mandatory and numeric", () => {
+  for (const bad of [{}, { guardianship_id: 0 }, { guardianship_id: "x" }, { guardianship_id: null }]) {
+    const r = validateAgeOutPayload(bad);
+    assert.equal(r.ok, false, JSON.stringify(bad));
+    assert.equal(r.status, 400);
+    assert.match(r.error, /guardianship_id/);
+  }
+});
+
+test("age-out payload: choice must be a member of SEPARATION_CHOICES, nothing else", () => {
+  for (const bad of [undefined, "", "separate", "KEPT", "yes"]) {
+    const r = validateAgeOutPayload({ guardianship_id: 7, choice: bad });
+    assert.equal(r.ok, false, `choice=${bad}`);
+    assert.equal(r.status, 400);
+  }
+  for (const good of SEPARATION_CHOICES) {
+    assert.equal(validateAgeOutPayload({ guardianship_id: 7, choice: good }).ok, true, good);
+  }
+});
+
+test("age-out payload: email is normalised, optional, and rejected only when malformed", () => {
+  // 'kept' needs no email at all.
+  assert.equal(validateAgeOutPayload({ guardianship_id: 7, choice: "kept" }).email, null);
+  // 'separated' without an email is VALID here — the handler falls back to the contact's own
+  // email (minors created through registration have one) and 400s only when neither exists.
+  assert.equal(validateAgeOutPayload({ guardianship_id: 7, choice: "separated" }).ok, true);
+  const r = validateAgeOutPayload({ guardianship_id: 7, choice: "separated", email: "  Jane@X.COM " });
+  assert.equal(r.ok, true);
+  assert.equal(r.email, "jane@x.com", "F-26's lesson: normalise at the boundary, every time");
+  const bad = validateAgeOutPayload({ guardianship_id: 7, choice: "separated", email: "not-an-email" });
+  assert.equal(bad.ok, false);
+  assert.equal(bad.status, 400);
 });

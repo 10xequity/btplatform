@@ -1,6 +1,12 @@
 /**
  * Boomtown Platform — Registration + Square + Captain-scoring routes
- * Version: v1.6 · Date: 2026-07-26 · Modules 4 + 8 · Ships in: v0.32.0
+ * Version: v1.7 · Date: 2026-07-29 · Modules 4 + 8 · Ships in: v0.34.0
+ *
+ * v1.7 (2026-07-29, v0.34.0): Option A testability — REMINDABLE_STATUSES + canRemind()
+ *   extracted from two inline duplicates (remind, retryPayment) and exported;
+ *   timingSafeEqual exported. Behaviour identical; registrations.test.mjs now guards it.
+ *   F-22's 'raw throw at :163' is CLOSED-UNLOCATABLE: zero `throw ` statements exist in
+ *   this file at v0.34.0 — the citation pointed at pre-v0.32.0 line numbers.
  *
  * v1.6 (2026-07-26, minors): submitRegistration is age-aware for the first time. Before v0.32.0
  *   this file contained zero matches for date_of_birth, guardian or minor across 49 KB — a
@@ -74,6 +80,10 @@ const SQUARE_VERSION = "2026-05-20";
 
 let json, audit, isStaff, requireStaff;
 export function wireRegistrations(helpers) { ({ json, audit, isStaff, requireStaff } = helpers); }
+
+/** The only statuses a payment nudge or a payment-link rerun makes sense for. One list, two gates. */
+export const REMINDABLE_STATUSES = ["pending", "email-sent"];
+export function canRemind(status) { return REMINDABLE_STATUSES.includes(status); }
 
 export async function registrationRoutes(request, env, url, ctx) {
   const p = url.pathname;
@@ -452,7 +462,7 @@ export async function squareWebhook(request, env) {
   return json({ ok: true }); // always 200 after verification so Square stops retrying
 }
 
-function timingSafeEqual(a, b) {
+export function timingSafeEqual(a, b) {
   if (typeof a !== "string" || typeof b !== "string" || a.length !== b.length) return false;
   let out = 0;
   for (let i = 0; i < a.length; i++) out |= a.charCodeAt(i) ^ b.charCodeAt(i);
@@ -494,7 +504,7 @@ async function remind(env, ctx, regId) {
   if (!reg) return json({ error: "Registration not found." }, 404);
   const deny = await requireStaff(env, ctx, reg.ev_org);
   if (deny) return deny;
-  if (!["pending", "email-sent"].includes(reg.status)) return json({ error: `Can't remind a registration with status '${reg.status}'.` }, 400);
+  if (!canRemind(reg.status)) return json({ error: `Can't remind a registration with status '${reg.status}'.` }, 400);
   if (!reg.checkout_url) return json({ error: "No payment link exists yet for this registration (Square not connected when they registered)." }, 400);
 
   await env.DB.prepare("UPDATE registrations SET last_reminded_at=datetime('now') WHERE id=?1").bind(regId).run();
@@ -814,7 +824,7 @@ async function retryPayment(env, ctx, regId) {
   if (!reg) return json({ error: "Registration not found." }, 404);
   const deny = await requireStaff(env, ctx, reg.org_id);
   if (deny) return deny;
-  if (!["pending", "email-sent"].includes(reg.status)) {
+  if (!canRemind(reg.status)) {
     return json({ error: `Can't rerun a registration with status '${reg.status}'.` }, 400);
   }
   if (!(reg.price_cents > 0)) return json({ error: "This event is free — nothing to charge." }, 400);

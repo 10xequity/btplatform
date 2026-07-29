@@ -1,6 +1,14 @@
 /**
  * Boomtown Platform — Families, guardians and minors
- * File: worker/src/family.js · Version: v1.1 · Date: 2026-07-26 · Ships in: v0.32.0
+ * File: worker/src/family.js · Version: v1.2 · Date: 2026-07-29 · Ships in: v0.34.0
+ *
+ * v1.2 (2026-07-29, v0.34.0): F-18/F-25 closed — POST /api/family/age-out is now the ONLY
+ *   age-out endpoint. It records the D-MIN-10 keep-or-separate choice AND, on 'separated',
+ *   absorbs everything profiles.js's deleted /api/family/ageout did: email transfer with an
+ *   org-scoped clash check BEFORE any write, guardianship end (status='ended',
+ *   end_reason='aged_out'), and the sign-in link. Idempotent: a second 'separated' call
+ *   returns {already:true} and never re-sends the link. validateAgeOutPayload() exported
+ *   pure for family.test.mjs.
  *
  * WHY GUARDIAN-FIRST, AND WHY IT IS NOT NEGOTIABLE
  * A minor cannot form a binding waiver. If a 15-year-old completes registration and signs, the
@@ -37,6 +45,25 @@ export const AGE_OF_MAJORITY = 18;
 export const DOMINANT_HANDS = ["left", "right", "ambidextrous"];
 
 export const SEPARATION_CHOICES = ["kept", "separated"];
+
+/**
+ * Pure request validation for POST /api/family/age-out. Exported for tests.
+ * 'kept' needs no email. 'separated' may carry one; if the contact already has their own
+ * email (minors created through registration do), the handler falls back to it.
+ */
+export function validateAgeOutPayload(b = {}) {
+  const gid = Number(b.guardianship_id);
+  if (!gid) return { ok: false, status: 400, error: "guardianship_id is required." };
+  const choice = String(b.choice || "");
+  if (!SEPARATION_CHOICES.includes(choice)) {
+    return { ok: false, status: 400, error: `choice must be one of: ${SEPARATION_CHOICES.join(", ")}.` };
+  }
+  const email = String(b.email || "").trim().toLowerCase();
+  if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    return { ok: false, status: 400, error: "Enter a valid email address." };
+  }
+  return { ok: true, gid, choice, email: email || null };
+}
 
 /** D-MIN-9 / migration 0025. A contact is 'active' or waiting on a linked adult. */
 export const ACTIVATION_STATES = ["active", "pending_guardian"];
@@ -393,16 +420,15 @@ export async function familyRoutes(request, env, url, ctx) {
     });
   }
 
-  /* ---- record the keep-or-separate decision at 18 ---- */
+  /* ---- D-MIN-10: record the keep-or-separate decision at 18.
+     v1.2 — the SINGLE age-out endpoint (F-18/F-25). 'separated' also transfers the sign-in
+     email and ends the guardianship, absorbing profiles.js's deleted /api/family/ageout. ---- */
   if (p === "/api/family/age-out" && m === "POST") {
     if (!ctx.session) return json({ error: "Sign in first." }, 401);
     const b = await request.json().catch(() => ({}));
-    const gid = Number(b.guardianship_id);
-    const choice = String(b.choice || "");
-    if (!gid) return json({ error: "guardianship_id is required." }, 400);
-    if (!SEPARATION_CHOICES.includes(choice)) {
-      return json({ error: `choice must be one of: ${SEPARATION_CHOICES.join(", ")}.` }, 400);
-    }
+    const v = validateAgeOutPayload(b);
+    if (!v.ok) return json({ error: v.error }, v.status);
+    const { gid, choice } = v;
 
     const self = await H.contactForSession(env, ctx);
     const staff = ctx.role === "staff" || ctx.role === "admin";
@@ -422,12 +448,48 @@ export async function familyRoutes(request, env, url, ctx) {
       return json({ error: "This member is still under 18. The guardian stays responsible until their 18th birthday." }, 409);
     }
 
+    // Idempotent: separation is one-way and already done. Never re-send the sign-in link.
+    if (g.separation_choice === "separated") {
+      return json({ ok: true, already: true, choice: "separated" });
+    }
+
     const sep = choice === "separated";
+    let emailTransferred = false;
+    let targetEmail = null;
+
+    if (sep) {
+      // Everything that can refuse runs BEFORE the first write — F-5's lesson. A guardianship
+      // ended with no reachable account behind it is the failure mode this ordering prevents.
+      const contact = await env.DB.prepare(
+        "SELECT id, email FROM contacts WHERE id=?1 AND org_id=?2 AND deleted_at IS NULL"
+      ).bind(g.minor_contact_id, ctx.orgId).first();
+      if (!contact) return json({ error: "Not found in this organization." }, 404);
+
+      targetEmail = v.email || (contact.email || "").trim().toLowerCase() || null;
+      if (!targetEmail) {
+        return json({ error: "Enter their email address — it's how they'll sign in." }, 400);
+      }
+      if (targetEmail !== (contact.email || "").trim().toLowerCase()) {
+        const clash = await env.DB.prepare(
+          "SELECT id FROM contacts WHERE org_id=?1 AND email=?2 AND id != ?3 AND deleted_at IS NULL"
+        ).bind(ctx.orgId, targetEmail, g.minor_contact_id).first();
+        // Standards §8: no literal org email in member-facing copy (F-40's fix, not its fifth costume).
+        if (clash) return json({ error: "That email is already on another account here. Ask the front desk and they'll sort it out." }, 409);
+        await env.DB.prepare(
+          "UPDATE contacts SET email=?1, updated_at=datetime('now') WHERE id=?2 AND org_id=?3"
+        ).bind(targetEmail, g.minor_contact_id, ctx.orgId).run();
+        emailTransferred = true;
+      }
+    }
+
     await env.DB.prepare(
       `UPDATE guardianships
           SET separation_choice = ?1,
               aged_out_at = COALESCE(aged_out_at, datetime('now')),
               separated_at = CASE WHEN ?2 = 1 THEN datetime('now') ELSE separated_at END,
+              status      = CASE WHEN ?2 = 1 THEN 'ended' ELSE status END,
+              ended_at    = CASE WHEN ?2 = 1 THEN datetime('now') ELSE ended_at END,
+              end_reason  = CASE WHEN ?2 = 1 THEN 'aged_out' ELSE end_reason END,
               updated_at = datetime('now')
         WHERE id = ?3 AND org_id = ?4`
     ).bind(choice, sep ? 1 : 0, gid, ctx.orgId).run();
@@ -439,16 +501,19 @@ export async function familyRoutes(request, env, url, ctx) {
            AND expires_at > datetime('now') LIMIT 1`
       ).bind(ctx.orgId, g.minor_contact_id).first();
       requirements = separationRequirements({ hasLiveWaiver: !!w });
-      // The member becomes their own account: drop the family link, keep the guardianship row.
+      // The member becomes their own account: drop the family link. The guardianship row stays
+      // (status='ended') — history is ended, never deleted.
       await env.DB.prepare(
         "UPDATE contacts SET family_id = NULL, updated_at = datetime('now') WHERE id=?1 AND org_id=?2"
       ).bind(g.minor_contact_id, ctx.orgId).run();
+      await H.sendLoginLink(env, targetEmail); // history rides on contact_id — nothing moves
     }
 
     await H.audit(env, ctx, "family.age_out", "guardianships", gid,
-      { choice, minor_contact_id: g.minor_contact_id, resign: requirements.resign });
+      { choice, minor_contact_id: g.minor_contact_id, resign: requirements.resign, email_transferred: emailTransferred });
 
-    return json({ ok: true, choice, requirements });
+    return json({ ok: true, choice, requirements,
+      message: sep ? "Invitation sent. Their history goes with them." : "They'll stay on your family account. They can separate any time." });
   }
 
   /* ---- guardian invitation: read (public — the token IS the credential) ---- */

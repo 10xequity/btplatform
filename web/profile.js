@@ -363,14 +363,14 @@
         </div>
         <div class="actions">
           ${k.is_adult
-            ? `<button class="btn secondary" data-ageout="${k.contact_id}" data-name="${esc(k.full_name)}">Hand over account</button>`
+            ? `<button class="btn secondary" data-ageout="${k.guardianship_id}" data-name="${esc(k.full_name)}">They're 18 — choose</button>`
             : `${k.waiver_ok ? "" : `<button class="btn secondary" data-sign="${k.contact_id}" data-name="${esc(k.full_name)}">Sign</button>`}
                <button class="btn ghost" data-photo="${k.contact_id}" aria-label="Change photo for ${esc(k.full_name)}">Photo</button>`}
         </div>
       </div>`).join("");
     el.querySelectorAll("[data-sign]").forEach((b) => b.addEventListener("click", () => signWaiverModal(Number(b.dataset.sign), b.dataset.name)));
     el.querySelectorAll("[data-photo]").forEach((b) => b.addEventListener("click", () => pickAvatar(Number(b.dataset.photo))));
-    el.querySelectorAll("[data-ageout]").forEach((b) => b.addEventListener("click", () => ageOutModal(Number(b.dataset.ageout), b.dataset.name)));
+    el.querySelectorAll("[data-ageout]").forEach((b) => b.addEventListener("click", () => ageOutModal(Number(b.dataset.ageout), b.dataset.name))); // v0.34.0: passes guardianship_id
   }
 
   function addChildModal() {
@@ -434,27 +434,37 @@
     });
   }
 
-  function ageOutModal(minorId, name) {
+  // v0.34.0 — one endpoint, POST /api/family/age-out, addressed by guardianship_id (D-MIN-10).
+  // 'separated' moves their sign-in email and sends the invitation; 'kept' records the choice
+  // and nothing else changes — you keep signing for them until they separate.
+  function ageOutModal(guardianshipId, name) {
     const first = (name || "").split(" ")[0];
     openModal(`
-      <h2 style="margin-top:0">${esc(first)} is 18 — hand over their account</h2>
-      <p>Enter <strong>their</strong> email address. We'll send them an invitation to claim their own account. All their playing history moves with them — your account stays untouched.</p>
-      <div class="field"><label for="aEmail">Their email</label>
+      <h2 style="margin-top:0">${esc(first)} is 18 — their account, their call</h2>
+      <p>They can move to their own account now, or stay on yours and separate later. Separating means they re-sign the waiver in their own name.</p>
+      <div class="field"><label for="aEmail">Their email (for their own account)</label>
         <input id="aEmail" type="email" inputmode="email" /></div>
       <div class="actions" style="margin-top:12px">
-        <button class="btn" id="doAgeout">Send invitation</button>
+        <button class="btn" id="doSeparate">Move to their own account</button>
+        <button class="btn secondary" id="doKeep">Keep on family account</button>
         <button class="btn ghost" data-close>Cancel</button>
       </div>
       <div id="ageoutNotice"></div>`);
-    document.getElementById("doAgeout").addEventListener("click", async () => {
-      const r = await api("/api/family/ageout", {
+    const send = async (choice) => {
+      const r = await api("/api/family/age-out", {
         method: "POST",
-        body: JSON.stringify({ minor_contact_id: minorId, email: document.getElementById("aEmail").value }),
+        body: JSON.stringify({
+          guardianship_id: guardianshipId,
+          choice,
+          email: choice === "separated" ? document.getElementById("aEmail").value : undefined,
+        }),
       });
-      if (!r.ok) { document.getElementById("ageoutNotice").innerHTML = `<div class="notice error">${esc(r.data.error || "That didn't send. Try again.")}</div>`; return; }
+      if (!r.ok) { document.getElementById("ageoutNotice").innerHTML = `<div class="notice error">${esc(r.data.error || "That didn't save. Try again.")}</div>`; return; }
       closeModal();
       load();
-    });
+    };
+    document.getElementById("doSeparate").addEventListener("click", () => send("separated"));
+    document.getElementById("doKeep").addEventListener("click", () => send("kept"));
   }
 
   /* ---------- passkeys ---------- */

@@ -1,6 +1,16 @@
 /**
  * Boomtown Platform — Member Profiles + Family Accounts module
- * File: worker/src/profiles.js · Version: v1.3 · Date: 2026-07-26 · Ships in: v0.22.0
+ * File: worker/src/profiles.js · Version: v1.4 · Date: 2026-07-29 · Ships in: v0.34.0
+ *
+ * v1.4 (2026-07-29, v0.34.0): F-18 closed — GET /api/family and POST /api/family/ageout
+ *   removed from this module. GET /api/family was shadowed by family.js (mounted first in
+ *   index.js) and had zero web/ callers; ageOut() moved into family.js's /api/family/age-out,
+ *   which records the D-MIN-10 keep-or-separate choice AND performs the identity transfer.
+ *   F-38: local-time ageFromDob() deleted; every age read here now uses family.js ageOn()
+ *   (UTC) — one age arithmetic, one timezone basis. familyRows() now returns guardianship_id
+ *   so the client can address the merged endpoint. Pure helpers (eventPoints, totals,
+ *   displayName, publicContactFields, profileFields, monthsUntil18) exported for
+ *   profiles.test.mjs — Option A, owner-approved 2026-07-29.
  *
  * v1.3 (2026-07-26, Waiver versioning): guardian sign-waiver pins waivers.version_id and
  *   signatures.version_id to the active published version (was the hardcoded tag
@@ -50,7 +60,7 @@
 
 import { pinFor } from "./waivers.js"; // v1.3 — one-way import, no cycle
 import { orgTimezone, icsVtimezone } from "./calendar.js"; // v0.26.0 — one zone source, no cycle
-import { guardianGate, contactWithDob } from "./family.js"; // v0.32.0 — one age rule; family.js imports only crypto.js, no cycle
+import { guardianGate, contactWithDob, ageOn } from "./family.js"; // v0.32.0 — one age rule; family.js imports only crypto.js, no cycle
 
 let H = null; // wired: { json, audit, isStaff, requireStaff, sendLoginLink }
 export function wireProfiles(helpers) { H = helpers; }
@@ -73,11 +83,9 @@ export async function profileRoutes(request, env, url, ctx) {
   if (p === "/api/profile/resume" && request.method === "GET") return resume(env, url, ctx);
   if (p === "/api/profile/upcoming" && request.method === "GET") return upcoming(env, ctx);
 
-  if (p === "/api/family" && request.method === "GET") return familyList(env, ctx);
   if (p === "/api/family/add-child" && request.method === "POST") return addChild(request, env, ctx);
   if (p === "/api/family/sign-waiver" && request.method === "POST") return signWaiver(request, env, ctx);
   if (p === "/api/family/remove-child" && request.method === "POST") return removeChild(request, env, ctx);
-  if (p === "/api/family/ageout" && request.method === "POST") return ageOut(request, env, ctx);
 
   if (p === "/api/seeding/recompute" && request.method === "POST") return seedingRecompute(request, env, ctx);
   if (p === "/api/seeding" && request.method === "GET") return seedingList(env, url, ctx);
@@ -137,17 +145,6 @@ async function getOrCreateProfile(env, orgId, contactId) {
   return prof;
 }
 
-function ageFromDob(dob) {
-  if (!dob) return null;
-  const d = new Date(dob + "T00:00:00");
-  if (isNaN(d)) return null;
-  const now = new Date();
-  let age = now.getFullYear() - d.getFullYear();
-  const m = now.getMonth() - d.getMonth();
-  if (m < 0 || (m === 0 && now.getDate() < d.getDate())) age--;
-  return age;
-}
-
 /* ---------- profile ---------- */
 
 async function me(env, ctx) {
@@ -198,7 +195,7 @@ async function update(request, env, ctx) {
 
   // Minors stay conservative: no public visibility for under-18s.
   const dob = fields.date_of_birth || prof.date_of_birth;
-  const age = ageFromDob(dob);
+  const age = ageOn(dob); // F-38
   if (age !== null && age < 18 && fields.visibility === "public") fields.visibility = "members";
 
   const keys = Object.keys(fields);
@@ -274,7 +271,7 @@ async function reminders(request, env, ctx) {
 
 /* ---------- résumé + upcoming ---------- */
 
-function eventPoints(wins, rank) {
+export function eventPoints(wins, rank) {
   let pts = (wins || 0) * 10;
   if (rank === 1) pts += 50;
   else if (rank === 2) pts += 30;
@@ -308,7 +305,7 @@ async function resume(env, url, ctx) {
   return H.json({ results: rows, totals: totals(rows) });
 }
 
-function totals(rows) {
+export function totals(rows) {
   const t = { events: rows.length, wins: 0, losses: 0, points: 0, best_finish: null };
   for (const r of rows) {
     t.wins += r.wins || 0; t.losses += r.losses || 0; t.points += r.points;
@@ -337,20 +334,20 @@ async function upcoming(env, ctx) {
 
 /* ---------- public profile ---------- */
 
-function displayName(fullName) {
+export function displayName(fullName) {
   const parts = (fullName || "").trim().split(/\s+/);
   if (parts.length === 0 || !parts[0]) return "Boomtown member";
   if (parts.length === 1) return parts[0];
   return `${parts[0]} ${parts[parts.length - 1][0].toUpperCase()}.`;
 }
 
-function publicContactFields(c, self = false) {
+export function publicContactFields(c, self = false) {
   const out = { id: c.id, display_name: displayName(c.full_name) };
   if (self) { out.full_name = c.full_name; out.email = c.email; }
   return out;
 }
 
-function profileFields(p) {
+export function profileFields(p) {
   if (!p) return null;
   return {
     contact_id: p.contact_id,
@@ -416,8 +413,9 @@ async function familyRows(env, orgId, guardianContactId) {
   const out = [];
   for (const r of rows) {
     const waiver = await validWaiver(env, orgId, r.minor_contact_id);
-    const age = ageFromDob(r.date_of_birth);
+    const age = ageOn(r.date_of_birth); // F-38: one age arithmetic (UTC), from family.js
     out.push({
+      guardianship_id: r.guardianship_id, // v1.4 — the merged /api/family/age-out addresses the row
       contact_id: r.minor_contact_id,
       full_name: r.full_name,
       display_name: displayName(r.full_name),
@@ -432,22 +430,17 @@ async function familyRows(env, orgId, guardianContactId) {
   return out;
 }
 
-function monthsUntil18(dob) {
-  const d = new Date(dob + "T00:00:00");
-  const eighteenth = new Date(d.getFullYear() + 18, d.getMonth(), d.getDate());
-  return (eighteenth - new Date()) / (1000 * 60 * 60 * 24 * 30.44);
+export function monthsUntil18(dob, now = new Date()) {
+  const d = new Date(dob + "T00:00:00Z"); // F-38: UTC, same basis as ageOn
+  if (isNaN(d)) return null;
+  const eighteenth = Date.UTC(d.getUTCFullYear() + 18, d.getUTCMonth(), d.getUTCDate());
+  return (eighteenth - now.getTime()) / (1000 * 60 * 60 * 24 * 30.44);
 }
 
 async function validWaiver(env, orgId, contactId) {
   return env.DB.prepare(
     "SELECT id, signed_at, expires_at FROM waivers WHERE org_id=?1 AND contact_id=?2 AND deleted_at IS NULL AND expires_at > datetime('now') ORDER BY expires_at DESC LIMIT 1"
   ).bind(orgId, contactId).first();
-}
-
-async function familyList(env, ctx) {
-  if (!ctx.session) return H.json({ error: "Sign in first." }, 401);
-  const self = await ownContact(env, ctx);
-  return H.json({ family: await familyRows(env, ctx.orgId, self.id) });
 }
 
 async function addChild(request, env, ctx) {
@@ -457,7 +450,7 @@ async function addChild(request, env, ctx) {
   const dob = body.date_of_birth;
   if (!name || name.split(/\s+/).length < 2) return H.json({ error: "Enter your child's first and last name." }, 400);
   if (!dob || !/^\d{4}-\d{2}-\d{2}$/.test(dob)) return H.json({ error: "Enter their date of birth." }, 400);
-  const age = ageFromDob(dob);
+  const age = ageOn(dob); // F-38
   if (age === null || age < 0 || age > 25) return H.json({ error: "That date of birth doesn't look right." }, 400);
   if (age >= 18) return H.json({ error: "They're 18 or older — they can create their own account with their email instead." }, 400);
 
@@ -511,7 +504,7 @@ async function signWaiver(request, env, ctx) {
   if (!link) return H.json({ error: "This child isn't in your family." }, 403);
 
   const prof = await getOrCreateProfile(env, ctx.orgId, minorId);
-  const age = ageFromDob(prof.date_of_birth);
+  const age = ageOn(prof.date_of_birth); // F-38
   const expires = new Date(Date.now() + 365 * 86_400_000).toISOString();
 
   // v1.3 — pin to the published version. A guardian signature spanning a publish is the
@@ -549,34 +542,6 @@ async function removeChild(request, env, ctx) {
   ).bind(link.g.id).run();
   await H.audit(env, ctx, "family.remove_child", "guardianships", link.g.id, {});
   return H.json({ ok: true });
-}
-
-async function ageOut(request, env, ctx) {
-  if (!ctx.session) return H.json({ error: "Sign in first." }, 401);
-  const body = await safeJson(request);
-  const minorId = Number(body.minor_contact_id);
-  const email = (body.email || "").trim().toLowerCase();
-  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return H.json({ error: "Enter a valid email address." }, 400);
-
-  const link = await guardianshipOf(env, ctx, minorId);
-  if (!link) return H.json({ error: "This person isn't in your family." }, 403);
-
-  const prof = await getOrCreateProfile(env, ctx.orgId, minorId);
-  const age = ageFromDob(prof.date_of_birth);
-  if (age === null || age < 18) return H.json({ error: "This works on their 18th birthday — not before." }, 400);
-
-  const clash = await env.DB.prepare(
-    "SELECT id FROM contacts WHERE org_id=?1 AND email=?2 AND id != ?3 AND deleted_at IS NULL"
-  ).bind(ctx.orgId, email, minorId).first();
-  if (clash) return H.json({ error: "That email is already on another account. Email admin@boomtownvb.com and we'll sort it out." }, 409);
-
-  await env.DB.prepare("UPDATE contacts SET email=?1, updated_at=datetime('now') WHERE id=?2").bind(email, minorId).run();
-  await env.DB.prepare(
-    "UPDATE guardianships SET status='ended', ended_at=datetime('now'), end_reason='aged_out', updated_at=datetime('now') WHERE id=?1"
-  ).bind(link.g.id).run();
-  await H.sendLoginLink(env, email); // their playing history rides on contact_id — nothing moves
-  await H.audit(env, ctx, "family.ageout", "guardianships", link.g.id, { minor: minorId });
-  return H.json({ ok: true, message: "Invitation sent. Their history goes with them." });
 }
 
 /* ---------- ICS ---------- */

@@ -1,6 +1,13 @@
 # Boomtown Platform — Design Handoff Spec
-**Version:** v0.1 · **Date:** 2026-07-21 · **Covers:** App Shell (index) + Tournament Ops screen, as built in v0.2.1
-**Stack:** vanilla HTML/CSS/JS, no framework · tokens in `web/assets/tokens.css` · spec of record: design spec v0.1 §4
+**Version:** v0.1.1 · **Date:** 2026-07-29 (v0.1 base 2026-07-21) · **Covers:** App Shell (index) + Tournament Ops screen, as built in v0.2.1
+**Stack:** vanilla HTML/CSS/JS, no framework · tokens in `web/assets/tokens.css` — **tokens.css is the source of truth; where this document disagrees with it, this document is wrong.** (Filename kept at v0.1 because tokens.css and the standards cite this exact path — a citation to a renamed file is a dead citation, F-24's own lesson.)
+
+> **v0.1.1 (2026-07-29) — F-24 resolved, owner ruling.** This document said focus rings are
+> 2px `--accent` (gold). tokens.css v0.4.0 keeps the 2px/2px geometry but deliberately uses
+> `--focus-ring` (= `--primary` in light, = `--text` in dark) because gold-on-gold fails
+> contrast exactly where focus matters most — the courtside dark theme. Under the standing
+> authority order (shipped code → tokens.css → this document → standards → skills) the token
+> file wins; the two focus rows below now restate it rather than contradicting it.
 
 ## Handoff Spec: App Shell & Tournament Ops
 
@@ -21,7 +28,7 @@ Two screens ship in v0.2.1. **App Shell** (`web/index.html`): magic-link sign-in
 | `--surface-raised` | #FFFFFF | #1B1B1F | score sheet, notices |
 | `--text` / `--text-muted` | #101418 / #5A6270 | #F2F0EA / #A8A49A | body / secondary |
 | `--primary` (+contrast) | #1B2A4A / #FFF | #D4AF37 / #0B0B0D | filled buttons, role pill |
-| `--accent` | #E6B800 | #D4AF37 | court-line signature, focus rings, scores |
+| `--accent` | #E6B800 | #D4AF37 | court-line signature, scores (F-24: **not** focus rings) |
 | `--positive` / `--danger` | #1F7A4D / #B3261E | #4CC38A / #F2555A | scored outline / errors |
 | `--radius-card` / `--radius-control` | 10px / 8px | same | cards / inputs+buttons |
 | `--font` | Inter → system stack | same | everything; body ≥16px |
@@ -46,7 +53,7 @@ Two screens ship in v0.2.1. **App Shell** (`web/index.html`): magic-link sign-in
 |---------|-------|----------|
 | Any `.btn` | :active | transform scale(0.97), 120ms `--ease-out` |
 | `.btn` | :hover (fine pointers only) | brightness(1.06) — gated by `@media (hover:hover) and (pointer:fine)` |
-| Any focusable | :focus-visible | 2px `--accent` outline, 2px offset |
+| Any focusable | :focus-visible | 2px `var(--focus-ring)` outline, 2px offset (F-24 — defined in tokens.css v0.4.0) |
 | Theme toggle / org switch | activate | **instant, zero animation** — high-frequency actions per emil rules |
 | Match cell | tap | score sheet slides up 240ms; tap winner (tap 1) → tap margin chip (tap 2) → sheet closes instantly, cell gains `.scored` green outline + gold tabular score |
 | Match cell | dragstart / over / drop | source opacity 0.4; target cell 2px dashed `--accent` outline; on drop → PATCH → amber warnings render, grid re-renders |
