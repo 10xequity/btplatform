@@ -1,6 +1,13 @@
 # Boomtown Platform — Worker deploy, gated
-# Version: v0.3.0 · Date: 2026-07-27
-# Supersedes: v0.2.2 (2026-07-21)
+# Version: v0.4.0 · Date: 2026-07-29
+# Supersedes: v0.3.0 (2026-07-27)
+#
+# v0.4.0 — F-37. v0.33.2 shipped its 13 tokens tests in a file named 'tokens.test.mjs,'
+# (trailing comma). `node --test test/*.mjs` cannot match it, so the suite ran 360/360,
+# reported green, and the new tests contributed ZERO — failure classes 1 and 4 landing on
+# the very release that shipped this gate. The gate measured the right command against the
+# wrong set. The parity step below makes an unmatched file a hard failure, and it also
+# forces the deletion of the malformed file: while 'tokens.test.mjs,' exists, no deploy runs.
 #
 # WHAT CHANGED AND WHY
 # --------------------
@@ -63,6 +70,19 @@ jobs:
           set -euo pipefail
           for f in worker/src/*.js; do node --check "$f"; done
           echo "node --check: $(ls worker/src/*.js | wc -l) modules OK"
+
+      - name: Test-file parity — every file in test/ must match the glob (F-37)
+        working-directory: worker
+        run: |
+          set -euo pipefail
+          TOTAL=$(ls -1 test | wc -l)
+          MATCHED=$(ls -1 test/*.mjs 2>/dev/null | wc -l)
+          echo "test/ files: $TOTAL · matched by test/*.mjs: $MATCHED"
+          if [ "$TOTAL" -ne "$MATCHED" ]; then
+            echo "::error::$((TOTAL-MATCHED)) file(s) in worker/test/ escape 'test/*.mjs' and will silently not run (F-37). Offenders:"
+            ls -1 test | grep -v '\.mjs$' || true
+            exit 1
+          fi
 
       - name: Full test suite
         working-directory: worker
