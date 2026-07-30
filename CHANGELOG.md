@@ -1,5 +1,9 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.36.0 — 2026-07-30
+
+- Auto-recorded by CI on deploy. `/api/health` reported `v0.36.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
+
 ## v0.33.2 — 2026-07-29
 - **F-35 — focus ring covered 3 element types out of every focusable.** `web/assets/tokens.css` v0.4.0 introduces a `--focus-ring` token (light `#1B2A4A` = `--primary`; dark `#F2F0EA` = `--text`, deliberately not gold — `--primary` and `--accent` both resolve to `#D4AF37` in dark) and replaces the `input, select, textarea:focus-visible` rule with a bare `:focus-visible` at 2px/2px. Measured at abdc64f: 38 of 39 HTML files contain a focusable, 26 had no ring rule at all and fell through to the UA default. Ring contrast computed, not assumed: 14.22:1 / 13.26:1 light, 17.26:1 / 16.13:1 / 15.07:1 dark — all clear WCAG 2.1 SC 1.4.11 (≥3:1) by 4×. The token values are written as literals, not `var(--primary)`/`var(--text)`, so a future edit to either cannot silently reintroduce a gold ring. This also corrects the recorded F-24 framing: the v0.2.1 ring was already 2px; the `1px` was `outline-offset`, not width.
 - **F-35 not fully closed here, deliberately.** 20 page-level `:focus-visible` rules across 13 files still name `--primary`/`--accent` and win on specificity, so they stay gold in dark mode until the v0.33.3 sweep. This release stays at two files so its diff verifies by blob SHA at a glance — this pipeline has lost files on three separate multi-file uploads (40ed3b6, be87230, 73f6b37).
