@@ -121,3 +121,49 @@ test("monthsUntil18 agrees with ageOn about the 18th-birthday boundary (F-38)", 
   assert.equal(ageOn(dob, NOW), 18, "ageOn says adult on the birthday");
   assert.ok(monthsUntil18(dob, NOW) <= 0, "monthsUntil18 agrees the birthday has arrived");
 });
+
+/* ---------- decision B (v0.37.0): the write-side age gate on visibility ----------
+   The gate lives inside update(), which needs a DB — so this is a source-slice guard
+   (same discipline as the F-27/F-39 read-gate guards) plus a direct test of the age
+   decision it encodes. Together they fail if the gate is removed, narrowed to only
+   'public', or flipped to fail-open on a NULL DOB. */
+import { readFileSync } from "node:fs";
+const PROFILES_SRC = readFileSync(new URL("../src/profiles.js", import.meta.url), "utf8");
+const UPDATE_FN = PROFILES_SRC.slice(
+  PROFILES_SRC.indexOf("async function update("),
+  PROFILES_SRC.indexOf("async function avatarUpload(")
+);
+
+test("decision B: update() gates BOTH listable tiers, not just 'public'", () => {
+  // The old defect guarded only 'public'; 'members' is equally listable under decision A.
+  assert.match(UPDATE_FN, /visibility === "public" \|\| .*visibility === "members"/,
+    "the listable check must cover 'members' as well as 'public'");
+});
+
+test("decision B: update() fails CLOSED on a missing DOB (dob_required)", () => {
+  assert.match(UPDATE_FN, /effectiveDob === null \|\| effectiveAge === null/,
+    "a NULL DOB must be refused, not allowed through");
+  assert.match(UPDATE_FN, /reason: "dob_required"/);
+});
+
+test("decision B: update() refuses under-18 with a named reason, no silent downgrade", () => {
+  assert.match(UPDATE_FN, /effectiveAge < 18/);
+  assert.match(UPDATE_FN, /reason: "minor_not_listable"/);
+  // The old line-199 silent rewrite must be gone — no assignment of visibility to "members".
+  assert.doesNotMatch(UPDATE_FN, /fields\.visibility = "members"/,
+    "found a silent downgrade; decision B rejects instead of rewriting the user's choice");
+});
+
+test("decision B negative control: the source-slice guard can actually fail", () => {
+  const mutated = UPDATE_FN
+    .replace(/effectiveDob === null \|\| effectiveAge === null/g, "false")
+    .replace(/reason: "dob_required"/g, "");
+  assert.doesNotMatch(mutated, /effectiveDob === null \|\| effectiveAge === null/);
+  assert.doesNotMatch(mutated, /reason: "dob_required"/);
+});
+
+test("decision B: the age boundary the gate relies on (ageOn) treats 17 as a minor, 18 as adult", () => {
+  assert.equal(ageOn("2009-07-29", NOW), 17); // blocked from listing
+  assert.equal(ageOn("2008-07-29", NOW), 18); // allowed
+  assert.equal(ageOn(null, NOW), null);        // fails closed at the gate
+});

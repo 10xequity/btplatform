@@ -1,5 +1,7 @@
 /* Boomtown Platform — Member Profile page
-   File: web/profile.js · Version: v1.0 · Date: 2026-07-22 · Ships in: v0.5.0
+   File: web/profile.js · Version: v1.1 · Date: 2026-07-30 · Ships in: v0.37.0 (was v1.0, v0.5.0)
+   v1.1: decision B — DOB-required-to-be-listed reflected live on the visibility control;
+   reason-aware save (dob_required focuses the DOB field). Server enforces; this only guides.
    Self-service profile (avatar crop, bio, Instagram, visibility), family accounts
    (add child, guardian waiver signing, 18th-birthday handover), upcoming events with
    Add-to-calendar + email reminders, results résumé, passkey enrollment.
@@ -199,8 +201,9 @@
       <div class="field"><label for="fBio">About you (optional)</label>
         <textarea id="fBio" maxlength="280" rows="3">${esc(p.bio || "")}</textarea>
         <div class="meta">A sentence or two. 280 characters max.</div></div>
-      <div class="field"><label for="fDob">Date of birth (optional)</label>
-        <input id="fDob" type="date" value="${esc(p.date_of_birth || "")}" /></div>
+      <div class="field"><label for="fDob">Date of birth <span id="dobReq" class="meta" style="font-weight:400">(optional)</span></label>
+        <input id="fDob" type="date" value="${esc(p.date_of_birth || "")}" aria-describedby="dobHint" />
+        <p id="dobHint" class="meta" style="margin:4px 0 0"></p></div>
       <div class="field"><label for="fVis">Who can see your profile?</label>
         <select id="fVis">
           <option value="public" ${p.visibility === "public" ? "selected" : ""}>Anyone with the link</option>
@@ -214,19 +217,40 @@
         <button class="btn ghost" data-close>Cancel</button>
       </div>
       <div id="editNotice"></div>`);
+    // v0.37.0 (decision B): listing yourself in the library needs a verified-adult DOB, so
+    // the "(optional)" label is only true while visibility is "Just me". Reflect that live —
+    // no silent state changes; the user sees why the field matters before they hit Save.
+    const visSel = document.getElementById("fVis");
+    const dobReq = document.getElementById("dobReq");
+    const dobHint = document.getElementById("dobHint");
+    function reflectDobRequirement() {
+      const listed = visSel.value === "public" || visSel.value === "members";
+      dobReq.textContent = listed ? "(required to be listed)" : "(optional)";
+      dobHint.textContent = listed
+        ? "The library only lists adults, so we need your date of birth to make this profile findable."
+        : "";
+    }
+    visSel.addEventListener("change", reflectDobRequirement);
+    reflectDobRequirement();
+
     document.getElementById("saveProfile").addEventListener("click", async () => {
       const body = {
         full_name: document.getElementById("fName").value,
         instagram_handle: document.getElementById("fInsta").value,
         bio: document.getElementById("fBio").value,
-        visibility: document.getElementById("fVis").value,
+        visibility: visSel.value,
         show_history: document.getElementById("fHist").checked ? 1 : 0,
         show_instagram: document.getElementById("fShowIg").checked ? 1 : 0,
       };
       const dob = document.getElementById("fDob").value;
       if (dob) body.date_of_birth = dob;
       const r = await api("/api/profile/update", { method: "POST", body: JSON.stringify(body) });
-      if (!r.ok) { document.getElementById("editNotice").innerHTML = `<div class="notice error">${esc(r.data.error || "That didn't save. Try again.")}</div>`; return; }
+      if (!r.ok) {
+        document.getElementById("editNotice").innerHTML = `<div class="notice error">${esc(r.data.error || "That didn't save. Try again.")}</div>`;
+        // Reason-aware: send the user to the field that will fix it (emil: point at the cause).
+        if (r.data.reason === "dob_required") { document.getElementById("fDob").focus(); reflectDobRequirement(); }
+        return;
+      }
       closeModal();
       load();
     });

@@ -1,6 +1,14 @@
 /**
  * Boomtown Platform — Member Profiles + Family Accounts module
- * File: worker/src/profiles.js · Version: v1.4 · Date: 2026-07-29 · Ships in: v0.34.0
+ * File: worker/src/profiles.js · Version: v1.5 · Date: 2026-07-30 · Ships in: v0.37.0
+ *
+ * v1.5 (2026-07-30, v0.37.0): decision B — the write-side twin of the v0.36.0 F-39 read gate.
+ *   POST /api/profile/update now REJECTS (400 + reason) any attempt to set visibility to
+ *   'public' or 'members' unless the profile carries a verified-adult date_of_birth. Replaces
+ *   the old line-199 silent downgrade, which (1) only guarded 'public' though decision A gates
+ *   both listable tiers, and (2) let a NULL DOB set 'public' — the write-side fail-open hole.
+ *   reason codes: 'dob_required' (no DOB) and 'minor_not_listable' (<18) drive the profile
+ *   UI prompt. Fail closed: unknown age = minor = not listable.
  *
  * v1.4 (2026-07-29, v0.34.0): F-18 closed — GET /api/family and POST /api/family/ageout
  *   removed from this module. GET /api/family was shadowed by family.js (mounted first in
@@ -193,10 +201,24 @@ async function update(request, env, ctx) {
       .bind(body.full_name.trim().slice(0, 120), targetId).run();
   }
 
-  // Minors stay conservative: no public visibility for under-18s.
-  const dob = fields.date_of_birth || prof.date_of_birth;
-  const age = ageOn(dob); // F-38
-  if (age !== null && age < 18 && fields.visibility === "public") fields.visibility = "members";
+  // Decision B (v0.37.0): to be LISTABLE in the library — 'public' OR 'members' — the system
+  // must be able to age-verify the profile as an adult. This is the write-side twin of the
+  // v0.36.0 read gate (LIBRARY_ADULT_PREDICATE). Two rules the old line-199 downgrade missed:
+  //   1. it only guarded 'public', but decision A gates BOTH non-staff tiers, so 'members' was
+  //      a stored contradiction (DB says listable, reader hides it — an F-26/F-39-class split);
+  //   2. NULL DOB fell through OPEN — the write-side of the hole decision A closed on the read.
+  // Fail closed: unknown age is a minor. Reject with a named reason instead of silently
+  // rewriting the caller's choice, so the UI can prompt for DOB rather than confusing the user
+  // with a visibility that quietly changed under them.
+  const effectiveDob = fields.date_of_birth || prof.date_of_birth;
+  const effectiveAge = ageOn(effectiveDob); // F-38
+  const wantsListed = fields.visibility === "public" || fields.visibility === "members";
+  if (wantsListed && (effectiveDob === null || effectiveAge === null)) {
+    return H.json({ error: "Add a date of birth before making this profile findable in the player library.", reason: "dob_required" }, 400);
+  }
+  if (wantsListed && effectiveAge < 18) {
+    return H.json({ error: "Players under 18 can't be listed in the public library. This profile stays private and is always reachable by an organizer.", reason: "minor_not_listable" }, 400);
+  }
 
   const keys = Object.keys(fields);
   if (keys.length) {
