@@ -1,6 +1,11 @@
 /**
  * Boomtown Platform — Sales Reports + Member Notifications
- * File: worker/src/reports.js · Version: v1.2 · Date: 2026-07-25 · Ships in: v0.18.0
+ * File: worker/src/reports.js · Version: v1.3 · Date: 2026-07-30 · Ships in: v0.36.0
+ *
+ * v1.3 (2026-07-30, v0.36.0): admin alerts persist until resolved. The dashboard feed
+ *   now returns only read_at IS NULL rows (an open cash flag can no longer scroll off
+ *   at LIMIT 6), and POST /api/admin/alerts/:id/dismiss (staff) resolves one, reusing
+ *   read_at — collision-free with the member inbox, which filters on contact_id.
  *
  * v1.2 (M15): GET /api/admin/reports/heatmap?weeks=N (R-02, attendance by weekday × hour),
  *   GET /api/admin/reports/pos-sales?from&to (POS revenue by day + by product),
@@ -31,6 +36,7 @@ export async function reportRoutes(request, env, url, ctx) {
   if (p === "/api/admin/dashboard" && m === "GET") return dashboard(env, ctx);
   if (p === "/api/notifications" && m === "GET") return inbox(env, ctx);
   if ((x = p.match(/^\/api\/notifications\/(\d+)\/read$/)) && m === "POST") return markRead(env, ctx, +x[1]);
+  if ((x = p.match(/^\/api\/admin\/alerts\/(\d+)\/dismiss$/)) && m === "POST") return dismissAlert(env, ctx, +x[1]);
   if (p === "/api/notifications/read-all" && m === "POST") return readAll(env, ctx);
   if (p === "/api/admin/reports/heatmap" && m === "GET") return heatmap(env, ctx, url);
   if (p === "/api/admin/reports/pos-sales" && m === "GET") return posSales(env, ctx, url);
@@ -140,10 +146,16 @@ async function dashboard(env, ctx) {
     "SELECT COUNT(*) AS n FROM contacts WHERE org_id=?1 AND deleted_at IS NULL"
   ).bind(org).first();
 
-  // Latest admin-facing notifications (cash pending etc.) — the "needs attention" feed.
+  // Admin-facing notifications (cash pending etc.) — the "needs attention" feed.
+  // v1.3: only UNRESOLVED rows. The old query was newest-6 regardless of state, so the
+  // 7th-oldest open cash flag silently fell off the only surface that shows it. read_at
+  // doubles as "resolved" for target='admin' rows — safe to reuse, because these rows
+  // carry contact_id NULL and the member inbox filters on contact_id IN (…), so the two
+  // consumers can never see each other's rows.
   const alerts = (await env.DB.prepare(
     `SELECT id, kind, title, body, payload_json, created_at FROM notifications
-     WHERE org_id=?1 AND target='admin' AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 6`
+     WHERE org_id=?1 AND target='admin' AND read_at IS NULL AND deleted_at IS NULL
+     ORDER BY created_at DESC LIMIT 6`
   ).bind(org).all()).results;
 
   return json({
@@ -183,6 +195,20 @@ async function inbox(env, ctx) {
      WHERE contact_id IN (${ph}) AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 50`
   ).bind(...ids).all()).results;
   return json({ notifications: rows, unread: rows.filter(r => !r.read_at).length });
+}
+
+/* v1.3 (v0.36.0): staff resolve an admin alert. Org-scoped in the WHERE (F-11 class),
+   target='admin' pinned so this path can never touch a member's inbox row. */
+async function dismissAlert(env, ctx, id) {
+  const deny = await requireStaff(env, ctx);
+  if (deny) return deny;
+  const r = await env.DB.prepare(
+    `UPDATE notifications SET read_at=datetime('now')
+     WHERE id=?1 AND org_id=?2 AND target='admin' AND read_at IS NULL AND deleted_at IS NULL`
+  ).bind(id, ctx.orgId).run();
+  if (!r.meta.changes) return json({ error: "Alert not found or already cleared." }, 404);
+  await audit(env, ctx, "alert.dismiss", "notifications", id, {});
+  return json({ ok: true, message: "Cleared." });
 }
 
 async function markRead(env, ctx, id) {

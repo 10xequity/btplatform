@@ -1,5 +1,6 @@
 /* Boomtown Platform — Control Center (manager home)
-   File: web/assets/admin-dash.js · Version: v1.2 · Date: 2026-07-24 · Ships in: v0.8.0
+   File: web/assets/admin-dash.js · Version: v1.3 · Date: 2026-07-30 · Ships in: v0.36.0
+   v1.3: Clear button on alert rows → POST /api/admin/alerts/:id/dismiss; feed shows only unresolved.
    Data: one call to GET /api/admin/dashboard (reports.js v1.1).
    Actions inline: Remind (existing link) and Rerun (fresh Square link) straight from
    the overdue list — no navigating to the Registrations page for routine follow-up. */
@@ -132,7 +133,16 @@
       try { const p = JSON.parse(a.payload_json || "{}"); if (p.team) extra = `${p.team} — ${p.event || ""}`; } catch {}
       return `<div class="alert-row"><span class="k">${esc(a.kind.replace(/_/g, " "))}</span>
         <span>${esc(a.title || extra || a.body || "")}</span>
-        <span class="help-text" style="margin-left:auto;flex:none">${esc((a.created_at || "").slice(5, 16).replace("T", " "))}</span></div>`;
+        <span class="help-text" style="margin-left:auto;flex:none">${esc((a.created_at || "").slice(5, 16).replace("T", " "))}</span>
+        <button class="btn ghost" data-dismiss="${a.id}" aria-label="Clear this alert"
+          style="flex:none;padding:4px 10px;min-height:32px;font-size:13px">Clear</button></div>`;
     }).join("") : `<p class="help-text">All clear — cash-pending flags and system alerts land here.</p>`;
+    // v1.3: alerts persist until cleared (server returns only unresolved rows).
+    $("alerts").querySelectorAll("[data-dismiss]").forEach(b => b.onclick = async () => {
+      b.disabled = true;
+      const r = await api(`/api/admin/alerts/${b.dataset.dismiss}/dismiss`, { method: "POST" });
+      if (!r.ok) { b.disabled = false; b.textContent = "Retry"; return; }
+      load();
+    });
   }
 })();

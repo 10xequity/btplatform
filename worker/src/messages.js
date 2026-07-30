@@ -1,6 +1,14 @@
 /**
  * Boomtown Platform — Messages, Relay & Player Library module (M14 Phase B)
- * File: worker/src/messages.js · Version: v1.1 · Date: 2026-07-25 · Ships in: v0.21.0
+ * File: worker/src/messages.js · Version: v1.2 · Date: 2026-07-30 · Ships in: v0.36.0
+ *
+ * v1.2 (2026-07-30, v0.36.0): F-39 — decision A, fail closed. Exported
+ *   LIBRARY_ADULT_PREDICATE (member_profiles.date_of_birth NOT NULL and 18+); tierClause()
+ *   appends it for both non-staff tiers, and startThread() refuses a recipient who fails
+ *   it with the same opaque 404 as 'private'. NULL DOB = not listed, not messageable.
+ *   Staff unaffected (spec §3.4). Verified live 2026-07-30: 0 public profiles, 0 profiles
+ *   with DOB — blast radius today is one sandbox 'members' profile dropping from search
+ *   until a DOB is entered. Decision B (require DOB to set visibility) is the follow-up.
  *
  * v1.1 (2026-07-25, M16): one-click mute from Message Reports —
  *   POST /api/admin/messages/mute   {contact_id, days?, reason?}  (default 7 days; 0 = until unmuted)
@@ -55,10 +63,19 @@ const MESSAGES_PER_DAY = 60;
 /* ================================ pure helpers (unit-tested) ================================ */
 
 /** SQL fragment gating library rows by privacy tier. Staff see everything (spec §3.4). */
+/* F-39 (v0.36.0, decision A): the library and the relay may only expose a profile the
+   system can age-verify as an adult. FAIL CLOSED — a NULL date_of_birth is treated as
+   a minor, not as an adult. One exported predicate, used by tierClause() below AND by
+   startThread()'s recipient check, so the listing filter and the DM gate cannot drift
+   apart (library failure class 3: a guard narrower than the thing it guards).
+   References member_profiles via alias `p`; ISO date strings compare correctly in SQLite. */
+export const LIBRARY_ADULT_PREDICATE =
+  "(p.date_of_birth IS NOT NULL AND p.date_of_birth <= date('now','-18 years'))";
+
 export function tierClause(signedIn, staff) {
   if (staff) return "1=1";
-  if (signedIn) return "p.visibility IN ('public','members')";
-  return "p.visibility = 'public'";
+  if (signedIn) return "p.visibility IN ('public','members') AND " + LIBRARY_ADULT_PREDICATE;
+  return "p.visibility = 'public' AND " + LIBRARY_ADULT_PREDICATE;
 }
 
 /** Library filter builder — same {where, binds} contract as marketing.buildSegmentWhere. */
@@ -200,11 +217,16 @@ async function startThread(request, env, ctx) {
   if (toId === me.id) return H.json({ error: "That's you — pick another player." }, 400);
 
   const to = await env.DB.prepare(
-    "SELECT c.id, c.email, c.full_name, p.visibility FROM contacts c LEFT JOIN member_profiles p ON p.contact_id=c.id AND p.org_id=c.org_id AND p.deleted_at IS NULL WHERE c.id=?1 AND c.org_id=?2 AND c.deleted_at IS NULL"
+    `SELECT c.id, c.email, c.full_name, p.visibility, ${LIBRARY_ADULT_PREDICATE} AS adult_ok
+     FROM contacts c LEFT JOIN member_profiles p ON p.contact_id=c.id AND p.org_id=c.org_id AND p.deleted_at IS NULL
+     WHERE c.id=?1 AND c.org_id=?2 AND c.deleted_at IS NULL`
   ).bind(toId, ctx.orgId).first();
   const staff = await H.isStaff(env, ctx);
   // Hidden players are unreachable for regular members (admin can always contact, spec §3.4).
-  if (!to || (!staff && (to.visibility || "private") === "private")) {
+  // F-39 (v0.36.0): so is anyone the system cannot age-verify as an adult — same predicate
+  // as the library listing, same opaque 404 (the response must not disclose WHY, least of
+  // all that the target is a minor). LEFT JOIN means no profile row → adult_ok is NULL → refused.
+  if (!to || (!staff && ((to.visibility || "private") === "private" || !to.adult_ok))) {
     return H.json({ error: "This player can't be messaged." }, 404);
   }
   if (await blockedEitherWay(env, ctx.orgId, me.id, toId)) {

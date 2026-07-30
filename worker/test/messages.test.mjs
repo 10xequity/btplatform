@@ -2,10 +2,47 @@
 // File: worker/test/messages.test.mjs · Version: v1.1 · Date: 2026-07-25 · Ships in: v0.21.0
 import test from "node:test";
 import assert from "node:assert/strict";
-import { tierClause, buildLibraryWhere, relayEmailHtml, overFlood, muteUntilIso, normalizeMuteBody } from "../src/messages.js";
+import { readFileSync } from "node:fs";
+import { tierClause, buildLibraryWhere, relayEmailHtml, overFlood, muteUntilIso, normalizeMuteBody, LIBRARY_ADULT_PREDICATE } from "../src/messages.js";
+
+const SRC = readFileSync(new URL("../src/messages.js", import.meta.url), "utf8");
 
 test("tierClause: anonymous visitors only see public profiles", () => {
-  assert.equal(tierClause(false, false), "p.visibility = 'public'");
+  const c = tierClause(false, false);
+  assert.match(c, /p\.visibility = 'public'/);
+  assert.doesNotMatch(c, /'members'/);
+});
+
+/* ---------------- F-39 guards (v0.36.0, decision A: fail closed) ---------------- */
+
+test("F-39: the adult predicate FAILS CLOSED — a NULL date_of_birth can never pass", () => {
+  // 'IS NOT NULL' must be a conjunct, so an unknown age is a minor, not an adult.
+  assert.match(LIBRARY_ADULT_PREDICATE, /date_of_birth IS NOT NULL/);
+  assert.match(LIBRARY_ADULT_PREDICATE, /date_of_birth <= date\('now','-18 years'\)/);
+  assert.match(LIBRARY_ADULT_PREDICATE, /AND/);
+});
+
+test("F-39: both non-staff library tiers carry the adult predicate; staff tier does not filter", () => {
+  assert.ok(tierClause(false, false).includes(LIBRARY_ADULT_PREDICATE), "anonymous tier missing the age gate");
+  assert.ok(tierClause(true, false).includes(LIBRARY_ADULT_PREDICATE), "member tier missing the age gate");
+  assert.equal(tierClause(true, true), "1=1");
+});
+
+test("F-39: startThread gates the DM recipient on the SAME predicate (guard as wide as the thing)", () => {
+  // Source-slice guard, same pattern as registrations.test.mjs's F-27 guard: the listing
+  // filter hiding minors while the relay still delivers to them is failure class 3.
+  const fn = SRC.slice(SRC.indexOf("async function startThread"), SRC.indexOf("async function reply"));
+  assert.ok(fn.includes("LIBRARY_ADULT_PREDICATE"), "recipient query no longer computes adult_ok from the canonical predicate");
+  assert.ok(/!to\.adult_ok/.test(fn), "recipient refusal no longer checks adult_ok");
+});
+
+test("F-39 negative control: the source-slice guard can actually fail", () => {
+  // Prove the guard above is not a regex self-check: strip the predicate from a copy
+  // of the slice and assert the same checks now fail on it.
+  const fn = SRC.slice(SRC.indexOf("async function startThread"), SRC.indexOf("async function reply"));
+  const mutated = fn.replace(/LIBRARY_ADULT_PREDICATE/g, "'1=1'").replace(/!to\.adult_ok/g, "false");
+  assert.ok(!mutated.includes("LIBRARY_ADULT_PREDICATE"));
+  assert.ok(!/!to\.adult_ok/.test(mutated));
 });
 
 test("tierClause: signed-in members see public + members tiers, never private", () => {
