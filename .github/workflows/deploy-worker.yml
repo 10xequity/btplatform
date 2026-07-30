@@ -1,6 +1,16 @@
 # Boomtown Platform — Worker deploy, gated
-# Version: v0.4.0 · Date: 2026-07-29
-# Supersedes: v0.3.0 (2026-07-27)
+# Version: v0.5.0 · Date: 2026-07-30
+# Supersedes: v0.4.0 (2026-07-29)
+#
+# v0.5.0 — auto-commit the CHANGELOG entry after a green deploy (owner decision 2026-07-30,
+# option B: full auto-commit, retiring the manual paste-block ritual). New job 3,
+# record-changelog, calls worker/scripts/changelog-entry.mjs — an idempotent, tail-integrity
+# guarded prepend proven in six local cases before first use. The 700-line loss (v0.33.1)
+# came from an automated process rewriting this file unseen; the write logic is therefore
+# a tested script that (a) refuses if line 1 is not the title, (b) aborts if any pre-existing
+# byte below the insertion point would change, and (c) is a no-op if the entry already exists,
+# so a manual paste and this job never collide. Loop-safe twice over: CHANGELOG.md is not in
+# the trigger `paths`, and the commit carries [skip ci]. Requires workflow `contents: write`.
 #
 # v0.4.0 — F-37. v0.33.2 shipped its 13 tokens tests in a file named 'tokens.test.mjs,'
 # (trailing comma). `node --test test/*.mjs` cannot match it, so the suite ran 360/360,
@@ -47,6 +57,11 @@ on:
 concurrency:
   group: deploy-worker
   cancel-in-progress: false
+
+# v0.5.0: the record-changelog job commits back to the repo (owner decision 2026-07-30,
+# option B). contents:write is the minimum scope for that single commit; no other job uses it.
+permissions:
+  contents: write
 
 env:
   D1_NAME: boomtown-prod
@@ -147,3 +162,60 @@ jobs:
           done
           echo "::error::Deployed but /api/health never reported $WANT. Propagation stall or a wrangler.toml route mismatch — investigate before shipping anything else."
           exit 1
+
+  # ---------------------------------------------------------------------------
+  # 3. RECORD — auto-commit the CHANGELOG entry (owner decision 2026-07-30, option B).
+  #    Runs ONLY after a green deploy+parity, so a failed release never writes history.
+  #    Idempotent: changelog-entry.mjs is a no-op if the entry already exists, so a manual
+  #    paste and this job coexist, and re-runs / workflow_dispatch replays never duplicate.
+  #    Loop-safe by two independent guards: CHANGELOG.md is absent from the trigger `paths`
+  #    (a commit touching only it cannot retrigger), AND the commit carries [skip ci].
+  # ---------------------------------------------------------------------------
+  record-changelog:
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history + a token permitted to push back.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Resolve version from source
+        id: want
+        run: |
+          set -euo pipefail
+          V=$(grep -oE 'version: "v[0-9]+\.[0-9]+\.[0-9]+"' worker/src/index.js \
+              | head -1 | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+')
+          test -n "$V" || { echo "::error::No version string in worker/src/index.js"; exit 1; }
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+
+      - name: Prepend CHANGELOG entry (idempotent, tail-integrity guarded)
+        id: entry
+        run: |
+          set -euo pipefail
+          node worker/scripts/changelog-entry.mjs \
+            --version "${{ steps.want.outputs.version }}" \
+            --file CHANGELOG.md
+          # Was anything actually changed? (idempotent no-op leaves the file untouched.)
+          if git diff --quiet -- CHANGELOG.md; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "CHANGELOG already had ${{ steps.want.outputs.version }} — nothing to commit."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit and push
+        if: steps.entry.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add CHANGELOG.md
+          # [skip ci] is the second loop-guard (paths-exclusion is the first).
+          git commit -m "docs(changelog): record ${{ steps.want.outputs.version }} [skip ci]"
+          # Push only if main has not moved under us; a stale push should fail loudly, not force.
+          git push origin HEAD:main
