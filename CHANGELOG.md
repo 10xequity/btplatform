@@ -1,5 +1,9 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.37.0 — 2026-07-30
+
+- Auto-recorded by CI on deploy. `/api/health` reported `v0.37.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
+
 ## v0.36.0 — 2026-07-30
 
 - Auto-recorded by CI on deploy. `/api/health` reported `v0.36.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
