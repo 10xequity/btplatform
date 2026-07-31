@@ -1,5 +1,9 @@
 /* Boomtown Platform — Member Profile page
-   File: web/profile.js · Version: v1.1 · Date: 2026-07-30 · Ships in: v0.37.0 (was v1.0, v0.5.0)
+   File: web/profile.js · Version: v1.2 · Date: 2026-07-30 · Ships in: v0.39.0 (was v1.1/v0.37.0, v1.0/v0.5.0)
+   v1.2: "Your check-in pass" card (owner req #20) — 8-char kiosk code minted on first view,
+   rendered as a Code 128 barcode (JsBarcode via cdnjs, the cropper precedent) on a WHITE
+   patch in both themes because scanners need dark-on-light; large-type code is the always-on
+   fallback. Regenerate is a two-step ("replace" confirm) since the old barcode stops working.
    v1.1: decision B — DOB-required-to-be-listed reflected live on the visibility control;
    reason-aware save (dob_required focuses the DOB field). Server enforces; this only guides.
    Self-service profile (avatar crop, bio, Instagram, visibility), family accounts
@@ -131,6 +135,12 @@
         <div id="profileNotice"></div>
       </section>
 
+      <section class="section card" id="passSection">
+        <h2>Your check-in pass</h2>
+        <p class="meta">Scan this at the kiosk when you arrive — or type the code. It's yours, so keep it to yourself.</p>
+        <div id="passBody"><p class="meta">Loading…</p></div>
+      </section>
+
       <section class="section card" id="upcomingSection">
         <h2>Upcoming events</h2>
         <div id="upcomingList"><p class="meta">Loading…</p></div>
@@ -169,6 +179,7 @@
 
     renderFamily();
     loadUpcoming();
+    loadPass();
     loadResume(c.id);
     setupPasskeyCard();
   }
@@ -319,6 +330,55 @@
   }
 
   /* ---------- upcoming events ---------- */
+  /* ── Check-in pass (owner req #20, v1.2) ─────────────────────────────────
+     One code, two inputs: the Code 128 barcode below and the same code in large
+     type for typing at the kiosk. The barcode sits on a WHITE patch in both
+     themes — scanners read dark-on-light; the patch is an instrument face, not
+     themable chrome (documented exception to the tokens-only rule).           */
+  async function loadPass(regenerated) {
+    const el = document.getElementById("passBody");
+    if (!el) return;
+    const r = await api("/api/profile/kiosk-code", regenerated ? { method: "POST" } : {});
+    if (!r.ok) { el.innerHTML = "<p class='meta'>Couldn't load your pass just now. Refresh to try again.</p>"; return; }
+    const code = r.data.code;
+    el.innerHTML = `
+      <div style="background:#FFFFFF;border-radius:8px;padding:14px 10px 8px;max-width:340px">
+        <svg id="passBarcode" role="img" aria-label="Your check-in barcode"></svg>
+      </div>
+      <p style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:26px;letter-spacing:0.2em;margin:12px 0 4px">${esc(code)}</p>
+      ${regenerated ? "<p class='meta'>New pass ready. Your old barcode no longer works.</p>" : ""}
+      <div id="passRegenRow" style="margin-top:8px">
+        <button class="btn ghost" id="passRegen" style="min-height:44px">Replace my code</button>
+      </div>`;
+    drawBarcode(code);
+    document.getElementById("passRegen").addEventListener("click", () => {
+      document.getElementById("passRegenRow").innerHTML = `
+        <p class="meta">This makes a new code — your current barcode stops working right away.</p>
+        <button class="btn secondary" id="passRegenGo" style="min-height:44px">Replace it</button>
+        <button class="btn ghost" id="passRegenNo" style="min-height:44px">Keep my code</button>`;
+      document.getElementById("passRegenGo").addEventListener("click", () => loadPass(true));
+      document.getElementById("passRegenNo").addEventListener("click", () => loadPass(false));
+    });
+  }
+
+  function drawBarcode(code) {
+    const render = () => {
+      try {
+        window.JsBarcode("#passBarcode", code, {
+          format: "CODE128", displayValue: false, margin: 0, height: 72, width: 2,
+          background: "#FFFFFF", lineColor: "#000000", // instrument face — see loadPass note
+        });
+        const svg = document.getElementById("passBarcode");
+        if (svg) { svg.style.width = "100%"; svg.style.height = "auto"; }
+      } catch { /* the large-type code above remains the fallback */ }
+    };
+    if (window.JsBarcode) { render(); return; }
+    const s = document.createElement("script");
+    s.src = "https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.12.3/barcodes/JsBarcode.code128.min.js";
+    s.onload = render; // on load failure the large-type code still shows — nothing breaks
+    document.head.appendChild(s);
+  }
+
   async function loadUpcoming() {
     const r = await api("/api/profile/upcoming");
     const el = document.getElementById("upcomingList");

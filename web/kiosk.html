@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<!-- Boomtown Platform — Desk Kiosk Check-in · Version: v1.0 · Date: 2026-07-30 · Ships in: v0.39.0
+     Owner req #20: barcode scanner or typed code → profile + balance, owed DENIES ("run off an ipad").
+     Open as kiosk.html?t=TOKEN (the event's checkin_token, minted from admin check-in).
+     Single file + assets/kiosk.js, no nav — the iPad lives on this page all day.
+     Design notes (standards §5 / emil): the scan loop is a 100+/day action, so NOTHING animates
+     on it — results swap instantly. No page-level :focus-visible rule (the bare app.css ring
+     via the focus-ring token governs; F-35 ratchet untouched). Targets 52px+ — thumb-critical. -->
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Check in — Boomtown Athletics</title>
+  <link rel="stylesheet" href="assets/tokens.css?v=0.39.0" />
+  <link rel="stylesheet" href="assets/app.css?v=0.39.0" />
+  <style>
+    .kk-wrap { min-height: 100dvh; display: grid; place-items: center; padding: 24px; }
+    .kk-card { width: min(560px, 94vw); text-align: center; }
+    .kk-card h1 { font-size: 28px; margin: 0 0 4px; }
+    .kk-card .sub { color: var(--text-muted); margin: 0 0 20px; font-size: 17px; }
+    #code {
+      text-align: center; font-size: 30px; letter-spacing: 0.22em; text-transform: uppercase;
+      min-height: 60px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    .kk-btn { width: 100%; min-height: 56px; font-size: 19px; margin-top: 14px; }
+    .kk-avatar {
+      width: 104px; height: 104px; border-radius: 50%; object-fit: cover; margin: 4px auto 12px;
+      background: var(--surface-2); display: flex; align-items: center; justify-content: center;
+      font-size: 36px; font-weight: 700; border: 1px solid var(--border);
+    }
+    .kk-name { font-size: 30px; font-weight: 700; margin: 0; }
+    .kk-team { color: var(--text-muted); font-size: 17px; margin: 4px 0 0; }
+    .kk-glyph { font-size: 56px; line-height: 1; margin: 2px 0 8px; }
+    .kk-msg { font-size: 19px; margin: 14px 0 0; }
+    .kk-msg.ok { color: var(--positive); }
+    .kk-msg.warn { color: var(--warn); }
+    .kk-msg.err { color: var(--danger); }
+    .kk-hint { color: var(--text-muted); font-size: 15px; margin-top: 18px; }
+  </style>
+</head>
+<body>
+  <main class="kk-wrap">
+    <div class="card kk-card" id="card" aria-live="polite"><h1>One moment…</h1></div>
+  </main>
+  <script src="assets/config.js?v=0.39.0"></script>
+  <script src="assets/kiosk.js?v=0.39.0"></script>
+</body>
+</html>

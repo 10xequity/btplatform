@@ -6,6 +6,11 @@
  * that drift triggered a "the deploy is broken" investigation across two sessions. /api/health is
  * the only honest source of the version. Do not reintroduce it here.
  *
+ * v0.39.0 (2026-07-30, Kiosk check-in): NEW kiosk.js mounted before checkin (owner req #20 —
+ *   scan/type an 8-char member code at an iPad desk kiosk; profile + balance shown; owed
+ *   balance DENIES, waiver never gates per D-MIN-8; member code self-service on the profile
+ *   page as a Code 128 barcode). Migration 0027. Token reuse: the event's checkin_token.
+ *
  * v0.38.0 (2026-07-30, Sub finder): NEW subs.js mounted before leagues (owner req #7 —
  *   sub signups with skill/gender/game-type preferences, open-request board, claim + cancel,
  *   matched in-app + email notify with 200-cap fan-out, 5-open flood guard). Migration 0026.
@@ -209,6 +214,7 @@ import { orgRoutes, wireOrgs, senderIdentity } from "./orgs.js"; // v0.31.0 org 
 import { documentRoutes, wireDocuments } from "./documents.js"; // v0.28.0 document library + requirements
 import { uploadRoutes, wireUploads } from "./uploads.js"; // v0.30.0 generic file uploads (R2 + D1 index)
 import { subsRoutes, wireSubs } from "./subs.js"; // v0.38.0 league sub finder (owner req #7, migration 0026)
+import { kioskRoutes, wireKiosk } from "./kiosk.js"; // v0.39.0 kiosk check-in (owner req #20, migration 0027)
 import { waiverReminderSweep, waiverExpirySweep, sendEmail, escapeHtml } from "./registrations.js";
 
 const MAGIC_LINK_TTL_MIN = 15;
@@ -260,6 +266,7 @@ wireMessages(wiredHelpers);
 wirePos(wiredHelpers);
 wireWaitlists({ ...wiredHelpers, sendEmail, escapeHtml }); // sendEmail injected — no circular import
 wireSubs({ ...wiredHelpers, sendEmail, escapeHtml }); // v0.38.0 — same injection pattern
+wireKiosk(wiredHelpers); // v0.39.0
 wirePush(wiredHelpers); // v0.20.0
 wireWaivers(wiredHelpers); // v0.22.0
 wireCalendar(wiredHelpers); // v0.23.0
@@ -328,7 +335,7 @@ export default {
       } else if (url.pathname === "/api/orgs" && request.method === "GET") {
         res = await listOrgs(env);
       } else if (url.pathname === "/api/health") {
-        res = json({ ok: true, version: "v0.38.0" });
+        res = json({ ok: true, version: "v0.39.0" });
       } else if (url.pathname === "/api/webhooks/square" && request.method === "POST") {
         res = await membershipWebhook(request, env); // verifies signature; forwards payment.* to squareWebhook
       } else if (url.pathname.startsWith("/api/calendar/") && url.pathname.endsWith(".ics") && request.method === "GET") {
@@ -355,6 +362,7 @@ export default {
            || (await securityRoutes(request, env, url, ctx))
            || (await memberPortalRoutes(request, env, url, ctx))
            || (await subsRoutes(request, env, url, ctx)) // v0.38.0 — league sub finder
+           || (await kioskRoutes(request, env, url, ctx)) // v0.39.0 — kiosk check-in (req #20)
            || (await leagueRoutes(request, env, url, ctx))
            || (await reportRoutes(request, env, url, ctx))
            || (await checkinRoutes(request, env, url, ctx))
