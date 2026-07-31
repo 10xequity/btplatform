@@ -1,5 +1,10 @@
 /* Boomtown Platform — Sales & Reports
-   File: web/assets/admin-reports.js · Version: v1.2 · Date: 2026-07-30 · Ships in: v0.40.0
+   File: web/assets/admin-reports.js · Version: v1.3 · Date: 2026-07-31 · Ships in: v0.43.0
+   v1.3: "Export for Looker · all companies" — one click fetches
+   /api/admin/reports/revenue-all.csv (12-column cross-org contract). The button only
+   appears when the signed-in user staffs more than one org, so single-company admins
+   never see a control that would duplicate the one next to it. Both exports share
+   lookerCsv().
    v1.2: "Export for Looker" — fetches /api/admin/reports/revenue.csv (stable headers, the
    Looker template contract, req #12/#18) and saves it via downloadText.
    RECOVERY of the lost v0.7.0 file. Renders /api/admin/reports/sales:
@@ -28,18 +33,25 @@
     sw.value = localStorage.getItem("bt_org") || "1";
     sw.onchange = () => { localStorage.setItem("bt_org", sw.value); load(); };
     $("csvBtn").onclick = csv;
-    $("lookerBtn").onclick = async () => {
-      // The endpoint returns text/csv, not JSON, so api() would choke — mirror its auth.
+    // The Looker endpoints return text/csv, not JSON, so api() would choke — mirror its auth.
+    async function lookerCsv(path, stem) {
       const API = (window.BT_CONFIG && window.BT_CONFIG.apiBase) || "";
       const headers = {};
       const t = sessionStorage.getItem("bt_token") || localStorage.getItem("bt_token");
       if (t) headers["Authorization"] = "Bearer " + t;
       const orgId = localStorage.getItem("bt_org");
       if (orgId) headers["X-Org-Id"] = orgId;
-      const resp = await fetch(API + "/api/admin/reports/revenue.csv", { headers, credentials: "include" });
+      const resp = await fetch(API + path, { headers, credentials: "include" });
       if (!resp.ok) return window.BT_ADMIN.fail(document.getElementById("app"), "The revenue export could not be generated.");
-      downloadText(`boomtown-revenue-${new Date().toISOString().slice(0, 10)}.csv`, await resp.text());
-    };
+      downloadText(`${stem}-${new Date().toISOString().slice(0, 10)}.csv`, await resp.text());
+    }
+    $("lookerBtn").onclick = () => lookerCsv("/api/admin/reports/revenue.csv", "boomtown-revenue");
+    // Cross-org export only makes sense when there is more than one company to cross.
+    const staffedOrgs = (me.roles || []).filter((r) => r.role === "admin" || r.role === "staff").length;
+    if (staffedOrgs > 1) {
+      $("lookerAllBtn").hidden = false;
+      $("lookerAllBtn").onclick = () => lookerCsv("/api/admin/reports/revenue-all.csv", "boomtown-revenue-all");
+    }
     load();
   }
 

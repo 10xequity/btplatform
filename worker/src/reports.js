@@ -1,6 +1,14 @@
 /**
  * Boomtown Platform — Sales Reports + Member Notifications
- * File: worker/src/reports.js · Version: v1.4 · Date: 2026-07-30 · Ships in: v0.40.0
+ * File: worker/src/reports.js · Version: v1.5 · Date: 2026-07-31 · Ships in: v0.43.0
+ *
+ * v1.5 (2026-07-31, v0.43.0): GET /api/admin/reports/revenue-all.csv (staff) — cross-org
+ *   Looker feed. One CSV across EVERY org where the caller holds admin/staff in
+ *   user_org_roles; the org set is DERIVED server-side (bound user_id) and never accepted
+ *   from the client (F-11 stands). This is the reports module's ONE deliberate cross-org
+ *   read, confined to the marked block below (SMS STOP/START precedent) and shape-guarded
+ *   by reports_export.test.mjs with negative controls. New 12-column header contract
+ *   (org_id + org prepended); the single-org 10-column contract is untouched.
  *
  * v1.4 (2026-07-30, v0.40.0): GET /api/admin/reports/revenue.csv (staff) — owner req #12/#18.
  *   One flat, stable-header CSV (per-event revenue rows) built for the Looker Studio template
@@ -46,6 +54,7 @@ export async function reportRoutes(request, env, url, ctx) {
   if ((x = p.match(/^\/api\/admin\/alerts\/(\d+)\/dismiss$/)) && m === "POST") return dismissAlert(env, ctx, +x[1]);
   if (p === "/api/notifications/read-all" && m === "POST") return readAll(env, ctx);
   if (p === "/api/admin/reports/revenue.csv" && m === "GET") return revenueCsv(env, ctx); // v1.4 req #12/#18
+  if (p === "/api/admin/reports/revenue-all.csv" && m === "GET") return revenueAllCsv(env, ctx); // v1.5 cross-org
   if (p === "/api/admin/reports/heatmap" && m === "GET") return heatmap(env, ctx, url);
   if (p === "/api/admin/reports/pos-sales" && m === "GET") return posSales(env, ctx, url);
   if (p === "/api/admin/reports/shift-coverage" && m === "GET") return shiftCoverage(env, ctx, url);
@@ -92,6 +101,72 @@ async function revenueCsv(env, ctx) {
     headers: {
       "content-type": "text/csv; charset=utf-8",
       "content-disposition": `attachment; filename="boomtown-revenue-${new Date().toISOString().slice(0, 10)}.csv"`,
+    },
+  });
+}
+
+/* ---------------- cross-org revenue CSV — Looker feed across staffed orgs (v1.5) ---------------- */
+
+/**
+ * 12-column contract for the cross-company Looker page: org_id + org, then the same
+ * 10 columns as the single-org feed. HEADERS ARE A CONTRACT — never rename either set.
+ */
+export const CROSS_ORG_REVENUE_CSV_HEADERS = [
+  "org_id", "org",
+  "event_id", "event", "type", "program", "starts_at", "month",
+  "registrations", "card_cents", "cash_cents", "total_cents",
+];
+export function buildCrossOrgRevenueCsv(rows) {
+  const lines = [CROSS_ORG_REVENUE_CSV_HEADERS.join(",")];
+  for (const r of rows) {
+    lines.push([
+      r.org_id, r.org,
+      r.event_id, r.event, r.type, r.program, r.starts_at,
+      (r.starts_at || "").slice(0, 7) || "undated",
+      r.registrations, r.card_cents, r.cash_cents, r.total_cents,
+    ].map(csvCell).join(","));
+  }
+  return lines.join("\r\n");
+}
+
+async function revenueAllCsv(env, ctx) {
+  const deny = await requireStaff(env, ctx);
+  if (deny) return deny;
+  /* CROSS-ORG READ — deliberate, confined exception (the module's only one).
+     Scope: revenue aggregation across exactly the orgs where THIS caller holds
+     admin/staff in user_org_roles (bound user_id, soft-delete honoured), and the
+     org itself is active and not deleted — the same visibility rule the switcher
+     enforces. No client-supplied org id or list is read anywhere in this handler
+     (F-11). Guarded with negative controls in reports_export.test.mjs. */
+  const rows = (await env.DB.prepare(
+    `SELECT og.id AS org_id, og.name AS org,
+            e.id AS event_id, e.name AS event, e.type, e.starts_at,
+            COALESCE(p.name, '(no program)') AS program,
+            COALESCE(sq.card_cents, 0) AS card_cents,
+            COALESCE(cash.n, 0) * COALESCE(e.price_cents, 0) AS cash_cents,
+            COALESCE(regs.n, 0) AS registrations
+     FROM events e
+     JOIN orgs og ON og.id = e.org_id AND og.active = 1 AND og.deleted_at IS NULL
+     JOIN user_org_roles uor ON uor.org_id = e.org_id
+          AND uor.user_id = ?1 AND uor.role IN ('admin','staff') AND uor.deleted_at IS NULL
+     LEFT JOIN programs p ON p.id = e.program_id
+     LEFT JOIN (SELECT r.event_id, SUM(pm.amount_cents) AS card_cents
+                FROM payments pm JOIN registrations r ON r.id = pm.registration_id AND r.deleted_at IS NULL
+                WHERE pm.status='COMPLETED' AND pm.deleted_at IS NULL GROUP BY r.event_id) sq ON sq.event_id = e.id
+     LEFT JOIN (SELECT event_id, COUNT(*) AS n FROM registrations
+                WHERE status='paid' AND payment_method='cash' AND deleted_at IS NULL GROUP BY event_id) cash ON cash.event_id = e.id
+     LEFT JOIN (SELECT event_id, COUNT(*) AS n FROM registrations
+                WHERE status IN ('paid','comped','cash-pending') AND deleted_at IS NULL GROUP BY event_id) regs ON regs.event_id = e.id
+     WHERE e.deleted_at IS NULL
+     ORDER BY og.id ASC, e.starts_at DESC`
+  ).bind(ctx.userId).all()).results.map(r => ({ ...r, total_cents: (r.card_cents || 0) + (r.cash_cents || 0) }));
+  /* END CROSS-ORG READ */
+  await audit(env, ctx, "reports.revenue_all.exported", "reports", null,
+    { rows: rows.length, orgs: new Set(rows.map(r => r.org_id)).size });
+  return new Response(buildCrossOrgRevenueCsv(rows), {
+    headers: {
+      "content-type": "text/csv; charset=utf-8",
+      "content-disposition": `attachment; filename="boomtown-revenue-all-${new Date().toISOString().slice(0, 10)}.csv"`,
     },
   });
 }

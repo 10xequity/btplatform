@@ -1,13 +1,16 @@
 /* Boomtown Platform — Revenue CSV export tests (req #12/#18)
-   File: worker/test/reports_export.test.mjs · Version: v1.0 · Date: 2026-07-30 · Ships in: v0.40.0
+   File: worker/test/reports_export.test.mjs · Version: v1.1 · Date: 2026-07-31 · Ships in: v0.43.0
    csvCell RFC 4180 behaviour, the header CONTRACT the Looker template maps by name,
-   month derivation, and a negative control proving the header guard can fail. */
+   month derivation, and a negative control proving the header guard can fail.
+   v1.1 (v0.43.0): the cross-org feed — 12-column contract, builder behaviour, and the
+   CROSS-ORG READ confinement guard (role-filtered, bound user_id, soft-delete + active
+   honoured, no client org input) with negative controls proving the guard can fail. */
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { csvCell, buildRevenueCsv, REVENUE_CSV_HEADERS } from "../src/reports.js";
+import { csvCell, buildRevenueCsv, REVENUE_CSV_HEADERS, buildCrossOrgRevenueCsv, CROSS_ORG_REVENUE_CSV_HEADERS } from "../src/reports.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const reportsSrc = readFileSync(join(here, "../src/reports.js"), "utf8");
@@ -71,4 +74,82 @@ test("NEGATIVE CONTROL: the header-contract guard fails when a column is renamed
   mutated[9] = "total"; // the rename a future session would plausibly make
   assert.notDeepEqual(mutated, REVENUE_CSV_HEADERS.map(h => h === "total_cents" ? "total" : h) === mutated ? [] : REVENUE_CSV_HEADERS);
   assert.throws(() => assert.deepEqual(mutated, REVENUE_CSV_HEADERS));
+});
+
+/* ---------------- cross-org feed (v1.5) — contract + builder ---------------- */
+
+test("CROSS_ORG_REVENUE_CSV_HEADERS is the exact 12-column contract: org_id + org, then the single-org 10", () => {
+  assert.deepEqual(CROSS_ORG_REVENUE_CSV_HEADERS, ["org_id", "org", ...REVENUE_CSV_HEADERS]);
+});
+
+test("the single-org 10-column contract is untouched by v1.5", () => {
+  assert.equal(REVENUE_CSV_HEADERS.length, 10);
+  assert.equal(REVENUE_CSV_HEADERS[0], "event_id");
+});
+
+test("buildCrossOrgRevenueCsv emits the 12-column header row first, CRLF-joined", () => {
+  assert.equal(buildCrossOrgRevenueCsv([]), CROSS_ORG_REVENUE_CSV_HEADERS.join(","));
+  const out = buildCrossOrgRevenueCsv([{ org_id: 2, org: "REVCO", event_id: 9, event: "A", starts_at: "2026-07-04T09:00" }]);
+  assert.ok(out.startsWith(CROSS_ORG_REVENUE_CSV_HEADERS.join(",") + "\r\n"));
+  assert.ok(out.split("\r\n")[1].startsWith("2,REVCO,9,"));
+});
+
+test("an org name holding a comma stays one cell and month still derives", () => {
+  const line = buildCrossOrgRevenueCsv([
+    { org_id: 3, org: "Boom, Town LLC", event_id: 4, event: "B", starts_at: "2026-04-01T10:00" },
+  ]).split("\r\n")[1];
+  assert.ok(line.includes('"Boom, Town LLC"'));
+  assert.ok(line.includes("2026-04-01T10:00,2026-04"), "derived month must follow starts_at");
+});
+
+/* ---------------- cross-org confinement guard (failure-class 3 discipline) ----------------
+   The cross-org read is a deliberate exception to per-org scoping. This guard pins its
+   shape: exactly one marked block, org set derived from the caller's own roles with a
+   BOUND user id, role-filtered to admin/staff, soft-deletes and org.active honoured, and
+   no client-supplied org anywhere in the block. checkCrossOrgConfinement() is pure so the
+   negative controls below can feed it mutated source and prove it says NO. */
+
+export function checkCrossOrgConfinement(src) {
+  const opens = src.split("CROSS-ORG READ").length - 1 - (src.split("END CROSS-ORG READ").length - 1);
+  const blocks = src.match(/CROSS-ORG READ[\s\S]*?END CROSS-ORG READ/g) || [];
+  if (opens !== 1 || blocks.length !== 1) return { ok: false, why: "expected exactly one marked CROSS-ORG READ block" };
+  const b = blocks[0];
+  if (!/JOIN user_org_roles/.test(b)) return { ok: false, why: "org set must derive from user_org_roles" };
+  if (!/uor\.user_id = \?1/.test(b)) return { ok: false, why: "user_id must be a BOUND parameter" };
+  if (!/\.bind\(ctx\.userId\)/.test(b)) return { ok: false, why: "the bound value must be ctx.userId" };
+  if (!/role IN \('admin','staff'\)/.test(b)) return { ok: false, why: "role filter admin/staff missing — member role must not widen the set" };
+  if (!/uor\.deleted_at IS NULL/.test(b)) return { ok: false, why: "soft-deleted roles must be excluded" };
+  if (!/og\.active = 1 AND og\.deleted_at IS NULL/.test(b)) return { ok: false, why: "deactivated/deleted orgs must be excluded (switcher rule)" };
+  if (/url\.|searchParams|X-Org-Id/i.test(b)) return { ok: false, why: "no client-supplied org input may be read in the block (F-11)" };
+  return { ok: true };
+}
+
+test("reports.js cross-org block passes the confinement check", () => {
+  const r = checkCrossOrgConfinement(reportsSrc);
+  assert.equal(r.ok, true, r.why);
+});
+
+test("NEGATIVE CONTROL: stripping the role filter is caught", () => {
+  const mutated = reportsSrc.replace("AND uor.role IN ('admin','staff') ", "");
+  assert.equal(checkCrossOrgConfinement(mutated).ok, false);
+});
+
+test("NEGATIVE CONTROL: unbinding user_id is caught", () => {
+  const mutated = reportsSrc.replace("uor.user_id = ?1", "uor.user_id = uor.user_id");
+  assert.equal(checkCrossOrgConfinement(mutated).ok, false);
+});
+
+test("NEGATIVE CONTROL: letting deactivated orgs through is caught", () => {
+  const mutated = reportsSrc.replace("og.active = 1 AND og.deleted_at IS NULL", "1 = 1");
+  assert.equal(checkCrossOrgConfinement(mutated).ok, false);
+});
+
+test("NEGATIVE CONTROL: reading a client org inside the block is caught", () => {
+  const mutated = reportsSrc.replace("const rows = (await env.DB.prepare(",
+    "const clientOrg = url.searchParams.get('org');\n  const rows = (await env.DB.prepare(");
+  assert.equal(checkCrossOrgConfinement(mutated).ok, false);
+});
+
+test("delivery gate greps the call site, not the name (§6.5): revenue-all route dispatches", () => {
+  assert.ok(/if \(p === "\/api\/admin\/reports\/revenue-all\.csv" && m === "GET"\) return revenueAllCsv\(env, ctx\);/.test(reportsSrc));
 });
