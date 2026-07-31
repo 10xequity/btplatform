@@ -368,7 +368,7 @@
     const wm = document.querySelector(".wordmark");
     if (!wm || wm.querySelector(".brand-logo")) return;
     const img = new Image();
-    img.src = "assets/logo-boom-wordmark.png?v=1.0";
+    img.src = "assets/logo-boom-wordmark.png?v=0.41.0";
     img.alt = "";
     img.className = "brand-logo";
     img.onerror = () => img.remove(); // missing file → text wordmark exactly as before
@@ -403,7 +403,7 @@
       if (window.BT_STATUS || document.getElementById("bt-status-js")) return;
       var s = document.createElement("script");
       s.id = "bt-status-js";
-      s.src = "assets/build-status.js?v=0.25.0";
+      s.src = "assets/build-status.js?v=0.41.0";
       s.async = false;
       document.head.appendChild(s);
     } catch (e) { /* indicators are never load-blocking */ }
