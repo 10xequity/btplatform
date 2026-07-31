@@ -6,6 +6,11 @@
  * that drift triggered a "the deploy is broken" investigation across two sessions. /api/health is
  * the only honest source of the version. Do not reintroduce it here.
  *
+ * v0.38.0 (2026-07-30, Sub finder): NEW subs.js mounted before leagues (owner req #7 —
+ *   sub signups with skill/gender/game-type preferences, open-request board, claim + cancel,
+ *   matched in-app + email notify with 200-cap fan-out, 5-open flood guard). Migration 0026.
+ *   sendEmail/escapeHtml injected via wireSubs (waitlists precedent, no cycle).
+ *
  * v0.32.0 (2026-07-26, Minors): registrations.js becomes age-aware — it held zero matches for
  *   date_of_birth, guardian or minor across 49 KB, so a participant of any age could be
  *   registered with no adult attached. D-MIN-9 (account created, not activated), D-MIN-11 (a
@@ -203,6 +208,7 @@ import { familyRoutes, wireFamily } from "./family.js"; // v0.27.0 guardians, mi
 import { orgRoutes, wireOrgs, senderIdentity } from "./orgs.js"; // v0.31.0 org profile, identity, sender
 import { documentRoutes, wireDocuments } from "./documents.js"; // v0.28.0 document library + requirements
 import { uploadRoutes, wireUploads } from "./uploads.js"; // v0.30.0 generic file uploads (R2 + D1 index)
+import { subsRoutes, wireSubs } from "./subs.js"; // v0.38.0 league sub finder (owner req #7, migration 0026)
 import { waiverReminderSweep, waiverExpirySweep, sendEmail, escapeHtml } from "./registrations.js";
 
 const MAGIC_LINK_TTL_MIN = 15;
@@ -253,6 +259,7 @@ wireMarketing(wiredHelpers);
 wireMessages(wiredHelpers);
 wirePos(wiredHelpers);
 wireWaitlists({ ...wiredHelpers, sendEmail, escapeHtml }); // sendEmail injected — no circular import
+wireSubs({ ...wiredHelpers, sendEmail, escapeHtml }); // v0.38.0 — same injection pattern
 wirePush(wiredHelpers); // v0.20.0
 wireWaivers(wiredHelpers); // v0.22.0
 wireCalendar(wiredHelpers); // v0.23.0
@@ -321,7 +328,7 @@ export default {
       } else if (url.pathname === "/api/orgs" && request.method === "GET") {
         res = await listOrgs(env);
       } else if (url.pathname === "/api/health") {
-        res = json({ ok: true, version: "v0.37.0" });
+        res = json({ ok: true, version: "v0.38.0" });
       } else if (url.pathname === "/api/webhooks/square" && request.method === "POST") {
         res = await membershipWebhook(request, env); // verifies signature; forwards payment.* to squareWebhook
       } else if (url.pathname.startsWith("/api/calendar/") && url.pathname.endsWith(".ics") && request.method === "GET") {
@@ -347,6 +354,7 @@ export default {
            || (await webauthnRoutes(request, env, url, ctx))
            || (await securityRoutes(request, env, url, ctx))
            || (await memberPortalRoutes(request, env, url, ctx))
+           || (await subsRoutes(request, env, url, ctx)) // v0.38.0 — league sub finder
            || (await leagueRoutes(request, env, url, ctx))
            || (await reportRoutes(request, env, url, ctx))
            || (await checkinRoutes(request, env, url, ctx))

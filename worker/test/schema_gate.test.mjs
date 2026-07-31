@@ -1,6 +1,10 @@
 /**
  * Boomtown Platform — schema gate tests
- * File: worker/test/schema_gate.test.mjs · Version: v1.0 · Date: 2026-07-27 · Ships in: v0.33.0
+ * File: worker/test/schema_gate.test.mjs · Version: v1.1 · Date: 2026-07-30 · Ships in: v0.38.0 (v1.0 shipped in v0.33.0)
+ *
+ * v1.1: directory ratchet 25 → 26 (migration 0026, sub finder). The ratchet is deliberate:
+ * adding a migration MUST break this test until the same release bumps it — proof the release
+ * author knows a schema change is in flight and has applied it to live D1 before deploy.
  *
  * The gate's whole value is that it says NO. So most of these assert a BLOCK, and the one that
  * matters most is `repo 0025 / D1 24` — the exact state that let run #31 deploy v0.32.0 against
@@ -124,9 +128,9 @@ test("pad produces the 4-digit form used in filenames and the ledger", () => {
   assert.equal(pad(2026), "2026");
 });
 
-test("the real db/migrations directory parses cleanly and reports 0025", () => {
+test("the real db/migrations directory parses cleanly and reports 0026", () => {
   const { highest, files, unparseable } = scanMigrations(DEFAULT_DIR);
   assert.deepEqual(unparseable, [], `unparseable migration filenames: ${unparseable.join(", ")}`);
-  assert.equal(highest, 25);
+  assert.equal(highest, 26);
   assert.ok(files >= 20, `expected at least 20 .sql files, saw ${files}`);
 });

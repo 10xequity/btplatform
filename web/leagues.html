@@ -1,8 +1,9 @@
 <!DOCTYPE html>
-<!-- Boomtown Platform — Leagues · Version: v1.0 · Date: 2026-07-23 · Ships in: v0.6.0
+<!-- Boomtown Platform — Leagues · Version: v1.1 · Date: 2026-07-30 · Ships in: v0.38.0
      Dedicated league area (volleyballlife pattern: leagues are first-class, not a tournament
      footnote): current & upcoming league nights, register links, season standings entry point.
-     Public page (no sign-in). Data: /api/schedule filtered to type=league. -->
+     v1.1: Sub finder (owner req #7) — sub list signup, need-a-sub requests, open-request board.
+     League list stays public; the sub finder asks for sign-in. Data: /api/schedule + /api/subs/*. -->
 <html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8" />
@@ -22,6 +23,27 @@
     .lg-meta { font-size: 13.5px; color: var(--text-muted); margin-top: 2px; }
     .lg-cta { align-self: center; }
     .empty { color: var(--text-muted); padding: 24px; text-align: center; }
+    /* Sub finder (v1.1). Tokens only; no hover-state animation beyond app.css defaults —
+       chips are tapped tens of times, so feedback is instant (:active) not animated. */
+    .sub-card { border: 1px solid var(--border); border-radius: var(--radius-card);
+      background: var(--surface); padding: 14px; margin-bottom: 10px; }
+    .sub-title { font-weight: 600; font-size: 16px; }
+    .sub-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+    .sub-lab { font-size: 12.5px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .05em; }
+    .sub-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+    .sub-chip { min-height: 44px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--border);
+      background: transparent; color: var(--text); font-size: 14px; cursor: pointer;
+      transition: background-color 120ms ease-out, border-color 120ms ease-out; }
+    .sub-chip:active { transform: scale(0.97); }
+    .sub-chip.on { background: var(--primary); border-color: var(--primary); color: var(--surface); font-weight: 600; }
+    .sub-chip:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+    .sub-input { display: block; width: 100%; min-height: 44px; margin-top: 4px; padding: 8px 10px;
+      border: 1px solid var(--border); border-radius: 8px; background: transparent; color: var(--text);
+      font-size: 15px; letter-spacing: normal; text-transform: none; }
+    .sub-req { display: flex; gap: 10px; align-items: center; padding: 10px 0;
+      border-top: 1px solid var(--border); font-size: 13.5px; color: var(--text-muted); }
+    .sub-req:first-child { border-top: 0; }
+    @media (prefers-reduced-motion: reduce) { .sub-chip, .sub-chip:active { transition: none; transform: none; } }
   </style>
   <script>
     (function () {
@@ -44,10 +66,13 @@
       <select id="orgFilter" class="org-switcher" aria-label="Filter by organization"><option value="">All orgs</option></select>
     </div>
     <div id="lgBody"><div class="empty">Loading leagues&#8230;</div></div>
+
+    <h2 style="font-size:16px;margin:22px 0 8px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em">Sub finder</h2>
+    <div id="subFinder"></div>
   </main>
 
   <script src="assets/site-nav.js?v=0.6.0" defer></script>
   <script src="assets/config.js?v=0.6.0"></script>
-  <script src="assets/leagues.js?v=1.0" defer></script>
+  <script src="assets/leagues.js?v=1.1" defer></script>
 </body>
 </html>
