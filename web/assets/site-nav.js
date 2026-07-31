@@ -1,5 +1,7 @@
 /* Boomtown Platform — Site-wide sidebar navigation (shared)
-   File: web/assets/site-nav.js · Version: v2.6 · Date: 2026-07-26 · Ships in: v0.24.0
+   File: web/assets/site-nav.js · Version: v2.7 · Date: 2026-07-30 · Ships in: v0.40.0
+   v2.7: "Help & FAQ" (help.html) in Explore (v0.40.0, owner req #21 phase 1) — public,
+   works signed-out; the searchable article set lives in admin-faq.html.
    v2.6: Build-status indicators (v0.24.0) — loads assets/build-status.js, which stamps a
    small BETA / WIP chip on member-rail items that are not finished (Membership and Register
    are SANDBOX; nothing on the member side is WIP today) and shows a dismissible banner at
@@ -95,6 +97,7 @@
         { href: "schedule.html", ico: "▣", text: "Schedule" },
         { href: "leagues.html",  ico: "◇", text: "Leagues" },
         { href: "library.html",  ico: "◎", text: "Player Library" },
+        { href: "help.html",     ico: "?", text: "Help & FAQ" },
       ]},
     ];
     if (signedIn) {

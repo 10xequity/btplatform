@@ -215,6 +215,7 @@ import { documentRoutes, wireDocuments } from "./documents.js"; // v0.28.0 docum
 import { uploadRoutes, wireUploads } from "./uploads.js"; // v0.30.0 generic file uploads (R2 + D1 index)
 import { subsRoutes, wireSubs } from "./subs.js"; // v0.38.0 league sub finder (owner req #7, migration 0026)
 import { kioskRoutes, wireKiosk } from "./kiosk.js"; // v0.39.0 kiosk check-in (owner req #20, migration 0027)
+import { faqRoutes, wireFaq } from "./faq.js"; // v0.40.0 Help & FAQ (owner req #21 phase 1, migration 0028)
 import { waiverReminderSweep, waiverExpirySweep, sendEmail, escapeHtml } from "./registrations.js";
 
 const MAGIC_LINK_TTL_MIN = 15;
@@ -267,6 +268,7 @@ wirePos(wiredHelpers);
 wireWaitlists({ ...wiredHelpers, sendEmail, escapeHtml }); // sendEmail injected — no circular import
 wireSubs({ ...wiredHelpers, sendEmail, escapeHtml }); // v0.38.0 — same injection pattern
 wireKiosk(wiredHelpers); // v0.39.0
+wireFaq(wiredHelpers); // v0.40.0
 wirePush(wiredHelpers); // v0.20.0
 wireWaivers(wiredHelpers); // v0.22.0
 wireCalendar(wiredHelpers); // v0.23.0
@@ -335,7 +337,7 @@ export default {
       } else if (url.pathname === "/api/orgs" && request.method === "GET") {
         res = await listOrgs(env);
       } else if (url.pathname === "/api/health") {
-        res = json({ ok: true, version: "v0.39.0" });
+        res = json({ ok: true, version: "v0.40.0" });
       } else if (url.pathname === "/api/webhooks/square" && request.method === "POST") {
         res = await membershipWebhook(request, env); // verifies signature; forwards payment.* to squareWebhook
       } else if (url.pathname.startsWith("/api/calendar/") && url.pathname.endsWith(".ics") && request.method === "GET") {
@@ -363,6 +365,7 @@ export default {
            || (await memberPortalRoutes(request, env, url, ctx))
            || (await subsRoutes(request, env, url, ctx)) // v0.38.0 — league sub finder
            || (await kioskRoutes(request, env, url, ctx)) // v0.39.0 — kiosk check-in (req #20)
+           || (await faqRoutes(request, env, url, ctx)) // v0.40.0 — Help & FAQ (req #21 phase 1)
            || (await leagueRoutes(request, env, url, ctx))
            || (await reportRoutes(request, env, url, ctx))
            || (await checkinRoutes(request, env, url, ctx))

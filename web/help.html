@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<!-- Boomtown Platform — Help & FAQ (owner req #21, phase 1) · Version: v1.0 · Date: 2026-07-30 · Ships in: v0.40.0
+     FAQ search first, LLM later (build/buy call of record). Public — help must work before
+     sign-in. Ranked search over published FAQs (GET /api/faq?q=), answers open inline as
+     native <details> (keyboard-accessible, no JS needed to read). Search-as-you-type is a
+     high-frequency action → NO animation on result changes (emil framework, standards §5).
+     Tokens only; the gold rule under the title is the one house decoration. -->
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Help &amp; FAQ — Boomtown Athletics</title>
+  <link rel="stylesheet" href="assets/tokens.css" />
+  <link rel="stylesheet" href="assets/app.css" />
+  <style>
+    .help-main { max-width: 760px; margin: 0 auto; padding: 16px; }
+    .help-main h1 { margin-bottom: 4px; }
+    .help-rule { height: 3px; width: 64px; background: var(--accent); border-radius: 2px; margin: 0 0 14px; }
+    .help-search { position: relative; margin-bottom: 18px; }
+    .help-search input { width: 100%; min-height: 52px; /* thumb-critical: primary action on the page */
+      font: inherit; font-size: var(--font-size-body); padding: 12px 44px 12px 14px;
+      background: var(--surface); color: var(--text); border: 1px solid var(--border);
+      border-radius: var(--radius-control, 8px); }
+    .help-search .clear { position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+      min-width: 36px; min-height: 36px; border: 0; background: none; color: var(--text-muted);
+      font-size: 18px; cursor: pointer; border-radius: 6px; display: none; }
+    .help-search .clear.show { display: block; }
+    .faq-item { border: 1px solid var(--border); border-radius: var(--radius-card, 10px);
+      background: var(--surface); margin-bottom: 8px; }
+    .faq-item summary { list-style: none; cursor: pointer; padding: 14px; min-height: 44px;
+      display: flex; align-items: center; gap: 10px; font-weight: 700; }
+    .faq-item summary::-webkit-details-marker { display: none; }
+    .faq-item summary::before { content: "+"; color: var(--accent); font-weight: 800; width: 16px; flex: none; }
+    .faq-item[open] summary::before { content: "–"; }
+    .faq-item summary:active { transform: scale(0.995); } /* press feedback, no transition needed */
+    .faq-a { padding: 0 14px 14px 40px; color: var(--text-muted); white-space: pre-line; overflow-wrap: anywhere; }
+    .faq-empty { border: 1px dashed var(--border); border-radius: var(--radius-card, 10px);
+      padding: 22px; text-align: center; color: var(--text-muted); }
+    .faq-count { font-size: 13px; color: var(--text-muted); margin: 0 0 10px; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <main class="help-main" id="main">
+      <h1>Help &amp; FAQ</h1>
+      <div class="help-rule" aria-hidden="true"></div>
+      <p class="muted">Answers to the questions we hear most — registration, payments, waivers, schedules. Type a few words to search.</p>
+      <div class="help-search">
+        <label for="helpQ" class="sr-only" style="position:absolute;left:-9999px">Search the FAQ</label>
+        <input id="helpQ" type="search" placeholder="Search — try &quot;refund&quot; or &quot;waiver&quot;" autocomplete="off" />
+        <button class="clear" id="helpClear" aria-label="Clear search">×</button>
+      </div>
+      <p class="faq-count" id="faqCount" aria-live="polite"></p>
+      <div id="faqList"></div>
+    </main>
+  </div>
+  <script src="assets/config.js"></script>
+  <script src="assets/site-nav.js" defer></script>
+  <script src="assets/help.js?v=1.0"></script>
+</body>
+</html>

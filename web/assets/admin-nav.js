@@ -1,5 +1,7 @@
 /* Boomtown Platform — Admin sidebar (shared)
-   Version: v2.12 · Date: 2026-07-26 · Ships in: v0.25.0
+   Version: v2.13 · Date: 2026-07-30 · Ships in: v0.40.0
+   v2.13: "Help & FAQ" (admin-faq.html) added to the People group after Documents
+   (v0.40.0, owner req #21 phase 1) — write/publish the public help articles.
    v2.12: Media consent (admin-consent.html) added under People (v0.25.0) — where a
    written media-release opt-out gets recorded. No self-serve equivalent, by design.
    v2.11: Build-status indicators (v0.24.0) — loads assets/build-status.js, which stamps a
@@ -145,6 +147,7 @@
       { href: "admin-security.html",      ico: "roles",   text: "Security & Recovery" },
       { href: "admin-waivers.html",       ico: "members", text: "Waivers" },
       { href: "admin-documents.html",     ico: "files",   text: "Documents" },
+      { href: "admin-faq.html",           ico: "files",   text: "Help & FAQ" },
       { href: "admin-uploads.html",       ico: "files",   text: "Files" },
       { href: "admin-org-settings.html",  ico: "gear",    text: "Organization" },
       { href: "settings.html",            ico: "gear",    text: "Settings" },

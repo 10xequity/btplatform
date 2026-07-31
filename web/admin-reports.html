@@ -1,5 +1,7 @@
 <!DOCTYPE html>
-<!-- Boomtown Platform — Sales & Reports · Version: v1.1 · Date: 2026-07-24 · Ships in: v0.9.1
+<!-- Boomtown Platform — Sales & Reports · Version: v1.2 · Date: 2026-07-30 · Ships in: v0.40.0
+     v1.2: "Export revenue CSV" button (req #12/#18) — downloads the flat per-event revenue
+     file the Looker Studio template consumes (docs/2026-07-30_looker-template_v1_0.md).
      RECOVERY of the v0.7.0 page (ZIP never uploaded). Reads GET /api/admin/reports/sales
      (reports.js, already in the repo): revenue by month, by program, by event; CSV export.
      Uses the shared admin rail so the menu matches every other admin page. -->
@@ -31,7 +33,8 @@
   <div class="admin-layout">
   <main class="main wide admin-main" id="app" aria-live="polite">
     <div class="page-head"><h1>Sales &amp; Reports</h1><div class="spacer"></div>
-      <button class="btn ghost" id="csvBtn">Download CSV</button></div>
+      <button class="btn ghost" id="csvBtn">Download CSV</button>
+      <button class="btn ghost" id="lookerBtn" title="Stable-header per-event revenue file for the Looker Studio template">Export for Looker</button></div>
 
     <div id="status" role="status" aria-live="polite"></div>
 
@@ -62,6 +65,6 @@
 
   <script src="assets/config.js?v=0.9.1"></script>
   <script src="assets/admin-nav.js?v=0.9.1"></script>
-  <script src="assets/admin-reports.js?v=1.1"></script>
+  <script src="assets/admin-reports.js?v=1.2"></script>
 </body>
 </html>

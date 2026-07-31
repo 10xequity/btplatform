@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<!-- Boomtown Platform — Help & FAQ (admin) · Version: v1.0 · Date: 2026-07-30 · Ships in: v0.40.0
+     Write, order and publish the articles the public Help page serves. Draft by default;
+     nothing is member-visible until Published is on. Answers are plain text — line breaks
+     survive, HTML never renders (escaped on the public page). Click budget (req #19): new
+     article = 1 click to open the form, 1 to save; publish toggle = 1 click, saves itself. -->
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Help &amp; FAQ — Boomtown Athletics</title>
+  <link rel="stylesheet" href="assets/tokens.css" />
+  <link rel="stylesheet" href="assets/app.css" />
+  <link rel="stylesheet" href="assets/admin.css?v=0.40.0" />
+  <style>
+    .faq-head { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; margin-bottom: 14px; }
+    .faq-form { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card, 10px);
+      padding: 16px; margin-bottom: 16px; display: grid; gap: 10px; }
+    .faq-form label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 700; }
+    .faq-form input, .faq-form textarea { font: inherit; padding: 10px; min-height: 44px;
+      background: var(--surface-2); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-control, 8px); }
+    .faq-form textarea { min-height: 140px; resize: vertical; }
+    .faq-form .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .faq-table { width: 100%; border-collapse: collapse; }
+    .faq-table th, .faq-table td { text-align: left; padding: 10px 8px; border-top: 1px solid var(--border); vertical-align: top; }
+    .faq-table th { border-top: 0; color: var(--text-muted); font-size: 13px; }
+    .faq-q { font-weight: 700; }
+    .faq-preview { color: var(--text-muted); font-size: 13px; max-width: 46ch; overflow: hidden;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+    .faq-pub { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; border: 1px solid var(--border); }
+    .faq-pub.on { color: var(--positive); border-color: currentColor; }
+    .faq-pub.off { color: var(--text-muted); }
+    .faq-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .faq-actions .btn { min-height: 44px; }
+    @media (max-width: 760px) {
+      .faq-table thead { display: none; }
+      .faq-table td { display: block; border-top: 0; }
+      .faq-table tr { display: block; border-top: 1px solid var(--border); padding: 8px 0; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app" class="admin-shell">
+    <main class="admin-main" id="main">
+      <div class="faq-head">
+        <div>
+          <h1>Help &amp; FAQ</h1>
+          <p class="muted">These articles power the public <a href="help.html">Help page</a>. Drafts stay hidden until you publish them.</p>
+        </div>
+        <button class="btn" id="faqNew">New article</button>
+      </div>
+      <form class="faq-form" id="faqForm" hidden>
+        <label>Question
+          <input id="fQ" maxlength="300" placeholder="How do refunds work?" required />
+        </label>
+        <label>Answer — plain text, line breaks are kept
+          <textarea id="fA" maxlength="5000" required></textarea>
+        </label>
+        <label>Search tags — comma-separated words people might type
+          <input id="fT" maxlength="200" placeholder="refund, payment, cancel" />
+        </label>
+        <div class="row">
+          <label class="row" style="flex-direction:row; align-items:center; gap:8px; font-weight:700;">
+            <input type="checkbox" id="fPub" style="min-height:20px; width:20px;" /> Published
+          </label>
+          <button class="btn" type="submit" id="fSave">Save article</button>
+          <button class="btn ghost" type="button" id="fCancel">Cancel</button>
+        </div>
+      </form>
+      <div class="pos-card">
+        <table class="faq-table">
+          <thead><tr><th>Order</th><th>Question</th><th>Status</th><th>Actions</th></tr></thead>
+          <tbody id="faqBody"></tbody>
+        </table>
+      </div>
+    </main>
+  </div>
+  <script src="assets/admin-nav.js?v=2.13"></script>
+  <script src="assets/admin-faq.js?v=1.0"></script>
+</body>
+</html>

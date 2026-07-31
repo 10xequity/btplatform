@@ -1,6 +1,13 @@
 /**
  * Boomtown Platform — Sales Reports + Member Notifications
- * File: worker/src/reports.js · Version: v1.3 · Date: 2026-07-30 · Ships in: v0.36.0
+ * File: worker/src/reports.js · Version: v1.4 · Date: 2026-07-30 · Ships in: v0.40.0
+ *
+ * v1.4 (2026-07-30, v0.40.0): GET /api/admin/reports/revenue.csv (staff) — owner req #12/#18.
+ *   One flat, stable-header CSV (per-event revenue rows) built for the Looker Studio template
+ *   (docs/2026-07-30_looker-template_v1_0.md). The build/buy call of record stands: export to
+ *   a free Looker template, do NOT build a report builder. Headers are a CONTRACT — the
+ *   Looker template maps them by name; renaming one breaks every saved report. Escaping is
+ *   RFC 4180 (csvCell, unit-tested). Pure helpers exported: csvCell · buildRevenueCsv.
  *
  * v1.3 (2026-07-30, v0.36.0): admin alerts persist until resolved. The dashboard feed
  *   now returns only read_at IS NULL rows (an open cash flag can no longer scroll off
@@ -38,10 +45,55 @@ export async function reportRoutes(request, env, url, ctx) {
   if ((x = p.match(/^\/api\/notifications\/(\d+)\/read$/)) && m === "POST") return markRead(env, ctx, +x[1]);
   if ((x = p.match(/^\/api\/admin\/alerts\/(\d+)\/dismiss$/)) && m === "POST") return dismissAlert(env, ctx, +x[1]);
   if (p === "/api/notifications/read-all" && m === "POST") return readAll(env, ctx);
+  if (p === "/api/admin/reports/revenue.csv" && m === "GET") return revenueCsv(env, ctx); // v1.4 req #12/#18
   if (p === "/api/admin/reports/heatmap" && m === "GET") return heatmap(env, ctx, url);
   if (p === "/api/admin/reports/pos-sales" && m === "GET") return posSales(env, ctx, url);
   if (p === "/api/admin/reports/shift-coverage" && m === "GET") return shiftCoverage(env, ctx, url);
   return null;
+}
+
+/* ---------------- revenue CSV export — Looker template feed (v1.4) ---------------- */
+
+/** RFC 4180 cell: null/undefined → empty; quote when the value holds , " or newline. */
+export function csvCell(v) {
+  const s2 = v == null ? "" : String(v);
+  return /[",\r\n]/.test(s2) ? `"${s2.replace(/"/g, '""')}"` : s2;
+}
+
+/**
+ * Rows → CSV text. HEADERS ARE A CONTRACT with the Looker template — never rename.
+ * One row per event: month is derived (YYYY-MM of starts_at) so Looker can group
+ * without a calculated field; cents kept as integers (Looker divides by 100 once).
+ */
+export const REVENUE_CSV_HEADERS = [
+  "event_id", "event", "type", "program", "starts_at", "month",
+  "registrations", "card_cents", "cash_cents", "total_cents",
+];
+export function buildRevenueCsv(rows) {
+  const lines = [REVENUE_CSV_HEADERS.join(",")];
+  for (const r of rows) {
+    lines.push([
+      r.event_id, r.event, r.type, r.program, r.starts_at,
+      (r.starts_at || "").slice(0, 7) || "undated",
+      r.registrations, r.card_cents, r.cash_cents, r.total_cents,
+    ].map(csvCell).join(","));
+  }
+  return lines.join("\r\n");
+}
+
+async function revenueCsv(env, ctx) {
+  const deny = await requireStaff(env, ctx);
+  if (deny) return deny;
+  // Same source of truth as sales(): card = Square COMPLETED, cash/comp at event price.
+  const res = await sales(env, ctx);
+  const { per_event } = await res.json();
+  await audit(env, ctx, "reports.revenue.exported", "reports", null, { rows: per_event.length });
+  return new Response(buildRevenueCsv(per_event), {
+    headers: {
+      "content-type": "text/csv; charset=utf-8",
+      "content-disposition": `attachment; filename="boomtown-revenue-${new Date().toISOString().slice(0, 10)}.csv"`,
+    },
+  });
 }
 
 /* ---------------- sales (staff) ---------------- */
