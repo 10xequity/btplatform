@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<!-- Boomtown Platform — Text Messages (admin) · Version: v1.0 · Date: 2026-07-31 · Ships in: v0.42.0
+     Owner req #17: courts and where to play, for league and tournaments. Send to an event's
+     registered players or one member; only opted-in numbers ever receive anything, and the
+     reach preview shows that BEFORE you type. Click budget (req #19): pick target (1) →
+     preview loads itself → write → Send (1) → confirm (1). No animation anywhere — this is
+     a many-times-a-day ops surface (emil-design-eng frequency rule). -->
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Text Messages — Boomtown Athletics</title>
+  <link rel="stylesheet" href="assets/tokens.css" />
+  <link rel="stylesheet" href="assets/app.css" />
+  <link rel="stylesheet" href="assets/admin.css?v=0.42.0" />
+  <style>
+    .sms-head { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; margin-bottom: 14px; }
+    .sms-banner { background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--warn);
+      border-radius: var(--radius-card, 10px); padding: 12px 16px; margin-bottom: 16px; }
+    .sms-form { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card, 10px);
+      padding: 16px; margin-bottom: 16px; display: grid; gap: 12px; max-width: 720px; }
+    .sms-form label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 700; }
+    .sms-form select, .sms-form textarea, .sms-form input { font: inherit; padding: 10px; min-height: 44px;
+      background: var(--surface-2); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-control, 8px); }
+    .sms-form textarea { min-height: 110px; resize: vertical; }
+    .sms-reach { display: flex; gap: 16px; flex-wrap: wrap; font-size: 14px; color: var(--text-muted); min-height: 20px; }
+    .sms-reach strong { color: var(--text); }
+    .sms-count { font-size: 12px; color: var(--text-muted); text-align: right; }
+    .sms-count.over { color: var(--danger); font-weight: 700; }
+    .sms-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .sms-row .btn { min-height: 44px; }
+    .sms-result { font-size: 14px; }
+    .sms-result.ok { color: var(--positive); }
+    .sms-result.err { color: var(--danger); }
+    .sms-table { width: 100%; border-collapse: collapse; }
+    .sms-table th, .sms-table td { text-align: left; padding: 10px 8px; border-top: 1px solid var(--border); vertical-align: top; font-size: 14px; }
+    .sms-table th { border-top: 0; color: var(--text-muted); font-size: 13px; }
+    .sms-dir { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; border: 1px solid var(--border); }
+    .sms-dir.out { color: var(--accent); }
+    .sms-dir.in { color: var(--positive); }
+    .sms-body { color: var(--text-muted); max-width: 52ch; overflow: hidden;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+    @media (max-width: 760px) {
+      .sms-table thead { display: none; }
+      .sms-table td { display: block; border-top: 0; }
+      .sms-table tr { display: block; border-top: 1px solid var(--border); padding: 8px 0; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app" class="admin-shell">
+    <main class="admin-main" id="main">
+      <div class="sms-head">
+        <div>
+          <h1>Text Messages</h1>
+          <p class="muted">Court assignments and game-day notices. Only members who opted in ever get a text — the reach line shows who that is before you send.</p>
+        </div>
+      </div>
+      <div class="sms-banner" id="smsBanner" hidden>
+        Texting isn't switched on yet — Twilio A2P registration is pending. You can look
+        around, but nothing sends until the registration clears and the secrets are set.
+      </div>
+      <form class="sms-form" id="smsForm">
+        <label>Send to
+          <select id="sTarget" required>
+            <option value="">Pick an event…</option>
+          </select>
+        </label>
+        <div class="sms-reach" id="sReach"></div>
+        <label>Message
+          <textarea id="sBody" maxlength="480" required
+            placeholder="Court 4 for your 6:15 match — doors on the north side."></textarea>
+        </label>
+        <div class="sms-count" id="sCount">0 / 480 · 1 text segment ≈ 160 characters</div>
+        <div class="sms-row">
+          <button class="btn" type="submit" id="sSend">Send text</button>
+          <button class="btn ghost" type="button" id="sConfirm" hidden>Yes — send it</button>
+          <span class="sms-result" id="sResult" role="status"></span>
+        </div>
+      </form>
+      <div class="pos-card">
+        <h2 style="margin-top:0">Recent texts</h2>
+        <table class="sms-table">
+          <thead><tr><th></th><th>To / From</th><th>Message</th><th>Status</th><th>When</th></tr></thead>
+          <tbody id="smsLog"></tbody>
+        </table>
+      </div>
+    </main>
+  </div>
+  <script src="assets/admin-nav.js?v=0.42.0"></script>
+  <script src="assets/admin-sms.js?v=0.42.0"></script>
+</body>
+</html>

@@ -1,6 +1,7 @@
 /* Boomtown Platform — Admin sidebar (shared)
    Version: v2.13 · Date: 2026-07-30 · Ships in: v0.40.0
    v2.13: "Help & FAQ" (admin-faq.html) added to the People group after Documents
+   v2.14 (v0.42.0): "Text Messages" (admin-sms.html) added after Marketing & Email
    (v0.40.0, owner req #21 phase 1) — write/publish the public help articles.
    v2.12: Media consent (admin-consent.html) added under People (v0.25.0) — where a
    written media-release opt-out gets recorded. No self-serve equivalent, by design.
@@ -139,6 +140,7 @@
     ]},
     { label: "Marketing", key: "mkt", items: [
       { href: "admin-marketing.html",     ico: "sales",  text: "Marketing & Email" },
+      { href: "admin-sms.html",           ico: "sales",  text: "Text Messages" },
       { href: "admin-messages.html",      ico: "members", text: "Message Reports" },
     ]},
     { label: "People", key: "people", items: [
@@ -368,7 +370,7 @@
     const wm = document.querySelector(".wordmark");
     if (!wm || wm.querySelector(".brand-logo")) return;
     const img = new Image();
-    img.src = "assets/logo-boom-wordmark.png?v=0.41.0";
+    img.src = "assets/logo-boom-wordmark.png?v=0.42.0";
     img.alt = "";
     img.className = "brand-logo";
     img.onerror = () => img.remove(); // missing file → text wordmark exactly as before
@@ -403,7 +405,7 @@
       if (window.BT_STATUS || document.getElementById("bt-status-js")) return;
       var s = document.createElement("script");
       s.id = "bt-status-js";
-      s.src = "assets/build-status.js?v=0.41.0";
+      s.src = "assets/build-status.js?v=0.42.0";
       s.async = false;
       document.head.appendChild(s);
     } catch (e) { /* indicators are never load-blocking */ }
