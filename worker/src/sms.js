@@ -1,6 +1,10 @@
 /**
  * Boomtown Platform — SMS (owner req #17, phase 3)
- * File: worker/src/sms.js · Version: v1.0 · Date: 2026-07-31 · Ships in: v0.42.0
+ * File: worker/src/sms.js · Version: v1.1 · Date: 2026-08-01 · Ships in: v0.44.0 (v1.0 shipped in v0.42.0)
+ *
+ * v1.1: twilioSend and the dormant-state message (SMS_OFF) are exported for marketing.js —
+ *       Marketing SMS scope C reuses this transport and this exact fails-closed sentence,
+ *       so there is ONE Twilio call site pattern and ONE dormancy message in the codebase.
  *
  * Owner requirement #17 (verbatim): "Text notifications — courts and where to play, for
  * league and tournaments. Also usable for marketing and CRM." Build/buy call of record
@@ -112,7 +116,7 @@ export async function validateTwilioSignature(authToken, url, params, signature)
 
 /* ============================ Twilio transport ============================ */
 
-async function twilioSend(env, to, body) {
+export async function twilioSend(env, to, body) {
   const form = new URLSearchParams({
     To: to, Body: body, MessagingServiceSid: env.TWILIO_MESSAGING_SERVICE_SID,
   });
@@ -171,7 +175,8 @@ function splitReach(rows) {
 
 /* ============================ routes ============================ */
 
-const OFF = "Texting isn't switched on yet — Twilio A2P registration is still pending.";
+export const SMS_OFF = "Texting isn't switched on yet — Twilio A2P registration is still pending.";
+const OFF = SMS_OFF;
 
 export async function smsRoutes(request, env, url, ctx) {
   const p = url.pathname, m = request.method;

@@ -1,5 +1,9 @@
-/* Boomtown Platform — Marketing & Email (admin)
-   File: web/assets/admin-marketing.js · Version: v1.0 · Date: 2026-07-24 · Ships in: v0.16.0
+/* Boomtown Platform — Marketing (admin)
+   File: web/assets/admin-marketing.js · Version: v1.1 · Date: 2026-08-01 · Ships in: v0.44.0 (v1.0 shipped in v0.16.0)
+   v1.1 — Marketing SMS scope C: campaigns carry a channel (Email / Text). Text campaigns get a
+   plain-text body with a live segment-count meter (480 cap = 3 SMS segments), reuse the same
+   segments, and stay clearly labeled in the list. While Twilio is unconfigured the strip says
+   texting is off and the API answers 503 — the UI never pretends a text was sent.
    Segments (create/edit/preview with live counts), campaigns (compose → test → send →
    batch progress), compliance address, sandbox-mode messaging. Uses BT_ADMIN helpers;
    errors always render through fail() (Back + Dashboard, standing rule 2). */
@@ -25,7 +29,10 @@
         ? `<span class="mkt-chip warn">SANDBOX — no real emails until the Brevo key is set</span>`
         : `<span class="mkt-chip">Email: Brevo connected</span>`) +
       (o.address_set ? `<span class="mkt-chip">Address on file ✓</span>`
-                     : `<span class="mkt-chip warn">Mailing address missing — sending blocked</span>`);
+                     : `<span class="mkt-chip warn">Mailing address missing — email sending blocked</span>`) +
+      (o.sms_mode === "twilio"
+        ? `<span class="mkt-chip">Texting: Twilio connected</span>`
+        : `<span class="mkt-chip warn">Texting off — A2P registration pending</span>`);
     if (o.mailing_address) $("mailAddr").value = o.mailing_address;
   }
 
@@ -141,7 +148,7 @@
     $("campList").innerHTML = rows.length ? rows.map((c) => `
       <div class="mkt-row" data-id="${c.id}">
         <div class="grow"><div class="k">${esc(c.name)}${c.sandbox ? " · sandbox" : ""}</div>
-          <div class="v">${esc(c.subject || "(no subject)")} → ${esc(c.segment_name || "no segment")}
+          <div class="v">${c.channel === "sms" ? "Text" : "Email"} · ${c.channel === "sms" ? "to" : esc(c.subject || "(no subject)") + " →"} ${esc(c.segment_name || "no segment")}
             ${c.status !== "draft" ? ` · ${c.sent_count}/${c.recipient_count} sent${c.queued_count ? `, ${c.queued_count} queued` : ""}` : ""}</div></div>
         <span class="status-pill ${esc(c.status)}">${esc(c.status)}</span>
         ${c.status === "draft" ? `<button class="btn ghost" data-act="edit">Edit</button>` : ""}
@@ -158,7 +165,7 @@
   }
 
   async function campaignModal(id) {
-    let c = { name: "", subject: "", html_body: "", segment_id: null };
+    let c = { name: "", subject: "", html_body: "", segment_id: null, channel: "email", sms_body: "" };
     if (id) {
       const r = await api(`/api/admin/marketing/campaigns/${id}`);
       if (!r.ok) return fail(r.data.error || "Could not open campaign.");
@@ -169,17 +176,32 @@
       <div class="mkt-form">
         <label for="mCName">Name (internal)</label>
         <input id="mCName" value="${esc(c.name)}" placeholder="Fall league early-bird" />
+        <label for="mCChan">Channel</label>
+        <select id="mCChan">
+          <option value="email" ${c.channel !== "sms" ? "selected" : ""}>Email</option>
+          <option value="sms" ${c.channel === "sms" ? "selected" : ""}>Text message (SMS)</option>
+        </select>
+        <div id="mCEmailFields">
         <label for="mCSubj">Subject line</label>
         <input id="mCSubj" value="${esc(c.subject)}" placeholder="Fall leagues open Monday — early-bird pricing" />
+        </div>
         <label for="mCSeg">Send to segment</label>
         <select id="mCSeg"><option value="">Choose…</option>
           ${SEGMENTS.map((s) => `<option value="${s.id}" ${c.segment_id === s.id ? "selected" : ""}>${esc(s.name)} (${s.count})</option>`).join("")}
         </select>
+        <div id="mCBodyEmail">
         <label for="mCBody">Email body (HTML or plain text)</label>
         <textarea id="mCBody" placeholder="Hi {{first_name}}, ...">${esc(c.html_body)}</textarea>
         <p class="mkt-hint">Personalize with {{first_name}}, {{full_name}}, {{email}}. The legal footer (address + unsubscribe) is added automatically — never write your own.</p>
         <label for="mCTest">Test address</label>
         <input id="mCTest" type="email" placeholder="you@boomtownvb.com" />
+        </div>
+        <div id="mCBodySms" hidden>
+        <label for="mCSms">Text message (plain text)</label>
+        <textarea id="mCSms" maxlength="480" placeholder="Hi {{first_name}} — fall leagues open Monday. Early-bird pricing this week: boomtownvb.com">${esc(c.sms_body || "")}</textarea>
+        <p class="mkt-hint" id="mCSmsMeter" aria-live="polite"></p>
+        <p class="mkt-hint">Personalize with {{first_name}}, {{full_name}}. Only people who opted in to texts get it — carriers add STOP/HELP handling automatically.</p>
+        </div>
         <div class="mkt-actions">
           <button class="btn ghost" id="mCSave">Save draft</button>
           <button class="btn ghost" id="mCTestBtn">Send test</button>
@@ -191,10 +213,29 @@
       </div>`);
     $("mCCancel").onclick = closeModal;
 
+    const applyChannel = () => {
+      const sms = $("mCChan").value === "sms";
+      $("mCBodyEmail").hidden = sms;
+      $("mCEmailFields").hidden = sms;
+      $("mCBodySms").hidden = !sms;
+      $("mCTestBtn").hidden = sms; // reach preview covers text campaigns; no test send yet
+      $("mCSendBtn").textContent = sms ? "Text the segment" : "Send to segment";
+      meter();
+    };
+    const meter = () => {
+      const n = $("mCSms").value.length;
+      const seg = n === 0 ? 0 : Math.ceil(n / 160);
+      $("mCSmsMeter").textContent = `${n}/480 characters · ${seg} SMS segment${seg === 1 ? "" : "s"} of 3`;
+    };
+    $("mCChan").onchange = applyChannel;
+    $("mCSms").oninput = meter;
+    applyChannel();
+
     const save = async () => {
       const body = JSON.stringify({
         name: $("mCName").value, subject: $("mCSubj").value,
         html_body: $("mCBody").value, segment_id: Number($("mCSeg").value) || null,
+        channel: $("mCChan").value, sms_body: $("mCSms").value,
       });
       const r = id
         ? await api(`/api/admin/marketing/campaigns/${id}/update`, { method: "POST", body })
@@ -219,7 +260,10 @@
     $("mCSendBtn").onclick = async () => {
       const s = await save();
       if (!s.ok) { $("mCMsg").textContent = s.data.error || "Save the draft first."; return; }
-      if (!confirm("Send this campaign to the whole segment? Sent campaigns can't be edited.")) return;
+      const isSms = $("mCChan").value === "sms";
+      if (!confirm(isSms
+        ? "Text everyone in this segment who opted in? Sent campaigns can't be edited."
+        : "Send this campaign to the whole segment? Sent campaigns can't be edited.")) return;
       const r = await api(`/api/admin/marketing/campaigns/${id}/send`, { method: "POST" });
       $("mCMsg").textContent = r.ok ? r.data.message : (r.data.error || "Could not send.");
       if (r.ok) { loadCampaigns(); loadOverview(); }
@@ -244,4 +288,7 @@
   await loadSegments();
   await loadCampaigns();
 })();
+/* Changelog: v1.1 (2026-08-01, v0.44.0) — Marketing SMS scope C: channel select, plain-text SMS
+   body with live segment meter (480 cap), texting status chip, channel-labeled campaign rows,
+   channel-aware send confirm. */
 /* Changelog: v1.0 (2026-07-24) — initial admin UI for M14 Phase A. */

@@ -1,6 +1,8 @@
 /**
  * Boomtown Platform — schema gate tests
- * File: worker/test/schema_gate.test.mjs · Version: v1.4 · Date: 2026-07-31 · Ships in: v0.42.0 (v1.0 shipped in v0.33.0)
+ * File: worker/test/schema_gate.test.mjs · Version: v1.5 · Date: 2026-08-01 · Ships in: v0.44.0 (v1.0 shipped in v0.33.0)
+ *
+ * v1.5: directory ratchet 29 → 30 (migration 0030, Marketing SMS scope C — req #17).
  *
  * v1.4: directory ratchet 28 → 29 (migration 0029, SMS — req #17 phase 3). Shipped as a
  *       corrective: the v0.42.0 ZIP carried migration 0029 without this bump — the ratchet
@@ -135,9 +137,9 @@ test("pad produces the 4-digit form used in filenames and the ledger", () => {
   assert.equal(pad(2026), "2026");
 });
 
-test("the real db/migrations directory parses cleanly and reports 0029", () => {
+test("the real db/migrations directory parses cleanly and reports 0030", () => {
   const { highest, files, unparseable } = scanMigrations(DEFAULT_DIR);
   assert.deepEqual(unparseable, [], `unparseable migration filenames: ${unparseable.join(", ")}`);
-  assert.equal(highest, 29);
+  assert.equal(highest, 30);
   assert.ok(files >= 20, `expected at least 20 .sql files, saw ${files}`);
 });

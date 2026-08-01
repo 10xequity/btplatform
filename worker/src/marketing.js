@@ -1,6 +1,15 @@
 /**
  * Boomtown Platform — Marketing & Comms module (M14 Phase A)
- * File: worker/src/marketing.js · Version: v1.0 · Date: 2026-07-24 · Ships in: v0.16.0
+ * File: worker/src/marketing.js · Version: v1.1 · Date: 2026-08-01 · Ships in: v0.44.0 (v1.0 shipped in v0.16.0)
+ *
+ * v1.1 — Marketing SMS, scope C (owner req #17; sequencing override of record 2026-08-01:
+ * built DORMANT ahead of live SMS proof). Campaigns gain channel 'email'|'sms' (migration
+ * 0030). SMS campaigns reuse the SAME segments; recipients are contacts with sms_opt_in=1
+ * and a normalizable phone (NOT the email BASE_WHERE). Per-recipient records ride sms_log
+ * with target='campaign:ID'. Transport, quiet hours, daily cap, and the dormant fails-closed
+ * sentence are imported from sms.js — one source of truth. Consent is re-checked per row at
+ * send time (a STOP between snapshot and send is honored, mirroring the unsubscribe re-check).
+ * While unconfigured: drafts and previews work; /send answers 503 and writes nothing.
  *
  * Staff routes (admin/staff role), mounted by worker/src/index.js:
  *   GET  /api/admin/marketing/overview                → contact counts, address status
@@ -36,6 +45,10 @@
  */
 
 import { sendEmail, escapeHtml } from "./registrations.js";
+
+import {
+  smsConfigured, normalizePhone, quietHoursBlocked, twilioSend, SMS_MAX, ORG_SENDS_PER_DAY, SMS_OFF,
+} from "./sms.js";
 
 let H = null; // wired: { json, audit, isStaff, requireStaff }
 export function wireMarketing(helpers) { H = helpers; }
@@ -106,6 +119,35 @@ export function dedupeRecipients(rows) {
   return out;
 }
 
+/** Campaign channel discriminator. SQLite ALTER cannot add a CHECK, so this IS the check. */
+export function normalizeChannel(v) {
+  if (v === undefined || v === null || v === "") return "email";
+  return v === "email" || v === "sms" ? v : null;
+}
+
+/** {{first_name}} {{full_name}} — PLAIN TEXT merge for SMS. No HTML escaping: an SMS is not
+ *  HTML, and escaping would text people "O&#39;Brien". {{email}} is deliberately absent. */
+export function mergeVarsText(body, contact) {
+  const full = (contact.full_name || "").trim();
+  const first = full.split(/\s+/)[0] || "there";
+  return String(body || "")
+    .replaceAll("{{first_name}}", first)
+    .replaceAll("{{full_name}}", full || "there");
+}
+
+/** Dedupe SMS recipients by normalized E.164; drops un-normalizable phones. */
+export function dedupeSmsRecipients(rows) {
+  const seen = new Set();
+  const out = [];
+  for (const r of rows) {
+    const to = normalizePhone(r.phone);
+    if (!to || seen.has(to)) continue;
+    seen.add(to);
+    out.push({ id: r.id, to });
+  }
+  return out;
+}
+
 /* ---------------- routing ---------------- */
 
 export async function marketingRoutes(request, env, url, ctx) {
@@ -163,6 +205,7 @@ async function overview(env, ctx) {
     address_set: !!(org && org.mailing_address),
     contacts: c.total || 0, reachable: c.reachable || 0, unsubscribed: c.unsubscribed || 0,
     email_mode: env.BREVO_API_KEY ? "brevo" : "sandbox",
+    sms_mode: smsConfigured(env) ? "twilio" : "off",
   });
 }
 
@@ -181,6 +224,10 @@ async function saveSettings(request, env, ctx) {
 
 const BASE_WHERE =
   "c.org_id=?1 AND c.deleted_at IS NULL AND c.unsubscribed=0 AND c.email IS NOT NULL AND c.email<>''";
+
+/* SMS campaigns: consent is sms_opt_in (TCPA), NOT the email unsubscribed flag. */
+const SMS_BASE_WHERE =
+  "c.org_id=?1 AND c.deleted_at IS NULL AND c.sms_opt_in=1 AND c.phone IS NOT NULL AND TRIM(c.phone)<>''";
 
 async function segmentCount(env, orgId, filter) {
   const { where, binds } = buildSegmentWhere(filter);
@@ -263,9 +310,14 @@ async function previewSegment(env, ctx, id) {
 async function listCampaigns(env, ctx) {
   const rows = (await env.DB.prepare(
     `SELECT cp.id, cp.name, cp.subject, cp.status, cp.sandbox, cp.recipient_count, cp.sent_at, cp.created_at,
+            cp.channel,
             s.name AS segment_name,
-            (SELECT COUNT(*) FROM campaign_sends cs WHERE cs.campaign_id=cp.id AND cs.status='sent') AS sent_count,
-            (SELECT COUNT(*) FROM campaign_sends cs WHERE cs.campaign_id=cp.id AND cs.status='queued') AS queued_count
+            CASE cp.channel WHEN 'sms'
+              THEN (SELECT COUNT(*) FROM sms_log sl WHERE sl.org_id=cp.org_id AND sl.target='campaign:'||cp.id AND sl.direction='out' AND sl.status='sent')
+              ELSE (SELECT COUNT(*) FROM campaign_sends cs WHERE cs.campaign_id=cp.id AND cs.status='sent') END AS sent_count,
+            CASE cp.channel WHEN 'sms'
+              THEN (SELECT COUNT(*) FROM sms_log sl WHERE sl.org_id=cp.org_id AND sl.target='campaign:'||cp.id AND sl.direction='out' AND sl.status='queued')
+              ELSE (SELECT COUNT(*) FROM campaign_sends cs WHERE cs.campaign_id=cp.id AND cs.status='queued') END AS queued_count
      FROM campaigns cp LEFT JOIN segments s ON s.id=cp.segment_id
      WHERE cp.org_id=?1 AND cp.deleted_at IS NULL ORDER BY cp.id DESC LIMIT 50`
   ).bind(ctx.orgId).all()).results;
@@ -277,19 +329,26 @@ async function getCampaign(env, ctx, id) {
     "SELECT * FROM campaigns WHERE id=?1 AND org_id=?2 AND deleted_at IS NULL"
   ).bind(id, ctx.orgId).first();
   if (!cp) return H.json({ error: "Campaign not found." }, 404);
-  const counts = (await env.DB.prepare(
-    "SELECT status, COUNT(*) AS n FROM campaign_sends WHERE campaign_id=?1 GROUP BY status"
-  ).bind(id).all()).results;
+  const counts = cp.channel === "sms"
+    ? (await env.DB.prepare(
+        "SELECT status, COUNT(*) AS n FROM sms_log WHERE org_id=?1 AND target=?2 AND direction='out' GROUP BY status"
+      ).bind(ctx.orgId, `campaign:${id}`).all()).results
+    : (await env.DB.prepare(
+        "SELECT status, COUNT(*) AS n FROM campaign_sends WHERE campaign_id=?1 GROUP BY status"
+      ).bind(id).all()).results;
   return H.json({ campaign: cp, counts });
 }
 
 async function createCampaign(request, env, ctx) {
-  const { name, subject, html_body, segment_id } = await request.json().catch(() => ({}));
+  const { name, subject, html_body, segment_id, channel, sms_body } = await request.json().catch(() => ({}));
   if (!name || !String(name).trim()) return H.json({ error: "Give the campaign a name." }, 400);
+  const ch = normalizeChannel(channel);
+  if (!ch) return H.json({ error: "Channel must be email or sms." }, 400);
   const ins = await env.DB.prepare(
-    "INSERT INTO campaigns (org_id, segment_id, name, subject, html_body) VALUES (?1, ?2, ?3, ?4, ?5)"
-  ).bind(ctx.orgId, segment_id || null, String(name).trim(), String(subject || ""), String(html_body || "")).run();
-  await H.audit(env, ctx, "marketing.campaign_create", "campaigns", ins.meta.last_row_id, { name });
+    "INSERT INTO campaigns (org_id, segment_id, name, subject, html_body, channel, sms_body) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)"
+  ).bind(ctx.orgId, segment_id || null, String(name).trim(), String(subject || ""), String(html_body || ""),
+         ch, sms_body != null ? String(sms_body) : null).run();
+  await H.audit(env, ctx, "marketing.campaign_create", "campaigns", ins.meta.last_row_id, { name, channel: ch });
   return H.json({ ok: true, id: ins.meta.last_row_id });
 }
 
@@ -305,11 +364,14 @@ async function draftOnly(env, ctx, id) {
 async function updateCampaign(request, env, ctx, id) {
   const { err } = await draftOnly(env, ctx, id);
   if (err) return err;
-  const { name, subject, html_body, segment_id } = await request.json().catch(() => ({}));
+  const { name, subject, html_body, segment_id, channel, sms_body } = await request.json().catch(() => ({}));
+  const ch = channel === undefined ? null : normalizeChannel(channel);
+  if (channel !== undefined && !ch) return H.json({ error: "Channel must be email or sms." }, 400);
   await env.DB.prepare(
     `UPDATE campaigns SET name=COALESCE(?1,name), subject=COALESCE(?2,subject),
-       html_body=COALESCE(?3,html_body), segment_id=COALESCE(?4,segment_id), updated_at=datetime('now') WHERE id=?5`
-  ).bind(name ?? null, subject ?? null, html_body ?? null, segment_id ?? null, id).run();
+       html_body=COALESCE(?3,html_body), segment_id=COALESCE(?4,segment_id),
+       channel=COALESCE(?5,channel), sms_body=COALESCE(?6,sms_body), updated_at=datetime('now') WHERE id=?7`
+  ).bind(name ?? null, subject ?? null, html_body ?? null, segment_id ?? null, ch, sms_body ?? null, id).run();
   await H.audit(env, ctx, "marketing.campaign_update", "campaigns", id, {});
   return H.json({ ok: true });
 }
@@ -344,6 +406,10 @@ async function testCampaign(request, env, ctx, id) {
     "SELECT * FROM campaigns WHERE id=?1 AND org_id=?2 AND deleted_at IS NULL"
   ).bind(id, ctx.orgId).first();
   if (!cp) return H.json({ error: "Campaign not found." }, 404);
+  if (cp.channel === "sms") {
+    if (!smsConfigured(env)) return H.json({ error: SMS_OFF }, 503);
+    return H.json({ error: "Text campaigns don't have a test send yet — the reach preview shows exactly who gets it." }, 400);
+  }
   const { email } = await request.json().catch(() => ({}));
   if (!email) return H.json({ error: "Enter an email for the test send." }, 400);
   const fake = { id: 0, full_name: "Test Player", email, unsub_token: "test" };
@@ -364,8 +430,9 @@ async function sendCampaign(env, ctx, id) {
   ).bind(id, ctx.orgId).first();
   if (!cp) return H.json({ error: "Campaign not found." }, 404);
   if (cp.status !== "draft") return H.json({ error: "This campaign was already sent or is sending." }, 400);
-  if (!cp.subject.trim()) return H.json({ error: "Add a subject line before sending." }, 400);
   if (!cp.segment_id) return H.json({ error: "Pick a segment before sending." }, 400);
+  if (cp.channel === "sms") return sendSmsCampaign(env, ctx, cp);
+  if (!cp.subject.trim()) return H.json({ error: "Add a subject line before sending." }, 400);
 
   const org = await env.DB.prepare("SELECT mailing_address FROM orgs WHERE id=?1").bind(ctx.orgId).first();
   if (!org.mailing_address) {
@@ -403,9 +470,122 @@ async function sendCampaign(env, ctx, id) {
 }
 
 async function processCampaign(env, orgId, id, ctx) {
-  const out = await processCampaignBatch(env, orgId, id);
+  const ch = await env.DB.prepare(
+    "SELECT channel FROM campaigns WHERE id=?1 AND org_id=?2 AND deleted_at IS NULL"
+  ).bind(id, orgId).first();
+  const out = ch && ch.channel === "sms"
+    ? await processSmsCampaignBatch(env, orgId, id)
+    : await processCampaignBatch(env, orgId, id);
   if (ctx) await H.audit(env, ctx, "marketing.campaign_process", "campaigns", id, out);
   return H.json({ ok: true, ...out });
+}
+
+/* ---------------- SMS campaigns (scope C — v1.1) ---------------- */
+
+/** How many more texts this org may send today (shared cap with ad-hoc admin SMS). */
+async function smsDailyAllowance(env, orgId) {
+  const row = await env.DB.prepare(
+    `SELECT COUNT(*) AS n FROM sms_log
+     WHERE org_id=?1 AND direction='out' AND created_at >= datetime('now','-1 day')`
+  ).bind(orgId).first();
+  return Math.max(0, ORG_SENDS_PER_DAY - (row.n || 0));
+}
+
+async function sendSmsCampaign(env, ctx, cp) {
+  /* Dormant gate FIRST — while Twilio is unconfigured this route answers with the same
+     sentence as every other SMS route and touches nothing. Order matters: no DB write
+     may precede this check (guarded in marketing.test.mjs). */
+  if (!smsConfigured(env)) return H.json({ error: SMS_OFF }, 503);
+  const body = String(cp.sms_body || "").trim();
+  if (!body) return H.json({ error: "Write the text message first." }, 400);
+  if (body.length > SMS_MAX) {
+    return H.json({ error: `Keep it under ${SMS_MAX} characters — that's three text segments.` }, 400);
+  }
+  if (quietHoursBlocked(new Date())) {
+    return H.json({ error: "It's outside texting hours (8am–9pm Mountain). Try again in the morning." }, 400);
+  }
+
+  const seg = await env.DB.prepare(
+    "SELECT filter_json FROM segments WHERE id=?1 AND org_id=?2 AND deleted_at IS NULL"
+  ).bind(cp.segment_id, ctx.orgId).first();
+  if (!seg) return H.json({ error: "That segment no longer exists." }, 400);
+  let filter = {};
+  try { filter = JSON.parse(seg.filter_json || "{}"); } catch {}
+  const { where, binds } = buildSegmentWhere(filter);
+  const rows = (await env.DB.prepare(
+    `SELECT c.id, c.phone FROM contacts c WHERE ${SMS_BASE_WHERE}${where} ORDER BY c.id`
+  ).bind(ctx.orgId, ...binds).all()).results;
+  const recipients = dedupeSmsRecipients(rows);
+  if (!recipients.length) {
+    return H.json({ error: "Nobody in that segment has opted in to texts with a textable number yet." }, 400);
+  }
+  const allowance = await smsDailyAllowance(env, ctx.orgId);
+  if (recipients.length > allowance) {
+    return H.json({ error: `That's ${recipients.length} texts but only ${allowance} remain in today's limit — it was not sent.` }, 429);
+  }
+
+  for (const r of recipients) {
+    await env.DB.prepare(
+      `INSERT INTO sms_log (org_id, contact_id, direction, to_number, status, target)
+       VALUES (?1, ?2, 'out', ?3, 'queued', ?4)`
+    ).bind(ctx.orgId, r.id, r.to, `campaign:${cp.id}`).run();
+  }
+  await env.DB.prepare(
+    "UPDATE campaigns SET status='sending', recipient_count=?1, sandbox=0, updated_at=datetime('now') WHERE id=?2"
+  ).bind(recipients.length, cp.id).run();
+  await H.audit(env, ctx, "marketing.sms_campaign_send", "campaigns", cp.id, { recipients: recipients.length });
+
+  const first = await processSmsCampaignBatch(env, ctx.orgId, cp.id);
+  return H.json({ ok: true, queued: recipients.length, ...first,
+    message: `Texting ${recipients.length} people in batches of ${BATCH_SIZE}. The daily job finishes any remainder, or click "Send next batch".` });
+}
+
+/** SMS batch worker — cron-safe. Quiet hours and the daily cap pause the queue instead of
+ *  failing it: rows stay 'queued' and the next tick drains them. Consent is re-checked per
+ *  row so a STOP that arrived after snapshot is honored ('skipped', never sent). */
+export async function processSmsCampaignBatch(env, orgId, campaignId) {
+  const cp = await env.DB.prepare(
+    "SELECT * FROM campaigns WHERE id=?1 AND org_id=?2 AND status='sending' AND deleted_at IS NULL"
+  ).bind(campaignId, orgId).first();
+  if (!cp) return { processed: 0, remaining: 0 };
+  if (!smsConfigured(env)) return { processed: 0, remaining: -1, paused: "unconfigured" };
+  if (quietHoursBlocked(new Date())) return { processed: 0, remaining: -1, paused: "quiet-hours" };
+  const allowance = await smsDailyAllowance(env, orgId);
+  if (allowance <= 0) return { processed: 0, remaining: -1, paused: "daily-limit" };
+
+  const queue = (await env.DB.prepare(
+    `SELECT sl.id AS log_id, sl.to_number, c.id AS contact_id, c.full_name, c.sms_opt_in, c.deleted_at AS contact_deleted
+     FROM sms_log sl JOIN contacts c ON c.id = sl.contact_id AND c.org_id = sl.org_id
+     WHERE sl.org_id=?1 AND sl.target=?2 AND sl.direction='out' AND sl.status='queued'
+     ORDER BY sl.id LIMIT ?3`
+  ).bind(orgId, `campaign:${campaignId}`, Math.min(BATCH_SIZE, allowance)).all()).results;
+
+  let sent = 0, skipped = 0, failed = 0;
+  for (const row of queue) {
+    // Honor a STOP or a delete that happened AFTER queueing — consent re-check per row.
+    if (!row.sms_opt_in || row.contact_deleted) {
+      await env.DB.prepare(
+        "UPDATE sms_log SET status='skipped', error='consent revoked or contact removed after queueing' WHERE id=?1"
+      ).bind(row.log_id).run();
+      skipped++; continue;
+    }
+    const text = mergeVarsText(cp.sms_body, row);
+    const res = await twilioSend(env, row.to_number, text);
+    await env.DB.prepare(
+      "UPDATE sms_log SET status=?1, body=?2, twilio_sid=?3, error=?4 WHERE id=?5"
+    ).bind(res.ok ? "sent" : "failed", text, res.ok ? res.sid : null, res.ok ? null : res.error, row.log_id).run();
+    res.ok ? sent++ : failed++;
+  }
+
+  const left = await env.DB.prepare(
+    "SELECT COUNT(*) AS n FROM sms_log WHERE org_id=?1 AND target=?2 AND direction='out' AND status='queued'"
+  ).bind(orgId, `campaign:${campaignId}`).first();
+  if (!left.n) {
+    await env.DB.prepare(
+      "UPDATE campaigns SET status='sent', sent_at=datetime('now'), updated_at=datetime('now') WHERE id=?1"
+    ).bind(campaignId).run();
+  }
+  return { processed: queue.length, sent, skipped, failed, remaining: left.n || 0 };
 }
 
 /** Core batch worker — also called by the daily cron (no ctx). ≤ BATCH_SIZE emails/invocation. */
@@ -455,10 +635,14 @@ export async function processCampaignBatch(env, orgId, campaignId) {
 /** Cron entry: drain up to 3 in-flight campaigns per day tick (index.js runDailyJobs). */
 export async function campaignQueueSweep(env) {
   const rows = (await env.DB.prepare(
-    "SELECT id, org_id FROM campaigns WHERE status='sending' AND deleted_at IS NULL LIMIT 3"
+    "SELECT id, org_id, channel FROM campaigns WHERE status='sending' AND deleted_at IS NULL LIMIT 3"
   ).all()).results;
   const out = [];
-  for (const r of rows) out.push({ id: r.id, ...(await processCampaignBatch(env, r.org_id, r.id)) });
+  for (const r of rows) {
+    out.push({ id: r.id, ...(r.channel === "sms"
+      ? await processSmsCampaignBatch(env, r.org_id, r.id)
+      : await processCampaignBatch(env, r.org_id, r.id)) });
+  }
   return out;
 }
 
@@ -522,6 +706,11 @@ async function unsubscribe(env, url) {
   return page("You're unsubscribed. You won't get marketing email from us again.");
 }
 
+/* Changelog: v1.1 (2026-08-01, v0.44.0) — Marketing SMS scope C: campaigns.channel 'email'|'sms',
+   sms_body ≤ SMS_MAX, recipients from segments via SMS_BASE_WHERE (sms_opt_in, not unsubscribed),
+   snapshot + batches ride sms_log target='campaign:ID', per-row consent re-check, quiet-hours and
+   daily-cap PAUSE the queue, dormant 503 via SMS_OFF, cron sweep channel-routes. Built dormant by
+   owner override of record 2026-08-01. */
 /* Changelog: v1.0 (2026-07-24) — M14 Phase A: segments (tags/played/since filters, live counts,
    preview), campaigns (draft→send→batch processing ≤30/invocation, cron drain, sandbox mode,
    test send), CAN-SPAM gate (mailing address required, footer + one-click unsubscribe on every
