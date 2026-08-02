@@ -1,68 +1,215 @@
 # Boomtown Platform — CHANGELOG
 
-## v0.53.0 — 2026-08-02
+## v0.53.0 — 2026-08-02 (Unified static MEMBER header + brand rename applied)
 
-- Auto-recorded by CI on deploy. `/api/health` reported `v0.53.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
+- **D-ORG-5 APPLIED to live D1** (owner-approved this session): `orgs` id 1 renamed
+  "Boomtown Volleyball" → **"Boomtown Athletics"** (guarded UPDATE, 1 row; ledger unchanged at
+  0033, no migration). The brand then swept repo-wide: 27 admin wordmarks, 13 member wordmarks +
+  page titles, root index/404, PWA manifest (v1.2: `name` + description), sw.js push fallback,
+  member.js document.title, widget, site-nav rail chip, and the worker's user-visible strings
+  (calendar calName/PRODID, marketing fallback page, profiles PRODID, webauthn RP *display*
+  name — RP ID is the domain, untouched, passkeys unaffected).
+- **ONE canonical static MEMBER header, byte-identical on the 13 site-nav pages** (the admin
+  v0.52.0 inversion, completed): brand-logo img + Athletics wordmark · **static-but-hidden
+  Admin link** (owner call: frame-one markup for everyone, one JS reveal for staff) · ✉ →
+  member-inbox · ◐ theme toggle · hidden Sign out · `no-print`. The pre-existing headers were
+  13 hand-rolled variants (5 had theme toggles, 9 had none; assorted ← Home/Inbox/Library
+  links). index.html keeps a reduced login header (brand img + Athletics + theme; app.js
+  stays that page's behavior owner — marker-gated, no double-bind).
+- **site-nav.js v2.13:** the v2.10 mail and v2.11 Admin-switch INJECTORS are DELETED; the file
+  becomes the single-source behavior owner — synchronous theme-toggle listener (works before
+  /api/me resolves) + logout, signed-in reveal of Sign out, staff reveal of the Admin link,
+  and a badge/aria FILL on the static ✉ (data fill only, the brandLogo-swap precedent).
+  Per-page theme/logout copies in register.js, score.js, settings.js DELETED (a surviving
+  copy double-binds → dead button, the v0.52.0 failure class). Bonus fix: profile.html's
+  theme toggle was a DEAD BUTTON (markup with no binder anywhere) — it works now.
+- **Member pre-paint theme snippet** on 13 + index.html — saved bt_theme, else system
+  preference, before the first stylesheet, byte-identical (theme half of the admin snippet;
+  member pages carry no rail-collapse state).
+- **404.html repaired:** its stylesheets were bustered `?v=0.11.0` — 42 releases of stale
+  cached CSS on the error page. Now on the release value.
+- **Guards (616 → 631/631):** `header_shell.test.mjs` v2.0 (member 13-page byte-identity +
+  completeness incl. NO org switcher + reduced-login variant + single-source verdicts +
+  no-copy scan with app.js as the one documented exception + 6 NCs) · `header_actions.test.mjs`
+  v3.0 (BOTH shells now forbid element injection; fill + reveal verdicts; static-✉/Admin
+  placement over the widest page set with floor counts) · `page_shell.test.mjs` v1.3 (member
+  snippet, before-CSS, byte-identical) · `brand.test.mjs` v2.0 (INVERTED post-rename: any
+  "Boomtown Volleyball" literal in the product shell is the offence; legal-entity keeps still
+  asserted). Proven-fails-live on pristine v0.52.0: **15 red**. The brand guard's own widest
+  scan caught two real sweep misses during the build (the span-split wordmark on 28 pages;
+  root 404/index) — failure class 3, working as designed.
+- **Release mechanics:** 68-file ZIP (30 HTML admin+root · 14 member HTML · 8 assets JS ·
+  manifest · sw/member/widget JS · 5 worker src · 4 tests · README) · index.js bump
+  byte-verified one-line diff (F-34) · buster sweep single value **0.53.0, 300 refs**
+  (284 + 13 member header imgs + 1 login img + 2 repaired 404 refs — delta accounted) ·
+  both manifest ratchets PASS · CHANGELOG absent from ZIP ✓ · no migration.
 
-## v0.52.0 — 2026-08-02
+## v0.52.0 — 2026-08-02 (Unified static admin header + org switcher everywhere — uiux-review §6 step 4)
 
-- Auto-recorded by CI on deploy. `/api/health` reported `v0.52.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
+> **Provenance note (2026-08-02, v1.0 of this reconstruction):** entries v0.36.0–v0.52.0 below were
+> restored on 2026-08-02 from the session handoffs, README v0.52.0 module table, in-source version
+> headers, and the v0.45.0 paste block — the CI deploy stubs they replace carried no content because
+> the paste-block ritual was retired but the blocks were never pasted. Entries marked
+> **[RECONSTRUCTED — summary only]** have no surviving session handoff; their one-line scope comes
+> from the README table and migration-file dates and cannot be expanded further. Everything from
+> v0.33.2 downward is the original record, byte-identical. Standing rule from this date: every
+> release ships a complete ready-to-upload `CHANGELOG.md` alongside the ZIP (never inside it).
 
-## v0.51.0 — 2026-08-02
+- **ONE canonical static admin header, byte-identical on all 27 admin-nav pages:** brand-logo img +
+  wordmark · **org switcher on ALL 27** (16 pages gained it — the "8 former admin-shell pages" figure
+  was stale; the widest scan found 16, failure class 3) · mail icon · theme toggle · Member site
+  link · `no-print`. The v2.4/v2.15 logo and v2.17 mail INJECTORS are deleted — the header paints
+  complete on frame one, zero post-paint mutation (the logo's per-org cache swap-on-change is the
+  sole, deliberate exception).
+- **Pre-paint snippet v2 ("Pre-paint state"):** collapse + **theme** — saved `bt_theme`, else system
+  preference, applied before the first stylesheet. 16 admin pages previously never applied a saved
+  theme at all; all 27 now paint the right theme on frame one.
+- **admin-nav.js v2.19 single-source behaviors:** switcher population/persistence with
+  `body[data-org-switch-href]` override (admin-event.html → admin-events.html; a reload there 404s
+  under the new org) + the theme-toggle listener. **12 per-page switcher copies and 6 theme blocks
+  DELETED** (a returned copy double-binds the toggle → toggles twice → dead button). Behavior note:
+  checkin/league/plans/registrations/reports/tournament org switches now full-reload instead of
+  targeted re-fetch — uniformity over the micro-nicety.
+- **Glass to the demo-v4 treatment** (tokens.css v0.6.0): 62% surface + blur 14 + saturate 1.25,
+  solid fallback kept. app.css v0.8.0: `.wordmark`/`.brand-logo`/`.hdr-mail` promoted from the
+  injected `<style>` to real CSS (frame-one styling).
+- **Guards (+12 tests, 616/616):** `header_shell.test.mjs` v1.0 NEW (identity + completeness +
+  derived-set no-copy scan + behavior checks + 7 NCs) · `header_actions.test.mjs` v2.0 (admin side
+  INVERTED: no injector may survive; static mail only on admin-nav pages; member shell stays
+  injected) · `page_shell.test.mjs` v1.2 (snippet regex + pre-paint theme assertions).
+  Proven-fails-live on pristine v0.51.0 (12 red). The guard's own discipline caught two draft bugs
+  (first-match-only scan; over-wide sweep flagging member scripts).
+- **Release mechanics:** 67-file ZIP (27 admin pages + 20 member pages buster-only + 13 JS + 2 CSS +
+  index.js + 3 tests + README) · index.js bump byte-verified one-line diff (F-34) · buster sweep
+  single value 0.52.0 (284 refs, delta accounted: −1 deleted FALLBACK literal, +27 header imgs) ·
+  both manifest ratchets PASS · no migration (ledger stays 0033, orgs = 6).
 
-- Auto-recorded by CI on deploy. `/api/health` reported `v0.51.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
+## v0.51.0 — 2026-08-02 (Announcements authoring + shared buttons + pre-paint collapse)
 
-## v0.50.0 — 2026-08-02
+- Admin **Announcements authoring page** — staff CRUD over `/api/admin/announcements` (cta vs news,
+  schedule window, live preview in the member's exact markup); rail item on all 27 pages.
+- **One shared button set** in app.css; per-page `.btn` redefinitions deleted on 6 pages
+  (uiux-review §4 — the per-page copies were the collapse/styling drift root cause).
+- **Pre-paint collapse state** via `bt_nav` cookie snippet on every admin page — no post-paint snap.
+- Suite 588 → 604. No migration.
 
-- Auto-recorded by CI on deploy. `/api/health` reported `v0.50.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
+## v0.50.0 — 2026-08-02 (R3 member home · announcements · sub availability · org brand)
 
-## v0.49.0 — 2026-08-02
+- **R3 member home:** announcement box (admin CTA pinned + non-mutable, per-item/per-category mutes,
+  aggregated feed), results/messages/my-events cards, sub-play CTA row.
+- **Sub availability** (passive/active + level → LFG) · **public org-brand endpoint** ·
+  org-branded member rail.
+- **Migration 0033** (announcements) — ledger 0032 → 0033, gate ratchet in the same package.
+- Suite → 588.
 
-- Auto-recorded by CI on deploy. `/api/health` reported `v0.49.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
+## v0.49.1 — 2026-08-02 **[RECONSTRUCTED — summary only]** (Hotfix)
 
-## v0.46.0 — 2026-08-02
+- config.js restored on 5 dead admin pages; headers on lfg/help; every js/css ref now bustered;
+  page-shell + bare-ref guards added. (No CI stub was recorded for this hotfix; entry restored from
+  the README v0.52.0 module table.)
 
-- Auto-recorded by CI on deploy. `/api/health` reported `v0.46.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
+## v0.49.0 — 2026-08-02 (Header Admin switch)
 
-## v0.45.0 — 2026-08-02
+- Header **Admin switch** for staff-who-play — site-nav.js v2.11 injects a Control Center button on
+  member pages for `admin`/`staff` roles, next to the mail icon.
 
-- Auto-recorded by CI on deploy. `/api/health` reported `v0.45.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
+## v0.48.0 — 2026-08-02 (Header mail icon)
 
-## v0.44.0 — 2026-08-01
+- **Header mail icon on both shells** — site-nav.js v2.10 / admin injector v2.17, single-source
+  injectors (superseded on the admin side by the v0.52.0 static header).
 
-- Auto-recorded by CI on deploy. `/api/health` reported `v0.44.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
+## v0.47.0 — 2026-08-02 **[RECONSTRUCTED — summary only]**
 
-## v0.43.0 — 2026-07-31
+- **Static rail inlined on all 26 admin pages** — kills the build-after-paint pop (uiux-review §3A).
+  Attribution corroborated by in-source "ships in v0.47.0" headers.
 
-- Auto-recorded by CI on deploy. `/api/health` reported `v0.43.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
+## v0.46.0 — 2026-08-02 **[RECONSTRUCTED — summary only]**
 
-## v0.42.0 — 2026-07-31
+- **Org-brand groundwork + contrast/emphasis tokens** — `--emphasis`/`--gold-ink` introduced; raw
+  `--accent` gold-as-text offenders swapped (uiux-review §1, AA pass). Corroborated by in-source
+  "ships in v0.46.0" / "since v0.46.0" headers.
 
-- Auto-recorded by CI on deploy. `/api/health` reported `v0.42.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
+## v0.45.0 — 2026-08-01 (LFG & Community Play — rebuilt against v0.44.0)
 
-## v0.41.0 — 2026-07-31
+**Lineage note:** the first v0.45.0 build (same day) was cut against v0.43.0 and its ZIP was never
+uploaded; the retired v0.44.0 ZIP was. This release is the same LFG scope rebuilt as the linear
+successor to actual HEAD v0.44.0. Migration 0031 was already applied to live D1 by the first build —
+its file ships here, reconstructed byte-faithful from the live schema, idempotent.
 
-- Auto-recorded by CI on deploy. `/api/health` reported `v0.41.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
+- **Worker:** `lfg.js` v1.0 NEW — two-way community board (owner spec 2026-08-01): `team_need` (any
+  member posts; the team shell forms immediately), `player_avail`, and free-form `casual` games (no
+  facility link — park, another gym, anywhere). Member routes: list/post listings · join (returns
+  the "on N team(s)" heads-up) · withdraw (inside `BAIL_WINDOW_HOURS = 12` of game time counts as a
+  bail — one edit to 24) · close · report-no-show (poster only, only after game time, only for
+  committed players). Escalation: first reported no-show → yellow ⚠ caution for 14 days → second →
+  30-day LFG ban + red ⚠ wherever the person appears in groups → auto-unban by time, strikes
+  consumed. Reliability is showed/bailed **counts, never a rating**. 18+ fail-closed on the shared
+  `family.js isMinor` (unknown birthdate = blocked). In-app messaging only (messages.js relay).
+  Flood guard `OPEN_LISTINGS_MAX = 5`. Staff: strikes/bans view + early unban. In-app notification
+  to the member on strike and on ban.
+- **Worker:** `index.js` — wire + dispatch + version v0.45.0 (4 hunks, byte-verified).
+- **DB:** migration `0031` file lands (APPLIED 2026-08-01; ledger row exists; file is a no-op
+  re-run). `schema_gate.test.mjs` v1.6 — ratchet 30 → 31 in the same package.
+- **Web:** `lfg.html` + `assets/lfg.js` v1.0 NEW — board with kind tabs, inline post form,
+  reliability strip, roster caution marks, bail-window confirm, relay compose. `home.html` v1.5.0 /
+  `home.js` v1.4.0 — Community-play opportunities card, per-category toggles ON by default
+  (`localStorage bt_lfg_prefs`). `site-nav.js` v2.8 — Explore link. Buster sweep: 43 pages →
+  `?v=0.45.0`.
+- **Tests:** 520 → **537/537** (17 new). The LFG org-scope guard is anchored per
+  `env.DB.prepare(` call with a miss counter — the first draft read whole-file strings and an
+  apostrophe in a comment blinded it to 22 of 33 queries (failure class 3, caught by its own count
+  assertion). Negative controls prove the scan fails both ways; prove-it-fails ran on the org-scope
+  guard and the §6.5 mount guard, red on mutation, green on byte-identical restore.
 
-## v0.40.0 — 2026-07-31
+## v0.44.0 — 2026-08-01 **[RECONSTRUCTED — summary only]**
 
-- Auto-recorded by CI on deploy. `/api/health` reported `v0.40.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
+- Part of the delivery-gate hardening / org-logos arc (README: v0.33–v0.44). Migration
+  `0032_org-reconciliation` (2026-08-01) dates to this release window. Session handoff superseded
+  before the entry was filled; detail not further recoverable.
 
-## v0.39.0 — 2026-07-31
+## v0.43.0 — 2026-07-31 **[RECONSTRUCTED — summary only]**
 
-- Auto-recorded by CI on deploy. `/api/health` reported `v0.39.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
+- Delivery-gate hardening arc; a "v0.43 owner check" remains a carried blocker in the handoff.
+  Detail not further recoverable.
 
-## v0.38.0 — 2026-07-31
+## v0.42.0 — 2026-07-31 **[RECONSTRUCTED — summary only]**
 
-- Auto-recorded by CI on deploy. `/api/health` reported `v0.38.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
+- Delivery-gate hardening / SMS-era arc (migrations `0029_sms` 2026-07-31, `0030_sms_campaigns`
+  2026-08-01 fall in the v0.38–v0.44 window; SMS later FROZEN by owner). Detail not further
+  recoverable.
 
-## v0.37.0 — 2026-07-30
+## v0.41.0 — 2026-07-31 **[RECONSTRUCTED — summary only]**
 
-- Auto-recorded by CI on deploy. `/api/health` reported `v0.37.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
+- Same arc as v0.42.0. Detail not further recoverable.
 
-## v0.36.0 — 2026-07-30
+## v0.40.0 — 2026-07-31 **[RECONSTRUCTED — summary only]**
 
-- Auto-recorded by CI on deploy. `/api/health` reported `v0.36.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
+- Same arc as v0.42.0. Detail not further recoverable.
+
+## v0.39.0 — 2026-07-31 **[RECONSTRUCTED — summary only]**
+
+- **Kiosk scan** ships in this release window (the "v0.39 kiosk scan" owner check is a carried
+  handoff blocker). Migration `0027_kiosk` (2026-07-30) precedes it. Detail not further recoverable.
+
+## v0.38.0 — 2026-07-31 **[RECONSTRUCTED — summary only]**
+
+- Delivery-gate hardening arc. Detail not further recoverable.
+
+## v0.37.0 — 2026-07-30 **[RECONSTRUCTED — summary only]**
+
+- Arc window for migrations `0026_subs`, `0027_kiosk`, `0028_faq` (all 2026-07-30) — subs, kiosk,
+  FAQ modules land in v0.36–v0.37. Detail not further recoverable.
+
+## v0.36.0 — 2026-07-30 (CHANGELOG auto-entry + tokens guard era)
+
+- **`worker/scripts/changelog-entry.mjs` v1.0 + `changelog_entry.test.mjs` v1.0 ship** [FACT —
+  in-source headers]: CI auto-prepends a deploy stub (idempotent, prepend-only, title-anchored,
+  tail-SHA-verified) so a release can never be missing from history. The paste-block ritual was
+  retired here — which is why v0.36–v0.51 sat as stubs until this 2026-08-02 reconstruction.
+- Remainder of the release: delivery-gate hardening arc. Detail not further recoverable.
+- **Lineage note:** no deploy record exists for v0.34.0 or v0.35.0 (no CI stub, no README row, no
+  in-source attribution). Consistent with the version-number skip precedent at v0.15 — these
+  numbers are treated as skipped, not lost.
 
 ## v0.33.2 — 2026-07-29
 - **F-35 — focus ring covered 3 element types out of every focusable.** `web/assets/tokens.css` v0.4.0 introduces a `--focus-ring` token (light `#1B2A4A` = `--primary`; dark `#F2F0EA` = `--text`, deliberately not gold — `--primary` and `--accent` both resolve to `#D4AF37` in dark) and replaces the `input, select, textarea:focus-visible` rule with a bare `:focus-visible` at 2px/2px. Measured at abdc64f: 38 of 39 HTML files contain a focusable, 26 had no ring rule at all and fell through to the UA default. Ring contrast computed, not assumed: 14.22:1 / 13.26:1 light, 17.26:1 / 16.13:1 / 15.07:1 dark — all clear WCAG 2.1 SC 1.4.11 (≥3:1) by 4×. The token values are written as literals, not `var(--primary)`/`var(--text)`, so a future edit to either cannot silently reintroduce a gold ring. This also corrects the recorded F-24 framing: the v0.2.1 ring was already 2px; the `1px` was `outline-offset`, not width.
