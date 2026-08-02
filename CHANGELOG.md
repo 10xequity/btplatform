@@ -2,7 +2,37 @@
 
 ## v0.55.0 — 2026-08-02
 
-- Auto-recorded by CI on deploy. `/api/health` reported `v0.55.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
+- **`build-status.js` v1.1 — the tester-facing registry was stale, and two entries were wrong.**
+  This file exists to be believed by someone who cannot read the code, so a wrong row does not
+  merely mislead: it manufactures bug reports about correct behaviour and discredits every other
+  row. Two entries told testers the door **refuses** a member with no current waiver. That gate was
+  removed in v0.33.1 on the owner's instruction (D-MIN-8, "no gating") and `checkin.js` v1.3
+  replaced it with a non-blocking advisory. The roadmap audit had recorded **one** instance; there
+  were **two** — the audit was narrower than its subject, the exact failure class it was auditing for.
+- **16 of 45 pages had no registry entry**, so they rendered to testers as finished with no caveat
+  — including `admin-sms`, which cannot send anything at all (Twilio frozen). All now registered.
+- **Four features marked "soon" had already shipped**, each re-checked against source rather than
+  against the roadmap: teammate self-sign links and the media-release opt-out record (v0.25,
+  `consent.js`), Player Exchange substantially (v0.45, `lfg.js` — roster RSVP is what remains),
+  and SMS (built, then frozen — now `wip`, not `soon`). The `.ics` row claimed no feed button
+  existed anywhere, while `admin-calendar` has had one for three releases.
+- **`build_status.test.mjs` v1.0 (+10 tests) so it cannot rot again.** A coverage ratchet fails the
+  suite when a new `web/*.html` has no registry entry, scanning the widest set with a floor so an
+  empty scan cannot pass. A copy-vs-code ratchet forbids any tester-facing text claiming a waiver
+  gate while `checkin.js` has none. NC-6 exists because the first draft failed for the *opposite*
+  of its purpose: `checkin.js`'s header documents the removal by naming the deleted symbols, so a
+  raw scan found "the gate" inside the sentence announcing its deletion.
+- **The CI syntax gate could not fail — fixed** (workflow edit, owner OK). `node --check <file>`
+  exits 0 for any `.js` containing `export`/`import` even when unparseable, reproduced on Node
+  22.23.2 (CI's pin) and 24.18.1. All 37 modules are ESM, so step 1 of the gate had been passing
+  unconditionally since v0.2.x while printing "N modules OK" — failure class 3, inside the gate
+  itself. It now pipes each file to `node --check --input-type=module` and **self-tests against a
+  deliberately broken module first**: if the check ever stops being able to fail, the build stops
+  rather than reporting clean. This release's CI log reads
+  `syntax: 37 modules parse (stdin form; self-test proved the check can fail)`.
+- **README §Roadmap is now a pointer** to `docs/2026-08-02_roadmap_v1_0.md`. Its old inline queue
+  still listed the v0.51.0 and v0.52.0 work as upcoming.
+- Suite **660 → 670**, all passing.
 
 ## v0.54.0 — 2026-08-02
 
