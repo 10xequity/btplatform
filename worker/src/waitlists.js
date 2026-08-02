@@ -40,10 +40,24 @@ export function computeIsFull(capacity, activeCount) {
   return Number(activeCount) >= cap;
 }
 
+/**
+ * Timestamps reach us in two shapes: SQLite datetime() form ("2026-07-25 12:00:00", written by
+ * nextOfferExpiry below) and true ISO ("2026-07-25T12:00:00Z"). Both are UTC, but the SQLite
+ * form carries no zone marker, so a bare Date.parse reads it as LOCAL time — an offer written
+ * as UTC then stayed live for the runtime's UTC offset past its expiry. Production runs UTC so
+ * the offset was zero and the defect was invisible; it surfaced on a UTC-6 dev machine.
+ * Same normalise-then-parse idiom as consent.parseTs and tiers.effectiveGrant.
+ */
+function ms(v) {
+  let s = String(v).trim().replace(" ", "T");
+  if (!/[Zz]$|[+-]\d{2}:?\d{2}$/.test(s)) s += "Z";
+  return Date.parse(s);
+}
+
 /** An offer with no expiry never expires; otherwise compare ISO strings as dates. */
 export function offerExpired(nowIso, expiresIso) {
   if (!expiresIso) return false;
-  const now = Date.parse(nowIso), exp = Date.parse(expiresIso);
+  const now = ms(nowIso), exp = ms(expiresIso);
   // Fail closed. A corrupt expires_at previously read as "no expiry", so a claim link stayed
   // live forever — same bug class as the token defect in handoff 2.8 §2a.
   if (!Number.isFinite(exp)) return true;

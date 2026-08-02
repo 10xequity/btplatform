@@ -163,7 +163,9 @@ test("inbound webhook checks X-Twilio-Signature before touching the database", (
 });
 
 test("NC-2: stripping the signature check from the real source fails the order guard", () => {
-  const mutated = smsSrc.replace(/const ok = await validateTwilioSignature\([\s\S]*?\);\n\s*if \(!ok\) return[^;]*;/, "const ok = true;");
+  // \s* not \n\s* — core.autocrlf checks this file out CRLF on Windows, and a literal \n
+  // never matched, so the mutation silently no-opped and the NC proved nothing locally.
+  const mutated = smsSrc.replace(/const ok = await validateTwilioSignature\([\s\S]*?\);\s*if \(!ok\) return[^;]*;/, "const ok = true;");
   assert.notEqual(mutated, smsSrc, "mutation did not land — NC is vacuous");
   assert.throws(() => signatureOrderGuard(mutated), "guard passed an unvalidated webhook");
 });

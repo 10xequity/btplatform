@@ -299,7 +299,11 @@ test("no member page script keeps a theme/logout copy (deleted blocks must not r
 });
 
 test("NC-M1: removing #btHdrMail from a member header fails completeness", () => {
-  const html = read("home.html").replace(/<a id="btHdrAdmin"[\s\S]*?<\/a>\n/, "$&").replace(/<a id="btHdrMail"[^>]*>✉<\/a>\n/, "");
+  // \r?\n, not \n: core.autocrlf checks home.html out CRLF on Windows, so the strip never
+  // matched and the NC passed an UNMUTATED page — proving nothing. Assert the cut landed.
+  const raw = read("home.html");
+  const html = raw.replace(/<a id="btHdrMail"[^>]*>✉<\/a>\r?\n/, "");
+  assert.notEqual(html, raw, "mutation did not land — NC is vacuous");
   assert.equal(memberHeaderVerdict(html).ok, false);
 });
 

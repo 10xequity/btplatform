@@ -1,0 +1,108 @@
+/* Boomtown Platform — preflight decision tests
+   File: worker/test/preflight.test.mjs · Version: v1.0 · Date: 2026-08-02 · Ships in: v0.54.0
+   Pure decision functions only — no git, no network, no D1 (schema_gate.test.mjs precedent).
+   Every verdict ships a negative control that PROVES it can say no (standards §6): a preflight
+   that cannot block is worse than none, because direct-commit trusts it in place of the human
+   checkpoint the ZIP drag used to provide. */
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { parseTestTotals, sourceVersion, schemaVerdict, gitVerdict, syntaxErrorFor } from "../scripts/preflight.mjs";
+
+/* ---------- syntaxErrorFor ---------- */
+
+test("syntaxErrorFor accepts a valid ES module", () => {
+  assert.equal(syntaxErrorFor('export const a = 1;\nexport function f() { return a; }\n'), null);
+});
+
+test("NC-0: a broken ES MODULE is caught — the hole `node --check <file>` cannot see", () => {
+  // Node 24.18.1: `node --check f.js` exits 0 for any .js carrying export/import even when it
+  // is unparseable. All 37 worker modules are ESM, so the file-path form guards nothing here.
+  // If this NC ever passes null, the syntax check has silently gone blind across the tree.
+  const err = syntaxErrorFor('export const a = 1;\nfunction ((((broken {\n');
+  assert.notEqual(err, null, "a syntax error in an ESM file must be caught, not skipped");
+  assert.match(err, /Error/);
+});
+
+test("NC-0b: a broken script with no ESM syntax is also caught", () => {
+  assert.notEqual(syntaxErrorFor('function ((((broken {\n'), null);
+});
+
+/* ---------- parseTestTotals ---------- */
+
+const SUMMARY = [
+  "ℹ tests 645", "ℹ suites 0", "ℹ pass 645", "ℹ fail 0", "ℹ cancelled 0", "ℹ skipped 0",
+].join("\n");
+
+test("parseTestTotals reads the real node:test summary", () => {
+  assert.deepEqual(parseTestTotals(SUMMARY), { tests: 645, pass: 645, fail: 0 });
+});
+
+test("parseTestTotals reads a failing run without rounding it down to green", () => {
+  const t = parseTestTotals(SUMMARY.replace("pass 645", "pass 642").replace("fail 0", "fail 3"));
+  assert.equal(t.fail, 3);
+  assert.equal(t.pass, 642);
+});
+
+test("NC-1: a truncated run returns null, never a zero-failure reading", () => {
+  // The v0.33.1 lesson: an absent number and a measured zero must not look alike. A crashed
+  // run that parsed as {fail: 0} would let a broken suite through the gate.
+  assert.equal(parseTestTotals("ℹ tests 645\nℹ pass 645"), null, "missing 'fail' must not default to 0");
+  assert.equal(parseTestTotals(""), null);
+  assert.equal(parseTestTotals("Segmentation fault"), null);
+});
+
+test("NC-2: prose containing the words must not be mistaken for the summary", () => {
+  assert.equal(parseTestTotals("all tests pass and none fail, honest"), null);
+});
+
+/* ---------- sourceVersion ---------- */
+
+test("sourceVersion extracts the health literal", () => {
+  assert.equal(sourceVersion('res = json({ ok: true, version: "v0.53.1" });'), "v0.53.1");
+  assert.equal(sourceVersion('version:   "v1.20.300"'), "v1.20.300");
+});
+
+test("NC-3: a missing or malformed version reads as null, not as a guess", () => {
+  assert.equal(sourceVersion("res = json({ ok: true });"), null);
+  assert.equal(sourceVersion('version: "0.53.1"'), null, "no 'v' prefix is not the shipped form");
+  assert.equal(sourceVersion('version: "v0.53"'), null, "two-part version is not the shipped form");
+});
+
+/* ---------- schemaVerdict ---------- */
+
+test("schemaVerdict passes when D1 matches or leads the repo", () => {
+  assert.equal(schemaVerdict(33, 33).status, "ok");
+  // Applied migrations get pruned from the repo, so D1 ahead is normal (library §3).
+  assert.equal(schemaVerdict(33, 40).status, "ok");
+});
+
+test("NC-4: code ahead of schema BLOCKS — the 2026-07-27 break", () => {
+  const v = schemaVerdict(34, 33);
+  assert.equal(v.status, "fail", "a repo migration D1 has not applied must block, not warn");
+  assert.match(v.detail, /0034/);
+});
+
+test("NC-5: an unreadable D1 warns and never launders into a pass", () => {
+  const v = schemaVerdict(33, null);
+  assert.equal(v.status, "warn", "'I could not look' must not report as 'it is fine'");
+  assert.notEqual(v.status, "ok");
+});
+
+/* ---------- gitVerdict ---------- */
+
+const CLEAN = { branch: "main", dirty: 0, behind: 0, ahead: 0, fetched: true };
+
+test("gitVerdict passes on a fetched, in-sync branch", () => {
+  assert.equal(gitVerdict(CLEAN).status, "ok");
+  assert.equal(gitVerdict({ ...CLEAN, dirty: 5, ahead: 2 }).status, "ok", "uncommitted work is normal mid-session");
+});
+
+test("NC-6: being behind origin BLOCKS — building on a stale tree is the defect it exists for", () => {
+  const v = gitVerdict({ ...CLEAN, behind: 5 });
+  assert.equal(v.status, "fail");
+  assert.match(v.detail, /5 commit/);
+});
+
+test("NC-7: an unfetched branch warns — unknown sync state is not a clean one", () => {
+  assert.equal(gitVerdict({ ...CLEAN, fetched: false }).status, "warn");
+});

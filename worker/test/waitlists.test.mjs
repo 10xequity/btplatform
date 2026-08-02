@@ -34,6 +34,18 @@ test("expiry boundary — expired only strictly after", () => {
   assert.equal(offerExpired("2026-07-25T12:00:01Z", "2026-07-25 12:00:00"), true);
   assert.equal(offerExpired("2026-07-24T12:00:00Z", "2026-07-25 12:00:00"), false);
 });
+/* Round-trip: nextOfferExpiry WRITES the zone-less SQLite form and offerExpired READS it.
+   Untested until v0.53.x, and that gap hid a real defect — the reader parsed the zone-less
+   string as local time, so on a UTC-6 runtime a 48h offer stayed claimable for 54h. These
+   assertions are timezone-independent: both sides derive from the same instant. */
+test("offer TTL round-trip survives a non-UTC runtime", () => {
+  const now = Date.parse("2026-07-25T12:00:00Z");
+  const expiresAt = nextOfferExpiry(now, 48);
+  const at = (ms) => new Date(now + ms).toISOString();
+  assert.equal(offerExpired(at(47 * 3600e3), expiresAt), false, "live an hour before expiry");
+  assert.equal(offerExpired(at(48 * 3600e3), expiresAt), false, "live at the exact boundary");
+  assert.equal(offerExpired(at(48 * 3600e3 + 1000), expiresAt), true, "dead a second after");
+});
 
 /* ---------- normalizeJoin ---------- */
 test("valid join normalizes email + trims", () => {

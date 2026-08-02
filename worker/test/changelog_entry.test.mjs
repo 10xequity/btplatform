@@ -10,8 +10,11 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const SCRIPT = new URL("../scripts/changelog-entry.mjs", import.meta.url).pathname;
+// fileURLToPath, not .pathname — on Windows .pathname yields "/D:/..." with a leading
+// slash, which is not a valid path, so every spawn below fails to find the script.
+const SCRIPT = fileURLToPath(new URL("../scripts/changelog-entry.mjs", import.meta.url));
 const TITLE = "# Boomtown Platform — CHANGELOG";
 const FIXTURE = `${TITLE}\n\n## v0.36.0 — 2026-07-30\n\n- Existing entry.\n\n## v0.35.0 — 2026-07-29\n\n- Older entry.\n`;
 

@@ -205,7 +205,12 @@ test("NC-5: removing the snippet from a real admin page fails the verdict", () =
 test("NC-6: moving the snippet BELOW the stylesheets fails (pre-paint means before CSS)", () => {
   const [name, html] = [...rawCorpus()].find(([, h]) => prePaintVerdict(h).applies && prePaintVerdict(h).ok);
   const snip = html.match(SNIPPET_RE)[0];
-  const mutated = html.replace(snip + "\n", "").replace("</head>", snip + "\n</head>");
+  // Cut by index, not by matching snip + "\n": core.autocrlf checks these pages out CRLF on
+  // Windows, so the literal \n never matched, the snippet was never removed, and the "moved"
+  // copy just made it appear twice — the verdict still passed and the NC proved nothing.
+  const at = html.indexOf(snip);
+  const withoutSnip = html.slice(0, at) + html.slice(at + snip.length).replace(/^\r?\n/, "");
+  const mutated = withoutSnip.replace("</head>", snip + "\n</head>");
   assert.equal(prePaintVerdict(mutated).ok, false,
     `snippet after CSS in ${name} must fail — order is the subject, not presence`);
 });
@@ -248,15 +253,21 @@ test("every member page carries the pre-paint THEME snippet, before CSS, byte-id
   assert.equal(new Set(snippets.values()).size, 1, "member snippet not byte-identical across pages");
 });
 
+/* \r?\n, not \n: core.autocrlf checks web/*.html out CRLF on Windows, so a trailing literal
+   \n never matched — NC-8's strip silently no-opped and NC-9's match threw. Both NCs proved
+   nothing locally while reporting clean on CI. Same defect class as NC-6 above. */
+const MEMBER_SNIPPET_RE = /<script>\/\* Pre-paint theme[\s\S]*?<\/script>\r?\n/;
+
 test("NC-8: removing the member snippet from a real page fails the verdict", () => {
-  const html = readFileSync(new URL("home.html", WEB_DIR), "utf8")
-    .replace(/<script>\/\* Pre-paint theme[\s\S]*?<\/script>\n/, "");
+  const raw = readFileSync(new URL("home.html", WEB_DIR), "utf8");
+  const html = raw.replace(MEMBER_SNIPPET_RE, "");
+  assert.notEqual(html, raw, "mutation did not land — NC is vacuous");
   assert.equal(memberSnippetVerdict(html).ok, false);
 });
 
 test("NC-9: a member snippet moved below the stylesheets fails (pre-paint means before CSS)", () => {
   const html = readFileSync(new URL("home.html", WEB_DIR), "utf8");
-  const m = html.match(/<script>\/\* Pre-paint theme[\s\S]*?<\/script>\n/)[0];
+  const m = html.match(MEMBER_SNIPPET_RE)[0];
   const moved = html.replace(m, "").replace("</head>", m + "</head>");
   assert.equal(memberSnippetVerdict(moved).ok, false);
 });
