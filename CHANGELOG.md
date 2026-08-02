@@ -1,5 +1,52 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.53.1 — 2026-08-02
+
+- **Patch release from an external code review of v0.53.0.** Five findings were raised; three
+  adopted, one adopted in part, one rejected with a measurement. Every verdict was settled by
+  running the code, not by reading it.
+- **`site-nav.js` v2.14 — two source fixes.**
+  (a) `headerMailFill` builds the unread badge with `createElement` + `textContent` instead of a
+  template literal through `insertAdjacentHTML`, and is now **idempotent** (it reuses or removes
+  an existing `.badge`). v2.13 appended unconditionally: the deleted v2.10 injector had carried
+  an idempotency guard, and deleting the injector deleted the guard with it. The XSS framing in
+  the review was **not** reachable — `/api/messages/unread-count` returns `SELECT COUNT(*)`, an
+  integer that cannot carry markup — but the DOM form removes the latent hazard if that endpoint
+  ever changes shape, so the fix ships on robustness grounds rather than security grounds.
+  (b) **`#logoutBtn` is revealed synchronously from the local token**, not from inside the
+  `/api/me` branch. In v2.13 a slow or 5xx `/api/me` left a signed-in member with a hidden Sign
+  out button and no way to end the session. Revealing on a stale token is the correct failure
+  direction: the click clears it and lands on login.
+- **`header_shell.test.mjs` v2.1 — a BLIND guard closed.** The v2.0 `#btHdrAdmin` check was an
+  alternation whose second branch omitted the href, so a header with
+  `href="https://evil.example/"` **passed**. Proven by mutation before the fix. Replaced with
+  per-attribute assertions on the extracted tag, which is additionally immune to attribute ORDER
+  — the reviewer's proposed replacement regex still failed when `hidden` preceded `href`.
+  NC-M7 now pins the hijack red and NC-M8 pins order-independence green.
+- **New invariant guard: the nav module must run after the header parses.** Nothing asserted it,
+  yet the entire single-source binding model depends on it — if `site-nav.js` ran first,
+  `getElementById("btHdrMail")` returns null, `canonHdr` goes false, and the theme toggle
+  silently stops binding on all 13 pages while every string scan stays green. Member pages
+  satisfy this with `defer`, admin pages with end-of-body placement, so the guard accepts
+  **either**. The first draft demanded `defer` specifically and went red on 27 correct admin
+  pages: the guard was wrong, not the code. Kept as a worked example, with NC-M10 pinning the
+  no-false-positive case.
+- **`brand.test.mjs` v2.1 — review adopted in part, and measured before choosing.** `\s+` and
+  the `i` flag adopted for the TITLE and LITERAL patterns (they catch a line-wrapped
+  `Boomtown\n  Volleyball` and lowercase drift, both of which v2.0 missed). **Rejected for the
+  WORDMARK pattern:** `\s+` requires whitespace, so `Boomtown<span>Volleyball</span>` would stop
+  matching — a strict narrowing of a guard, the exact failure class this file's self-count
+  exists to prevent. Both directions were run before the call. NC-4 now pins the no-space form.
+- **`header_actions.test.mjs` v3.1 — guards for the two source fixes.** They exist because the
+  first prove-it-fails run on this release came back **green**: the source had been fixed with no
+  assertion behind it. Added, and both now go red against the shipped v0.53.0 tree.
+- **Also in this release: the v0.53.0 `CHANGELOG.md` that never landed.** The v0.53.0 drag placed
+  68 of 69 files (verified byte-identical against the intended tree); `CHANGELOG.md` was missed,
+  so CI wrote a stub for v0.53.0 and the reconstructed v0.36–v0.52 history stayed absent. This
+  release carries the full file.
+- Suite **631 → 644**, 0 fail. Buster single value 0.53.1 across 300 refs. `index.js` bump
+  byte-verified as a one-line diff. No migration — ledger stays 0033.
+
 ## v0.53.0 — 2026-08-02 (Unified static MEMBER header + brand rename applied)
 
 - **D-ORG-5 APPLIED to live D1** (owner-approved this session): `orgs` id 1 renamed

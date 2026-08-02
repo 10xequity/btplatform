@@ -1,6 +1,20 @@
 /**
  * Boomtown Platform — unified admin header guard
- * File: worker/test/header_shell.test.mjs · Version: v2.0 · Date: 2026-08-02 · Ships in: v0.53.0 (v1.0 v0.52.0)
+ * File: worker/test/header_shell.test.mjs · Version: v2.1 · Date: 2026-08-02 · Ships in: v0.53.1 (v2.0 v0.53.0 · v1.0 v0.52.0)
+ *
+ * v2.1 (v0.53.1, external code review): TWO GUARD DEFECTS FIXED, both of the class this file
+ * exists to prevent — an assertion that passes while the thing it claims to check is broken.
+ *   (a) the v2.0 #btHdrAdmin check was an alternation whose second branch omitted the href, so
+ *       a hijacked `href="https://evil.example/"` passed. Proven: the sabotaged header returned
+ *       true. Replaced with per-attribute assertions on the extracted tag, which is also immune
+ *       to attribute ORDER (the reviewer's proposed regex still failed on `hidden` before `href`).
+ *   (b) nothing asserted that the nav module runs AFTER the header parses. The entire
+ *       single-source binding model depends on it: if site-nav.js ran first,
+ *       getElementById("btHdrMail") returns null, canonHdr goes false, and the theme toggle
+ *       silently stops binding on all 13 pages with every string-scan still green. Member pages
+ *       satisfy this with `defer`, admin pages with end-of-body placement, so the guard accepts
+ *       EITHER. (The first draft demanded defer and went red on 27 correct admin pages — the
+ *       guard was wrong, not the code. Kept as a worked example of investigating before fixing.)
  *
  * v2.0 (v0.53.0): the MEMBER canonical header — 13 site-nav pages (every site-nav page
  * except index.html, whose reduced login header app.js owns) ship ONE static header,
@@ -212,7 +226,13 @@ function memberHeaderVerdict(html) {
   const missing = [];
   if (!/<img class="brand-logo" src="assets\/logo-boom-icon-512\.png\?v=/.test(h)) missing.push("static .brand-logo img");
   if (!/Boomtown <span>Athletics<\/span>/.test(h)) missing.push("Athletics wordmark");
-  if (!/id="btHdrAdmin"[^>]*href="admin\.html"[^>]*hidden|id="btHdrAdmin"[^>]*hidden/.test(h)) missing.push("hidden #btHdrAdmin");
+  const adminTag = h.match(/<a[^>]*id="btHdrAdmin"[^>]*>/);
+  if (!adminTag) missing.push("#btHdrAdmin");
+  else {
+    /* per-attribute, order-independent — v2.0's alternation let a hijacked href through */
+    if (!/\shref="admin\.html"/.test(adminTag[0])) missing.push('#btHdrAdmin href must be admin.html');
+    if (!/\shidden(\s|>)/.test(adminTag[0])) missing.push("#btHdrAdmin must ship hidden");
+  }
   if (!/id="btHdrMail"[^>]*href="member-inbox\.html"|href="member-inbox\.html"[^>]*id="btHdrMail"/.test(h)) missing.push("#btHdrMail → member-inbox.html");
   if (!h.includes('id="themeToggle"')) missing.push("#themeToggle");
   if (!/id="logoutBtn"[^>]*hidden/.test(h)) missing.push("hidden #logoutBtn");
@@ -306,4 +326,64 @@ test("NC-M5: stripping the bt_theme write from site-nav.js fails the theme verdi
 test("NC-M6: a re-added per-page theme copy fails the no-copy scan (exact subject line)", () => {
   const mutated = read("assets/score.js") + '\n  document.getElementById("themeToggle").onclick = () => {};';
   assert.ok(memberPageCopyVerdict(mutated).length >= 1, "the no-copy scan must catch a returned theme listener");
+});
+
+/* ═══════════════ v2.1 — script-loading contract (v0.53.1) ═══════════════ */
+
+/* The single-source model is only correct if the nav module runs AFTER the header markup is
+   parsed. TWO ways to satisfy that: `defer`, or a script tag positioned below the <header>.
+   Member pages use defer; admin pages put the tag at end-of-body. The guard asserts the
+   INVARIANT, not one implementation of it — the first draft demanded defer and went red on 27
+   correct admin pages. Either mechanism passes; neither present fails. */
+const runsAfterHeaderVerdict = (html, src) => {
+  const hdrAt = html.search(/<header[\s>]/);
+  const tags = [...html.matchAll(new RegExp(`<script[^>]+src="assets/${src}[^"]*"[^>]*>`, "g"))];
+  if (!tags.length) return { applies: false, ok: true };
+  const bad = tags.filter((m) => !/\sdefer(\s|>)/.test(m[0]) && !(hdrAt !== -1 && m.index > hdrAt));
+  return { applies: true, ok: bad.length === 0, bad: bad.map((m) => m[0]) };
+};
+
+test("every nav script runs after the header parses (defer, or positioned below it)", () => {
+  let checked = 0;
+  const offenders = [];
+  for (const f of htmlPages()) {
+    const html = read(f);
+    for (const src of ["site-nav.js", "admin-nav.js"]) {
+      const v = runsAfterHeaderVerdict(html, src);
+      if (!v.applies) continue;
+      checked++;
+      if (!v.ok) offenders.push(`${f} (${src}): ${v.bad.join(" ")}`);
+    }
+  }
+  assert.ok(checked >= 41, `guard floor: expected >=41 nav script tags, saw ${checked} (failure class 4)`);
+  assert.deepEqual(offenders, [],
+    `nav script may run before its header \u2014 header controls will not bind:\n${offenders.join("\n")}`);
+});
+
+test("NC-M7: a hijacked #btHdrAdmin href FAILS the verdict (v2.0 passed this — the fixed defect)", () => {
+  const html = read("home.html").replace('href="admin.html"', 'href="https://evil.example/pwn"');
+  assert.equal(memberHeaderVerdict(html).ok, false,
+    "the href hijack must fail — if it passes, the check is blind again");
+});
+
+test("NC-M8: attribute order on #btHdrAdmin does NOT matter (hidden before href still passes)", () => {
+  const html = read("home.html").replace(
+    /<a id="btHdrAdmin"([^>]*)href="admin\.html"([^>]*)hidden>/,
+    '<a id="btHdrAdmin"$1hidden$2href="admin.html">');
+  assert.equal(memberHeaderVerdict(html).ok, true, "the check must be order-independent");
+});
+
+test("NC-M9: a nav script ABOVE the header with no defer fails the verdict", () => {
+  const html = read("home.html");
+  const tag = html.match(/<script[^>]+src="assets\/site-nav\.js[^"]*"[^>]*>/)[0];
+  /* strip defer AND hoist it above the header — neither mechanism left */
+  const mutated = html.replace(tag, "").replace(/<header/, tag.replace(/\s*defer/, "") + "</script><header");
+  assert.equal(runsAfterHeaderVerdict(mutated, "site-nav.js").ok, false,
+    "a hoisted, non-deferred nav script must fail");
+});
+
+test("NC-M10: dropping defer is FINE when the tag already sits below the header (no false positive)", () => {
+  const mutated = read("home.html").replace('site-nav.js?v=0.53.1" defer', 'site-nav.js?v=0.53.1"');
+  assert.equal(runsAfterHeaderVerdict(mutated, "site-nav.js").ok, true,
+    "position alone satisfies the invariant \u2014 the guard must not demand defer specifically");
 });

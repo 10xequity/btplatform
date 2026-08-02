@@ -1,5 +1,13 @@
 /**
- * brand.test.mjs · v2.0 · 2026-08-02 · Ships in: v0.53.0 (v1.0 v0.46.0)
+ * brand.test.mjs · v2.1 · 2026-08-02 · Ships in: v0.53.1 (v2.0 v0.53.0 · v1.0 v0.46.0)
+ *
+ * v2.1 (external code review, PARTIALLY adopted): the reviewer proposed \s+ and the i flag on
+ * all three patterns. Adopted for TITLE and LITERAL — \s+ catches a line-wrapped
+ * "Boomtown\n  Volleyball" that v2.0's literal space missed, and i catches case drift. REJECTED
+ * for WORDMARK: \s+ REQUIRES whitespace, so "Boomtown<span>Volleyball</span>" (no space, which
+ * the real markup could legally be) would stop matching. That is a strict narrowing of a guard
+ * — the exact failure class this file's self-count exists to prevent. Verified both ways
+ * before choosing: \s* keeps the no-space form caught, \s+ drops it.
  *
  * v2.0 INVERTS v1.0: D-ORG-5 was APPLIED to live D1 on 2026-08-02 (org 1 renamed
  * "Boomtown Athletics", owner-approved this session), so the app brand and the legal
@@ -42,9 +50,9 @@ const stripJsBlockComments = (s) => s.replace(/\/\*[\s\S]*?\*\//g, "");
 /* v2.0: the whole literal is the offence — post-rename there is no legitimate use of the
    old brand anywhere in the product shell (comments included; the one historical comment in
    site-nav.js was rewritten to not carry the literal, deliberately). */
-const WORDMARK_OFFENCE = /Boomtown\s*<span>\s*Volleyball\s*<\/span>/g;
-const TITLE_OFFENCE = /Boomtown Volleyball<\/title>/g;
-const LITERAL_OFFENCE = /Boomtown Volleyball/g;
+const WORDMARK_OFFENCE = /Boomtown\s*<span>\s*Volleyball\s*<\/span>/gi; // \s* NOT \s+ — see v2.1 note
+const TITLE_OFFENCE = /Boomtown\s+Volleyball<\/title>/gi;
+const LITERAL_OFFENCE = /Boomtown\s+Volleyball/gi;
 
 /** Map<name, strippedText>. Pure over the fs reads so NCs can feed synthetic corpora. */
 function brandCorpus() {
@@ -118,4 +126,18 @@ test("NC-2: an offence inside a stripped HTML comment is invisible", () => {
 
 test("NC-3: an empty corpus cannot pass the self-count", () => {
   assert.ok(!(new Map().size >= 57), "an empty corpus must fail the miss-count floor");
+});
+
+test("NC-4: the wordmark pattern still catches the NO-SPACE form (\\s+ would not) — v2.1", () => {
+  const fake = new Map([["f.html", "Boomtown<span>Volleyball</span>"]]);
+  assert.ok(auditBrand(fake).length >= 1, "narrowing \\s* to \\s+ would blind this — regression guard");
+});
+
+test("NC-5: a LINE-WRAPPED stale brand literal is caught (v2.0 missed this) — v2.1", () => {
+  const fake = new Map([["f.js", "the Boomtown\n  Volleyball brand"]]);
+  assert.ok(auditBrand(fake).length >= 1, "\\s+ must span the newline");
+});
+
+test("NC-6: lowercase drift is caught by the i flag — v2.1", () => {
+  assert.ok(auditBrand(new Map([["f.js", "boomtown volleyball"]])).length >= 1);
 });

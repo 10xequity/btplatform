@@ -1,4 +1,14 @@
 /* Boomtown Platform — Site-wide sidebar navigation (shared)
+   v2.14 (v0.53.1, external code review 2026-08-02): two fixes from the review.
+   (1) headerMailFill builds the badge with DOM APIs instead of insertAdjacentHTML and is
+   IDEMPOTENT (reuses/removes an existing .badge). The v2.13 form appended unconditionally,
+   so any second run would have stacked a second badge — the v2.10 injector had an
+   idempotency guard and deleting the injector deleted the guard with it. The template
+   literal was not reachable as XSS (the endpoint returns SELECT COUNT(*), an integer) but
+   the DOM form removes the latent hazard if that endpoint ever changes shape.
+   (2) #logoutBtn is revealed SYNCHRONOUSLY from the local token, not from the /api/me
+   response. In v2.13 a slow or 5xx /api/me left a signed-in member with no way to sign out.
+   Revealing on a stale token is the better failure: the click clears it and returns to login.
    v2.13 (v0.53.0, owner 2026-08-02): the unified static MEMBER header (admin v0.52.0
    precedent, inverted here too). The v2.10 mail and v2.11 Admin-switch INJECTORS are
    DELETED — 13 member pages now ship one canonical static header (wordmark img + Admin
@@ -17,7 +27,7 @@
    empty — a member never sees a broken rail. (2) rail visual pass to the design guide:
    the brand card's hardcoded #000/#F2F0EA move behind tokens with the same literals as
    fallbacks (uiux-review §1 — the card is deliberately dark so gold-on-dark logos read).
-   File: web/assets/site-nav.js · Version: v2.13 · Date: 2026-08-02 · Ships in: v0.53.0
+   File: web/assets/site-nav.js · Version: v2.14 · Date: 2026-08-02 · Ships in: v0.53.1
    v2.11: header "Admin" switch (owner 2026-08-02) — staff/admin who are also players get a
    header button on member pages to jump back to the Control Center, next to the mail icon
    and theme toggle. Clears bt_demo_member on click (same escape as the exit pill). Role-gated
@@ -118,6 +128,10 @@
       if (lbl) lbl.textContent = next === "dark" ? "Dark (black & gold)" : "Light (white & navy)";
     });
     const lo = document.getElementById("logoutBtn");
+    /* v2.14: reveal from the LOCAL token, synchronously. Waiting on /api/me meant a slow or
+       failing call left a signed-in member unable to sign out. A stale token showing the
+       button is the safe direction — clicking it clears the token and lands on login. */
+    if (lo && token) lo.hidden = false;
     if (lo) lo.addEventListener("click", async () => {
       try { await fetch(API + "/api/auth/logout", { method: "POST", headers: authHeaders(), credentials: "include" }); } catch (e) {}
       try { sessionStorage.removeItem("bt_token"); sessionStorage.removeItem("bt_demo_member"); } catch (e) {}
@@ -168,15 +182,21 @@
         const a = document.getElementById("btHdrMail");
         if (!a) return;
         a.setAttribute("aria-label", inboxUnread ? "Messages — " + inboxUnread + " unread" : "Messages");
+        /* v2.14: DOM APIs, idempotent. textContent can never be parsed as markup, and
+           reusing/removing an existing .badge means a second run cannot stack a second one. */
+        let badge = a.querySelector(".badge");
         if (inboxUnread) {
           a.style.position = "relative";
-          a.insertAdjacentHTML("beforeend", `<span class="badge" style="position:absolute;top:2px;right:2px;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:var(--accent);color:var(--gold-ink);font-size:11px;font-weight:800;display:grid;place-items:center">${inboxUnread > 9 ? "9+" : inboxUnread}</span>`);
+          if (!badge) {
+            badge = document.createElement("span");
+            badge.className = "badge";
+            badge.setAttribute("style", "position:absolute;top:2px;right:2px;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:var(--accent);color:var(--gold-ink);font-size:11px;font-weight:800;display:grid;place-items:center");
+            a.appendChild(badge);
+          }
+          badge.textContent = inboxUnread > 9 ? "9+" : String(inboxUnread);
+        } else if (badge) {
+          badge.remove();
         }
-      })();
-      /* v2.13: reveal Sign out for any signed-in member (button ships hidden, static). */
-      (function logoutReveal() {
-        const lo = document.getElementById("logoutBtn");
-        if (lo && document.getElementById("btHdrMail")) lo.hidden = false;
       })();
       NAV.push({ label: "You", items: [
         { href: "home.html",     ico: "▦", text: "My Dashboard" },
@@ -302,7 +322,7 @@
       if (window.BT_STATUS || document.getElementById("bt-status-js")) return;
       var s = document.createElement("script");
       s.id = "bt-status-js";
-      s.src = "assets/build-status.js?v=0.53.0";
+      s.src = "assets/build-status.js?v=0.53.1";
       s.async = false;
       document.head.appendChild(s);
     } catch (e) { /* indicators are never load-blocking */ }

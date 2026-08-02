@@ -1,6 +1,15 @@
 /**
  * Boomtown Platform — header-actions guard
- * File: worker/test/header_actions.test.mjs · Version: v3.0 · Date: 2026-08-02 · Ships in: v0.53.0
+ * File: worker/test/header_actions.test.mjs · Version: v3.1 · Date: 2026-08-02 · Ships in: v0.53.1 (v3.0 v0.53.0)
+ *
+ * v3.1 (v0.53.1): guards for the two v2.14 source fixes. Both were found by external review of
+ * v0.53.0 and both were shipped BEFORE these assertions existed — recorded here because the
+ * first prove-it-fails run on v0.53.1 came back green, which is what surfaced the omission.
+ *   (a) the badge must be built with DOM APIs and be idempotent (v2.13 appended unconditionally,
+ *       so a second run stacked a second badge — the deleted v2.10 injector had carried the
+ *       idempotency guard and deleting the injector deleted the guard).
+ *   (b) #logoutBtn must be revealed from the LOCAL token, synchronously — not from inside the
+ *       /api/me branch, where a slow or 5xx response strands a signed-in member with no way out.
  *
  * v3.0 (v0.53.0): the MEMBER shell inverts too — the v2.10 mail and v2.11 Admin-switch
  * INJECTORS are deleted from site-nav.js; 13 canonical member pages ship the static header
@@ -110,4 +119,56 @@ test("NC-3: an un-gated Admin reveal fails the check", () => {
 
 test("NC-4: a reveal that stops un-hiding fails the check", () => {
   assert.equal(adminRevealVerdict(read("assets/site-nav.js").replace("a.hidden = false", "")), false);
+});
+
+/* ═══════════════ v3.1 — the two review fixes (v0.53.1) ═══════════════ */
+
+/* (a) badge construction: DOM APIs, never markup-parsing, and idempotent. */
+const badgeSafeVerdict = (src) => {
+  const fn = src.match(/function headerMailFill\(\)[\s\S]*?\n      \}\)\(\);/);
+  if (!fn) return { ok: false, why: "headerMailFill not found" };
+  const body = fn[0];
+  if (/insertAdjacentHTML|innerHTML\s*=/.test(body)) return { ok: false, why: "badge built by parsing markup" };
+  if (!body.includes("createElement")) return { ok: false, why: "badge not built with createElement" };
+  if (!body.includes("textContent")) return { ok: false, why: "count not written via textContent" };
+  if (!/querySelector\(["'`]\.badge/.test(body)) return { ok: false, why: "no existing-badge lookup — not idempotent" };
+  return { ok: true };
+};
+
+/* (b) logout reveal must sit OUTSIDE the signed-in branch, gated on the local token. */
+const logoutRevealVerdict = (src) => {
+  if (/function logoutReveal\(\)/.test(src)) return { ok: false, why: "reveal still inside the /api/me branch" };
+  if (!/if \(lo && token\) lo\.hidden = false;/.test(src)) return { ok: false, why: "no synchronous token-gated reveal" };
+  const revealAt = src.search(/if \(lo && token\) lo\.hidden = false;/);
+  const initAt = src.search(/^  init\(\);$/m);
+  if (initAt !== -1 && revealAt > initAt) return { ok: false, why: "reveal runs after init() — not synchronous" };
+  return { ok: true };
+};
+
+test("v3.1(a): the mail badge is built with DOM APIs and is idempotent", () => {
+  const v = badgeSafeVerdict(read("assets/site-nav.js"));
+  assert.ok(v.ok, `badge construction regressed: ${v.why}`);
+});
+
+test("v3.1(b): Sign out is revealed synchronously from the local token, not from /api/me", () => {
+  const v = logoutRevealVerdict(read("assets/site-nav.js"));
+  assert.ok(v.ok, `logout reveal regressed: ${v.why}`);
+});
+
+test("NC-5: reverting the badge to insertAdjacentHTML fails the verdict", () => {
+  const mutated = read("assets/site-nav.js")
+    .replace("badge.textContent = inboxUnread > 9", 'a.insertAdjacentHTML("beforeend", "x"); const _ = inboxUnread > 9');
+  assert.equal(badgeSafeVerdict(mutated).ok, false);
+});
+
+test("NC-6: dropping the existing-badge lookup fails the idempotency verdict", () => {
+  const mutated = read("assets/site-nav.js").replace('let badge = a.querySelector(".badge");', "let badge = null;");
+  assert.equal(badgeSafeVerdict(mutated).ok, false);
+});
+
+test("NC-7: moving the logout reveal back inside the /api/me branch fails the verdict", () => {
+  const mutated = read("assets/site-nav.js")
+    .replace("if (lo && token) lo.hidden = false;", "")
+    .replace("(function headerMailFill() {", "(function logoutReveal() {})();\n      (function headerMailFill() {");
+  assert.equal(logoutRevealVerdict(mutated).ok, false);
 });
