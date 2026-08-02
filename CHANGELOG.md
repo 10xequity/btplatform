@@ -2,7 +2,37 @@
 
 ## v0.54.0 — 2026-08-02
 
-- Auto-recorded by CI on deploy. `/api/health` reported `v0.54.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
+- **First release delivered by direct commit** (owner decision 2026-08-02). The ZIP, both manifest
+  ratchets, and the extract-and-drag step are retired. Delivery is now: preflight CLEAR → commit to
+  `main` → push → CI gates, deploys, byte-verifies `/api/health`. v0.53.1, whose only content was
+  moving `CHANGELOG.md` into the ZIP, is moot for the same reason.
+- **`waitlists.js` v1.1 — real product defect in offer expiry.** `offerExpired` parsed the zone-less
+  SQLite datetime form (`2026-07-25 12:00:00`) that `nextOfferExpiry` itself writes, so a UTC instant
+  was read as LOCAL time. Cloudflare runs UTC, which made the offset zero and hid it in production;
+  on a UTC-6 runtime a 48-hour claim link stayed live for 54. Now normalises before parsing — the
+  same idiom already in `consent.parseTs`, `tiers.effectiveGrant`, `calendar.toIcsUtc`,
+  `announcements` and `waivers`. Fail-closed behaviour on a corrupt `expires_at` is unchanged.
+  Ships the write→read round-trip test that never existed, which is why the defect survived.
+- **Five negative controls that could not fail on Windows (+1 new guard).** `core.autocrlf` checks
+  source out CRLF, so NCs mutating on a literal `\n` silently no-opped: the mutation never landed,
+  the guard had nothing to detect, and the NC reported clean while proving nothing — failure class 3
+  inside the guards themselves. Fixed in `sms` NC-2, `page_shell` NC-6/NC-8/NC-9, `header_shell`
+  NC-M1; each now matches `\r?\n` or cuts by index and asserts the mutation landed.
+- **`worker/scripts/preflight.mjs` v1.0 — the local gate.** Runs the CI gate before the commit plus
+  the origin-sync check CI cannot do (syntax · F-37 parity · measured suite · schema · deployed
+  parity). Replaces the mechanical half of the checkpoint the owner's ZIP drag used to provide.
+  `WARN` never launders into `PASS`. 15 tests, every verdict with a negative control.
+- **[FLAGGED, NOT FIXED] The CI syntax gate cannot fail.** `node --check <file>` exits 0 on Node
+  24.18.1 for any `.js` containing `export`/`import` even when unparseable; all 37 worker modules are
+  ESM, so `deploy-worker.yml` step 1 prints "37 modules OK" and proves nothing. Preflight uses the
+  working stdin form locally. The workflow is deliberately unchanged — `CLAUDE.md` §8 forbids
+  workflow edits without an explicit owner OK. Tracked as `CLAUDE.md` §9.3.
+- **Doc set completed and ZIP delivery struck everywhere.** Installs the 7 files lost to a 50,000-char
+  paste truncation. Retires the ZIP rule in all four places that restated it — `CLAUDE.md` §2,
+  standards §9 (→ v2.1), uiux-review §6 (→ v1.1), handoff §0 (→ v1.2, marked superseded with its
+  reasoning preserved as history) — and closes INDEX contradiction C1. Handoff §8 next-session
+  prompt rewritten off `/mnt/project/` onto the repo-relative direct-commit loop.
+- Suite **645 → 660**, all passing.
 
 ## v0.53.1 — 2026-08-02
 

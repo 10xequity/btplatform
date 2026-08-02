@@ -75,9 +75,14 @@ only content was moving `CHANGELOG.md` into the ZIP — is moot for the same rea
    plus the origin-sync check CI cannot do. **BLOCKED** is a hard stop, not a warning.
 2. Commit to `main`. Conventional-commit subject; body states what shipped and why.
 3. Push. `deploy-worker.yml` re-runs the whole gate on a clean checkout, deploys, byte-verifies
-   `/api/health`, then auto-commits the CHANGELOG entry (job 3, `[skip ci]`). **Never hand-write
-   `CHANGELOG.md`** — CI owns it through `changelog-entry.mjs`.
+   `/api/health`, then auto-commits a CHANGELOG entry (job 3, `[skip ci]`).
 4. Watch the run (`gh run watch`). A red run *is* the release; do not stack work on top of it.
+5. **Fill the CHANGELOG stub, same session.** Job 3 writes a placeholder — *"Auto-recorded by CI on
+   deploy … fill this entry from the session handoff"*. It guarantees the release is never **missing**
+   from history; it does not write the entry. `git pull`, replace the stub with the real entry, and
+   commit. **An unfilled stub is the v0.36–v0.51 decay, exactly.** Never *prepend* by hand —
+   `changelog-entry.mjs` owns insertion and tail integrity; you are only replacing the body it wrote.
+   Verify with `node worker/scripts/changelog-entry.mjs --version vX.Y.Z --check` (exit 0).
 
 **Still true, and not negotiable:**
 
