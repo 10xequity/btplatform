@@ -1,5 +1,5 @@
 /* Boomtown Platform — Control Center (manager home)
-   File: web/assets/admin-dash.js · Version: v1.3 · Date: 2026-07-30 · Ships in: v0.36.0
+   File: web/assets/admin-dash.js · Version: v1.4 · Date: 2026-08-02 · Ships in: v0.36.0
    v1.3: Clear button on alert rows → POST /api/admin/alerts/:id/dismiss; feed shows only unresolved.
    Data: one call to GET /api/admin/dashboard (reports.js v1.1).
    Actions inline: Remind (existing link) and Rerun (fresh Square link) straight from
@@ -16,12 +16,7 @@
   const first = ((me.user && (me.user.display_name || me.user.email)) || "").split(/[@\s]/)[0];
   if (first) $("hello").textContent = `Morning, ${first.charAt(0).toUpperCase() + first.slice(1)}`;
 
-  /* org switcher (shared pattern) */
-  const sw = $("orgSwitcher");
-  const orgs = (await api("/api/orgs")).data.orgs || [];
-  const current = Number(localStorage.getItem("bt_org")) || (orgs[0] && orgs[0].id) || 1;
-  sw.innerHTML = orgs.map(o => `<option value="${o.id}" ${o.id === current ? "selected" : ""}>${esc(o.name)}</option>`).join("");
-  sw.addEventListener("change", () => { localStorage.setItem("bt_org", sw.value); location.reload(); });
+  /* v0.52.0: org switcher is single-source now — populated + handled by admin-nav.js v2.19. */
 
   load();
   async function load() {

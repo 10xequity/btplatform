@@ -1,6 +1,6 @@
 /**
  * Boomtown Platform — page-shell prerequisites guard
- * File: worker/test/page_shell.test.mjs · Version: v1.1 · Date: 2026-08-02 · Ships in: v0.51.0 (v1.0 v0.49.1)
+ * File: worker/test/page_shell.test.mjs · Version: v1.2 · Date: 2026-08-02 · Ships in: v0.52.0 (v1.1 v0.51.0 · v1.0 v0.49.1)
  *
  * WHY (the v0.49.1 outage): five admin pages (facility, faq, sms, waitlists, waivers) loaded
  * admin-nav.js WITHOUT config.js. BT_CONFIG.apiBase was undefined, guard()'s /api/me fetch hit
@@ -24,7 +24,9 @@
  * NCs mutate the exact subject line (the §2 lesson: a loose NC that mutates the wrong
  * occurrence proves nothing).
  *
- * v1.1 (v0.51.0): check 3 + NC-5/6/7 added. v1.0 (v0.49.1): checks 1–2.
+ * v1.2 (v0.52.0): the snippet grows pre-paint THEME (uiux-review §6.4) — renamed "Pre-paint
+ * state"; regex + assertions follow, incl. the system-preference fallback the deleted
+ * per-page theme blocks used to provide. v1.1 (v0.51.0): check 3 + NC-5/6/7. v1.0 (v0.49.1): checks 1–2.
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -132,7 +134,7 @@ test("NC-4: a header hidden inside an HTML comment does not satisfy the verdict"
 
 /* ── check 3 (v1.1): pre-paint collapse snippet — present, first, identical ── */
 
-const SNIPPET_RE = /<script>\/\* Pre-paint collapse[\s\S]*?<\/script>/;
+const SNIPPET_RE = /<script>\/\* Pre-paint state[\s\S]*?<\/script>/;  /* v1.2: "collapse" → "state" — the snippet now applies the theme too */
 
 /** Raw file read — the snippet lives in real bytes, not the comment-stripped corpus. */
 function rawCorpus() {
@@ -155,7 +157,7 @@ function prePaintVerdict(html) {
   return { applies: true, ok: true, snippet: m[0] };
 }
 
-test("every admin-nav.js page carries the pre-paint collapse snippet, before CSS, byte-identical", () => {
+test("every admin-nav.js page carries the pre-paint state snippet (collapse + theme), before CSS, byte-identical", () => {
   const offenders = [];
   const variants = new Set();
   let applied = 0;
@@ -174,6 +176,12 @@ test("every admin-nav.js page carries the pre-paint collapse snippet, before CSS
   const s = [...variants][0];
   assert.ok(s.includes("bt_nav") && s.includes('dataset.nav="min"'),
     "the snippet must read the bt_nav cookie and set data-nav before paint");
+  /* v1.2 (v0.52.0): the snippet also owns pre-paint THEME — saved bt_theme, else the system
+     preference — so no admin page snaps from the hardcoded dark to the user's light. */
+  assert.ok(s.includes('localStorage.getItem("bt_theme")') && s.includes("dataset.theme"),
+    "the snippet must apply the saved (or system) theme before paint");
+  assert.ok(s.includes("prefers-color-scheme"),
+    "with no saved theme the snippet must honor the system preference (the per-page blocks it replaced did)");
 });
 
 test("admin-nav.js writes the bt_nav cookie on toggle and keeps NO post-paint read", () => {

@@ -1,5 +1,5 @@
 /* Boomtown Platform — Event Management screen
-   Version: v0.4.0 · Date: 2026-07-22
+   Version: v0.4.1 · Date: 2026-08-02
    One screen per event: edit details, publish/cancel, duplicate, save-as-template,
    recurring “this and future” editing, registrations (remind / mark paid), CSV download,
    and the public sign-up + pay link (register.html?event=N). */
@@ -8,11 +8,9 @@
   const me = await guard();
   if (!me) return;
 
-  const sw = document.getElementById("orgSwitcher");
-  const orgs = (await api("/api/orgs")).data.orgs || [];
-  const currentOrg = Number(localStorage.getItem("bt_org")) || (orgs[0] && orgs[0].id) || 1;
-  sw.innerHTML = orgs.map(o => `<option value="${o.id}" ${o.id === currentOrg ? "selected" : ""}>${esc(o.name)}</option>`).join("");
-  sw.addEventListener("change", () => { localStorage.setItem("bt_org", sw.value); location.href = "admin-events.html"; });
+  /* v0.52.0: org switcher is single-source now — populated + handled by admin-nav.js v2.19.
+     Change lands on admin-events.html via body[data-org-switch-href]: this event id doesn't
+     exist under the new org, so a plain reload would 404. */
 
   const id = Number(new URLSearchParams(location.search).get("id"));
   const main = document.getElementById("main");

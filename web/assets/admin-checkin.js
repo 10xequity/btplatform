@@ -1,5 +1,5 @@
 /* Boomtown Platform — Door Check-in
-   File: web/assets/admin-checkin.js · Version: v1.1 · Date: 2026-07-25 · Ships in: v0.21.0
+   File: web/assets/admin-checkin.js · Version: v1.2 · Date: 2026-08-02 · Ships in: v0.21.0
    v1.1 (M16): balance-due chip (Gymdesk pattern) — a team that still owes shows
    "Owes $X · mark paid" beside its team header; one tap → confirm → mark-paid
    (cash-collected rail) → roster reloads. Chip lives on the header, not the player
@@ -13,22 +13,11 @@
   const $ = id => document.getElementById(id);
   let eventId = null, data = null, filter = "";
 
-  const savedTheme = localStorage.getItem("bt_theme");
-  document.documentElement.dataset.theme = savedTheme || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
-  $("themeToggle").onclick = () => {
-    const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
-    document.documentElement.dataset.theme = next;
-    localStorage.setItem("bt_theme", next);
-  };
-
+  /* v0.52.0: theme is single-source now — pre-paint via the shared <head> snippet, toggle in admin-nav.js v2.19. */
   boot();
   async function boot() {
     const me = await guard(); if (!me) return;
-    const orgs = await api("/api/orgs");
-    const sw = $("orgSwitcher");
-    sw.innerHTML = (orgs.data.orgs || []).map(o => `<option value="${o.id}">${esc(o.name)}</option>`).join("");
-    sw.value = localStorage.getItem("bt_org") || "1";
-    sw.onchange = () => { localStorage.setItem("bt_org", sw.value); loadEvents(); };
+    /* v0.52.0: org switcher is single-source now — populated + handled by admin-nav.js v2.19. */
     await loadEvents();
     $("search").addEventListener("input", e => { filter = e.target.value.toLowerCase(); renderRoster(); });
     $("walkinBtn").onclick = walkinModal;

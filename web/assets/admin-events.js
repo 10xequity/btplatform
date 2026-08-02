@@ -1,5 +1,5 @@
 /* Boomtown Platform — Events & Programs Admin
-   Version: v0.4.0 · Date: 2026-07-22
+   Version: v0.4.1 · Date: 2026-08-02
    Calendar with HTML5 drag-and-drop (template chip → day = create; event → day = reschedule),
    recurring series, bulk CSV import (paste or file), bulk edit, view profiles + embed snippet. */
 (async function () {
@@ -7,13 +7,7 @@
   const me = await guard();
   if (!me) return;
 
-  /* ---------- org switcher ---------- */
-  const sw = document.getElementById("orgSwitcher");
-  const orgs = (await api("/api/orgs")).data.orgs || [];
-  const currentOrg = Number(localStorage.getItem("bt_org")) || (orgs[0] && orgs[0].id) || 1;
-  sw.innerHTML = orgs.map(o => `<option value="${o.id}" ${o.id === currentOrg ? "selected" : ""}>${esc(o.name)}</option>`).join("");
-  localStorage.setItem("bt_org", String(currentOrg));
-  sw.addEventListener("change", () => { localStorage.setItem("bt_org", sw.value); location.reload(); });
+  /* v0.52.0: org switcher is single-source now — populated + handled by admin-nav.js v2.19. */
 
   /* ---------- state ---------- */
   let events = [], templates = [], views = [];

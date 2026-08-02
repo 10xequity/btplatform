@@ -1,5 +1,8 @@
 /* Boomtown Platform — App Shell Styles
-   Version: v0.7.0 · Date: 2026-08-02 (v0.1 base 2026-07-21)
+   Version: v0.8.0 · Date: 2026-08-02 (v0.1 base 2026-07-21)
+   v0.8.0 (v0.52.0): static admin header (uiux-review §6 step 4) — .wordmark becomes a flex
+   row and .brand-logo / .hdr-mail move here from the admin-nav.js injected <style>, because
+   the header is now fully static markup and must be styled on frame one, before any script.
    v0.7.0 (v0.51.0): ONE shared button set (uiux-review §4) — .primary (semantic alias of the
    base), .danger, and .sm/.small (the two size vocabularies unified; .btn.small was used by
    admin-faq/admin-waitlists but never defined anywhere). Per-page redefinitions in
@@ -36,12 +39,22 @@ html, body {
 }
 
 .wordmark {
+  display: flex;              /* v0.8.0 — was injected by admin-nav.js; the header is static now */
+  align-items: center;
+  gap: 10px;
   font-weight: 800;
   letter-spacing: 0.02em;
   font-size: 18px;
   text-transform: uppercase;
 }
 .wordmark span { color: var(--emphasis); }
+/* v0.8.0 (v0.52.0, uiux-review §6.4): brand logo + header mail styles move here from the
+   admin-nav.js injected <style> — the header is fully static markup and must be styled on
+   frame one, before any script runs. The mark lives on black in both themes (UX-06). */
+.brand-logo { height: 22px; width: auto; display: block; background: #000;
+  border-radius: 6px; padding: 4px 8px; box-sizing: content-box; }
+.hdr-mail { min-width: 44px; min-height: 44px; display: inline-flex;
+  align-items: center; justify-content: center; text-decoration: none; }
 
 .header .spacer { flex: 1; }
 

@@ -1,5 +1,5 @@
 /* Boomtown Platform — Facility Calendar (admin)
-   Version: v1.1.0 · Date: 2026-07-24 · Ships in: v0.13.0
+   Version: v1.1.1 · Date: 2026-08-02 · Ships in: v0.13.0
    v1.1.0 (M12B): rental-requests approval panel (pending list, preset picker, approve/decline,
    share-accept retry). Auto-claimed event bookings render like any booking (source badge in modal title).
    Day grid (spaces × time, 6:00–23:00) + Week list, conflict-checked booking modal,
@@ -13,14 +13,7 @@
     ? window.BT_ADMIN.fail(document.getElementById("calRoot"), msg)
     : (document.getElementById("calRoot").innerHTML = `<div class="empty">${esc(msg)}</div>`));
 
-  // Org switcher (shared pattern)
-  const sw = document.getElementById("orgSwitcher");
-  const orgsRes = await api("/api/orgs");
-  const orgs = (orgsRes.data && orgsRes.data.orgs) || [];
-  const currentOrg = Number(localStorage.getItem("bt_org")) || (orgs[0] && orgs[0].id) || 1;
-  sw.innerHTML = orgs.map(o => `<option value="${o.id}" ${o.id === currentOrg ? "selected" : ""}>${esc(o.name)}</option>`).join("");
-  localStorage.setItem("bt_org", String(currentOrg));
-  sw.addEventListener("change", () => { localStorage.setItem("bt_org", sw.value); location.reload(); });
+  /* v0.52.0: org switcher is single-source now — populated + handled by admin-nav.js v2.19. */
 
   // Reference data
   const ref = await api("/api/admin/facility/spaces");

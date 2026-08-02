@@ -1,5 +1,5 @@
 /* Boomtown Platform — Registrations Admin
-   Version: v0.3.0 · Date: 2026-07-21
+   Version: v0.3.1 · Date: 2026-08-02
    Staff-gated. Unpaid list + 1-click reminder (≤3 clicks per spec §4), cash collect,
    Google Forms CSV import (client-side RFC-4180 parse + header auto-mapping), captain score links. */
 
@@ -14,14 +14,7 @@
     return;
   }
 
-  const savedTheme = localStorage.getItem("bt_theme");
-  document.documentElement.dataset.theme = savedTheme || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
-  $("themeToggle").onclick = () => {
-    const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
-    document.documentElement.dataset.theme = next;
-    localStorage.setItem("bt_theme", next);
-  };
-
+  /* v0.52.0: theme is single-source now — pre-paint via the shared <head> snippet, toggle in admin-nav.js v2.19. */
   async function api(path, opts = {}) {
     const headers = Object.assign({ "content-type": "application/json" }, opts.headers || {});
     if (bearer) headers["Authorization"] = "Bearer " + bearer;
@@ -43,12 +36,7 @@
     if (!bearer) { location.href = "index.html"; return; }
     const me = await api("/api/me");
     if (!me.ok) { location.href = "index.html"; return; }
-    const orgs = (await api("/api/orgs")).data.orgs || [];
-    const sw = $("orgSwitcher");
-    sw.innerHTML = orgs.map((o) => `<option value="${o.id}">${esc(o.name)}</option>`).join("");
-    const saved = localStorage.getItem("bt_org");
-    if (saved) sw.value = saved;
-    sw.onchange = () => { localStorage.setItem("bt_org", sw.value); loadEvents(); };
+    /* v0.52.0: org switcher is single-source now — populated + handled by admin-nav.js v2.19. */
     loadEvents();
   })();
 

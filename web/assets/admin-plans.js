@@ -1,5 +1,5 @@
 /* Boomtown Platform — Memberships (admin)
-   File: web/assets/admin-plans.js · Version: v1.0 · Date: 2026-07-24 · Ships in: v0.10.0
+   File: web/assets/admin-plans.js · Version: v1.1 · Date: 2026-08-02 · Ships in: v0.10.0
    Reads /api/admin/plans, /api/admin/subscriptions, /api/admin/mrr.
    Create/edit posts to /api/admin/plans — the worker also creates the Square
    Catalog plan + variation, so a plan is instantly sellable once Square keys exist. */
@@ -9,22 +9,11 @@
   const $ = id => document.getElementById(id);
   let editingId = null;
 
-  const savedTheme = localStorage.getItem("bt_theme");
-  document.documentElement.dataset.theme = savedTheme || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
-  $("themeToggle").onclick = () => {
-    const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
-    document.documentElement.dataset.theme = next;
-    localStorage.setItem("bt_theme", next);
-  };
-
+  /* v0.52.0: theme is single-source now — pre-paint via the shared <head> snippet, toggle in admin-nav.js v2.19. */
   boot();
   async function boot() {
     const me = await guard(); if (!me) return;
-    const orgs = await api("/api/orgs");
-    const sw = $("orgSwitcher");
-    sw.innerHTML = (orgs.data.orgs || []).map(o => `<option value="${o.id}">${esc(o.name)}</option>`).join("");
-    sw.value = localStorage.getItem("bt_org") || "1";
-    sw.onchange = () => { localStorage.setItem("bt_org", sw.value); load(); };
+    /* v0.52.0: org switcher is single-source now — populated + handled by admin-nav.js v2.19. */
     $("planForm").onsubmit = save;
     $("cancelEdit").onclick = resetForm;
     load();

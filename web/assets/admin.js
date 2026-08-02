@@ -1,17 +1,11 @@
 /* Boomtown Platform — Admin Dashboard
-   Version: v0.4.0 · Date: 2026-07-22 */
+   Version: v0.4.1 · Date: 2026-08-02 */
 (async function () {
   const { api, guard, esc, money, fmtDT } = window.BT_ADMIN;
   const me = await guard();
   if (!me) return;
 
-  // Org switcher (shared pattern: value persists in localStorage, pages read X-Org-Id)
-  const sw = document.getElementById("orgSwitcher");
-  const orgs = (await api("/api/orgs")).data.orgs || [];
-  const current = Number(localStorage.getItem("bt_org")) || (orgs[0] && orgs[0].id) || 1;
-  sw.innerHTML = orgs.map(o => `<option value="${o.id}" ${o.id === current ? "selected" : ""}>${esc(o.name)}</option>`).join("");
-  localStorage.setItem("bt_org", String(current));
-  sw.addEventListener("change", () => { localStorage.setItem("bt_org", sw.value); location.reload(); });
+  /* v0.52.0: org switcher is single-source now — populated + handled by admin-nav.js v2.19. */
 
   const events = (await api("/api/events")).data.events || [];
   const now = new Date();

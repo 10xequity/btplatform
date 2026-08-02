@@ -1,7 +1,8 @@
 /* Boomtown Platform — Design Tokens
-   Version: v0.5.0 · Date: 2026-08-01 (v0.1 base 2026-07-21 · v0.2.1 contrast recovery · v0.3.0 F-23
+   Version: v0.6.0 · Date: 2026-08-02 (v0.1 base 2026-07-21 · v0.2.1 contrast recovery · v0.3.0 F-23
     · v0.4.0 F-35 focus-ring scope + F-36 body-size reconciliation · v0.5.0 contrast pass:
-    --emphasis / --gold-ink / --ok, ships in v0.46.0)
+    --emphasis / --gold-ink / --ok, v0.46.0 · v0.6.0 chrome-glass to the demo-v4 treatment,
+    ships in v0.52.0)
    THIS FILE IS THE SOURCE OF TRUTH for colour, shape, type and motion. Nothing overrides it.
    Cited by: docs/2026-07-21_design-handoff_v0.1.md · 2026-07-27_standards_v0.32.1-r1.md §1
    (v0.2.1 pointed at "design spec §4" — boomtown-design-spec_v0_1/_v0_2 were deleted, see
@@ -84,14 +85,17 @@
   --ok: var(--positive);     /* v0.5.0 — re-declared, not inherited */
 }
 
-/* Glass — permitted on static chrome only (header/modals), with solid fallback (spec §4) */
+/* Glass — permitted on static chrome only (header/modals), with solid fallback (spec §4).
+   v0.6.0 (v0.52.0): demo-v4 treatment (uiux-review §6 step 4) — 62% surface + blur 14
+   saturate 1.25. The heavier blur is what keeps text AA-legible over scrolled content:
+   it flattens whatever passes underneath into a near-uniform field of --surface hue. */
 .chrome-glass {
   background: var(--surface); /* solid fallback */
 }
-@supports (backdrop-filter: blur(12px)) {
+@supports (backdrop-filter: blur(14px)) {
   .chrome-glass {
-    background: color-mix(in srgb, var(--surface) 78%, transparent);
-    backdrop-filter: blur(12px) saturate(1.2);
+    background: color-mix(in srgb, var(--surface) 62%, transparent);
+    backdrop-filter: blur(14px) saturate(1.25);
   }
 }
 

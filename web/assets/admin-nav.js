@@ -1,5 +1,12 @@
 /* Boomtown Platform — Admin sidebar (shared)
-   Version: v2.18 · Date: 2026-08-02 · Ships in: v0.51.0
+   Version: v2.19 · Date: 2026-08-02 · Ships in: v0.52.0
+   v2.19 (v0.52.0): STATIC HEADER (uiux-review §6 step 4). The header icons this file used to
+   inject (#btHdrMail v2.17, the .brand-logo img v2.4/v2.15) are now static markup on every
+   admin page — injection deleted; brandLogo() keeps ONLY the per-org cache-refresh/swap on
+   the static img. NEW single-source header behaviors: orgSwitcher population + change
+   handling (was duplicated across 12 page scripts; body[data-org-switch-href] overrides the
+   reload target for detail pages) and the #themeToggle listener (pre-paint theme is applied
+   by the shared inline <head> snippet; this file only handles the toggle).
    v2.18 (v0.51.0): Announcements nav item (mkt group) · pre-paint collapse state moved to the
    shared inline <head> snippet reading the bt_nav cookie (uiux-review §4) — the toggle now
    writes the cookie and retires the legacy localStorage key; no post-paint read remains here.
@@ -92,10 +99,7 @@
   /* v0.7.0 rail styles: collapse mode + icon sizing + back bar (layers on admin.css) */
   const extra = document.createElement("style");
   extra.textContent = `
-    /* v2.4 UX-06: brand logo chip — the mark lives on black in both themes */
-    .wordmark { display: flex; align-items: center; gap: 10px; }
-    .brand-logo { height: 22px; width: auto; display: block; background: #000;
-      border-radius: 6px; padding: 4px 8px; box-sizing: content-box; }
+    /* v0.52.0: .wordmark / .brand-logo moved to app.css v0.8.0 — the header is static now */
     .nav-item svg { width: 20px; height: 20px; flex: none; opacity: .8; }
     .nav-item.active svg { opacity: 1; }
     .sidebar .rail-foot { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border); }
@@ -406,45 +410,67 @@
      icon — the Athletics wordmark PNG is retired from the header, its baked-in text contradicted
      the Boomtown Volleyball brand), then refreshes the cache from the org profile in the
      background and swaps only on change. Paint never waits on the network. */
+  /* v2.4 UX-06 · v2.5 per-org logo · v2.19 STATIC: the <img class="brand-logo"> ships in the
+     page markup (fallback icon src), so the header paints complete on frame one. This block
+     only (a) swaps in the cached per-org logo, (b) refreshes the cache from the org profile
+     in the background and swaps ONLY on change, (c) falls back cleanly on a dead URL.
+     Paint never waits on the network. */
   (function brandLogo() {
-    const wm = document.querySelector(".wordmark");
-    if (!wm || wm.querySelector(".brand-logo")) return;
-    const FALLBACK = "assets/logo-boom-icon-512.png?v=0.51.0";
+    const img = document.querySelector(".wordmark .brand-logo");
+    if (!img) return;
+    const FALLBACK = img.getAttribute("src"); // the static fallback icon, buster included
     const cacheKey = "bt_org_logo:" + (localStorage.getItem("bt_org") || "");
-    const img = new Image();
-    img.src = localStorage.getItem(cacheKey) || FALLBACK;
-    img.alt = "";
-    img.className = "brand-logo";
+    const cached = localStorage.getItem(cacheKey);
+    if (cached) img.src = cached;
     img.onerror = () => { // a dead cached URL falls back; a dead fallback removes cleanly
       if (img.src.indexOf("logo-boom-icon") === -1) { try { localStorage.removeItem(cacheKey); } catch (e) {} img.src = FALLBACK; }
       else img.remove();
     };
-    wm.prepend(img);
     api("/api/admin/org/profile").then((r) => {
       if (!r.ok) return;
       const fresh = (r.data.org && r.data.org.logo_url) || "";
-      const cached = localStorage.getItem(cacheKey) || "";
-      if (fresh === cached) return;
+      const prev = localStorage.getItem(cacheKey) || "";
+      if (fresh === prev) return;
       try { fresh ? localStorage.setItem(cacheKey, fresh) : localStorage.removeItem(cacheKey); } catch (e) {}
       img.src = fresh || FALLBACK;
     }).catch(() => {});
   })();
 
-  /* v2.17: header mail icon — admin pages are staff-only past guard(), so it always renders.
-     Links the Message Reports queue; 44px target; badge is a queued follow-up (no admin
-     unread-count endpoint exists yet). */
-  (function headerMail() {
-    const hdr = document.querySelector("header.header");
-    if (!hdr || document.getElementById("btHdrMail")) return;
-    const a = document.createElement("a");
-    a.id = "btHdrMail";
-    a.href = "admin-messages.html";
-    a.className = "btn ghost hdr-mail";
-    a.setAttribute("aria-label", "Messages");
-    a.setAttribute("style", "min-width:44px;min-height:44px;display:inline-flex;align-items:center;justify-content:center;text-decoration:none");
-    a.textContent = "✉";
-    const theme = hdr.querySelector("#themeToggle");
-    if (theme) hdr.insertBefore(a, theme); else hdr.appendChild(a);
+  /* v2.19: unified org switcher — SINGLE SOURCE (uiux-review §6 step 4). Populates the static
+     #orgSwitcher on every admin page from /api/orgs, selects the persisted org, and on change
+     persists + reloads. Detail pages whose URL pins a record in the OLD org declare
+     <body data-org-switch-href="..."> to navigate to a safe landing instead (admin-event.html
+     → admin-events.html — a reload there would 404 the event under the new org). The 12
+     per-page copies of this block are deleted this release; header_shell.test.mjs guards
+     against their return. Click budget unchanged: open + pick = 2 (owner req #19). */
+  (function orgSwitcher() {
+    const sw = document.getElementById("orgSwitcher");
+    if (!sw) return;
+    api("/api/orgs").then((r) => {
+      if (!r.ok) return;
+      const orgs = r.data.orgs || [];
+      const current = Number(localStorage.getItem("bt_org")) || (orgs[0] && orgs[0].id) || 1;
+      try { if (!localStorage.getItem("bt_org")) localStorage.setItem("bt_org", String(current)); } catch (e) {} // first visit: persist so api() sends X-Org-Id (admin.js precedent)
+      sw.innerHTML = orgs.map((o) => `<option value="${o.id}" ${o.id === current ? "selected" : ""}>${esc(o.name)}</option>`).join("");
+    }).catch(() => {});
+    sw.addEventListener("change", () => {
+      localStorage.setItem("bt_org", sw.value);
+      const href = document.body.dataset.orgSwitchHref;
+      if (href) location.href = href; else location.reload();
+    });
+  })();
+
+  /* v2.19: theme toggle — SINGLE SOURCE. The shared inline <head> snippet applies the saved
+     (or system) theme BEFORE first paint; this listener only flips + persists. Fired often →
+     the swap itself is instant, no transition (emil: no animation on high-frequency actions). */
+  (function themeToggle() {
+    const t = document.getElementById("themeToggle");
+    if (!t) return;
+    t.addEventListener("click", () => {
+      const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+      document.documentElement.dataset.theme = next;
+      try { localStorage.setItem("bt_theme", next); } catch (e) {}
+    });
   })();
 
   /* v2.4: the role gate runs on EVERY admin page load — including pages that never call
@@ -475,7 +501,7 @@
       if (window.BT_STATUS || document.getElementById("bt-status-js")) return;
       var s = document.createElement("script");
       s.id = "bt-status-js";
-      s.src = "assets/build-status.js?v=0.51.0";
+      s.src = "assets/build-status.js?v=0.52.0";
       s.async = false;
       document.head.appendChild(s);
     } catch (e) { /* indicators are never load-blocking */ }

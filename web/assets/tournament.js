@@ -1,5 +1,5 @@
 /* Boomtown Platform — Tournament Ops
-   Version: v0.3.0 · Date: 2026-07-21 (v0.3.0: network-failure + stale-config guards, matching app.js v0.2.4)
+   Version: v0.3.1 · Date: 2026-08-02 (v0.3.0: network-failure + stale-config guards, matching app.js v0.2.4)
    Flow: pick/create event → paste teams → generate (feasibility gate with one-tap fixes)
    → live grid (drag to move, tap to score in 2 taps) → standings → bracket → print/CSV. */
 
@@ -17,14 +17,7 @@
   let currentEvent = null, teams = [], teamName = {}, matches = [], formats = {};
 
   /* theme + org (same behavior as index) */
-  const savedTheme = localStorage.getItem("bt_theme");
-  document.documentElement.dataset.theme = savedTheme || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
-  $("themeToggle").onclick = () => {
-    const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
-    document.documentElement.dataset.theme = next;
-    localStorage.setItem("bt_theme", next);
-  };
-
+  /* v0.52.0: theme is single-source now — pre-paint via the shared <head> snippet, toggle in admin-nav.js v2.19. */
   async function api(path, opts = {}) {
     const headers = Object.assign({ "content-type": "application/json" }, opts.headers || {});
     if (bearer) headers["Authorization"] = "Bearer " + bearer;
@@ -44,12 +37,7 @@
     if (!bearer) { location.href = "index.html"; return; }
     const me = await api("/api/me");
     if (!me.ok) { location.href = "index.html"; return; }
-    const orgs = (await api("/api/orgs")).data.orgs || [];
-    const sw = $("orgSwitcher");
-    sw.innerHTML = orgs.map((o) => `<option value="${o.id}">${o.name}</option>`).join("");
-    const saved = localStorage.getItem("bt_org");
-    if (saved) sw.value = saved;
-    sw.onchange = () => { localStorage.setItem("bt_org", sw.value); loadEvents(); };
+    /* v0.52.0: org switcher is single-source now — populated + handled by admin-nav.js v2.19. */
     formats = (await api("/api/formats")).data.formats || {};
     $("evTemplate").innerHTML = `<option value="">Custom</option>` +
       Object.keys(formats).map((k) => `<option value="${k}">${k}</option>`).join("");

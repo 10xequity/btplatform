@@ -1,5 +1,5 @@
 /* Boomtown Platform — Sales & Reports
-   File: web/assets/admin-reports.js · Version: v1.3 · Date: 2026-07-31 · Ships in: v0.43.0
+   File: web/assets/admin-reports.js · Version: v1.4 · Date: 2026-08-02 · Ships in: v0.43.0
    v1.3: "Export for Looker · all companies" — one click fetches
    /api/admin/reports/revenue-all.csv (12-column cross-org contract). The button only
    appears when the signed-in user staffs more than one org, so single-company admins
@@ -16,22 +16,11 @@
   const $ = id => document.getElementById(id);
   let report = null;
 
-  const savedTheme = localStorage.getItem("bt_theme");
-  document.documentElement.dataset.theme = savedTheme || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
-  $("themeToggle").onclick = () => {
-    const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
-    document.documentElement.dataset.theme = next;
-    localStorage.setItem("bt_theme", next);
-  };
-
+  /* v0.52.0: theme is single-source now — pre-paint via the shared <head> snippet, toggle in admin-nav.js v2.19. */
   boot();
   async function boot() {
     const me = await guard(); if (!me) return;
-    const orgs = await api("/api/orgs");
-    const sw = $("orgSwitcher");
-    sw.innerHTML = (orgs.data.orgs || []).map(o => `<option value="${o.id}">${esc(o.name)}</option>`).join("");
-    sw.value = localStorage.getItem("bt_org") || "1";
-    sw.onchange = () => { localStorage.setItem("bt_org", sw.value); load(); };
+    /* v0.52.0: org switcher is single-source now — populated + handled by admin-nav.js v2.19. */
     $("csvBtn").onclick = csv;
     // The Looker endpoints return text/csv, not JSON, so api() would choke — mirror its auth.
     async function lookerCsv(path, stem) {

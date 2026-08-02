@@ -1,5 +1,5 @@
 # Boomtown Athletics Platform
-**Version:** v0.51.0 · **Date:** 2026-08-02 · **Supersedes:** README @ v0.24.0 (2026-07-26)
+**Version:** v0.52.0 · **Date:** 2026-08-02 · **Supersedes:** README @ v0.24.0 (2026-07-26)
 
 Multi-org sports operations platform for **Boomtown Volleyball · Match Point Social · Queens Club**, plus 7 facility-operator orgs (Colorado Boom, Oda Up, RMR, Real Futsal, Special Olympics CO, Zara Gymnastics, External/Rental). Facility is in **Aurora, Colorado**.
 
@@ -37,7 +37,7 @@ Two things are sandboxed platform-wide and are **deliberate, not defects**:
 |---|---|---|
 | `web/` | Static frontend, GitHub Pages. No build step; every page carries a `?v=` cache-bust. | Push to `main` |
 | `worker/src/` | Cloudflare Worker API. `index.js` mounts every module route. | Auto-deploys via Actions **Deploy Worker** on any `worker/**` push |
-| `worker/test/` | `node --test` suites. **604 passing at v0.51.0.** | — |
+| `worker/test/` | `node --test` suites. **616 passing at v0.52.0.** | — |
 | `db/migrations/` | Schema of record. **0001–0033 all applied live** to D1 `boomtown-prod` (82 tables). | Applied by Claude via Cloudflare MCP, **additive-only**. The SQL files here are records — never re-run them. |
 | `docs/` | Install guides, handoffs, roadmaps. Naming: `YYYY-MM-DD_name_vX_Y.md`. | — |
 
@@ -82,6 +82,7 @@ Every table carries `org_id`, timestamps and a soft-delete `deleted_at`.
 | v0.48.0 | Header mail icon (both shells, single-source injectors) |
 | v0.49.0 | Header Admin switch for staff-who-play |
 | v0.49.1 | **Hotfix:** config.js restored on 5 dead admin pages; headers on lfg/help; every js/css ref now bustered; page-shell + bare-ref guards |
+| **v0.52.0** | **Unified static admin header** (uiux-review §6 step 4): brand logo + mail icon absorbed into static markup (injectors deleted), **org switcher on all 27 admin pages** (16 gained it; single-source population in admin-nav.js v2.19, 12 per-page copies deleted), **theme toggle everywhere with pre-paint theme** (snippet grows bt_theme + system preference), chrome-glass to the demo-v4 treatment. header_shell.test.mjs v1.0 holds the 27 header copies byte-identical. No migration. |
 | **v0.51.0** | Admin **Announcements authoring page** (staff CRUD over /api/admin/announcements — cta vs news, schedule window, live preview in the member's exact markup; rail item on all 27 pages) · **one shared button set** in app.css, per-page redefinitions deleted on 6 pages (uiux-review §4) · **pre-paint collapse state** via bt_nav cookie snippet on every admin page — no post-paint snap. No migration. |
 | **v0.50.0** | **R3 member home** — announcement box (admin CTA pinned + non-mutable, per-item/per-category mutes, aggregated feed), results/messages/my-events cards, sub-play CTA row, sub availability (passive/active + level → LFG), public org-brand endpoint, org-branded member rail. Migration 0033. |
 
@@ -91,7 +92,7 @@ Full detail per release lives in `CHANGELOG.md`.
 
 ## Roadmap
 
-Current queue lives in the session handoff (project knowledge). Headline order after v0.51.0:
+Current queue lives in the session handoff (project knowledge). Headline order after v0.52.0:
 
 1. Shared button classes + pre-paint collapse state (uiux-review §6 step 3)
 2. Header re-layout + glass + motion + unified org switcher (absorbs header icons into static markup)
@@ -118,8 +119,8 @@ Current queue lives in the session handoff (project knowledge). Headline order a
 ## Start here
 
 - New to the repo: `docs/2026-07-21_setup-guide_v0.1.md`
-- Latest session handoff: `2026-08-02_handoff_v0_51_0.md` (project knowledge)
+- Latest session handoff: `2026-08-02_handoff_v0_52_0.md` (project knowledge)
 - What works right now: open `web/admin-buildstatus.html`
 
 ---
-*Changelog: v0.51.0 (2026-08-02) — admin announcements authoring page, shared button set, pre-paint collapse; suite 604. · v0.50.0 (2026-08-02) — brought current: suite 588, migrations through 0033 (82 tables), module table v0.25–v0.50, roadmap replaced with the uiux-review §6 queue + live blocker list, handoff pointer updated. · v0.24.0 (2026-07-26) — full rewrite from the stale v0.12.0 README: module table brought current through v0.24.0, build-status marker legend added, architecture table rewritten with the real route pattern and test count, roadmap replaced with a v7 pointer, standing rules updated for D-MIG-2 and D-DOC-3. · 2026-07-24 — v0.2 → v0.12.0.*
+*Changelog: v0.52.0 (2026-08-02) — unified static admin header + org switcher everywhere + pre-paint theme + demo-v4 glass; suite 616. · v0.51.0 (2026-08-02) — admin announcements authoring page, shared button set, pre-paint collapse; suite 604. · v0.50.0 (2026-08-02) — brought current: suite 588, migrations through 0033 (82 tables), module table v0.25–v0.50, roadmap replaced with the uiux-review §6 queue + live blocker list, handoff pointer updated. · v0.24.0 (2026-07-26) — full rewrite from the stale v0.12.0 README: module table brought current through v0.24.0, build-status marker legend added, architecture table rewritten with the real route pattern and test count, roadmap replaced with a v7 pointer, standing rules updated for D-MIG-2 and D-DOC-3. · 2026-07-24 — v0.2 → v0.12.0.*
