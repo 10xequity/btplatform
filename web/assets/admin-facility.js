@@ -273,7 +273,7 @@
         Needs columns: <strong>Date, Start, End, Title, Operator</strong>. Recognized extras:
         Spaces/Booked As, Court Share, Staff, Bar, Catering, Door Charge, POC Name/Email/Phone, Attendees, Notes, Closure.
         Unknown columns are ignored. Rows with hard conflicts are skipped and reported.</p>
-      <textarea id="iCsv" placeholder="Date,Start,End,Title,Operator,Booked As,Court Share&#10;8/2/2026,6:00 PM,9:00 PM,Open Gym,Boomtown Volleyball,Full Hardwood,No"></textarea>
+      <textarea id="iCsv" placeholder="Date,Start,End,Title,Operator,Booked As,Court Share&#10;8/2/2026,6:00 PM,9:00 PM,Open Gym,Boomtown Athletics,Full Hardwood,No"></textarea>
       <div class="report" id="iReport"></div>
       <div class="fc-actions">
         <button class="btn ghost" id="iCancel">Cancel</button>

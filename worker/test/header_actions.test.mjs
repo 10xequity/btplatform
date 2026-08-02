@@ -1,18 +1,18 @@
 /**
  * Boomtown Platform — header-actions guard
- * File: worker/test/header_actions.test.mjs · Version: v2.0 · Date: 2026-08-02 · Ships in: v0.52.0
+ * File: worker/test/header_actions.test.mjs · Version: v3.0 · Date: 2026-08-02 · Ships in: v0.53.0
  *
- * v2.0 (v0.52.0, uiux-review §6 step 4): the ADMIN shell's header is STATIC now — the mail
- * icon ships in every admin page's markup (header_shell.test.mjs holds the 27 copies
- * byte-identical, which is what replaces the old single-source-by-injection guarantee), and
- * admin-nav.js must NOT keep an injector (a surviving injector would double the icon).
- * The MEMBER shell is untouched: site-nav.js still injects, and no member page may carry a
- * static copy. The v1.x "no static page hardcodes btHdrMail" check therefore inverts for
- * admin-nav pages and holds for everything else.
- * v1.1 (v0.49.0): header "Admin" switch checks (unchanged here — member shell).
- * v1.0 (v0.48.0): header mail icon, both shells, injected.
+ * v3.0 (v0.53.0): the MEMBER shell inverts too — the v2.10 mail and v2.11 Admin-switch
+ * INJECTORS are deleted from site-nav.js; 13 canonical member pages ship the static header
+ * (header_shell.test.mjs v2.0 holds those copies byte-identical). site-nav.js keeps only
+ * a badge/aria FILL on the static ✉ (data fill — the brandLogo-swap precedent) and a
+ * reveal of the static-but-hidden #btHdrAdmin (owner call 2026-08-02: static + hidden +
+ * JS reveal, frame-one markup for everyone). BOTH shells now forbid element injection:
+ * a surviving injector renders the control twice.
+ * v2.0 (v0.52.0): admin side inverted (static header, no admin-nav injector).
+ * v1.1 (v0.49.0): Admin switch injected. v1.0 (v0.48.0): mail icon injected, both shells.
  *
- * NCs prove the checks can fail on mutated sources (tokens.test.mjs precedent).
+ * NCs prove the checks can fail on mutated sources; presence scans count their own misses.
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -20,65 +20,94 @@ import { readFileSync, readdirSync } from "node:fs";
 
 const WEB_DIR = new URL("../../web/", import.meta.url);
 const read = (p) => readFileSync(new URL(p, WEB_DIR), "utf8");
+const pages = () => readdirSync(WEB_DIR).filter((f) => f.endsWith(".html"));
+const isAdmin = (html) => /<script[^>]+src="assets\/admin-nav\.js[^"]*"/.test(html);
+const isMemberCanon = (f, html) =>
+  f !== "index.html" && /<script[^>]+src="assets\/site-nav\.js[^"]*"/.test(html);
 
 /* pure verdicts — real corpus and NCs share them */
-const memberVerdict = (src) =>
-  src.includes('a.id = "btHdrMail"') && src.includes('a.href = "member-inbox.html"') && src.includes("min-width:44px");
-/* v2.0: the admin shell must NOT inject — the icon is static. The signature scanned is the
+/* v3.0: NEITHER nav script may inject header controls. The signature scanned is the
    injector's assignment form, which cannot appear in static markup. */
-const adminNoInjectorVerdict = (src) => !src.includes('a.id = "btHdrMail"');
-/* v1.1: the Admin switch must be role-gated AND target admin.html */
-const switchVerdict = (src) =>
-  src.includes('if (role === "admin" || role === "staff") (function headerAdminSwitch()') &&
-  src.includes('a.id = "btHdrAdmin"') && src.includes('a.href = "admin.html"');
+const noInjectorVerdict = (src) =>
+  !src.includes('a.id = "btHdrMail"') && !src.includes('a.id = "btHdrAdmin"');
+/* site-nav must FILL the static ✉ (badge + aria) instead of creating it */
+const mailFillVerdict = (src) =>
+  src.includes('function headerMailFill()') &&
+  src.includes('document.getElementById("btHdrMail")') &&
+  src.includes("inboxUnread");
+/* the Admin control: role-gated REVEAL of the static hidden element, still → admin.html
+   (the href lives in markup now; header_shell v2.0 asserts it there) */
+const adminRevealVerdict = (src) =>
+  src.includes('if (role === "admin" || role === "staff") (function headerAdminReveal()') &&
+  src.includes('document.getElementById("btHdrAdmin")') &&
+  src.includes("a.hidden = false");
 
-test("site-nav.js injects the role-gated header Admin switch (v0.49.0)", () => {
-  assert.ok(switchVerdict(read("assets/site-nav.js")), "Admin switch injector missing, retargeted, or un-gated");
+test("site-nav.js keeps NO header injectors (v3.0 — both controls are static; a survivor doubles them)", () => {
+  assert.ok(noInjectorVerdict(read("assets/site-nav.js")),
+    "an element injector for btHdrMail/btHdrAdmin survived in site-nav.js");
 });
 
-test("no static page hardcodes btHdrAdmin (single-source rule)", () => {
-  const pages = readdirSync(WEB_DIR).filter((f) => f.endsWith(".html"));
-  const offenders = pages.filter((f) => read(f).includes("btHdrAdmin"));
-  assert.deepEqual(offenders, [], `static copies of the Admin switch found: ${offenders.join(", ")}`);
+test("admin-nav.js keeps NO mail injector (v2.0 rule, still in force)", () => {
+  assert.ok(noInjectorVerdict(read("assets/admin-nav.js")),
+    "a header-control injector appeared in admin-nav.js");
 });
 
-test("NC-3: an un-gated Admin switch fails the check", () => {
-  const mutated = read("assets/site-nav.js")
-    .replace('if (role === "admin" || role === "staff") (function headerAdminSwitch()', "(function headerAdminSwitch()");
-  assert.equal(switchVerdict(mutated), false, "the role-gate check must notice a stripped gate");
+test("site-nav.js FILLS the static mail badge (data fill, not element injection)", () => {
+  assert.ok(mailFillVerdict(read("assets/site-nav.js")), "headerMailFill missing or altered");
 });
 
-test("site-nav.js injects the member header mail icon (inbox link, 44px target)", () => {
-  assert.ok(memberVerdict(read("assets/site-nav.js")), "member header mail injector missing or altered");
+test("site-nav.js REVEALS the static role-gated Admin link (owner call: static + hidden + reveal)", () => {
+  assert.ok(adminRevealVerdict(read("assets/site-nav.js")),
+    "Admin reveal missing, un-gated, or reverted to injection");
 });
 
-test("admin-nav.js keeps NO mail injector (v2.0 — the icon is static; a survivor doubles it)", () => {
-  assert.ok(adminNoInjectorVerdict(read("assets/admin-nav.js")),
-    "an #btHdrMail injector survived in admin-nav.js — with the static icon this renders twice");
-});
-
-test("static btHdrMail appears ONLY on admin-nav pages (member shell stays injected), widest set", () => {
-  const pages = readdirSync(WEB_DIR).filter((f) => f.endsWith(".html"));
-  assert.ok(pages.length >= 39, `web corpus shrank: ${pages.length} html files`);
-  let adminPages = 0;
-  const offenders = [];
-  for (const f of pages) {
+test("static btHdrMail on admin-nav pages AND the 13 canonical member pages — nowhere else, widest set", () => {
+  const all = pages();
+  assert.ok(all.length >= 45, `web corpus shrank: ${all.length} html files`);
+  let adminPages = 0, memberPages = 0;
+  const missing = [], extras = [];
+  for (const f of all) {
     const html = read(f);
-    const isAdmin = /<script[^>]+src="assets\/admin-nav\.js[^"]*"/.test(html);
-    if (isAdmin) adminPages++;
-    if (!isAdmin && html.includes("btHdrMail")) offenders.push(f);
+    const admin = isAdmin(html), member = isMemberCanon(f, html);
+    if (admin) adminPages++;
+    if (member) memberPages++;
+    const has = html.includes("btHdrMail");
+    if ((admin || member) && !has) missing.push(f);
+    if (!admin && !member && has) extras.push(f);
   }
   assert.ok(adminPages >= 27, `guard floor: expected >=27 admin-nav pages, saw ${adminPages} (failure class 4)`);
-  assert.deepEqual(offenders, [],
-    `static mail icon on NON-admin pages (member shell injects — a static copy doubles it): ${offenders.join(", ")}`);
+  assert.equal(memberPages, 13, `guard floor: expected exactly 13 canonical member pages, saw ${memberPages}`);
+  assert.deepEqual(missing, [], `pages missing the static ✉: ${missing.join(", ")}`);
+  assert.deepEqual(extras, [], `static ✉ on excluded pages (index/chromeless): ${extras.join(", ")}`);
 });
 
-test("NC-1: a stripped member injector fails the presence check", () => {
-  assert.equal(memberVerdict(read("assets/site-nav.js").replace('a.href = "member-inbox.html"', "")), false);
+test("static btHdrAdmin ships hidden on exactly the 13 canonical member pages — and NO admin page", () => {
+  const offendersAdmin = [], missing = [];
+  for (const f of pages()) {
+    const html = read(f);
+    if (isAdmin(html) && html.includes("btHdrAdmin")) offendersAdmin.push(f);
+    if (isMemberCanon(f, html) && !/id="btHdrAdmin"[^>]*hidden/.test(html)) missing.push(f);
+  }
+  assert.deepEqual(offendersAdmin, [], `btHdrAdmin leaked onto admin pages: ${offendersAdmin.join(", ")}`);
+  assert.deepEqual(missing, [], `canonical member pages missing the hidden Admin link: ${missing.join(", ")}`);
 });
 
-test("NC-2: a re-added admin injector fails the no-injector check (v2.0 subject line)", () => {
-  const mutated = read("assets/admin-nav.js") + '\n  const a = document.createElement("a"); a.id = "btHdrMail";';
-  assert.equal(adminNoInjectorVerdict(mutated), false,
+test("NC-1: a re-added site-nav injector fails the no-injector check (v3.0 subject line)", () => {
+  const mutated = read("assets/site-nav.js") + '\n  const a = document.createElement("a"); a.id = "btHdrMail";';
+  assert.equal(noInjectorVerdict(mutated), false,
     "re-introducing the injector signature must fail — if it passes, the verdict is blind");
+});
+
+test("NC-2: a stripped badge fill fails the fill check", () => {
+  assert.equal(mailFillVerdict(read("assets/site-nav.js").replace("function headerMailFill()", "function x()")), false);
+});
+
+test("NC-3: an un-gated Admin reveal fails the check", () => {
+  const mutated = read("assets/site-nav.js")
+    .replace('if (role === "admin" || role === "staff") (function headerAdminReveal()', "(function headerAdminReveal()");
+  assert.equal(adminRevealVerdict(mutated), false, "the role-gate check must notice a stripped gate");
+});
+
+test("NC-4: a reveal that stops un-hiding fails the check", () => {
+  assert.equal(adminRevealVerdict(read("assets/site-nav.js").replace("a.hidden = false", "")), false);
 });

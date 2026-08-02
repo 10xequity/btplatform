@@ -13,19 +13,10 @@
   const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
-  /* theme toggle (instant — high-frequency action) */
-  document.getElementById("themeToggle").addEventListener("click", () => {
-    const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
-    document.documentElement.dataset.theme = next;
-    localStorage.setItem("bt_theme", next);
-    const lbl = document.getElementById("themeNow");
-    if (lbl) lbl.textContent = next === "dark" ? "Dark (black & gold)" : "Light (white & navy)";
-  });
-  document.getElementById("logoutBtn").addEventListener("click", async () => {
-    await api("/api/auth/logout", { method: "POST" });
-    sessionStorage.removeItem("bt_token");
-    location.href = "index.html";
-  });
+  /* theme + logout: site-nav.js v2.13 owns both listeners (per-page copies DELETED in
+     v0.53.0 — double-bind kills the toggle; double logout double-fires the POST). The
+     #themeNow label update moved into the single-source listener. signOut2 below still
+     relays through #logoutBtn and keeps working. */
 
   async function api(path, opts = {}) {
     const headers = Object.assign({ "content-type": "application/json" }, opts.headers || {});

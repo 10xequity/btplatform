@@ -690,9 +690,9 @@ async function unsubscribe(env, url) {
   const token = url.searchParams.get("t") || "";
   const page = (msg) => new Response(
     `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">` +
-    `<title>Boomtown Volleyball</title><body style="font-family:system-ui;background:#0B0B0D;color:#F2F0EA;` +
+    `<title>Boomtown Athletics</title><body style="font-family:system-ui;background:#0B0B0D;color:#F2F0EA;` +
     `display:grid;place-items:center;min-height:100dvh;margin:0"><div style="text-align:center;padding:24px">` +
-    `<h1 style="font-size:20px">${escapeHtml(msg)}</h1><p style="color:#A8A49A">Boomtown Volleyball</p></div>`,
+    `<h1 style="font-size:20px">${escapeHtml(msg)}</h1><p style="color:#A8A49A">Boomtown Athletics</p></div>`,
     { headers: { "content-type": "text/html; charset=utf-8" } }
   );
   if (!id || !token) return page("That unsubscribe link is incomplete.");

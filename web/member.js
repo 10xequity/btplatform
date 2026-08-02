@@ -52,7 +52,7 @@
               </div>`).join("")
           : "<p class='meta'>No results yet.</p>"}
       </div>` : ""}`;
-    document.title = name + " — Boomtown Volleyball";
+    document.title = name + " — Boomtown Athletics";
   }
 
   function notFound() {

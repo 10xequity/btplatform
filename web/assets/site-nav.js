@@ -1,4 +1,15 @@
 /* Boomtown Platform — Site-wide sidebar navigation (shared)
+   v2.13 (v0.53.0, owner 2026-08-02): the unified static MEMBER header (admin v0.52.0
+   precedent, inverted here too). The v2.10 mail and v2.11 Admin-switch INJECTORS are
+   DELETED — 13 member pages now ship one canonical static header (wordmark img + Admin
+   [hidden] + ✉ + ◐ + Sign out [hidden]). This file becomes the single-source BEHAVIOR
+   owner: theme-toggle listener + logout (per-page copies in register.js/score.js/settings.js
+   deleted — a surviving copy double-binds and kills the button, v0.52.0 failure class),
+   signed-in reveal of #logoutBtn, staff/admin reveal of the static #btHdrAdmin (+ the
+   bt_demo_member clear), and the ✉ unread-badge FILL on the static #btHdrMail (data fill is
+   the sole post-paint mutation, the brandLogo-swap precedent). All of it is gated on the
+   canonical-header marker (#btHdrMail present): index.html keeps its reduced login header
+   and app.js stays that page's behavior owner. Brand text: Boomtown Athletics (D-ORG-5).
    v2.12 (v0.50.0 R3): (1) org-brand rail card — the nav-brand name/logo now resolve from
    GET /api/public/org-brand?org=<bt_org> (queued since v0.46.0 §3.2). localStorage cache
    bt_org_brand:<org> (~5 min, matching the endpoint's Cache-Control); FAIL-CLOSED to the
@@ -6,18 +17,15 @@
    empty — a member never sees a broken rail. (2) rail visual pass to the design guide:
    the brand card's hardcoded #000/#F2F0EA move behind tokens with the same literals as
    fallbacks (uiux-review §1 — the card is deliberately dark so gold-on-dark logos read).
-   File: web/assets/site-nav.js · Version: v2.11 · Date: 2026-08-02 · Ships in: v0.49.0
+   File: web/assets/site-nav.js · Version: v2.13 · Date: 2026-08-02 · Ships in: v0.53.0
    v2.11: header "Admin" switch (owner 2026-08-02) — staff/admin who are also players get a
    header button on member pages to jump back to the Control Center, next to the mail icon
    and theme toggle. Clears bt_demo_member on click (same escape as the exit pill). Role-gated
    client-side for presentation only; guard() + requireStaff remain the real gate (v2.2 rule).
-   v2.10: header mail icon (owner 2026-08-02) — signed-in members get a ✉ button in the page
-   header, placed immediately before the theme toggle when one exists (else appended), linking
-   member-inbox.html with the same live unread badge the rail Inbox item carries. Injected here
-   (single source, brandLogo precedent) rather than into ~30 static headers — the header
-   re-layout release will absorb it into static markup.
-   v2.9: brand — rail chip is now the boom icon + "Boomtown Volleyball" text (the wordmark PNG
-   read "Boomtown Athletics", contradicting the app brand); badge ink is var(--gold-ink)
+   v2.10: header mail icon (owner 2026-08-02) — ✉ with live unread badge, injected (the
+   “re-layout release will absorb it into static markup” note came true: v2.13 did).
+   v2.9: brand — rail chip became the boom icon + brand text (the wordmark PNG carried the
+   pre-rename volleyball brand, contradicting the app brand); badge ink is var(--gold-ink)
    (white-on-gold was an AA failure — contrast pass, uiux-review §1).
    v2.8: "Community Play" (lfg.html) in Explore — LFG board, v0.45.0.
    v2.7: "Help & FAQ" (help.html) in Explore (v0.40.0, owner req #21 phase 1) — public,
@@ -95,6 +103,28 @@
   style.textContent = css;
   document.head.appendChild(style);
 
+  /* ---------- v2.13: single-source header behaviors (canonical static header only) ----------
+     Bound SYNCHRONOUSLY so the toggle works before /api/me resolves. Marker-gated: the
+     canonical member header ships #btHdrMail; index.html's reduced login header does not,
+     so app.js keeps owning that page (no double-bind). */
+  const canonHdr = !!document.getElementById("btHdrMail");
+  if (canonHdr) {
+    const tt = document.getElementById("themeToggle");
+    if (tt) tt.addEventListener("click", () => {
+      const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+      document.documentElement.dataset.theme = next;
+      try { localStorage.setItem("bt_theme", next); } catch (e) {}
+      const lbl = document.getElementById("themeNow"); /* settings.html label, if present */
+      if (lbl) lbl.textContent = next === "dark" ? "Dark (black & gold)" : "Light (white & navy)";
+    });
+    const lo = document.getElementById("logoutBtn");
+    if (lo) lo.addEventListener("click", async () => {
+      try { await fetch(API + "/api/auth/logout", { method: "POST", headers: authHeaders(), credentials: "include" }); } catch (e) {}
+      try { sessionStorage.removeItem("bt_token"); sessionStorage.removeItem("bt_demo_member"); } catch (e) {}
+      location.href = "index.html";
+    });
+  }
+
   /* ---------- build nav after we know the role ---------- */
   init();
   async function init() {
@@ -132,20 +162,21 @@
         const iu = await fetch(API + "/api/messages/unread-count", { headers: authHeaders(), credentials: "include" });
         if (iu.ok) inboxUnread = (await iu.json()).unread || 0;
       } catch (e) { /* worker older than v0.17.0 or offline: no badge */ }
-      /* v2.10: header mail icon — next to the theme toggle (owner 2026-08-02). 44px target,
-         tokens only; badge mirrors the rail Inbox count. Skipped if a page already has one. */
-      (function headerMail() {
-        const hdr = document.querySelector("header.header");
-        if (!hdr || document.getElementById("btHdrMail")) return;
-        const a = document.createElement("a");
-        a.id = "btHdrMail";
-        a.href = "member-inbox.html";
-        a.className = "btn ghost hdr-mail";
+      /* v2.13: FILL the static ✉ (badge + aria) — data fill only; the element ships in
+         static markup on all 13 canonical member pages (admin v0.52.0 inversion). */
+      (function headerMailFill() {
+        const a = document.getElementById("btHdrMail");
+        if (!a) return;
         a.setAttribute("aria-label", inboxUnread ? "Messages — " + inboxUnread + " unread" : "Messages");
-        a.setAttribute("style", "position:relative;min-width:44px;min-height:44px;display:inline-flex;align-items:center;justify-content:center;text-decoration:none");
-        a.innerHTML = "✉" + (inboxUnread ? `<span class="badge" style="position:absolute;top:2px;right:2px;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:var(--accent);color:var(--gold-ink);font-size:11px;font-weight:800;display:grid;place-items:center">${inboxUnread > 9 ? "9+" : inboxUnread}</span>` : "");
-        const theme = hdr.querySelector("#themeToggle");
-        if (theme) hdr.insertBefore(a, theme); else hdr.appendChild(a);
+        if (inboxUnread) {
+          a.style.position = "relative";
+          a.insertAdjacentHTML("beforeend", `<span class="badge" style="position:absolute;top:2px;right:2px;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:var(--accent);color:var(--gold-ink);font-size:11px;font-weight:800;display:grid;place-items:center">${inboxUnread > 9 ? "9+" : inboxUnread}</span>`);
+        }
+      })();
+      /* v2.13: reveal Sign out for any signed-in member (button ships hidden, static). */
+      (function logoutReveal() {
+        const lo = document.getElementById("logoutBtn");
+        if (lo && document.getElementById("btHdrMail")) lo.hidden = false;
       })();
       NAV.push({ label: "You", items: [
         { href: "home.html",     ico: "▦", text: "My Dashboard" },
@@ -159,19 +190,14 @@
       /* v2.11: header Admin switch — players who are also staff jump back to the Control
          Center from any member page. Presentation-only gating (v2.2 rule): the admin shell's
          own guard() + server requireStaff remain the enforcement. */
-      if (role === "admin" || role === "staff") (function headerAdminSwitch() {
-        const hdr = document.querySelector("header.header");
-        if (!hdr || document.getElementById("btHdrAdmin")) return;
-        const a = document.createElement("a");
-        a.id = "btHdrAdmin";
-        a.href = "admin.html";
-        a.className = "btn ghost hdr-admin";
-        a.setAttribute("aria-label", "Switch to admin view");
-        a.setAttribute("style", "min-height:44px;display:inline-flex;align-items:center;text-decoration:none");
-        a.textContent = "Admin";
+      if (role === "admin" || role === "staff") (function headerAdminReveal() {
+        /* v2.13: the Admin link ships static-but-hidden on all 13 canonical member pages
+           (owner call 2026-08-02: frame-one markup for everyone, one reveal for staff).
+           Presentation-only gating unchanged (v2.2 rule): guard() + requireStaff enforce. */
+        const a = document.getElementById("btHdrAdmin");
+        if (!a) return;
+        a.hidden = false;
         a.addEventListener("click", () => { try { sessionStorage.removeItem("bt_demo_member"); } catch (e) {} });
-        const anchor = hdr.querySelector("#btHdrMail") || hdr.querySelector("#themeToggle");
-        if (anchor) hdr.insertBefore(a, anchor); else hdr.appendChild(a);
       })();
       if ((role === "admin" || role === "staff") && demoMember) {
         const pill = document.createElement("button");
@@ -206,8 +232,8 @@
     const aside = document.createElement("nav");
     aside.className = "site-nav";
     aside.setAttribute("aria-label", "Site navigation");
-    aside.innerHTML = `<a class="nav-brand" href="index.html" aria-label="Boomtown Volleyball home">
-      <img src="assets/logo-boom-icon-512.png" alt="" width="36" height="36"><span class="nav-brand-name">Boomtown Volleyball</span></a>` + NAV.map(g => `
+    aside.innerHTML = `<a class="nav-brand" href="index.html" aria-label="Boomtown Athletics home">
+      <img src="assets/logo-boom-icon-512.png" alt="" width="36" height="36"><span class="nav-brand-name">Boomtown Athletics</span></a>` + NAV.map(g => `
       <div class="nav-group" role="group" aria-label="${g.label}">
         <div class="nav-label">${g.label}</div>
         ${g.items.map(i => `<a class="nav-item${i.href.split("#")[0] === here ? " active" : ""}" href="${i.href}"
@@ -276,7 +302,7 @@
       if (window.BT_STATUS || document.getElementById("bt-status-js")) return;
       var s = document.createElement("script");
       s.id = "bt-status-js";
-      s.src = "assets/build-status.js?v=0.52.0";
+      s.src = "assets/build-status.js?v=0.53.0";
       s.async = false;
       document.head.appendChild(s);
     } catch (e) { /* indicators are never load-blocking */ }

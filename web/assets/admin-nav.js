@@ -408,7 +408,7 @@
   /* v2.4 UX-06: put the logo in the header wordmark. Decorative — text stays for AT.
      v2.5 (v0.46.0): per-org logo. Renders instantly from the localStorage cache (or the boom
      icon — the Athletics wordmark PNG is retired from the header, its baked-in text contradicted
-     the Boomtown Volleyball brand), then refreshes the cache from the org profile in the
+     the pre-rename app brand), then refreshes the cache from the org profile in the
      background and swaps only on change. Paint never waits on the network. */
   /* v2.4 UX-06 · v2.5 per-org logo · v2.19 STATIC: the <img class="brand-logo"> ships in the
      page markup (fallback icon src), so the header paints complete on frame one. This block
@@ -501,7 +501,7 @@
       if (window.BT_STATUS || document.getElementById("bt-status-js")) return;
       var s = document.createElement("script");
       s.id = "bt-status-js";
-      s.src = "assets/build-status.js?v=0.52.0";
+      s.src = "assets/build-status.js?v=0.53.0";
       s.async = false;
       document.head.appendChild(s);
     } catch (e) { /* indicators are never load-blocking */ }

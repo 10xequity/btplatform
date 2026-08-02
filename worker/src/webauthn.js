@@ -56,7 +56,7 @@ async function registerOptions(env, ctx) {
 
   return H.json({
     publicKey: {
-      rp: { id: rpId(env), name: "Boomtown Volleyball" },
+      rp: { id: rpId(env), name: "Boomtown Athletics" },
       user: {
         id: b64urlFromString(String(user.id)),
         name: user.email,

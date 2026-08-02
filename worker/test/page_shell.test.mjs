@@ -1,6 +1,9 @@
 /**
  * Boomtown Platform — page-shell prerequisites guard
- * File: worker/test/page_shell.test.mjs · Version: v1.2 · Date: 2026-08-02 · Ships in: v0.52.0 (v1.1 v0.51.0 · v1.0 v0.49.1)
+ * File: worker/test/page_shell.test.mjs · Version: v1.3 · Date: 2026-08-02 · Ships in: v0.53.0 (v1.2 v0.52.0 · v1.1 v0.51.0 · v1.0 v0.49.1)
+ * v1.3: MEMBER pre-paint theme snippet — the 13 canonical member pages + index.html apply
+ * saved bt_theme (else system preference) before the first stylesheet, byte-identical
+ * (theme half only; member pages carry no rail-collapse state).
  *
  * WHY (the v0.49.1 outage): five admin pages (facility, faq, sms, waitlists, waivers) loaded
  * admin-nav.js WITHOUT config.js. BT_CONFIG.apiBase was undefined, guard()'s /api/me fetch hit
@@ -217,4 +220,43 @@ test("NC-7: a one-byte drift in one page's snippet breaks byte-identity", () => 
     variants.add(s);
   });
   assert.ok(variants.size > 1, "a drifted copy must register as a second variant");
+});
+
+/* ═══════════════ v1.3 — member pre-paint theme snippet (v0.53.0) ═══════════════ */
+
+const MEMBER_SNIPPET_PAGES = ["help.html","home.html","index.html","leagues.html","lfg.html",
+  "library.html","member-inbox.html","member.html","membership.html","profile.html",
+  "register.html","schedule.html","score.html","settings.html"];
+
+function memberSnippetVerdict(html) {
+  const m = html.match(/<script>\/\* Pre-paint theme \(v[\d.]+\):[\s\S]*?<\/script>/);
+  if (!m) return { ok: false, why: "member pre-paint theme snippet missing" };
+  const cssAt = html.indexOf('<link rel="stylesheet"');
+  if (cssAt !== -1 && html.indexOf(m[0]) > cssAt) return { ok: false, why: "snippet sits BELOW the stylesheets" };
+  if (!m[0].includes('localStorage.getItem("bt_theme")')) return { ok: false, why: "snippet does not read bt_theme" };
+  if (!m[0].includes("prefers-color-scheme")) return { ok: false, why: "snippet lost the system-preference fallback" };
+  return { ok: true, snippet: m[0] };
+}
+
+test("every member page carries the pre-paint THEME snippet, before CSS, byte-identical", () => {
+  const snippets = new Map();
+  for (const f of MEMBER_SNIPPET_PAGES) {
+    const v = memberSnippetVerdict(readFileSync(new URL(f, WEB_DIR), "utf8"));
+    assert.ok(v.ok, `${f}: ${v.why}`);
+    snippets.set(f, v.snippet);
+  }
+  assert.equal(new Set(snippets.values()).size, 1, "member snippet not byte-identical across pages");
+});
+
+test("NC-8: removing the member snippet from a real page fails the verdict", () => {
+  const html = readFileSync(new URL("home.html", WEB_DIR), "utf8")
+    .replace(/<script>\/\* Pre-paint theme[\s\S]*?<\/script>\n/, "");
+  assert.equal(memberSnippetVerdict(html).ok, false);
+});
+
+test("NC-9: a member snippet moved below the stylesheets fails (pre-paint means before CSS)", () => {
+  const html = readFileSync(new URL("home.html", WEB_DIR), "utf8");
+  const m = html.match(/<script>\/\* Pre-paint theme[\s\S]*?<\/script>\n/)[0];
+  const moved = html.replace(m, "").replace("</head>", m + "</head>");
+  assert.equal(memberSnippetVerdict(moved).ok, false);
 });

@@ -12,13 +12,8 @@
     app.innerHTML = "<div class='card'><h1>One moment</h1><p>Settings still loading — pull down to refresh.</p></div>";
     return;
   }
-  const savedTheme = localStorage.getItem("bt_theme");
-  document.documentElement.dataset.theme = savedTheme || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
-  document.getElementById("themeToggle").onclick = () => {
-    const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
-    document.documentElement.dataset.theme = next;
-    localStorage.setItem("bt_theme", next);
-  };
+  /* theme: pre-paint snippet applies it; site-nav.js v2.13 owns the toggle listener
+     (per-page copy DELETED in v0.53.0 — a surviving copy double-binds → dead button). */
 
   async function api(path, opts = {}) {
     const headers = { "content-type": "application/json" };

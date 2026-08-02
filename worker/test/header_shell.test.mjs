@@ -1,6 +1,15 @@
 /**
  * Boomtown Platform — unified admin header guard
- * File: worker/test/header_shell.test.mjs · Version: v1.0 · Date: 2026-08-02 · Ships in: v0.52.0
+ * File: worker/test/header_shell.test.mjs · Version: v2.0 · Date: 2026-08-02 · Ships in: v0.53.0 (v1.0 v0.52.0)
+ *
+ * v2.0 (v0.53.0): the MEMBER canonical header — 13 site-nav pages (every site-nav page
+ * except index.html, whose reduced login header app.js owns) ship ONE static header,
+ * byte-identical: brand-logo img + "Boomtown Athletics" wordmark · hidden #btHdrAdmin →
+ * admin.html · #btHdrMail → member-inbox.html · #themeToggle · hidden #logoutBtn ·
+ * no-print · deliberately NO #orgSwitcher (owner call 2026-08-02: members act in one org).
+ * site-nav.js v2.13 is the single behavior source (theme + logout); the per-page theme
+ * copies in register.js/score.js/settings.js are DELETED and must not return (app.js is
+ * the documented exception — it owns index.html's reduced header).
  *
  * WHY (uiux-review §6 step 4): v0.52.0 makes the admin header fully STATIC — the brand logo
  * and mail icon that admin-nav.js used to inject after first paint are markup now, the org
@@ -189,4 +198,112 @@ test("NC-6: a re-added per-page switcher population fails the no-copy scan", () 
 test("NC-7: removing the body override from admin-event.html fails check 3", () => {
   const mutated = read("admin-event.html").replace(' data-org-switch-href="admin-events.html"', "");
   assert.equal(/<body[^>]*data-org-switch-href="admin-events\.html"/.test(mutated), false);
+});
+
+/* ═══════════════ v2.0 — MEMBER canonical header (v0.53.0) ═══════════════ */
+
+const isMemberCanonPage = (f, html) =>
+  f !== "index.html" && /<script[^>]+src="assets\/site-nav\.js[^"]*"/.test(html);
+
+function memberHeaderVerdict(html) {
+  const m = html.match(HEADER_RE);
+  if (!m) return { ok: false, why: "canonical header block missing" };
+  const h = m[0];
+  const missing = [];
+  if (!/<img class="brand-logo" src="assets\/logo-boom-icon-512\.png\?v=/.test(h)) missing.push("static .brand-logo img");
+  if (!/Boomtown <span>Athletics<\/span>/.test(h)) missing.push("Athletics wordmark");
+  if (!/id="btHdrAdmin"[^>]*href="admin\.html"[^>]*hidden|id="btHdrAdmin"[^>]*hidden/.test(h)) missing.push("hidden #btHdrAdmin");
+  if (!/id="btHdrMail"[^>]*href="member-inbox\.html"|href="member-inbox\.html"[^>]*id="btHdrMail"/.test(h)) missing.push("#btHdrMail → member-inbox.html");
+  if (!h.includes('id="themeToggle"')) missing.push("#themeToggle");
+  if (!/id="logoutBtn"[^>]*hidden/.test(h)) missing.push("hidden #logoutBtn");
+  if (h.includes("orgSwitcher")) missing.push("UNEXPECTED #orgSwitcher (members act in one org)");
+  if (missing.length) return { ok: false, why: "member header issues: " + missing.join(", ") };
+  return { ok: true, header: h };
+}
+
+/* site-nav.js single-source behavior verdicts */
+const siteNavThemeVerdict = (src) =>
+  src.includes('tt.addEventListener("click"') && src.includes('localStorage.setItem("bt_theme"');
+const siteNavLogoutVerdict = (src) =>
+  src.includes('lo.addEventListener("click"') && src.includes('"/api/auth/logout"');
+/* a member page-script keeping a theme copy double-binds → dead button (v0.52.0 class) */
+const memberPageCopyVerdict = (src) => {
+  const bad = [];
+  if (/getElementById\("themeToggle"\)\s*\.\s*(onclick|addEventListener)/.test(src)) bad.push("theme listener copy");
+  if (/getElementById\("logoutBtn"\)\s*\.\s*addEventListener/.test(src)) bad.push("logout listener copy");
+  return bad;
+};
+
+test("the 13 canonical member pages carry the complete member header, byte-identical", () => {
+  const canon = htmlPages().filter((f) => isMemberCanonPage(f, read(f)));
+  assert.equal(canon.length, 13, `expected exactly 13 canonical member pages, saw ${canon.length}: ${canon.join(", ")}`);
+  const headers = new Map();
+  for (const f of canon) {
+    const v = memberHeaderVerdict(read(f));
+    assert.ok(v.ok, `${f}: ${v.why}`);
+    headers.set(f, v.header);
+  }
+  const uniq = new Set(headers.values());
+  assert.equal(uniq.size, 1,
+    `member header not byte-identical — ${uniq.size} variants across: ${[...headers.keys()].join(", ")}`);
+});
+
+test("index.html keeps the reduced login header: brand img + Athletics + theme, NO mail/Admin", () => {
+  const html = read("index.html");
+  assert.match(html, /<img class="brand-logo" src="assets\/logo-boom-icon-512\.png\?v=/, "login brand img missing");
+  assert.match(html, /Boomtown <span>Athletics<\/span>/, "login wordmark not renamed");
+  assert.ok(html.includes('id="themeToggle"'), "login theme toggle missing");
+  assert.ok(!html.includes("btHdrMail"), "mail icon leaked onto the login page");
+  assert.ok(!html.includes("btHdrAdmin"), "Admin link leaked onto the login page");
+});
+
+test("site-nav.js v2.13 owns the member theme-toggle listener and logout", () => {
+  const src = read("assets/site-nav.js");
+  assert.ok(siteNavThemeVerdict(src), "single-source theme listener missing from site-nav.js");
+  assert.ok(siteNavLogoutVerdict(src), "single-source logout missing from site-nav.js");
+  assert.ok(src.includes('getElementById("btHdrMail")'),
+    "the canonical-header marker gate is gone — site-nav would double-bind on index.html");
+});
+
+test("no member page script keeps a theme/logout copy (deleted blocks must not return), widest set", () => {
+  const files = readdirSync(new URL("assets/", WEB_DIR)).filter((f) => f.endsWith(".js"));
+  assert.ok(files.length >= 25, `assets corpus shrank: ${files.length} js files`);
+  const allowed = new Set(["site-nav.js", "admin-nav.js", "app.js"]); // app.js = index.html owner, documented
+  const offenders = [];
+  for (const f of files) {
+    if (allowed.has(f)) continue;
+    const bad = memberPageCopyVerdict(read("assets/" + f));
+    if (bad.length) offenders.push(`${f}: ${bad.join(" + ")}`);
+  }
+  assert.deepEqual(offenders, [], `per-page header-behavior copies returned:\n${offenders.join("\n")}`);
+});
+
+test("NC-M1: removing #btHdrMail from a member header fails completeness", () => {
+  const html = read("home.html").replace(/<a id="btHdrAdmin"[\s\S]*?<\/a>\n/, "$&").replace(/<a id="btHdrMail"[^>]*>✉<\/a>\n/, "");
+  assert.equal(memberHeaderVerdict(html).ok, false);
+});
+
+test("NC-M2: a one-byte drift in one member page's header breaks byte-identity", () => {
+  const a = memberHeaderVerdict(read("home.html")).header;
+  const b = memberHeaderVerdict(read("lfg.html").replace("Sign out", "Sign Out")).header;
+  assert.notEqual(a, b, "the identity comparison must notice a one-byte drift");
+});
+
+test("NC-M3: an un-hidden Admin link fails the verdict (it must ship hidden)", () => {
+  const html = read("home.html").replace(/(id="btHdrAdmin"[^>]*) hidden/, "$1");
+  assert.equal(memberHeaderVerdict(html).ok, false);
+});
+
+test("NC-M4: a member header carrying an org switcher fails (members act in one org)", () => {
+  const html = read("home.html").replace('<div class="spacer"></div>', '<div class="spacer"></div><select id="orgSwitcher"></select>');
+  assert.equal(memberHeaderVerdict(html).ok, false);
+});
+
+test("NC-M5: stripping the bt_theme write from site-nav.js fails the theme verdict", () => {
+  assert.equal(siteNavThemeVerdict(read("assets/site-nav.js").replace('localStorage.setItem("bt_theme"', "x(")), false);
+});
+
+test("NC-M6: a re-added per-page theme copy fails the no-copy scan (exact subject line)", () => {
+  const mutated = read("assets/score.js") + '\n  document.getElementById("themeToggle").onclick = () => {};';
+  assert.ok(memberPageCopyVerdict(mutated).length >= 1, "the no-copy scan must catch a returned theme listener");
 });
