@@ -1,5 +1,9 @@
 /* Boomtown Platform — Site-wide sidebar navigation (shared)
-   File: web/assets/site-nav.js · Version: v2.10 · Date: 2026-08-02 · Ships in: v0.48.0
+   File: web/assets/site-nav.js · Version: v2.11 · Date: 2026-08-02 · Ships in: v0.49.0
+   v2.11: header "Admin" switch (owner 2026-08-02) — staff/admin who are also players get a
+   header button on member pages to jump back to the Control Center, next to the mail icon
+   and theme toggle. Clears bt_demo_member on click (same escape as the exit pill). Role-gated
+   client-side for presentation only; guard() + requireStaff remain the real gate (v2.2 rule).
    v2.10: header mail icon (owner 2026-08-02) — signed-in members get a ✉ button in the page
    header, placed immediately before the theme toggle when one exists (else appended), linking
    member-inbox.html with the same live unread badge the rail Inbox item carries. Injected here
@@ -145,6 +149,23 @@
         { href: "settings.html", ico: "⚙", text: "Settings" },
       ]});
       const demoMember = sessionStorage.getItem("bt_demo_member") === "1";
+      /* v2.11: header Admin switch — players who are also staff jump back to the Control
+         Center from any member page. Presentation-only gating (v2.2 rule): the admin shell's
+         own guard() + server requireStaff remain the enforcement. */
+      if (role === "admin" || role === "staff") (function headerAdminSwitch() {
+        const hdr = document.querySelector("header.header");
+        if (!hdr || document.getElementById("btHdrAdmin")) return;
+        const a = document.createElement("a");
+        a.id = "btHdrAdmin";
+        a.href = "admin.html";
+        a.className = "btn ghost hdr-admin";
+        a.setAttribute("aria-label", "Switch to admin view");
+        a.setAttribute("style", "min-height:44px;display:inline-flex;align-items:center;text-decoration:none");
+        a.textContent = "Admin";
+        a.addEventListener("click", () => { try { sessionStorage.removeItem("bt_demo_member"); } catch (e) {} });
+        const anchor = hdr.querySelector("#btHdrMail") || hdr.querySelector("#themeToggle");
+        if (anchor) hdr.insertBefore(a, anchor); else hdr.appendChild(a);
+      })();
       if ((role === "admin" || role === "staff") && demoMember) {
         const pill = document.createElement("button");
         pill.type = "button";
@@ -219,7 +240,7 @@
       if (window.BT_STATUS || document.getElementById("bt-status-js")) return;
       var s = document.createElement("script");
       s.id = "bt-status-js";
-      s.src = "assets/build-status.js?v=0.48.0";
+      s.src = "assets/build-status.js?v=0.49.0";
       s.async = false;
       document.head.appendChild(s);
     } catch (e) { /* indicators are never load-blocking */ }

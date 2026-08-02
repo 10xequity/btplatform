@@ -1,6 +1,12 @@
 /**
  * Boomtown Platform — header-actions guard
- * File: worker/test/header_actions.test.mjs · Version: v1.0 · Date: 2026-08-02 · Ships in: v0.48.0
+ * File: worker/test/header_actions.test.mjs · Version: v1.1 · Date: 2026-08-02 · Ships in: v0.49.0
+ *
+ * v1.1 (v0.49.0): adds the header "Admin" switch checks — the injector must exist in
+ * site-nav.js, link admin.html, and sit behind the staff/admin role gate (presentation-only;
+ * the admin shell's guard() + server requireStaff are the enforcement). NC-3 proves the
+ * role-gate check can fail.
+ * v1.0 (v0.48.0): header mail icon, both shells.
  *
  * v0.48.0 adds a header mail icon to BOTH shells (owner 2026-08-02), injected from the two
  * shared nav scripts — single source, brandLogo precedent — instead of edited into ~40 static
@@ -25,6 +31,26 @@ const memberVerdict = (src) =>
   src.includes('a.id = "btHdrMail"') && src.includes('a.href = "member-inbox.html"') && src.includes("min-width:44px");
 const adminVerdict = (src) =>
   src.includes('a.id = "btHdrMail"') && src.includes('a.href = "admin-messages.html"') && src.includes("min-width:44px");
+/* v1.1: the Admin switch must be role-gated AND target admin.html */
+const switchVerdict = (src) =>
+  src.includes('if (role === "admin" || role === "staff") (function headerAdminSwitch()') &&
+  src.includes('a.id = "btHdrAdmin"') && src.includes('a.href = "admin.html"');
+
+test("site-nav.js injects the role-gated header Admin switch (v0.49.0)", () => {
+  assert.ok(switchVerdict(read("assets/site-nav.js")), "Admin switch injector missing, retargeted, or un-gated");
+});
+
+test("no static page hardcodes btHdrAdmin (single-source rule)", () => {
+  const pages = readdirSync(WEB_DIR).filter((f) => f.endsWith(".html"));
+  const offenders = pages.filter((f) => read(f).includes("btHdrAdmin"));
+  assert.deepEqual(offenders, [], `static copies of the Admin switch found: ${offenders.join(", ")}`);
+});
+
+test("NC-3: an un-gated Admin switch fails the check", () => {
+  const mutated = read("assets/site-nav.js")
+    .replace('if (role === "admin" || role === "staff") (function headerAdminSwitch()', "(function headerAdminSwitch()");
+  assert.equal(switchVerdict(mutated), false, "the role-gate check must notice a stripped gate");
+});
 
 test("site-nav.js injects the member header mail icon (inbox link, 44px target)", () => {
   assert.ok(memberVerdict(read("assets/site-nav.js")), "member header mail injector missing or altered");
