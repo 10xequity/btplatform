@@ -1,5 +1,9 @@
 /* Boomtown Platform — Admin sidebar (shared)
-   Version: v2.16 · Date: 2026-08-02 · Ships in: v0.47.0
+   Version: v2.17 · Date: 2026-08-02 · Ships in: v0.48.0
+   v2.17 (v0.48.0): header mail icon (owner 2026-08-02) — every admin page header gets a ✉
+   button linking admin-messages.html (the message-report review queue), placed before the
+   theme toggle when the page has one, else appended. No badge yet: there is no admin
+   unread-count endpoint (queued follow-up). Injected here, single source.
    v2.16 (v0.47.0): STATIC RAIL (uiux-review §3A). Every admin page now ships the rail
    markup in its static HTML (`<aside class="sidebar" data-static="rail">`), so the rail
    paints with the page — no more build-after-paint pop ("reloads every time"). This file
@@ -398,7 +402,7 @@
   (function brandLogo() {
     const wm = document.querySelector(".wordmark");
     if (!wm || wm.querySelector(".brand-logo")) return;
-    const FALLBACK = "assets/logo-boom-icon-512.png?v=0.47.0";
+    const FALLBACK = "assets/logo-boom-icon-512.png?v=0.48.0";
     const cacheKey = "bt_org_logo:" + (localStorage.getItem("bt_org") || "");
     const img = new Image();
     img.src = localStorage.getItem(cacheKey) || FALLBACK;
@@ -417,6 +421,23 @@
       try { fresh ? localStorage.setItem(cacheKey, fresh) : localStorage.removeItem(cacheKey); } catch (e) {}
       img.src = fresh || FALLBACK;
     }).catch(() => {});
+  })();
+
+  /* v2.17: header mail icon — admin pages are staff-only past guard(), so it always renders.
+     Links the Message Reports queue; 44px target; badge is a queued follow-up (no admin
+     unread-count endpoint exists yet). */
+  (function headerMail() {
+    const hdr = document.querySelector("header.header");
+    if (!hdr || document.getElementById("btHdrMail")) return;
+    const a = document.createElement("a");
+    a.id = "btHdrMail";
+    a.href = "admin-messages.html";
+    a.className = "btn ghost hdr-mail";
+    a.setAttribute("aria-label", "Messages");
+    a.setAttribute("style", "min-width:44px;min-height:44px;display:inline-flex;align-items:center;justify-content:center;text-decoration:none");
+    a.textContent = "✉";
+    const theme = hdr.querySelector("#themeToggle");
+    if (theme) hdr.insertBefore(a, theme); else hdr.appendChild(a);
   })();
 
   /* v2.4: the role gate runs on EVERY admin page load — including pages that never call
@@ -447,7 +468,7 @@
       if (window.BT_STATUS || document.getElementById("bt-status-js")) return;
       var s = document.createElement("script");
       s.id = "bt-status-js";
-      s.src = "assets/build-status.js?v=0.47.0";
+      s.src = "assets/build-status.js?v=0.48.0";
       s.async = false;
       document.head.appendChild(s);
     } catch (e) { /* indicators are never load-blocking */ }

@@ -1,7 +1,7 @@
 /* Boomtown Platform — Email signup widget (embeddable)
    File: web/assets/signup-widget.js · Version: v1.0 · Date: 2026-07-24 · Ships in: v0.16.0
    Drop-in for boomtownvb.com / coloradoboom.com (spec §3.3 "website signup widgets"):
-     <script src="https://10xequity.github.io/btplatform/web/assets/signup-widget.js?v=0.47.0"
+     <script src="https://10xequity.github.io/btplatform/web/assets/signup-widget.js?v=0.48.0"
              data-org="boomtown" defer></script>
    Renders where the tag sits. data-org: boomtown | match-point | queens-club.
    Optional data-api overrides the API origin. Honors the host page's colors via inherited

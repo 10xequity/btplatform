@@ -1,5 +1,10 @@
 /* Boomtown Platform — Site-wide sidebar navigation (shared)
-   File: web/assets/site-nav.js · Version: v2.9 · Date: 2026-08-01 · Ships in: v0.46.0
+   File: web/assets/site-nav.js · Version: v2.10 · Date: 2026-08-02 · Ships in: v0.48.0
+   v2.10: header mail icon (owner 2026-08-02) — signed-in members get a ✉ button in the page
+   header, placed immediately before the theme toggle when one exists (else appended), linking
+   member-inbox.html with the same live unread badge the rail Inbox item carries. Injected here
+   (single source, brandLogo precedent) rather than into ~30 static headers — the header
+   re-layout release will absorb it into static markup.
    v2.9: brand — rail chip is now the boom icon + "Boomtown Volleyball" text (the wordmark PNG
    read "Boomtown Athletics", contradicting the app brand); badge ink is var(--gold-ink)
    (white-on-gold was an AA failure — contrast pass, uiux-review §1).
@@ -116,6 +121,21 @@
         const iu = await fetch(API + "/api/messages/unread-count", { headers: authHeaders(), credentials: "include" });
         if (iu.ok) inboxUnread = (await iu.json()).unread || 0;
       } catch (e) { /* worker older than v0.17.0 or offline: no badge */ }
+      /* v2.10: header mail icon — next to the theme toggle (owner 2026-08-02). 44px target,
+         tokens only; badge mirrors the rail Inbox count. Skipped if a page already has one. */
+      (function headerMail() {
+        const hdr = document.querySelector("header.header");
+        if (!hdr || document.getElementById("btHdrMail")) return;
+        const a = document.createElement("a");
+        a.id = "btHdrMail";
+        a.href = "member-inbox.html";
+        a.className = "btn ghost hdr-mail";
+        a.setAttribute("aria-label", inboxUnread ? "Messages — " + inboxUnread + " unread" : "Messages");
+        a.setAttribute("style", "position:relative;min-width:44px;min-height:44px;display:inline-flex;align-items:center;justify-content:center;text-decoration:none");
+        a.innerHTML = "✉" + (inboxUnread ? `<span class="badge" style="position:absolute;top:2px;right:2px;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:var(--accent);color:var(--gold-ink);font-size:11px;font-weight:800;display:grid;place-items:center">${inboxUnread > 9 ? "9+" : inboxUnread}</span>` : "");
+        const theme = hdr.querySelector("#themeToggle");
+        if (theme) hdr.insertBefore(a, theme); else hdr.appendChild(a);
+      })();
       NAV.push({ label: "You", items: [
         { href: "home.html",     ico: "▦", text: "My Dashboard" },
         { href: "home.html#notifications", ico: "◔", text: "Notifications", badge: unread },
@@ -199,7 +219,7 @@
       if (window.BT_STATUS || document.getElementById("bt-status-js")) return;
       var s = document.createElement("script");
       s.id = "bt-status-js";
-      s.src = "assets/build-status.js?v=0.47.0";
+      s.src = "assets/build-status.js?v=0.48.0";
       s.async = false;
       document.head.appendChild(s);
     } catch (e) { /* indicators are never load-blocking */ }
