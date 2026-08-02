@@ -1,5 +1,5 @@
 # Boomtown Athletics Platform
-**Version:** v0.24.0 · **Date:** 2026-07-26 · **Supersedes:** README @ v0.12.0 (2026-07-24)
+**Version:** v0.50.0 · **Date:** 2026-08-02 · **Supersedes:** README @ v0.24.0 (2026-07-26)
 
 Multi-org sports operations platform for **Boomtown Volleyball · Match Point Social · Queens Club**, plus 7 facility-operator orgs (Colorado Boom, Oda Up, RMR, Real Futsal, Special Olympics CO, Zara Gymnastics, External/Rental). Facility is in **Aurora, Colorado**.
 
@@ -37,8 +37,8 @@ Two things are sandboxed platform-wide and are **deliberate, not defects**:
 |---|---|---|
 | `web/` | Static frontend, GitHub Pages. No build step; every page carries a `?v=` cache-bust. | Push to `main` |
 | `worker/src/` | Cloudflare Worker API. `index.js` mounts every module route. | Auto-deploys via Actions **Deploy Worker** on any `worker/**` push |
-| `worker/test/` | `node --test` suites. **137 passing at v0.24.0.** | — |
-| `db/migrations/` | Schema of record. **0001–0016 all applied live** to D1 `boomtown-prod` (63 tables). | Applied by Claude via Cloudflare MCP, **additive-only**. The SQL files here are records — never re-run them. |
+| `worker/test/` | `node --test` suites. **588 passing at v0.50.0.** | — |
+| `db/migrations/` | Schema of record. **0001–0033 all applied live** to D1 `boomtown-prod` (82 tables). | Applied by Claude via Cloudflare MCP, **additive-only**. The SQL files here are records — never re-run them. |
 | `docs/` | Install guides, handoffs, roadmaps. Naming: `YYYY-MM-DD_name_vX_Y.md`. | — |
 
 Worker route pattern: `xxxRoutes(request, env, url, ctx)` + `wireXxx(h)`; helpers destructure
@@ -72,7 +72,17 @@ Every table carries `org_id`, timestamps and a soft-delete `deleted_at`.
 | v0.21.0 | M16 optimization + QA sweep |
 | v0.22.0 | Waiver versioning — publish versions, every signature pins the text it was shown |
 | v0.23.0 | Waiver enforcement at the door + iCal calendar feeds + Aurora location correction |
-| **v0.24.0** | **Build-status indicators, Build Status page, README refresh** |
+| v0.24.0 | Build-status indicators, Build Status page, README refresh |
+| v0.25–0.28 | Teammate self-sign, media consent, documents & templating, FAQ |
+| v0.29–0.32 | SMS foundation (frozen), marketing SMS scope C, org reconciliation |
+| v0.33–0.44 | Delivery-gate hardening, kiosk scan, tokens/AA contrast pass, org logos |
+| v0.45.0 | LFG & Community Play — two-way board, reliability counts (never ratings), 18+ gate |
+| v0.46.0 | Org-brand groundwork, contrast/emphasis tokens |
+| v0.47.0 | Static rail inlined on all 26 admin pages (kills the build-after-paint pop) |
+| v0.48.0 | Header mail icon (both shells, single-source injectors) |
+| v0.49.0 | Header Admin switch for staff-who-play |
+| v0.49.1 | **Hotfix:** config.js restored on 5 dead admin pages; headers on lfg/help; every js/css ref now bustered; page-shell + bare-ref guards |
+| **v0.50.0** | **R3 member home** — announcement box (admin CTA pinned + non-mutable, per-item/per-category mutes, aggregated feed), results/messages/my-events cards, sub-play CTA row, sub availability (passive/active + level → LFG), public org-brand endpoint, org-branded member rail. Migration 0033. |
 
 Full detail per release lives in `CHANGELOG.md`.
 
@@ -80,16 +90,14 @@ Full detail per release lives in `CHANGELOG.md`.
 
 ## Roadmap
 
-Current: **`2026-07-26_roadmap_v7_0.md`** (project knowledge). Headline order:
+Current queue lives in the session handoff (project knowledge). Headline order after v0.50.0:
 
-1. **v0.25.0** Teammate self-sign links + calendar subscribe UI
-2. **R1 refinement sprint** — check-in balance chip, promo redemption at checkout, one-click mute, register-page nav
-3. **v0.26.0** Media-consent record
-4. **R2 refinement sprint** — reporting depth, saved views, bulk actions
-5. **M-TF** Tournament format engine ⚠ *on hold*
-6. **M17** Achievements + public standings · **M18** Player Exchange · **M19** Revenue pack · **M20** Lessons/clinics/camps · **M21** Auto-scheduler
+1. Shared button classes + pre-paint collapse state (uiux-review §6 step 3)
+2. Header re-layout + glass + motion + unified org switcher (absorbs header icons into static markup)
+3. Optional SPA shell session (uiux-review §3C)
+4. **M-TF** Tournament format engine ⚠ *FABLE-GATED* · tournament/league/module questions (requirements §15) gate those builds
 
-**Go-live blockers:** waiver v2 text published · Brevo key + SPF/DKIM/DMARC · Square SANDBOX → production (owner's call) · 3 VAPID worker secrets.
+**Go-live blockers:** Brevo key + SPF/DKIM/DMARC (owner-paused) · Square SANDBOX → production (owner's call) · `orgs.rules_url` after domain transfer · TWILIO/A2P **frozen by owner** · admin unread-count endpoint (header badge) · org switcher on the 8 former admin-shell pages.
 
 ---
 
@@ -109,8 +117,8 @@ Current: **`2026-07-26_roadmap_v7_0.md`** (project knowledge). Headline order:
 ## Start here
 
 - New to the repo: `docs/2026-07-21_setup-guide_v0.1.md`
-- Latest session handoff: `2026-07-26_handoff_v2_7.md` (project knowledge)
+- Latest session handoff: `2026-08-02_handoff_v0_50_0.md` (project knowledge)
 - What works right now: open `web/admin-buildstatus.html`
 
 ---
-*Changelog: v0.24.0 (2026-07-26) — full rewrite from the stale v0.12.0 README: module table brought current through v0.24.0, build-status marker legend added, architecture table rewritten with the real route pattern and test count, roadmap replaced with a v7 pointer, standing rules updated for D-MIG-2 and D-DOC-3. · 2026-07-24 — v0.2 → v0.12.0.*
+*Changelog: v0.50.0 (2026-08-02) — brought current: suite 588, migrations through 0033 (82 tables), module table v0.25–v0.50, roadmap replaced with the uiux-review §6 queue + live blocker list, handoff pointer updated. · v0.24.0 (2026-07-26) — full rewrite from the stale v0.12.0 README: module table brought current through v0.24.0, build-status marker legend added, architecture table rewritten with the real route pattern and test count, roadmap replaced with a v7 pointer, standing rules updated for D-MIG-2 and D-DOC-3. · 2026-07-24 — v0.2 → v0.12.0.*

@@ -1,4 +1,11 @@
 /* Boomtown Platform — Site-wide sidebar navigation (shared)
+   v2.12 (v0.50.0 R3): (1) org-brand rail card — the nav-brand name/logo now resolve from
+   GET /api/public/org-brand?org=<bt_org> (queued since v0.46.0 §3.2). localStorage cache
+   bt_org_brand:<org> (~5 min, matching the endpoint's Cache-Control); FAIL-CLOSED to the
+   default Boomtown icon/wordmark when the org is unknown, the fetch fails, or fields are
+   empty — a member never sees a broken rail. (2) rail visual pass to the design guide:
+   the brand card's hardcoded #000/#F2F0EA move behind tokens with the same literals as
+   fallbacks (uiux-review §1 — the card is deliberately dark so gold-on-dark logos read).
    File: web/assets/site-nav.js · Version: v2.11 · Date: 2026-08-02 · Ships in: v0.49.0
    v2.11: header "Admin" switch (owner 2026-08-02) — staff/admin who are also players get a
    header button on member pages to jump back to the Control Center, next to the mail icon
@@ -67,9 +74,9 @@
     border-radius: 999px; background: var(--accent); color: var(--gold-ink); font-size: 12px; font-weight: 800;
     display: grid; place-items: center; }
   .site-nav .nav-brand { display: flex; align-items: center; gap: 10px; margin: 0 4px 14px; padding: 10px 12px; border-radius: var(--radius-card, 10px);
-    background: #000; border: 1px solid var(--border); text-decoration: none; }
+    background: var(--brand-card-bg, #000); border: 1px solid var(--border); text-decoration: none; }
   .site-nav .nav-brand img { width: 36px; height: 36px; display: block; flex: none; }
-  .site-nav .nav-brand-name { color: #F2F0EA; font-weight: 700; font-size: 15px; line-height: 1.2; }
+  .site-nav .nav-brand-name { color: var(--brand-card-ink, #F2F0EA); font-weight: 700; font-size: 15px; line-height: 1.2; }
   .site-nav .nav-brand:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .site-layout > main, .site-layout > .site-content { flex: 1; min-width: 0; }
   @media (hover: hover) and (pointer: fine) { .site-nav .nav-item:hover { background: var(--surface); } }
@@ -208,6 +215,35 @@
       </div>`).join("");
     layout.appendChild(aside);
     layout.appendChild(main);
+    applyOrgBrand(aside); // v2.12 — async; rail paints with the default first (fail-closed)
+  }
+
+  /* v2.12: org-brand rail card. Cache ~5 min per org; fail closed to the default. */
+  async function applyOrgBrand(aside) {
+    const org = localStorage.getItem("bt_org");
+    if (!org || !API || API.includes("PENDING")) return;
+    const KEY = "bt_org_brand:" + org;
+    let brand = null;
+    try {
+      const cached = JSON.parse(localStorage.getItem(KEY) || "null");
+      if (cached && (Date.now() - cached.at) < 5 * 60 * 1000) brand = cached.v;
+    } catch (e) { /* bad cache = no cache */ }
+    if (!brand) {
+      try {
+        const r = await fetch(API + "/api/public/org-brand?org=" + encodeURIComponent(org));
+        if (!r.ok) return; // fail closed — default brand stays
+        brand = await r.json();
+        localStorage.setItem(KEY, JSON.stringify({ at: Date.now(), v: brand }));
+      } catch (e) { return; } // offline = default brand stays
+    }
+    if (!brand || !brand.display_name) return;
+    const nameEl = aside.querySelector(".nav-brand-name");
+    if (nameEl) nameEl.textContent = brand.display_name;
+    const img = aside.querySelector(".nav-brand img");
+    if (img && brand.logo_url) {
+      img.onerror = () => { img.src = "assets/logo-boom-icon-512.png"; }; // fail closed on 404
+      img.src = brand.logo_url;
+    }
   }
 
   function authHeaders() {
@@ -240,7 +276,7 @@
       if (window.BT_STATUS || document.getElementById("bt-status-js")) return;
       var s = document.createElement("script");
       s.id = "bt-status-js";
-      s.src = "assets/build-status.js?v=0.49.1";
+      s.src = "assets/build-status.js?v=0.50.0";
       s.async = false;
       document.head.appendChild(s);
     } catch (e) { /* indicators are never load-blocking */ }

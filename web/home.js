@@ -1,7 +1,11 @@
 /* Boomtown Platform — My Dashboard
-   File: web/home.js · Version: v1.4.0 · Date: 2026-08-01 · Ships in: v0.14.0 (v1.4.0 in v0.45.0)
-   v1.4.0: Community-play opportunities card. Per-category toggles are ON by default and
-   remembered per browser (localStorage bt_lfg_prefs); the feed is /api/lfg/opportunities.
+   File: web/home.js · Version: v2.0.0 · Date: 2026-08-02 · Ships in: v0.14.0 (v2.0.0 in v0.50.0)
+   v2.0.0 (R3, owner 2026-08-02): announcement/news box from /api/home/feed — admin CTA pinned
+   (non-mutable, server-enforced), aggregated news/events/my-events/messages/subs/community
+   groups, per-item ✕ + per-category mutes stored SERVER-SIDE (announcement_mutes; the
+   localStorage bt_lfg_prefs toggles are retired), results résumé card (/api/profile/resume),
+   sub availability strip (opt-in, passive vs actively-looking + level → LFG player_avail).
+   v1.4.0: Community-play opportunities card (feed was /api/lfg/opportunities).
    v1.3.0 (M12.5): waiver-status chips (self + children), Agreements card
    (/api/me/agreements), Request-court-time card gated by BT_CONFIG.RENTALS_ENABLED.
    RECOVERY of the lost v0.7.0 member dashboard. On load: silently links roster
@@ -45,9 +49,11 @@
     if (first) $("hello").textContent = `Welcome back, ${first}`;
     api("/api/profile/connect-teams", { method: "POST" }); // fire-and-forget roster link
     loadMembership();
-    loadNotifications(); loadUpcoming(); loadTeams();
-    setupLfgCard();
+    loadTeams();
+    loadFeed();          // v2.0.0 — the announcement box (replaces notifications/upcoming/lfg cards)
+    loadAchievements();  // v2.0.0
     loadAgreements();
+    setupPanels();       // v2.0.0 — CTA-row tiles toggle the agreements / rental panels
     setupRental();
   }
 
@@ -84,10 +90,10 @@
   }
 
   function setupRental() {
-    const card = $("rentalCard");
-    if (!card) return;
+    const tile = $("rentalTile");
+    if (!tile) return;
     if (!(window.BT_CONFIG && window.BT_CONFIG.RENTALS_ENABLED)) return; // hidden by owner decision
-    card.hidden = false;
+    tile.hidden = false;
     $("rqSend").onclick = async () => {
       const btn = $("rqSend"); btn.disabled = true;
       const me = await api("/api/profile/me");
@@ -103,42 +109,196 @@
     };
   }
 
-  async function loadNotifications() {
-    const r = await api("/api/notifications");
-    const list = r.ok ? r.data.notifications || [] : [];
-    $("readAll").hidden = !list.some(n => !n.read_at);
-    $("ntfList").innerHTML = list.length ? list.map(n => `
-      <div class="ntf ${n.read_at ? "read" : ""}" data-id="${n.id}">
-        <span class="dot" aria-hidden="true"></span>
-        <div><div class="t">${esc(n.title || n.kind.replace(/_/g, " "))}</div>
-          ${n.body ? `<div class="b">${esc(n.body)}</div>` : ""}</div>
-        <span class="when">${esc((n.created_at || "").slice(5, 10))}</span>
-      </div>`).join("") :
-      `<p class="help-text" style="margin:0">You're all caught up. Event reminders and updates land here.</p>`;
-    $("ntfList").querySelectorAll(".ntf:not(.read)").forEach(el => {
-      el.style.cursor = "pointer";
-      el.onclick = async () => {
-        await api(`/api/notifications/${el.dataset.id}/read`, { method: "POST" });
-        el.classList.add("read");
-      };
-    });
-    $("readAll").onclick = async () => {
-      await api("/api/notifications/read-all", { method: "POST" });
-      loadNotifications();
-    };
+  /* ================= v2.0.0 — announcement box, mutes, sub availability ================= */
+
+  const CAT_LABEL = { news: "News", events: "Upcoming events", my_events: "My events",
+    messages: "Messages", subs: "Sub requests", community: "Community play" };
+  const SKILL_OPTS = ["any", "b", "bb", "a", "aa", "open"]; // subs.js SKILLS — one vocabulary
+
+  async function loadFeed() {
+    const r = await api("/api/home/feed");
+    const groups = $("feedGroups");
+    if (!r.ok) { groups.innerHTML = `<p class="help-text" style="margin:0">Couldn't load updates right now.</p>`; return; }
+    renderCtas(r.data.ctas || []);
+    renderGroups(r.data.categories || {}, r.data.muted_categories || []);
+    renderPrefs(r.data.muted_categories || []);
+    renderSub(r.data.sub || {});
+    loadNotificationsGroup(); // in-app notifications (invites, strike notices) join the box
   }
 
-  async function loadUpcoming() {
-    const r = await api("/api/profile/upcoming");
-    const rows = r.ok ? r.data.upcoming || [] : [];
-    $("upList").innerHTML = rows.length ? rows.map(u => `
-      <div class="up-row">
-        <div class="nm"><b>${esc(u.name)}</b>
-          <span>${fmt(u.starts_at)}${u.location ? " · " + esc(u.location) : ""}${u.full_name ? " · " + esc(u.full_name) : ""}</span></div>
-        <a class="btn ghost" style="text-decoration:none" href="${API}/api/events/ics?event_id=${u.event_id}">Add to calendar</a>
-      </div>`).join("") :
-      `<p class="help-text" style="margin:0">Nothing on the calendar for you yet.
-        <a href="schedule.html">See the schedule</a> and grab a spot.</p>`;
+  function renderCtas(ctas) {
+    // Owner rule: the admin priority CTA is pinned first and carries NO mute affordance.
+    $("annCtas").innerHTML = ctas.map(c => `
+      <div class="ann-cta">
+        <div><b>${esc(c.title)}</b>
+          ${c.body ? `<div class="b">${esc(c.body)}</div>` : ""}
+          ${c.link_url ? `<a href="${esc(c.link_url)}">${esc(c.link_label || "Open")} &rarr;</a>` : ""}</div>
+      </div>`).join("");
+  }
+
+  function muteBtn(scope, key, label) {
+    return `<button class="feed-mute" data-mscope="${scope}" data-mkey="${esc(String(key))}"
+      aria-label="${esc(label)}" title="${esc(label)}">&times;</button>`;
+  }
+
+  function renderGroups(cat, muted) {
+    const out = [];
+    if (cat.news && cat.news.length) {
+      out.push(`<div class="feed-group"><h3>News</h3>` + cat.news.map(n => `
+        <div class="feed-item"><div class="fx"><b>${esc(n.title)}</b>
+          ${n.body ? `<span>${esc(n.body)}</span>` : ""}
+          ${n.link_url ? `<span><a href="${esc(n.link_url)}">${esc(n.link_label || "More")}</a></span>` : ""}</div>
+          ${muteBtn("item", n.id, "Hide this announcement")}</div>`).join("") + `</div>`);
+    }
+    if (cat.events && cat.events.length) {
+      out.push(`<div class="feed-group"><h3>Upcoming events${muteBtn("category", "events", "Hide upcoming events from this box")}</h3>` +
+        cat.events.map(e => `
+        <div class="feed-item"><div class="fx"><b>${esc(e.name)}</b>
+          <span>${fmt(e.starts_at)}${e.location ? " · " + esc(e.location) : ""}</span></div>
+          <a class="btn ghost" style="text-decoration:none" href="register.html?event_id=${e.id}">View</a></div>`).join("") + `</div>`);
+    }
+    if (cat.my_events && cat.my_events.length) {
+      out.push(`<div class="feed-group"><h3>You're signed up${muteBtn("category", "my_events", "Hide my events from this box")}</h3>` +
+        cat.my_events.map(e => `
+        <div class="feed-item"><div class="fx"><b>${esc(e.name)}</b>
+          <span>${fmt(e.starts_at)} · ${esc(e.status)}</span></div>
+          <a class="btn ghost" style="text-decoration:none" href="${API}/api/events/ics?event_id=${e.event_id}">Calendar</a></div>`).join("") + `</div>`);
+    }
+    if (cat.messages && cat.messages.unread > 0) {
+      out.push(`<div class="feed-group"><h3>Messages${muteBtn("category", "messages", "Hide messages from this box")}</h3>
+        <div class="feed-item"><div class="fx"><b>${cat.messages.unread} unread</b></div>
+          <a class="btn ghost" style="text-decoration:none" href="member-inbox.html">Open inbox</a></div></div>`);
+    }
+    if (cat.subs && cat.subs.length) {
+      out.push(`<div class="feed-group"><h3>Teams need subs${muteBtn("category", "subs", "Hide sub requests from this box")}</h3>` +
+        cat.subs.map(s => `
+        <div class="feed-item"><div class="fx"><b>${esc(s.event_name || "Pickup")}</b>
+          <span>${s.needed_at ? fmt(s.needed_at) + " · " : ""}${s.skill_level !== "any" ? esc(s.skill_level).toUpperCase() + " · " : ""}${esc(s.game_type || "")}</span></div>
+          <a class="btn ghost" style="text-decoration:none" href="lfg.html">See it</a></div>`).join("") + `</div>`);
+    }
+    if (cat.community && cat.community.length) {
+      const what = (o) => o.kind === "team_need" ? (o.team_name || "Team recruiting")
+        : o.kind === "player_avail" ? "Player available" : "Casual game";
+      out.push(`<div class="feed-group"><h3>Community play${muteBtn("category", "community", "Hide community play from this box")}</h3>` +
+        cat.community.map(o => `
+        <a class="feed-item" href="lfg.html" style="text-decoration:none;color:inherit"><div class="fx"><b>${esc(what(o))}</b>
+          <span>${[o.skill_level !== "any" ? String(o.skill_level).toUpperCase() : null, o.game_type !== "any" ? o.game_type : null, o.play_at ? fmt(o.play_at) : null].filter(Boolean).map(esc).join(" · ")}</span></div></a>`).join("") + `</div>`);
+    }
+    $("feedGroups").innerHTML = out.join("") ||
+      `<p class="help-text" style="margin:0">Quiet for now — events, messages, and community posts land here.</p>`;
+    $("feedGroups").querySelectorAll(".feed-mute").forEach(b => b.onclick = () => mute(b.dataset.mscope, b.dataset.mkey));
+  }
+
+  async function mute(scope, key) {
+    const body = scope === "item" ? { scope, announcement_id: Number(key) } : { scope, category: key };
+    const r = await api("/api/announcements/mute", { method: "POST", body: JSON.stringify(body) });
+    if (!r.ok) { $("status").innerHTML = `<p class="notice-err">${esc(r.data.error || "Couldn't hide that.")}</p>`; return; }
+    loadFeed();
+  }
+
+  function renderPrefs(muted) {
+    const box = $("feedPrefs");
+    const cats = ["news", "events", "my_events", "messages", "subs", "community"];
+    box.hidden = false;
+    box.innerHTML = `<span>Show:</span>` + cats.map(c => `
+      <label><input type="checkbox" data-cat="${c}" ${muted.includes(c) ? "" : "checked"}> ${CAT_LABEL[c]}</label>`).join("");
+    box.querySelectorAll("[data-cat]").forEach(cb => cb.onchange = async () => {
+      await api(cb.checked ? "/api/announcements/unmute" : "/api/announcements/mute",
+        { method: "POST", body: JSON.stringify({ scope: "category", category: cb.dataset.cat }) });
+      loadFeed();
+    });
+  }
+
+  /* in-app notifications (team invites, LFG notices) — read/dismiss model, joins the box */
+  async function loadNotificationsGroup() {
+    const r = await api("/api/notifications");
+    const list = r.ok ? r.data.notifications || [] : [];
+    const unread = list.filter(n => !n.read_at);
+    $("readAll").hidden = !unread.length;
+    $("readAll").onclick = async () => { await api("/api/notifications/read-all", { method: "POST" }); loadFeed(); };
+    if (!unread.length) return;
+    const el = document.createElement("div");
+    el.className = "feed-group";
+    el.innerHTML = `<h3>For you</h3>` + unread.slice(0, 6).map(n => `
+      <div class="feed-item ntf" data-id="${n.id}" style="cursor:pointer"><span class="dot" aria-hidden="true"></span>
+        <div class="fx"><b>${esc(n.title || n.kind.replace(/_/g, " "))}</b>
+          ${n.body ? `<span>${esc(n.body)}</span>` : ""}</div>
+        <span class="when">${esc((n.created_at || "").slice(5, 10))}</span></div>`).join("");
+    $("feedGroups").prepend(el);
+    el.querySelectorAll(".ntf").forEach(x => x.onclick = async () => {
+      await api(`/api/notifications/${x.dataset.id}/read`, { method: "POST" });
+      x.remove();
+    });
+  }
+
+  /* ---------------- sub availability (owner rule: passive vs actively-looking) ---------------- */
+  let SUB = { opt_in: false, mode: "passive", level: null };
+  function renderSub(sub) {
+    SUB = sub;
+    const strip = $("subStrip");
+    strip.hidden = false;
+    $("subOptIn").checked = !!sub.opt_in;
+    $("subModeWrap").hidden = !sub.opt_in;
+    $("subActive").checked = sub.mode === "active";
+    $("subLevelWrap").hidden = !(sub.opt_in && sub.mode === "active");
+    const sel = $("subLevel");
+    sel.innerHTML = SKILL_OPTS.map(s => `<option value="${s}" ${s === (sub.level || "any") ? "selected" : ""}>${s === "any" ? "Any" : s.toUpperCase()}</option>`).join("");
+    $("subOptIn").onchange = pushSub; $("subActive").onchange = pushSub; sel.onchange = pushSub;
+  }
+  async function pushSub() {
+    const body = { opt_in: $("subOptIn").checked,
+      mode: $("subActive").checked ? "active" : "passive", level: $("subLevel").value };
+    const r = await api("/api/me/sub-availability", { method: "PUT", body: JSON.stringify(body) });
+    $("subMsg").textContent = r.ok
+      ? (body.opt_in ? (body.mode === "active" ? "Posted to Community Play." : "Coaches and captains can find you.") : "You're off the sub list.")
+      : (r.data.error || "Couldn't save that.");
+    if (r.ok) renderSub({ opt_in: body.opt_in, mode: body.mode, level: r.data.level });
+  }
+
+  /* ---------------- results résumé (compact) ---------------- */
+  async function loadAchievements() {
+    const r = await api("/api/profile/resume");
+    const box = $("achBox");
+    if (!r.ok) { box.innerHTML = `<p class="help-text" style="margin:0">Play your first event and your results start here.</p>`; return; }
+    const t = r.data.totals || {};
+    const rows = (r.data.results || []).slice(0, 3);
+    if (!t.events) { box.innerHTML = `<p class="help-text" style="margin:0">Play your first event and your results start here.</p>`; return; }
+    box.innerHTML = `
+      <div class="ach-tot">
+        <div><span class="n">${t.events}</span><span class="l">events</span></div>
+        <div><span class="n">${t.wins || 0}&ndash;${t.losses || 0}</span><span class="l">record</span></div>
+        <div><span class="n">${t.best_finish ? "#" + t.best_finish : "&mdash;"}</span><span class="l">best finish</span></div>
+        <div><span class="n">${t.points || 0}</span><span class="l">points</span></div>
+      </div>` + rows.map(x => `
+      <div class="feed-item"><div class="fx"><b>${esc(x.name)}</b>
+        <span>${esc(x.team_name || "")}${x.rank ? ` · finished #${x.rank} of ${x.teams_in_event}` : ""} · ${x.wins || 0}&ndash;${x.losses || 0}</span></div></div>`).join("") +
+      `<a class="btn ghost" href="profile.html" style="text-decoration:none;margin-top:8px;display:inline-block">Full résumé</a>`;
+  }
+
+  /* ---------------- messages summary card ---------------- */
+  async function loadMessagesCard() {
+    const r = await api("/api/messages/unread-count");
+    const n = r.ok ? r.data.unread || 0 : 0;
+    $("msgBox").innerHTML = `
+      <div class="feed-item"><div class="fx"><b>${n ? n + " unread message" + (n > 1 ? "s" : "") : "No unread messages"}</b>
+        <span>${n ? "Someone's waiting on you." : "Community play and team threads land here."}</span></div>
+        <a class="btn ${n ? "" : "ghost"}" style="text-decoration:none" href="member-inbox.html">Open inbox</a></div>`;
+  }
+
+  /* ---------------- CTA-row panels ---------------- */
+  function setupPanels() {
+    loadMessagesCard();
+    const wire = (tileId, panelId) => {
+      const tile = $(tileId), panel = $(panelId);
+      if (!tile || !panel) return;
+      tile.onclick = () => {
+        panel.hidden = !panel.hidden;
+        tile.setAttribute("aria-expanded", String(!panel.hidden));
+        if (!panel.hidden) panel.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "nearest" });
+      };
+    };
+    wire("agrTile", "agrPanel");
+    wire("rentalTile", "rentalPanel");
   }
 
   async function loadTeams() {
@@ -187,57 +347,6 @@
     box.innerHTML = `<div style="font-weight:700">${esc(s.plan_name)} <span style="color:var(--text-muted);font-weight:600">${price}</span></div>
       <p class="help-text" style="margin:6px 0 10px">${line}</p>
       <a class="btn ghost" href="membership.html" style="text-decoration:none">Manage membership</a>`;
-  }
-
-  /* ---------------- community play opportunities (v1.4.0) ---------------- */
-  const LFG_LABEL = { team_need: "Team recruiting", player_avail: "Player available", casual: "Casual game" };
-  function lfgPrefs() {
-    // Toggles are ON by default (owner spec); an entry only exists once someone turns one off.
-    try { return JSON.parse(localStorage.getItem("bt_lfg_prefs") || "{}"); } catch (e) { return {}; }
-  }
-  function setupLfgCard() {
-    const card = $("lfgCard");
-    if (!card) return;
-    const prefs = lfgPrefs();
-    card.querySelectorAll("[data-lfgk]").forEach((cb) => {
-      cb.checked = prefs[cb.dataset.lfgk] !== false;
-      cb.addEventListener("change", () => {
-        const p = lfgPrefs();
-        p[cb.dataset.lfgk] = cb.checked;
-        localStorage.setItem("bt_lfg_prefs", JSON.stringify(p));
-        renderLfg();
-      });
-    });
-    loadLfg();
-  }
-  let LFG_ROWS = [];
-  async function loadLfg() {
-    const r = await api("/api/lfg/opportunities");
-    const el = $("lfgList");
-    if (!r.ok) {
-      // 403 = under 18 or paused — the card stays quiet rather than nagging on every visit.
-      $("lfgCard").hidden = r.status === 403;
-      if (!$("lfgCard").hidden) el.innerHTML = `<p class="help-text" style="margin:0">Couldn't load community play right now.</p>`;
-      return;
-    }
-    LFG_ROWS = r.data.opportunities || [];
-    renderLfg();
-  }
-  function renderLfg() {
-    const el = $("lfgList");
-    const prefs = lfgPrefs();
-    const rows = LFG_ROWS.filter((o) => prefs[o.kind] !== false).slice(0, 5);
-    if (!rows.length) {
-      el.innerHTML = `<p class="help-text" style="margin:0">Nothing open right now. <a href="lfg.html">Post something &rarr;</a></p>`;
-      return;
-    }
-    el.innerHTML = rows.map((o) => {
-      const what = o.kind === "team_need" ? o.team_name : (o.kind === "player_avail" ? `${o.poster} wants to play` : (o.location_note || "Casual game"));
-      const bits = [LFG_LABEL[o.kind], o.skill_level !== "any" ? o.skill_level.toUpperCase() : null,
-        o.game_type !== "any" ? o.game_type : null, o.play_at ? fmt(o.play_at) : null].filter(Boolean).join(" · ");
-      return `<a class="up-row" href="lfg.html" style="text-decoration:none;color:inherit">
-        <div class="nm"><b>${esc(what)}</b><span>${esc(bits)}</span></div></a>`;
-    }).join("");
   }
 
 })();

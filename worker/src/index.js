@@ -218,6 +218,7 @@ import { kioskRoutes, wireKiosk } from "./kiosk.js"; // v0.39.0 kiosk check-in (
 import { faqRoutes, wireFaq } from "./faq.js"; // v0.40.0 Help & FAQ (owner req #21 phase 1, migration 0028)
 import { smsRoutes, wireSms } from "./sms.js"; // v0.42.0 SMS phase 3 (owner req #17, migration 0029, Twilio)
 import { lfgRoutes, wireLfg } from "./lfg.js"; // v0.45.0 LFG & community play (migration 0031)
+import { announcementsRoutes, wireAnnouncements, publicOrgBrand } from "./announcements.js"; // v0.50.0 R3 member home (migration 0033)
 import { waiverReminderSweep, waiverExpirySweep, sendEmail, escapeHtml } from "./registrations.js";
 
 const MAGIC_LINK_TTL_MIN = 15;
@@ -273,6 +274,7 @@ wireKiosk(wiredHelpers); // v0.39.0
 wireFaq(wiredHelpers); // v0.40.0
 wireSms(wiredHelpers); // v0.42.0 — fails closed until TWILIO_* secrets exist
 wireLfg(wiredHelpers); // v0.45.0
+wireAnnouncements(wiredHelpers); // v0.50.0
 wirePush(wiredHelpers); // v0.20.0
 wireWaivers(wiredHelpers); // v0.22.0
 wireCalendar(wiredHelpers); // v0.23.0
@@ -341,9 +343,13 @@ export default {
       } else if (url.pathname === "/api/orgs" && request.method === "GET") {
         res = await listOrgs(env);
       } else if (url.pathname === "/api/health") {
-        res = json({ ok: true, version: "v0.49.1" });
+        res = json({ ok: true, version: "v0.50.0" });
       } else if (url.pathname === "/api/webhooks/square" && request.method === "POST") {
         res = await membershipWebhook(request, env); // verifies signature; forwards payment.* to squareWebhook
+      } else if (url.pathname === "/api/public/org-brand" && request.method === "GET") {
+        // v0.50.0 — public member-page branding. Intentionally OUTSIDE buildCtx (no session;
+        // three brand fields only — standards §8) with its own Cache-Control (~5 min).
+        res = await publicOrgBrand(env, url);
       } else if (url.pathname.startsWith("/api/calendar/") && url.pathname.endsWith(".ics") && request.method === "GET") {
         // v0.23.0 — public iCal feed. Intentionally OUTSIDE buildCtx (the token is the
         // credential) and OUTSIDE json() (needs text/calendar + a real max-age).
@@ -372,6 +378,7 @@ export default {
            || (await faqRoutes(request, env, url, ctx)) // v0.40.0 — Help & FAQ (req #21 phase 1)
            || (await smsRoutes(request, env, url, ctx)) // v0.42.0 — SMS phase 3 (req #17)
            || (await lfgRoutes(request, env, url, ctx)) // v0.45.0 — LFG & community play
+           || (await announcementsRoutes(request, env, url, ctx)) // v0.50.0 — R3 member home feed + announcements
            || (await leagueRoutes(request, env, url, ctx))
            || (await reportRoutes(request, env, url, ctx))
            || (await checkinRoutes(request, env, url, ctx))
