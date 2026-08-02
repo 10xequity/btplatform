@@ -1,6 +1,6 @@
 # CLAUDE.md — Boomtown Platform (btplatform)
 
-**File:** CLAUDE.md · **Version:** v1.1 · **Created:** 2026-08-02 · **Updated:** 2026-08-02
+**File:** CLAUDE.md · **Version:** v1.2 · **Created:** 2026-08-02 · **Updated:** 2026-08-02
 **Status:** ACTIVE — always-loaded context for Claude Code in this repo.
 **Supersedes:** nothing. First Claude Code instruction file for this project; ported from the
 Claude Desktop project-knowledge doc set (9 markdown files + 1 HTML demo, dated 2026-07-26 →
@@ -50,11 +50,12 @@ a migration mismatch stops the session.
 
 Never report a "projected" suite count. Measure it. (The v0.33.1 lesson.)
 
-**`node --check <file>` is not a syntax check on this codebase.** On Node 24.18.1 it exits 0 for any
-`.js` file containing `export` or `import` even when the file is unparseable — verified 2026-08-02.
-All 37 worker modules are ESM, so the file-path form is incapable of failing here. Use
-`preflight.syntaxErrorFor()`, which pipes source to `node --check --input-type=module`. The CI gate
-still uses the blind form; see §9.3.
+**`node --check <file>` is not a syntax check on this codebase.** It exits 0 for any `.js` file
+containing `export` or `import` even when the file is unparseable — reproduced 2026-08-02 on both
+Node 22.23.2 (CI's pin) and 24.18.1. All 37 worker modules are ESM, so the file-path form cannot
+fail here. Always pipe source in with an explicit `--input-type=module`: `preflight.syntaxErrorFor()`
+locally, and the CI gate's own step since v0.55.0 — which now self-tests against a deliberately
+broken module before trusting itself.
 
 ---
 
@@ -243,17 +244,17 @@ gate live test · Oda Up and External/Rental confirms (C-1/C-2, decisions §F).
 2. ~~**Standards §9 / handoff §0 contradiction.**~~ **CLOSED 2026-08-02 — moot and struck.** Both
    clauses described ZIP delivery, which no longer exists. `standards §9` and the
    `uiux-review §6` closing paragraph were rewritten to point at §2 in the same release.
-3. **The CI syntax gate cannot fail.** `deploy-worker.yml` step 1 runs `node --check "$f"` over
-   `worker/src/*.js`. On Node 24.18.1 that exits 0 for any `.js` file containing `export` or
-   `import` even when it is unparseable, and all 37 modules are ESM — so the step prints
-   "37 modules OK" and proves nothing. Failure class 3, in the gate itself. `preflight.mjs` uses
-   the working form locally, so this is currently covered on the way in, not in CI.
-   *Recommendation: change the loop to pipe each file to `node --check --input-type=module`.*
-   One line. **Not done** — §8 forbids workflow edits without an explicit OK, and this needs one.
+3. ~~**The CI syntax gate cannot fail.**~~ **CLOSED 2026-08-02 — fixed in v0.55.0 with owner OK.**
+   `deploy-worker.yml` step 1 ran `node --check "$f"`, which exits 0 for any ESM `.js` file even
+   when unparseable (reproduced on Node 22.23.2 and 24.18.1). All 37 modules are ESM, so the step
+   had passed unconditionally since v0.2.x. Now pipes each file to `node --check --input-type=module`
+   and **self-tests against a deliberately broken module first** — if the check ever stops being
+   able to fail, the build stops rather than reporting clean. This remains the only workflow edit
+   made under §8; the standing rule is unchanged.
 
 ---
 
-*Changelog: v1.1 (2026-08-02) — records the owner's direct-commit decision: §2 rewritten from
+*Changelog: v1.2 (2026-08-02) — §9.3 closed: the blind CI syntax gate is fixed in v0.55.0 with an owner OK and now self-tests; §1 note updated (bug reproduced on Node 22 and 24). v1.1 (2026-08-02) — records the owner's direct-commit decision: §2 rewritten from
 Desktop-parity to the direct-commit release loop, §1 session protocol replaced by `preflight.mjs`,
 §6 GitHub row corrected to reflect git/gh as the write path. Closes open decisions 1 and 2; opens
 3, the blind CI syntax gate. v1.0 (2026-08-02) — created for the Claude Code port.*

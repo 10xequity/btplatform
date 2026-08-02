@@ -80,11 +80,30 @@ jobs:
         with:
           node-version: "22"
 
+      # `node --check <file>` is NOT a syntax check on this codebase. It exits 0 for any .js file
+      # containing `export` or `import` even when the file is unparseable — reproduced on both
+      # Node 22.23.2 (what this workflow pins) and 24.18.1. Every worker module is ESM, so from
+      # v0.2.x until 2026-08-02 this step passed unconditionally, printing "N modules OK" while
+      # proving nothing: failure class 3, inside the gate itself. Piping source in with an
+      # explicit --input-type=module is the form that actually parses and rejects.
+      #
+      # The self-test runs first and proves the check can FAIL before any real module is trusted
+      # to it. A gate that cannot fail must stop the build, not report clean — that is the whole
+      # lesson of this step's history. (Owner OK for this workflow edit, 2026-08-02.)
       - name: Syntax check every worker module
         run: |
           set -euo pipefail
-          for f in worker/src/*.js; do node --check "$f"; done
-          echo "node --check: $(ls worker/src/*.js | wc -l) modules OK"
+          if printf 'export const a=1;\nfunction ((((broken {\n' | node --check --input-type=module 2>/dev/null; then
+            echo "::error::Self-test failed — the syntax check accepted a deliberately broken module. Refusing to report clean."
+            exit 1
+          fi
+          N=0
+          for f in worker/src/*.js; do
+            node --check --input-type=module < "$f" || { echo "::error::$f does not parse"; exit 1; }
+            N=$((N+1))
+          done
+          test "$N" -ge 30 || { echo "::error::only $N modules scanned — an empty or narrow scan must fail (failure class 4)"; exit 1; }
+          echo "syntax: $N modules parse (stdin form; self-test proved the check can fail)"
 
       - name: Test-file parity — every file in test/ must match the glob (F-37)
         working-directory: worker

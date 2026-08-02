@@ -1,5 +1,22 @@
 /* Boomtown Platform — Build Status indicators (shared)
-   File: web/assets/build-status.js · Version: v1.0 · Date: 2026-07-26 · Ships in: v0.24.0
+   File: web/assets/build-status.js · Version: v1.1 · Date: 2026-08-02 · Ships in: v0.55.0
+   v1.0: 2026-07-26, v0.24.0
+
+   v1.1 — THE REGISTRY HAD GONE STALE, AND ONE ENTRY WAS ACTIVELY WRONG.
+   This file is tester-facing copy, so a wrong entry does not just mislead — it manufactures
+   bug reports about correct behaviour, and burns the tester's trust in every other row.
+     · admin-checkin + "Waiver enforcement at the door" both claimed the door REFUSES a member
+       with no current waiver. That gate was removed in v0.33.1 on the owner's instruction
+       (D-MIN-8, "no gating"); checkin.js v1.3 replaced it with a non-blocking advisory. A
+       tester reading the old copy would have filed the absence of a block as a defect.
+     · 16 of 45 real pages were absent from PAGES, so they silently rendered as "live" with no
+       caveat — including admin-sms, which cannot send at all.
+     · Four FEATURES rows said "soon" for things that had shipped (teammate self-sign and
+       media-release record in v0.25, Player Exchange substantially in v0.45, SMS built then
+       frozen), and the .ics row claimed no feed button existed anywhere while admin-calendar
+       has had one for three releases.
+   build_status.test.mjs now ratchets the page half of this: a new web/*.html that never gets
+   a registry entry fails the suite. Prose cannot hold a registry current; a guard can.
 
    WHY THIS EXISTS
    Testers are about to be pointed at a site where some screens are finished, some work
@@ -39,8 +56,10 @@
     "admin-events.html":        { s: "live" },
     "admin-registrations.html": { s: "live" },
     "admin-waitlists.html":     { s: "beta", n: "Queue, auto-offer and expiring claim links all work. The offer email will not actually arrive until the Brevo key is set — check the sandbox link in the admin list instead." },
-    "admin-checkin.html":       { s: "beta", n: "The waiver gate is live: check-in returns a block if the member has no current waiver, and staff can override with a typed reason. Not built yet: the outstanding-balance chip and one-tap resolve." },
+    "admin-checkin.html":       { s: "beta", n: "Check-in never blocks anyone. A member with no current waiver still checks in — the door just shows a note so staff can follow up (owner decision 2026-07-29, \"no gating\"). Not built yet: the outstanding-balance chip and one-tap resolve." },
     "admin-facility.html":      { s: "beta", n: "Calendar, space presets and the conflict engine are finished. Public rental requests stay hidden until RENTALS_ENABLED is switched on." },
+    "admin-calendar.html":      { s: "live" },
+    "admin-event.html":         { s: "live" },
     "tournament.html":          { s: "live" },
     "admin-league.html":        { s: "live" },
 
@@ -52,13 +71,22 @@
     /* --- Marketing --- */
     "admin-marketing.html":     { s: "wip",  n: "Sending is deliberately blocked in code until two things are done: the physical mailing address is saved in Settings, and the Brevo API key plus SPF/DKIM/DMARC are verified. You can build contacts, segments and campaigns; you cannot send. This is expected — not a bug." },
     "admin-messages.html":      { s: "beta", n: "The report queue works. Muting a member still has to be done from their member record — one-click mute from this queue is not built yet." },
+    "admin-announcements.html": { s: "beta", n: "Writing, scheduling and targeting all work. Anything that goes out by email is still sandboxed until the Brevo key is set." },
+    "admin-sms.html":           { s: "wip",  n: "Texting is switched off at the platform level: Twilio A2P 10DLC registration is frozen by the owner. The screen, the recipient preview and the consent controls are all built and safe to look at, but no message can leave. Expected — not a bug." },
 
     /* --- People --- */
     "admin-users.html":         { s: "live" },
     "admin-security.html":      { s: "live" },
     "admin-waivers.html":       { s: "beta", n: "Versioning, publishing and signature pinning are finished and tested. The live text is still the v1 legacy placeholder — waiver v2 is drafted and waiting on one email address before it can be published." },
+    "admin-consent.html":       { s: "live" },
+    "admin-documents.html":     { s: "live" },
+    "admin-uploads.html":       { s: "live" },
+    "admin-tiers.html":         { s: "live" },
+    "admin-org-settings.html":  { s: "live" },
+    "admin-faq.html":           { s: "live" },
     "settings.html":            { s: "live" },
     "admin-buildstatus.html":   { s: "live" },
+    "kiosk.html":               { s: "live" },
 
     /* --- Member site --- */
     "index.html":               { s: "live" },
@@ -72,6 +100,11 @@
     "register.html":            { s: "beta", n: "Registration, teammates, waiver and Square checkout all work (SANDBOX). Promo codes cannot be entered at checkout yet — they are admin-applied only." },
     "checkin.html":             { s: "live" },
     "score.html":               { s: "live" },
+    "member.html":              { s: "live" },
+    "lfg.html":                 { s: "beta", n: "The sub board and the free-agent pool are finished. Replying to a roster invitation (RSVP) is the one piece still to come." },
+    "sign.html":                { s: "live" },
+    "guardian-complete.html":   { s: "live" },
+    "help.html":                { s: "live" },
   };
 
   /* ---------------------------------------------------------------------
@@ -79,10 +112,10 @@
      Shown on the Build Status page only.
      --------------------------------------------------------------------- */
   const FEATURES = [
-    { name: "Waiver enforcement at the door", s: "live", area: "People",
-      n: "Check-in and walk-in both refuse a member with no current waiver. Staff override needs a typed reason of 8+ characters and is written to the audit log." },
+    { name: "Waiver status at the door",      s: "live", area: "People",
+      n: "Check-in shows whether a member has a current waiver, and never blocks on it. The hard gate that used to refuse entry was REMOVED on the owner's instruction (2026-07-29, \"no gating\"). Someone getting in without a waiver is the intended behaviour — please do not file it." },
     { name: "Calendar feeds (.ics)",          s: "beta", area: "Run events",
-      n: "The feed itself is built and tested. There is no button anywhere to get your feed URL yet — that ships with the subscribe UI." },
+      n: "The feed works, and admins can mint and copy a feed URL from the Calendar screen. Members still have no way to get their own feed — that ships with the member subscribe button." },
     { name: "Push notifications",             s: "wip",  area: "Member site",
       n: "The full PWA and push stack is built, but the three VAPID server secrets have never been set, so the browser cannot subscribe. Every push feature will look broken until that is done. Known — do not file." },
     { name: "Add to Home Screen (PWA)",       s: "live", area: "Member site",
@@ -91,17 +124,17 @@
       n: "Every email path in the platform — reminders, waitlist offers, waiver notices, campaigns — is in sandbox mode. Nothing reaches a real inbox yet." },
     { name: "Payments (Square)",              s: "beta", area: "Money",
       n: "SANDBOX across the whole platform. Switching to production is the owner's call and is a deliberate, separate step." },
-    { name: "SMS",                            s: "soon", area: "Marketing",
-      n: "Phase 3. Needs Twilio plus A2P 10DLC registration and its own opt-in, which can never be bundled with the email consent." },
-    { name: "Teammate self-sign links",       s: "soon", area: "People",
-      n: "Today only the captain signs a waiver; teammates are just a name and an email. Next build." },
-    { name: "Media-release opt-out record",   s: "soon", area: "People",
-      n: "The waiver names a written opt-out path, but the platform has nowhere to record that a family used it." },
+    { name: "SMS",                            s: "wip",  area: "Marketing",
+      n: "Built, and deliberately dormant. Sending needs Twilio plus A2P 10DLC registration, which the owner has frozen, and its own opt-in that can never be bundled with the email consent. Every SMS route answers with a plain sentence and touches nothing until then." },
+    { name: "Teammate self-sign links",       s: "live", area: "People",
+      n: "Teammates get their own link and sign their own waiver — the captain no longer signs on their behalf." },
+    { name: "Media-release opt-out record",   s: "live", area: "People",
+      n: "A family's media-release choice is recorded against the person, and re-asked when the waiver version changes." },
     { name: "Promo redemption at checkout",   s: "soon", area: "Money",
       n: "Promos exist and work admin-side; the public checkout has no code box yet." },
     { name: "Achievements & public standings",s: "soon", area: "Run events", n: "M17. Spec approved, queued behind the format engine." },
     { name: "Tournament format engine",       s: "soon", area: "Run events", n: "M-TF. Pluggable formats: single/double elim, Swiss, King of the Court, ladder, blind draw." },
-    { name: "Player Exchange (free agents, subs)", s: "soon", area: "People", n: "M18. Sub board, free-agent pool, roster RSVP." },
+    { name: "Player Exchange (free agents, subs)", s: "beta", area: "People", n: "The sub board and the free-agent pool are live. Roster RSVP — replying yes or no to a team invitation — is the remaining piece." },
     { name: "Lessons, clinics & camps",       s: "soon", area: "Money", n: "M20. Multi-coach booking and lesson packs." },
     { name: "Auto-scheduler v1",              s: "soon", area: "Run events", n: "M21." },
   ];

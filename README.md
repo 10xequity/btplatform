@@ -94,14 +94,18 @@ Full detail per release lives in `CHANGELOG.md`.
 
 ## Roadmap
 
-Current queue lives in the session handoff (project knowledge). Headline order after v0.53.1:
+**[`docs/2026-08-02_roadmap_v1_0.md`](docs/2026-08-02_roadmap_v1_0.md) is the roadmap of record.**
+It reconciles five separate backlog sources against the live tree, and it is the only list kept
+current. This section is a pointer by design: the queue that used to live here went stale, and
+its items 1 and 2 had already shipped as v0.51.0 and v0.52.0 while still being listed as upcoming.
 
-1. Shared button classes + pre-paint collapse state (uiux-review §6 step 3)
-2. Header re-layout + glass + motion + unified org switcher (absorbs header icons into static markup)
-3. Optional SPA shell session (uiux-review §3C)
-4. **M-TF** Tournament format engine ⚠ *FABLE-GATED* · tournament/league/module questions (requirements §15) gate those builds
+Headline order after v0.54.0: `build-status.js` registry accuracy → **SPA shell** (the last open
+uiux-review item) → end-to-end test harness → M22 membership field registry → M12C public rental
+booking → **M-TF** tournament format engine ⚠ *FABLE-GATED*, then M17 behind it.
 
-**Go-live blockers:** Brevo key + SPF/DKIM/DMARC (owner-paused) · Square SANDBOX → production (owner's call) · `orgs.rules_url` after domain transfer · TWILIO/A2P **frozen by owner** · admin unread-count endpoint (header badge) · org switcher on the 8 former admin-shell pages.
+**Go-live blockers** — owner-gated config, not build work: Brevo key + SPF/DKIM/DMARC
+(owner-paused) · Square SANDBOX → production (owner's call) · VAPID push secrets, never set ·
+`orgs.rules_url` after the domain transfer · Twilio / A2P **frozen by owner**.
 
 ---
 
