@@ -1,5 +1,13 @@
 /* Boomtown Platform — Admin sidebar (shared)
-   Version: v2.15 · Date: 2026-08-01 · Ships in: v0.46.0
+   Version: v2.16 · Date: 2026-08-02 · Ships in: v0.47.0
+   v2.16 (v0.47.0): STATIC RAIL (uiux-review §3A). Every admin page now ships the rail
+   markup in its static HTML (`<aside class="sidebar" data-static="rail">`), so the rail
+   paints with the page — no more build-after-paint pop ("reloads every time"). This file
+   detects the static rail and only WIRES it (group collapse state + listeners, sandbox
+   actions, edge handle, active marking); the JS builder remains solely as a fallback for
+   pages without static markup (the rail_static guard asserts the repo has none). Edge
+   handle position is bound to the rail width var --bt-rail-w (admin.css v0.6.0, rail
+   216px) — the fixed left:219px magic number is gone (uiux-review §2).
    v2.15 (v0.46.0): per-org header logo — renders orgs.logo_url from a localStorage cache
    (instant paint), refreshes from /api/admin/org/profile in the background, falls back to
    the boom icon. The Athletics wordmark PNG is retired from the header.
@@ -87,7 +95,7 @@
       font: inherit; font-size: 15px; font-weight: 600; color: var(--text-muted);
       background: none; border: 0; border-radius: var(--radius-control); padding: 10px 12px; cursor: pointer; }
     .bt-collapse svg { width: 18px; height: 18px; transition: transform 160ms var(--ease-out); }
-    html[data-nav="min"] .admin-layout { grid-template-columns: 68px 1fr; }
+    html[data-nav="min"] { --bt-rail-w: 68px; }
     html[data-nav="min"] .sidebar .nav-label { visibility: hidden; height: 6px; padding: 0; }
     html[data-nav="min"] .sidebar .nav-item { justify-content: center; padding: 11px 0; }
     html[data-nav="min"] .sidebar .nav-item .txt { display: none; }
@@ -96,13 +104,12 @@
     html[data-nav="min"] .bt-collapse .txt { display: none; }
     .bt-backbar-admin { margin: 0 0 12px; }
     /* v0.11.0: side-edge collapse handle (fixed → immune to the rail's own scroll/clip) */
-    .bt-edge { position: fixed; top: 50vh; left: 219px; transform: translateY(-50%);
+    .bt-edge { position: fixed; top: 50vh; left: calc(var(--bt-rail-w, 216px) - 13px); transform: translateY(-50%);
       width: 26px; height: 56px; display: grid; place-items: center; cursor: pointer;
       background: var(--surface); border: 1px solid var(--border); border-radius: 13px;
       color: var(--text-muted); z-index: 11; }
     .bt-edge:hover, .bt-edge:focus-visible { color: var(--text); border-color: var(--primary); }
     .bt-edge svg { width: 16px; height: 16px; transition: transform 160ms var(--ease-out); }
-    html[data-nav="min"] .bt-edge { left: 55px; }
     html[data-nav="min"] .bt-edge svg { transform: rotate(180deg); }
     @media (max-width: 860px) { .bt-edge { display: none; } }
     /* v0.11.0: collapsible groups */
@@ -169,7 +176,12 @@
   const layout = document.querySelector(".admin-layout");
   if (layout) {
     const here = location.pathname.split("/").pop() || "admin.html";
-    const aside = document.createElement("aside");
+    /* v2.16 static rail (uiux-review §3A): every repo page ships the rail in static HTML —
+       this branch only WIRES it. The builder below is a fallback for a page that lacks the
+       static markup; the rail_static guard asserts the repo has no such page. */
+    let aside = layout.querySelector('.sidebar[data-static="rail"]');
+    if (!aside) {
+    aside = document.createElement("aside");
     aside.className = "sidebar";
     aside.setAttribute("aria-label", "Admin sections");
     aside.innerHTML = NAV.map(g => `
@@ -190,6 +202,16 @@
     aside.insertAdjacentHTML("beforeend",
       `<button class="bt-edge" type="button" aria-label="Collapse or expand navigation">${ICONS.chevron}</button>`);
     layout.prepend(aside);
+    }
+    /* Group collapse state — static markup ships all-open; the persisted state is applied
+       here (idempotent for the JS-built fallback too). Pre-paint application of collapse
+       state is the queued uiux-review §6 step-3 release, not this one. */
+    aside.querySelectorAll(".nav-group").forEach(g => {
+      const closed = localStorage.getItem("bt_navgrp_" + g.dataset.key) === "closed";
+      g.classList.toggle("closed", closed);
+      const lbl = g.querySelector(".nav-label");
+      if (lbl) lbl.setAttribute("aria-expanded", String(!closed));
+    });
     aside.querySelector(".bt-edge").addEventListener("click", () => {
       const min = document.documentElement.dataset.nav === "min";
       if (min) delete document.documentElement.dataset.nav; else document.documentElement.dataset.nav = "min";
@@ -376,7 +398,7 @@
   (function brandLogo() {
     const wm = document.querySelector(".wordmark");
     if (!wm || wm.querySelector(".brand-logo")) return;
-    const FALLBACK = "assets/logo-boom-icon-512.png?v=0.46.0";
+    const FALLBACK = "assets/logo-boom-icon-512.png?v=0.47.0";
     const cacheKey = "bt_org_logo:" + (localStorage.getItem("bt_org") || "");
     const img = new Image();
     img.src = localStorage.getItem(cacheKey) || FALLBACK;
@@ -425,7 +447,7 @@
       if (window.BT_STATUS || document.getElementById("bt-status-js")) return;
       var s = document.createElement("script");
       s.id = "bt-status-js";
-      s.src = "assets/build-status.js?v=0.46.0";
+      s.src = "assets/build-status.js?v=0.47.0";
       s.async = false;
       document.head.appendChild(s);
     } catch (e) { /* indicators are never load-blocking */ }

@@ -7,9 +7,9 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Check-in — Boomtown Volleyball</title>
-  <link rel="stylesheet" href="assets/tokens.css?v=0.46.0" />
-  <link rel="stylesheet" href="assets/app.css?v=0.46.0" />
-  <link rel="stylesheet" href="assets/admin.css?v=0.46.0" />
+  <link rel="stylesheet" href="assets/tokens.css?v=0.47.0" />
+  <link rel="stylesheet" href="assets/app.css?v=0.47.0" />
+  <link rel="stylesheet" href="assets/admin.css?v=0.47.0" />
   <style>
     .ck-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
     .ck-progress { font-size: 20px; font-weight: 800; }
@@ -55,6 +55,64 @@
   </header>
 
   <div class="admin-layout">
+    <aside class="sidebar" data-static="rail" aria-label="Admin sections">
+      <nav class="nav-group" data-key="run">
+        <div class="nav-label" role="button" tabindex="0" aria-expanded="true">Run events<span class="grp-chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></span></div>
+        
+          <a class="nav-item" href="admin.html" title="Dashboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="5" rx="1.5"/><rect x="13" y="10" width="8" height="11" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/></svg><span class="txt">Dashboard</span></a>
+          <a class="nav-item" href="admin-events.html" title="Events & Programs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span class="txt">Events & Programs</span></a>
+          <a class="nav-item" href="admin-registrations.html" title="Registrations"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 12l2 2 4-5"/><rect x="4" y="4" width="16" height="16" rx="2"/></svg><span class="txt">Registrations</span></a>
+          <a class="nav-item" href="admin-waitlists.html" title="Waitlists"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 12l2 2 4-5"/><rect x="4" y="4" width="16" height="16" rx="2"/></svg><span class="txt">Waitlists</span></a>
+          <a class="nav-item" href="admin-checkin.html" title="Check-in"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 3h6v18h-6"/><path d="M13 21H4V3h9"/><circle cx="10.5" cy="12" r="1.2"/></svg><span class="txt">Check-in</span></a>
+          <a class="nav-item" href="admin-facility.html" title="Facility Calendar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/><circle cx="19" cy="18" r="2"/></svg><span class="txt">Facility Calendar</span></a>
+          <a class="nav-item" href="tournament.html" title="Tournament Ops"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 3v3M16 3v3M8 11h8M8 15h5"/></svg><span class="txt">Tournament Ops</span></a>
+          <a class="nav-item" href="admin-league.html" title="League Manager"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 21h8M12 17v4M7 4h10v4a5 5 0 0 1-10 0z"/><path d="M7 6H4a3 3 0 0 0 3 4M17 6h3a3 3 0 0 1-3 4"/></svg><span class="txt">League Manager</span></a>
+      </nav>
+      <nav class="nav-group" data-key="money">
+        <div class="nav-label" role="button" tabindex="0" aria-expanded="true">Money<span class="grp-chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></span></div>
+        
+          <a class="nav-item" href="admin-reports.html" title="Sales & Reports"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-8M21 20H3"/></svg><span class="txt">Sales & Reports</span></a>
+          <a class="nav-item" href="admin-pos.html" title="Point of Sale"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-8M21 20H3"/></svg><span class="txt">Point of Sale</span></a>
+          <a class="nav-item" href="admin-plans.html" title="Membership Plans"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-8M21 20H3"/></svg><span class="txt">Membership Plans</span></a>
+          <a class="nav-item" href="admin-tiers.html" title="Membership Levels"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/><circle cx="12" cy="15" r="1.6"/></svg><span class="txt">Membership Levels</span></a>
+      </nav>
+      <nav class="nav-group" data-key="mkt">
+        <div class="nav-label" role="button" tabindex="0" aria-expanded="true">Marketing<span class="grp-chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></span></div>
+        
+          <a class="nav-item" href="admin-marketing.html" title="Marketing & Email"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-8M21 20H3"/></svg><span class="txt">Marketing & Email</span></a>
+          <a class="nav-item" href="admin-sms.html" title="Text Messages"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-8M21 20H3"/></svg><span class="txt">Text Messages</span></a>
+          <a class="nav-item" href="admin-messages.html" title="Message Reports"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M2.5 20c1.2-3.4 4-4.6 6.5-4.6S14.3 16.6 15.5 20"/><circle cx="17" cy="9" r="2.6"/><path d="M15.5 14.6c2.8-.3 5.2 1 6 4.4"/></svg><span class="txt">Message Reports</span></a>
+      </nav>
+      <nav class="nav-group" data-key="people">
+        <div class="nav-label" role="button" tabindex="0" aria-expanded="true">People<span class="grp-chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></span></div>
+        
+          <a class="nav-item" href="admin-users.html" title="Members"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M2.5 20c1.2-3.4 4-4.6 6.5-4.6S14.3 16.6 15.5 20"/><circle cx="17" cy="9" r="2.6"/><path d="M15.5 14.6c2.8-.3 5.2 1 6 4.4"/></svg><span class="txt">Members</span></a>
+          <a class="nav-item" href="admin-users.html#roles" title="Admins & Roles"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/><circle cx="12" cy="15" r="1.6"/></svg><span class="txt">Admins & Roles</span></a>
+          <a class="nav-item" href="admin-security.html" title="Security & Recovery"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/><circle cx="12" cy="15" r="1.6"/></svg><span class="txt">Security & Recovery</span></a>
+          <a class="nav-item" href="admin-waivers.html" title="Waivers"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M2.5 20c1.2-3.4 4-4.6 6.5-4.6S14.3 16.6 15.5 20"/><circle cx="17" cy="9" r="2.6"/><path d="M15.5 14.6c2.8-.3 5.2 1 6 4.4"/></svg><span class="txt">Waivers</span></a>
+          <a class="nav-item" href="admin-documents.html" title="Documents"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9z"/><path d="M13 3v6h6"/></svg><span class="txt">Documents</span></a>
+          <a class="nav-item" href="admin-faq.html" title="Help & FAQ"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9z"/><path d="M13 3v6h6"/></svg><span class="txt">Help & FAQ</span></a>
+          <a class="nav-item" href="admin-uploads.html" title="Files"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9z"/><path d="M13 3v6h6"/></svg><span class="txt">Files</span></a>
+          <a class="nav-item" href="admin-org-settings.html" title="Organization"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9 17 7M7 17l-2.1 2.1"/></svg><span class="txt">Organization</span></a>
+          <a class="nav-item" href="settings.html" title="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9 17 7M7 17l-2.1 2.1"/></svg><span class="txt">Settings</span></a>
+      </nav>
+      <nav class="nav-group" data-key="site">
+        <div class="nav-label" role="button" tabindex="0" aria-expanded="true">Member site<span class="grp-chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></span></div>
+        
+          <a class="nav-item" href="index.html" title="Home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M10 21v-6h4v6"/></svg><span class="txt">Home</span></a>
+          <a class="nav-item" href="schedule.html" title="Schedule Page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/><circle cx="19" cy="18" r="2"/></svg><span class="txt">Schedule Page</span></a>
+          <a class="nav-item" href="leagues.html" title="Leagues Page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 21h8M12 17v4M7 4h10v4a5 5 0 0 1-10 0z"/><path d="M7 6H4a3 3 0 0 0 3 4M17 6h3a3 3 0 0 1-3 4"/></svg><span class="txt">Leagues Page</span></a>
+          <a class="nav-item" href="admin-events.html#views" title="Views & Embed"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 8 4 12l4 4M16 8l4 4-4 4"/></svg><span class="txt">Views & Embed</span></a>
+          <a class="nav-item" href="admin-calendar.html" title="Calendar Feeds"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/><circle cx="19" cy="18" r="2"/></svg><span class="txt">Calendar Feeds</span></a>
+      </nav>
+      <nav class="nav-group sandbox" data-key="sandbox">
+        <div class="nav-label" role="button" tabindex="0" aria-expanded="true">Sandbox<span class="grp-chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></span></div>
+        <a class="nav-item" href="#" id="btViewMember" title="View as member"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M2.5 20c1.2-3.4 4-4.6 6.5-4.6S14.3 16.6 15.5 20"/><circle cx="17" cy="9" r="2.6"/><path d="M15.5 14.6c2.8-.3 5.2 1 6 4.4"/></svg><span class="txt">View as member</span></a>
+        <a class="nav-item" href="#" id="btTestData" title="Test data"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 12l2 2 4-5"/><rect x="4" y="4" width="16" height="16" rx="2"/></svg><span class="txt">Test data…</span></a>
+        <a class="nav-item" href="admin-buildstatus.html" title="Build status"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 3v3M16 3v3M8 11h8M8 15h5"/></svg><span class="txt">Build status</span></a>
+      </nav>
+      <button class="bt-edge" type="button" aria-label="Collapse or expand navigation"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
+    </aside>
   <main class="main wide admin-main" id="app" aria-live="polite">
     <div class="page-head"><h1>Door Check-in</h1><div class="spacer"></div>
       <select id="eventSelect" class="org-switcher" aria-label="Choose event"></select></div>
@@ -82,8 +140,8 @@
   </div><!-- /admin-layout -->
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer></script>
-  <script src="assets/config.js?v=0.46.0"></script>
-  <script src="assets/admin-nav.js?v=0.46.0"></script>
-  <script src="assets/admin-checkin.js?v=0.46.0"></script>
+  <script src="assets/config.js?v=0.47.0"></script>
+  <script src="assets/admin-nav.js?v=0.47.0"></script>
+  <script src="assets/admin-checkin.js?v=0.47.0"></script>
 </body>
 </html>

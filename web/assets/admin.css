@@ -1,19 +1,25 @@
 /* Boomtown Platform — Admin Panel styles
-   Version: v0.5.0 · Date: 2026-07-23 (streamline pass; base v0.4.0 2026-07-22)
+   Version: v0.6.0 · Date: 2026-08-02 (rail tighten + centered main, uiux-review §2; ships in v0.47.0)
+   v0.6.0: rail 232px → 216px behind --bt-rail-w (the edge handle in admin-nav.js binds to
+   the same var — no more magic 219px); tighter group rhythm; .admin-main centered
+   (max-width 1360px, margin auto) so content stops drifting left on ultrawide; the two
+   divergent .admin-main blocks consolidated into one.
+   Base v0.5.0 2026-07-23 (streamline pass; base v0.4.0 2026-07-22).
    Layers on tokens.css + app.css. Motion: exact properties only, ≤240ms, ease-out
    (emil-design-eng — no `transition: all`, hover feedback is instant-feeling). */
 
-.admin-layout { display: grid; grid-template-columns: 232px 1fr; min-height: calc(100vh - 57px); }
+:root { --bt-rail-w: 216px; }
+.admin-layout { display: grid; grid-template-columns: var(--bt-rail-w, 216px) 1fr; min-height: calc(100vh - 57px); }
 
 /* ---------- sidebar ---------- */
 .sidebar {
   background: var(--surface);
   border-right: 1px solid var(--border);
-  padding: 12px 8px;
+  padding: 10px 8px;
   position: sticky; top: 57px; height: calc(100vh - 57px);
   overflow-y: auto;
 }
-.sidebar .nav-group { margin: 4px 0 14px; }
+.sidebar .nav-group { margin: 2px 0 10px; }
 .sidebar .nav-label {
   font-size: 11px; letter-spacing: .08em; text-transform: uppercase;
   color: var(--text-muted); padding: 0 12px 6px;
@@ -42,7 +48,9 @@
 .nav-item:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 
 /* ---------- content ---------- */
-.admin-main { padding: 20px 24px 60px; min-width: 0; }
+/* v0.6.0: single consolidated definition (the v0.5.0 streamline block's duplicate is gone).
+   width:100% + margin:0 auto centers the capped column inside the grid track (uiux-review §2). */
+.admin-main { padding: 22px 26px 64px; min-width: 0; width: 100%; max-width: 1360px; margin: 0 auto; }
 .page-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
 .page-head h1 { font-size: 22px; margin: 0; }
 .page-head .spacer { flex: 1; }
@@ -147,7 +155,6 @@
    Cards breathe (18px pad), one heading scale, tables lose visual weight. */
 .card { padding: 18px; }
 .card > h2:first-child { margin-top: 0; }
-.admin-main { padding: 22px 26px 64px; max-width: 1280px; }
 .page-head h1 { font-size: 24px; letter-spacing: -0.01em; }
 .tbl { font-size: 15px; }
 .tbl th { font-size: 12px; }
