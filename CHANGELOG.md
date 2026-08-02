@@ -1,5 +1,9 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.56.0 — 2026-08-02
+
+- Auto-recorded by CI on deploy. `/api/health` reported `v0.56.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
+
 ## v0.55.0 — 2026-08-02
 
 - **`build-status.js` v1.1 — the tester-facing registry was stale, and two entries were wrong.**
