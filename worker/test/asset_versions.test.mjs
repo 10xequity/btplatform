@@ -1,5 +1,5 @@
 /**
- * asset_versions.test.mjs · v1.0 · 2026-07-31 · Ships in: v0.41.0
+ * asset_versions.test.mjs · v1.1 · 2026-08-02 · Ships in: v0.49.1 (v1.0 2026-07-31, v0.41.0)
  *
  * Guards the SINGLE shared cache-buster convention adopted in v0.41.0.
  *
@@ -41,6 +41,14 @@ const stripJsBlockComments = (s) => s.replace(/\/\*[\s\S]*?\*\//g, "");
 
 /** All `?v=` buster values in already-stripped text, in order. */
 const collectBusters = (s) => [...s.matchAll(/\?v=([0-9][0-9.]*)/g)].map((m) => m[1]);
+
+/** v1.1: local asset refs (src/href="assets/*.js|css") WITHOUT a buster, in already-stripped HTML.
+ *  The v0.49.1 lesson: the sweep sed only rewrites `?v=` that already exists — 65 bare refs
+ *  (tokens.css/app.css on ~30 pages, four admin-pos scripts, guardian-complete, help) were
+ *  invisible to v1.0, which audits busters, not references (failure class 3: a guard narrower
+ *  than its subject reports clean). This collector scans the REFERENCE set. */
+const collectBareRefs = (s) =>
+  [...s.matchAll(/(?:src|href)="(assets\/[^"?]+\.(?:js|css))"/g)].map((m) => m[1]);
 
 /**
  * Audit a corpus: Map<filename, strippedText> → { withBusters, total, values }.
@@ -102,7 +110,32 @@ test("the widest-set guard actually covers the critical surfaces", () => {
   }
 });
 
+test("v1.1: no HTML page references a local js/css asset without a buster", () => {
+  const offenders = [];
+  let htmlScanned = 0;
+  for (const f of readdirSync(WEB_DIR)) {
+    if (!f.endsWith(".html")) continue;
+    htmlScanned++;
+    const bare = collectBareRefs(stripHtmlComments(readFileSync(new URL(f, WEB_DIR), "utf8")));
+    for (const ref of bare) offenders.push(`${f} → ${ref}`);
+  }
+  assert.ok(htmlScanned >= 40,
+    `guard floor: expected >=40 HTML pages scanned, saw ${htmlScanned} (failure class 4)`);
+  assert.deepEqual(offenders, [],
+    `bare (unbustered) asset refs found — the sweep cannot see these:\n  ${offenders.join("\n  ")}`);
+});
+
 /* ── negative controls — mutate REAL input and prove the guard can fail ── */
+
+test("NC-5: a real page with its buster stripped from one ref is caught by v1.1", () => {
+  // mutate the exact subject line: take a real page, strip ?v= off its first asset ref
+  const f = readdirSync(WEB_DIR).find((n) => n.endsWith(".html") &&
+    /(?:src|href)="assets\/[^"?]+\.(?:js|css)\?v=/.test(readFileSync(new URL(n, WEB_DIR), "utf8")));
+  const mutated = stripHtmlComments(readFileSync(new URL(f, WEB_DIR), "utf8"))
+    .replace(/((?:src|href)="assets\/[^"?]+\.(?:js|css))\?v=[0-9][0-9.]*"/, '$1"');
+  assert.ok(collectBareRefs(mutated).length >= 1,
+    `stripping a buster from ${f} must surface as a bare ref — if not, the collector is blind`);
+});
 
 test("NC-1: one drifted buster in the real corpus fails the all-identical check", () => {
   const corpus = realCorpus();

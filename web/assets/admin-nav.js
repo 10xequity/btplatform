@@ -402,7 +402,7 @@
   (function brandLogo() {
     const wm = document.querySelector(".wordmark");
     if (!wm || wm.querySelector(".brand-logo")) return;
-    const FALLBACK = "assets/logo-boom-icon-512.png?v=0.49.0";
+    const FALLBACK = "assets/logo-boom-icon-512.png?v=0.49.1";
     const cacheKey = "bt_org_logo:" + (localStorage.getItem("bt_org") || "");
     const img = new Image();
     img.src = localStorage.getItem(cacheKey) || FALLBACK;
@@ -468,7 +468,7 @@
       if (window.BT_STATUS || document.getElementById("bt-status-js")) return;
       var s = document.createElement("script");
       s.id = "bt-status-js";
-      s.src = "assets/build-status.js?v=0.49.0";
+      s.src = "assets/build-status.js?v=0.49.1";
       s.async = false;
       document.head.appendChild(s);
     } catch (e) { /* indicators are never load-blocking */ }
