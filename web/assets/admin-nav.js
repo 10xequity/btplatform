@@ -1,5 +1,8 @@
 /* Boomtown Platform — Admin sidebar (shared)
-   Version: v2.17 · Date: 2026-08-02 · Ships in: v0.48.0
+   Version: v2.18 · Date: 2026-08-02 · Ships in: v0.51.0
+   v2.18 (v0.51.0): Announcements nav item (mkt group) · pre-paint collapse state moved to the
+   shared inline <head> snippet reading the bt_nav cookie (uiux-review §4) — the toggle now
+   writes the cookie and retires the legacy localStorage key; no post-paint read remains here.
    v2.17 (v0.48.0): header mail icon (owner 2026-08-02) — every admin page header gets a ✉
    button linking admin-messages.html (the message-report review queue), placed before the
    theme toggle when the page has one, else appended. No badge yet: there is no admin
@@ -73,6 +76,7 @@
     ops:     I('<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 3v3M16 3v3M8 11h8M8 15h5"/>'),
     league:  I('<path d="M8 21h8M12 17v4M7 4h10v4a5 5 0 0 1-10 0z"/><path d="M7 6H4a3 3 0 0 0 3 4M17 6h3a3 3 0 0 1-3 4"/>'),
     sales:   I('<path d="M4 20V10M10 20V4M16 20v-8M21 20H3"/>'),
+    mega:    I('<path d="M3 11v2a1 1 0 0 0 1 1h2l5 4V6L6 10H4a1 1 0 0 0-1 1z"/><path d="M15 9a4 4 0 0 1 0 6M18 7a7 7 0 0 1 0 10"/>'),
     members: I('<circle cx="9" cy="8" r="3.2"/><path d="M2.5 20c1.2-3.4 4-4.6 6.5-4.6S14.3 16.6 15.5 20"/><circle cx="17" cy="9" r="2.6"/><path d="M15.5 14.6c2.8-.3 5.2 1 6 4.4"/>'),
     roles:   I('<rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/><circle cx="12" cy="15" r="1.6"/>'),
     gear:    I('<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9 17 7M7 17l-2.1 2.1"/>'),
@@ -134,7 +138,8 @@
       .sidebar .nav-item .txt { display: inline; }
     }`;
   document.head.appendChild(extra);
-  if (localStorage.getItem("bt_nav_collapsed") === "1") document.documentElement.dataset.nav = "min";
+  /* v2.18: pre-paint collapse state is applied by the shared inline <head> snippet on every
+     page (bt_nav cookie) — no post-paint read here, so the rail cannot snap after paint. */
   const NAV = [
     { label: "Run events", key: "run", items: [
       { href: "admin.html",               ico: "dash",   text: "Dashboard" },
@@ -153,6 +158,7 @@
       { href: "admin-tiers.html",          ico: "roles",  text: "Membership Levels" },
     ]},
     { label: "Marketing", key: "mkt", items: [
+      { href: "admin-announcements.html", ico: "mega",   text: "Announcements" },
       { href: "admin-marketing.html",     ico: "sales",  text: "Marketing & Email" },
       { href: "admin-sms.html",           ico: "sales",  text: "Text Messages" },
       { href: "admin-messages.html",      ico: "members", text: "Message Reports" },
@@ -219,7 +225,8 @@
     aside.querySelector(".bt-edge").addEventListener("click", () => {
       const min = document.documentElement.dataset.nav === "min";
       if (min) delete document.documentElement.dataset.nav; else document.documentElement.dataset.nav = "min";
-      localStorage.setItem("bt_nav_collapsed", min ? "0" : "1");
+      document.cookie = "bt_nav=" + (min ? "" : "min") + "; path=/; max-age=31536000; SameSite=Lax";
+      try { localStorage.removeItem("bt_nav_collapsed"); } catch (e) {} // retire the pre-v0.51 key
     });
     // group collapse (remembered per group; keyboard: Enter/Space)
     aside.querySelectorAll(".nav-group .nav-label").forEach(lbl => {
@@ -402,7 +409,7 @@
   (function brandLogo() {
     const wm = document.querySelector(".wordmark");
     if (!wm || wm.querySelector(".brand-logo")) return;
-    const FALLBACK = "assets/logo-boom-icon-512.png?v=0.50.0";
+    const FALLBACK = "assets/logo-boom-icon-512.png?v=0.51.0";
     const cacheKey = "bt_org_logo:" + (localStorage.getItem("bt_org") || "");
     const img = new Image();
     img.src = localStorage.getItem(cacheKey) || FALLBACK;
@@ -468,7 +475,7 @@
       if (window.BT_STATUS || document.getElementById("bt-status-js")) return;
       var s = document.createElement("script");
       s.id = "bt-status-js";
-      s.src = "assets/build-status.js?v=0.50.0";
+      s.src = "assets/build-status.js?v=0.51.0";
       s.async = false;
       document.head.appendChild(s);
     } catch (e) { /* indicators are never load-blocking */ }

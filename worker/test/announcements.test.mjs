@@ -1,6 +1,6 @@
 /**
  * Boomtown Platform — announcements / home feed / org-brand guards
- * File: worker/test/announcements.test.mjs · Version: v1.0 · Date: 2026-08-02 · Ships in: v0.50.0
+ * File: worker/test/announcements.test.mjs · Version: v1.1 · Date: 2026-08-02 · Ships in: v0.51.0 (v1.0 v0.50.0)
  *
  * Covers the R3 module (announcements.js) the way lfg.test.mjs covers lfg.js:
  *   1. Pure helpers: isLive · muteKeyValid · normalizeSubBody · CATEGORIES.
@@ -178,4 +178,54 @@ test("NC-4: a dispatch chain missing the call site fails the §6.5 check", () =>
 test("NC-5: the statement scanner counts a miss when SQL is unreadable", () => {
   const { misses } = collectStatements(`env.DB.prepare(\`SELECT 1 FROM x`); // unterminated template
   assert.equal(misses, 1, "an uncapturable prepare must count as a miss, never vanish");
+});
+
+/* ============ 6. (v1.1, v0.51.0) admin authoring page — staff CRUD UI ============ */
+/* The page is static UI over the section-5 routes above; these checks hold the page to
+   the same rules the API enforces, scanning the REAL page/JS sources (never trust). */
+
+const PAGE = readFileSync(new URL("../../web/admin-announcements.html", import.meta.url), "utf8");
+const PAGE_JS = readFileSync(new URL("../../web/assets/admin-announcements.js", import.meta.url), "utf8");
+const HOME_JS = readFileSync(new URL("../../web/home.js", import.meta.url), "utf8");
+
+test("authoring JS drives all four staff routes (list, create, update, soft delete)", () => {
+  assert.ok(PAGE_JS.includes('api("/api/admin/announcements")'), "GET list call missing");
+  assert.ok(PAGE_JS.includes('api("/api/admin/announcements", { method: "POST"'), "POST create call missing");
+  assert.ok(PAGE_JS.includes('`/api/admin/announcements/${editingId}`, { method: "PUT"'), "PUT update call missing");
+  assert.ok(PAGE_JS.includes('`/api/admin/announcements/${id}`, { method: "DELETE"'), "DELETE call missing");
+});
+
+test("preview parity: the admin preview renders the member's exact fragments", () => {
+  // Both renderers must carry the same structural classes home.js paints — if home.js
+  // renames its markup, this fails and the preview is known-stale (failure class 2).
+  for (const cls of ['class="ann-cta"', 'class="feed-item"', 'class="fx"']) {
+    assert.ok(HOME_JS.includes(cls), `home.js lost ${cls} — update BOTH renderers together`);
+    assert.ok(PAGE_JS.includes(cls), `admin preview lost ${cls} — it no longer shows what members see`);
+  }
+});
+
+test("owner rule in the UI copy: the cta is pinned and hide attempts are silently ignored", () => {
+  assert.ok(/Hide controls don't apply/.test(PAGE) && /no error/.test(PAGE),
+    "the cta option must state the rule of record (owner 2026-08-02): it stays, silently");
+  assert.ok(!/class="feed-mute"/.test(PAGE_JS),
+    "the admin preview must not render the member hide button — staff have nothing to hide with");
+});
+
+test("times: the page speaks local, stores the server's UTC vocabulary", () => {
+  assert.ok(PAGE_JS.includes('toISOString().slice(0, 16).replace("T", " ")'),
+    "save path must produce UTC 'YYYY-MM-DD HH:MM' — isLive() appends Z to exactly that shape");
+  assert.ok(PAGE_JS.includes('replace(" ", "T") + "Z"'),
+    "read path must parse the stored value as UTC before localizing");
+});
+
+test("NC-6: renaming .ann-cta in the admin preview source is caught by the parity scan", () => {
+  const mutated = PAGE_JS.replace('class="ann-cta"', 'class="ann-ctA"');
+  assert.ok(!mutated.includes('class="ann-cta"'),
+    "mutation must hit the exact subject line, or this NC proves nothing");
+});
+
+test("NC-7: stripping the rule-of-record copy from the page is caught", () => {
+  const mutated = PAGE.replace(/Hide controls don't apply/g, "");
+  assert.ok(!/Hide controls don't apply/.test(mutated) && /no error/.test(PAGE),
+    "the copy scan must fail when the cta rule leaves the page");
 });

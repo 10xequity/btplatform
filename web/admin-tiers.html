@@ -9,9 +9,10 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Membership levels — Boomtown Volleyball</title>
-  <link rel="stylesheet" href="assets/tokens.css?v=0.50.0" />
-  <link rel="stylesheet" href="assets/app.css?v=0.50.0" />
-  <link rel="stylesheet" href="assets/admin.css?v=0.50.0" />
+  <script>/* Pre-paint collapse (uiux-review §4, v0.51.0): read the bt_nav cookie before first paint so the rail opens in the saved state — no post-paint snap. admin-nav.js writes the cookie on toggle; the localStorage fallback migrates pre-v0.51 sessions. */(function(){try{var m=document.cookie.match(/(?:^|; )bt_nav=([^;]*)/);var v=m?m[1]:((window.localStorage&&localStorage.getItem("bt_nav_collapsed")==="1")?"min":"");if(v==="min")document.documentElement.dataset.nav="min";}catch(e){}})();</script>
+  <link rel="stylesheet" href="assets/tokens.css?v=0.51.0" />
+  <link rel="stylesheet" href="assets/app.css?v=0.51.0" />
+  <link rel="stylesheet" href="assets/admin.css?v=0.51.0" />
   <style>
     .tg { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,360px); gap: 20px; align-items: start; }
     @media (max-width: 980px) { .tg { grid-template-columns: 1fr; } }
@@ -23,14 +24,7 @@
       background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 8px; }
     .card textarea { min-height: 72px; resize: vertical; font-family: inherit; }
     .card :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
-    .btn { min-height: 44px; padding: 0 16px; font-size: 15px; font-weight: 600; cursor: pointer;
-      background: var(--primary); color: var(--bg); border: 0; border-radius: 8px;
-      transition: transform 120ms cubic-bezier(.23,1,.32,1); }
-    .btn:active { transform: scale(.97); }
-    .btn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
-    .btn.ghost { background: transparent; color: var(--text); border: 1px solid var(--border); }
-    .btn.sm { min-height: 36px; font-size: 13px; padding: 0 12px; }
-    .btn.danger { background: transparent; color: var(--danger); border: 1px solid var(--border); }
+    /* v0.51.0: shared button set (app.css) — local redefinitions deleted (uiux-review §4) */
     .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     .tier { display: flex; gap: 14px; align-items: flex-start; padding: 14px 0; border-bottom: 1px solid var(--border); }
     .tier:last-child { border-bottom: 0; }
@@ -48,7 +42,6 @@
     .note { font-size: 13px; color: var(--text-dim); line-height: 1.55; }
     .cbx { display: flex; align-items: center; gap: 10px; margin: 12px 0 0; font-size: 14px; }
     .cbx input { width: 20px; height: 20px; }
-    @media (prefers-reduced-motion: reduce) { .btn { transition: none; } .btn:active { transform: none; } }
   </style>
 </head>
 <body>
@@ -82,6 +75,7 @@
       <nav class="nav-group" data-key="mkt">
         <div class="nav-label" role="button" tabindex="0" aria-expanded="true">Marketing<span class="grp-chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></span></div>
         
+          <a class="nav-item" href="admin-announcements.html" title="Announcements"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11v2a1 1 0 0 0 1 1h2l5 4V6L6 10H4a1 1 0 0 0-1 1z"/><path d="M15 9a4 4 0 0 1 0 6M18 7a7 7 0 0 1 0 10"/></svg><span class="txt">Announcements</span></a>
           <a class="nav-item" href="admin-marketing.html" title="Marketing & Email"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-8M21 20H3"/></svg><span class="txt">Marketing & Email</span></a>
           <a class="nav-item" href="admin-sms.html" title="Text Messages"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-8M21 20H3"/></svg><span class="txt">Text Messages</span></a>
           <a class="nav-item" href="admin-messages.html" title="Message Reports"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M2.5 20c1.2-3.4 4-4.6 6.5-4.6S14.3 16.6 15.5 20"/><circle cx="17" cy="9" r="2.6"/><path d="M15.5 14.6c2.8-.3 5.2 1 6 4.4"/></svg><span class="txt">Message Reports</span></a>
@@ -222,9 +216,9 @@
   </main>
   </div>
 
-  <script src="assets/config.js?v=0.50.0"></script>
-  <script src="assets/admin-nav.js?v=0.50.0" defer></script>
-  <script src="assets/build-status.js?v=0.50.0" defer></script>
+  <script src="assets/config.js?v=0.51.0"></script>
+  <script src="assets/admin-nav.js?v=0.51.0" defer></script>
+  <script src="assets/build-status.js?v=0.51.0" defer></script>
   <script>
   document.addEventListener("DOMContentLoaded", function () {
     "use strict";

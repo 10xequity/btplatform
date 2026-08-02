@@ -1,5 +1,11 @@
 /* Boomtown Platform — App Shell Styles
-   Version: v0.6.0 · Date: 2026-07-23 (v0.1 base 2026-07-21)
+   Version: v0.7.0 · Date: 2026-08-02 (v0.1 base 2026-07-21)
+   v0.7.0 (v0.51.0): ONE shared button set (uiux-review §4) — .primary (semantic alias of the
+   base), .danger, and .sm/.small (the two size vocabularies unified; .btn.small was used by
+   admin-faq/admin-waitlists but never defined anywhere). Per-page redefinitions in
+   admin-calendar, admin-tiers, guardian-complete, admin-facility, lfg and profile are deleted
+   the same release; shared_buttons.test.mjs guards against their return. Sizes keep the 44px
+   floor (standards §5) — .sm is compact type/padding, not a smaller target.
    Motion rules (emil-design-eng): theme toggle & org switch = high-frequency → NO animation.
    Buttons get 120ms press feedback. Cards fade in once on load. Nothing exceeds 300ms. */
 
@@ -78,7 +84,10 @@ html, body {
   color: var(--text);
   border: 1px solid var(--border);
 }
-.btn[disabled] { opacity: 0.5; cursor: not-allowed; }
+.btn[disabled], .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+.btn.primary { /* the base .btn IS the primary style; the class is kept for semantic markup */ }
+.btn.danger { background: transparent; color: var(--danger); border: 1px solid var(--border); }
+.btn.sm, .btn.small { font-size: 13px; padding: 6px 12px; } /* compact, 44px target kept */
 
 /* Theme toggle: fired often → instant, no transition on the swap itself */
 .theme-toggle { min-width: 44px; }

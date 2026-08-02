@@ -20,8 +20,8 @@
   <meta name="robots" content="noindex, nofollow" />
   <meta name="referrer" content="no-referrer" />
   <title>Confirm a young participant's account</title>
-  <link rel="stylesheet" href="assets/tokens.css?v=0.50.0" />
-  <link rel="stylesheet" href="assets/app.css?v=0.50.0" />
+  <link rel="stylesheet" href="assets/tokens.css?v=0.51.0" />
+  <link rel="stylesheet" href="assets/app.css?v=0.51.0" />
   <style>
     .g-wrap { max-width: 620px; margin: 0 auto; padding: 24px 16px 64px; }
     .g-card { background: var(--surface); border: 1px solid var(--border);
@@ -41,7 +41,8 @@
     .g-check { display: flex; gap: 12px; align-items: flex-start; margin: 14px 0 4px; }
     .g-check input { width: 22px; height: 22px; min-width: 22px; margin-top: 2px; }
     .g-check label { font-size: 15px; line-height: 1.5; }
-    .btn.primary { width: 100%; min-height: 52px; font-size: 16px; margin-top: 20px; }
+    /* v0.51.0: scoped — page layout only; the button itself is the shared set (uiux-review §4) */
+    .g-wrap .btn.primary { width: 100%; min-height: 52px; font-size: 16px; margin-top: 20px; }
     .help-text { font-size: 13px; color: var(--text-dim); margin: 6px 0 0; line-height: 1.5; }
     .msg { margin-top: 16px; font-size: 15px; line-height: 1.5; border-radius: 8px; padding: 12px 14px; }
     .msg.err { color: var(--danger); border: 1px solid var(--danger); }
@@ -62,7 +63,7 @@
       <p class="help-text">Loading…</p>
     </div>
   </main>
-  <script src="assets/config.js?v=0.50.0" defer></script>
-  <script src="assets/guardian-complete.js?v=0.50.0" defer></script>
+  <script src="assets/config.js?v=0.51.0" defer></script>
+  <script src="assets/guardian-complete.js?v=0.51.0" defer></script>
 </body>
 </html>

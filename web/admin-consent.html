@@ -9,9 +9,10 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Media consent — Boomtown Volleyball</title>
-  <link rel="stylesheet" href="assets/tokens.css?v=0.50.0" />
-  <link rel="stylesheet" href="assets/app.css?v=0.50.0" />
-  <link rel="stylesheet" href="assets/admin.css?v=0.50.0" />
+  <script>/* Pre-paint collapse (uiux-review §4, v0.51.0): read the bt_nav cookie before first paint so the rail opens in the saved state — no post-paint snap. admin-nav.js writes the cookie on toggle; the localStorage fallback migrates pre-v0.51 sessions. */(function(){try{var m=document.cookie.match(/(?:^|; )bt_nav=([^;]*)/);var v=m?m[1]:((window.localStorage&&localStorage.getItem("bt_nav_collapsed")==="1")?"min":"");if(v==="min")document.documentElement.dataset.nav="min";}catch(e){}})();</script>
+  <link rel="stylesheet" href="assets/tokens.css?v=0.51.0" />
+  <link rel="stylesheet" href="assets/app.css?v=0.51.0" />
+  <link rel="stylesheet" href="assets/admin.css?v=0.51.0" />
   <style>
     .mc-grid { display: grid; grid-template-columns: minmax(0,340px) minmax(0,1fr); gap: 20px; align-items: start; }
     @media (max-width: 860px) { .mc-grid { grid-template-columns: 1fr; } }
@@ -72,6 +73,7 @@
       <nav class="nav-group" data-key="mkt">
         <div class="nav-label" role="button" tabindex="0" aria-expanded="true">Marketing<span class="grp-chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></span></div>
         
+          <a class="nav-item" href="admin-announcements.html" title="Announcements"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11v2a1 1 0 0 0 1 1h2l5 4V6L6 10H4a1 1 0 0 0-1 1z"/><path d="M15 9a4 4 0 0 1 0 6M18 7a7 7 0 0 1 0 10"/></svg><span class="txt">Announcements</span></a>
           <a class="nav-item" href="admin-marketing.html" title="Marketing & Email"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-8M21 20H3"/></svg><span class="txt">Marketing & Email</span></a>
           <a class="nav-item" href="admin-sms.html" title="Text Messages"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-8M21 20H3"/></svg><span class="txt">Text Messages</span></a>
           <a class="nav-item" href="admin-messages.html" title="Message Reports"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M2.5 20c1.2-3.4 4-4.6 6.5-4.6S14.3 16.6 15.5 20"/><circle cx="17" cy="9" r="2.6"/><path d="M15.5 14.6c2.8-.3 5.2 1 6 4.4"/></svg><span class="txt">Message Reports</span></a>
@@ -160,9 +162,9 @@
   </main>
   </div>
 
-  <script src="assets/config.js?v=0.50.0"></script>
-  <script src="assets/admin-nav.js?v=0.50.0" defer></script>
-  <script src="assets/build-status.js?v=0.50.0" defer></script>
+  <script src="assets/config.js?v=0.51.0"></script>
+  <script src="assets/admin-nav.js?v=0.51.0" defer></script>
+  <script src="assets/build-status.js?v=0.51.0" defer></script>
   <script>
   document.addEventListener("DOMContentLoaded", function () {
     "use strict";

@@ -6,8 +6,8 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Your profile — Boomtown Volleyball</title>
-  <link rel="stylesheet" href="assets/tokens.css?v=0.50.0" />
-  <link rel="stylesheet" href="assets/app.css?v=0.50.0" />
+  <link rel="stylesheet" href="assets/tokens.css?v=0.51.0" />
+  <link rel="stylesheet" href="assets/app.css?v=0.51.0" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css" />
   <style>
     /* Page styles — design-system v1.0 tokens only; transform/opacity motion only. */
@@ -32,8 +32,6 @@
     .switch input:checked + .track { background: var(--accent, #D4AF37); }
     .switch input:checked + .track + .dot { transform: translateX(22px); background: #111; }
     .switch input:focus-visible + .track { outline: 2px solid var(--accent, #D4AF37); outline-offset: 2px; }
-    .btn { min-height: 44px; }
-    .btn:active { transform: scale(0.97); }
     .actions { display: flex; gap: 8px; flex-wrap: wrap; }
     .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 50; opacity: 0; transition: opacity 200ms cubic-bezier(0.23, 1, 0.32, 1); }
     .modal { background: var(--surface, #141417); border: 1px solid var(--border, #26262C); border-radius: 10px; max-width: 480px; width: 100%; max-height: 90vh; overflow: auto; padding: 20px; transform: scale(0.97); opacity: 0; transition: transform 200ms cubic-bezier(0.23, 1, 0.32, 1), opacity 200ms cubic-bezier(0.23, 1, 0.32, 1); }
@@ -66,10 +64,10 @@
   <input type="file" id="avatarFile" accept="image/jpeg,image/png,image/webp" hidden />
   <div id="modalRoot"></div>
 
-  <script src="assets/site-nav.js?v=0.50.0" defer></script>
-  <script src="assets/config.js?v=0.50.0"></script>
+  <script src="assets/site-nav.js?v=0.51.0" defer></script>
+  <script src="assets/config.js?v=0.51.0"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js" defer></script>
-  <script src="assets/passkey.js?v=0.50.0" defer></script>
-  <script src="profile.js?v=0.50.0" defer></script>
+  <script src="assets/passkey.js?v=0.51.0" defer></script>
+  <script src="profile.js?v=0.51.0" defer></script>
 </body>
 </html>
