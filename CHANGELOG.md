@@ -2,7 +2,31 @@
 
 ## v0.56.0 — 2026-08-02
 
-- Auto-recorded by CI on deploy. `/api/health` reported `v0.56.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
+- **The admin ✉ badge, unparked since v0.48.0.** `admin-nav.js` v2.17 shipped the header envelope
+  with the note "No badge yet: there is no admin unread-count endpoint (queued follow-up)". This is
+  that endpoint: `GET /api/admin/messages/flags/count` — staff-only, org-scoped, binding
+  `ctx.orgId`, and taking no status from the caller.
+- **One predicate, two call sites.** `MESSAGE_FLAG_SCOPE` is interpolated by both the report queue
+  and the new count (F-26). A badge reading 3 over a queue showing 2 is worse than no badge — the
+  operator stops trusting the number, then stops looking. A test asserts the literal `WHERE` clause
+  appears exactly once in the file, so a second hand-written copy cannot drift in later.
+- **Caught mid-build: `mailBadgeFill` was defined and never called.** Every existing guard stayed
+  green, because a defined-but-unreferenced function is indistinguishable from a working one at the
+  source level unless you assert the *call site*. Failure class 1, and it nearly shipped.
+  `header_actions.test.mjs` now gates the call site per §6.5/F-15, with a negative control that
+  deletes the invocation and proves the gate reddens.
+- **Cache-buster swept to 0.56.0 across 300 references in 49 files — this also fixes a real v0.55.0
+  miss.** v0.55.0 changed `build-status.js` *without* sweeping, so any browser holding the old file
+  cached would have kept serving the wrong tester copy: the fix would not have reached the people it
+  was written for. `asset_versions.test.mjs` stayed green throughout, because it asserts the buster
+  is ONE value, not the CURRENT value.
+- **One-click mute was never unbuilt.** The roadmap listed it as a gap; `admin-messages.js` v1.1
+  shipped it with M16 — every open row carries "Mute sender 7d" / "Unmute", one tap, audited. Three
+  documents claimed otherwise (roadmap §2.3, the `admin-messages.html` header comment, and the
+  build-status note) and all three are corrected. That is the third consecutive release where the
+  documents were wrong about shipped code in the same direction, so `build_status.test.mjs` now
+  ratchets this claim too: if the button exists, no copy may say it does not.
+- Suite **670 → 683**, all passing.
 
 ## v0.55.0 — 2026-08-02
 
