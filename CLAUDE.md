@@ -13,7 +13,7 @@ Claude Desktop project-knowledge doc set (9 markdown files + 1 HTML demo, dated 
 
 | Step | File | When |
 |---|---|---|
-| 1 | `docs/2026-08-02_handoff_v0_53_0.md` | **Every session.** State of record. §0 delivery rule, §1 build state, §3 owner answers, §4 next build. |
+| 1 | `docs/2026-08-02_handoff_v0_56_0.md` | **Every session.** State of record. §0 delivery rule, §1 build state, §3 owner answers, §4 next build. |
 | 2 | `docs/2026-07-30_standards_v2_0.md` | **Every session.** Build/design law. |
 | 3 | `docs/2026-08-02_roadmap_v1_0.md` | **Every session.** What is unbuilt and in what order. |
 | 4 | `docs/INDEX.md` | **Every session.** Read-order, doc status, and the open contradiction register. |
