@@ -1,5 +1,9 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.55.0 — 2026-08-02
+
+- Auto-recorded by CI on deploy. `/api/health` reported `v0.55.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
+
 ## v0.54.0 — 2026-08-02
 
 - **First release delivered by direct commit** (owner decision 2026-08-02). The ZIP, both manifest
