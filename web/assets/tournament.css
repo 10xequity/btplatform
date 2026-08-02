@@ -25,7 +25,7 @@ textarea { font: inherit; color: var(--text); background: var(--bg); border: 1px
 .match-cell { cursor: pointer; border-radius: 6px; padding: 4px; }
 .match-cell .vs { font-weight: 600; }
 .match-cell .ref { display: block; font-size: 12px; color: var(--text-muted); }
-.match-cell .score { display: block; font-variant-numeric: tabular-nums; font-weight: 800; color: var(--accent); }
+.match-cell .score { display: block; font-variant-numeric: tabular-nums; font-weight: 800; color: var(--emphasis); }
 .match-cell.scored { outline: 1px solid var(--positive); outline-offset: -3px; }
 .match-cell.dragging { opacity: 0.4; }
 .match-cell.drop-target { outline: 2px dashed var(--accent); outline-offset: -3px; }

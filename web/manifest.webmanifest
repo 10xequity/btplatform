@@ -1,8 +1,8 @@
 {
-  "$comment": "Boomtown Platform — PWA manifest · Version: v1.0 · Date: 2026-07-25 · Ships in: v0.20.0",
-  "name": "Boomtown Athletics",
+  "$comment": "Boomtown Platform — PWA manifest · Version: v1.1 · Date: 2026-08-01 · Ships in: v0.46.0 · v1.1: app brand is Boomtown Volleyball (short_name Boomtown unchanged)",
+  "name": "Boomtown Volleyball",
   "short_name": "Boomtown",
-  "description": "Schedules, scores, registrations, and your member dashboard for Boomtown Athletics.",
+  "description": "Schedules, scores, registrations, and your member dashboard for Boomtown Volleyball.",
   "id": "./home.html",
   "start_url": "./home.html",
   "scope": "./",

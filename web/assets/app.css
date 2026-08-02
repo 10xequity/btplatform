@@ -35,7 +35,7 @@ html, body {
   font-size: 18px;
   text-transform: uppercase;
 }
-.wordmark span { color: var(--accent); }
+.wordmark span { color: var(--emphasis); }
 
 .header .spacer { flex: 1; }
 
@@ -127,7 +127,7 @@ html, body {
 
 .notice { border-left: 3px solid var(--accent); padding: 10px 12px; background: var(--surface-raised); border-radius: 0 var(--radius-control) var(--radius-control) 0; margin-top: 14px; font-size: 14px; overflow-wrap: anywhere; }
 .notice.error { border-left-color: var(--danger); }
-.notice a { color: var(--accent); }
+.notice a { color: var(--emphasis); }
 
 /* ---------- dashboard ---------- */
 .grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); margin-top: 18px; }

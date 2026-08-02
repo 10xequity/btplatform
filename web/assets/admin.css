@@ -60,7 +60,7 @@
   border: 1px solid var(--border); background: var(--surface); }
 .chip.paid, .chip.published, .chip.comped { color: var(--positive); border-color: color-mix(in srgb, var(--positive) 40%, transparent); }
 .chip.pending, .chip.draft, .chip.email-sent { color: var(--text-muted); }
-.chip.cash-pending, .chip.in_progress { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 50%, transparent); }
+.chip.cash-pending, .chip.in_progress { background: var(--accent); color: var(--gold-ink); border-color: color-mix(in srgb, var(--accent) 60%, transparent); }
 .chip.cancelled { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, transparent); }
 .chip.completed { color: var(--text-muted); }
 .chip.role-admin { color: var(--primary); border-color: color-mix(in srgb, var(--primary) 50%, transparent); }

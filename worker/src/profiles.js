@@ -586,7 +586,7 @@ async function eventIcs(env, url) {
   const esc = (s) => String(s || "").replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\n/g, "\\n");
 
   const ics = [
-    "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Boomtown Athletics//btplatform//EN",
+    "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Boomtown Volleyball//btplatform//EN",
     "CALSCALE:GREGORIAN", "METHOD:PUBLISH",
     ...icsVtimezone(tzid),
     "BEGIN:VEVENT",

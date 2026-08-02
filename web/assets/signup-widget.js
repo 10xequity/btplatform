@@ -1,7 +1,7 @@
 /* Boomtown Platform — Email signup widget (embeddable)
    File: web/assets/signup-widget.js · Version: v1.0 · Date: 2026-07-24 · Ships in: v0.16.0
    Drop-in for boomtownvb.com / coloradoboom.com (spec §3.3 "website signup widgets"):
-     <script src="https://10xequity.github.io/btplatform/web/assets/signup-widget.js?v=0.45.0"
+     <script src="https://10xequity.github.io/btplatform/web/assets/signup-widget.js?v=0.46.0"
              data-org="boomtown" defer></script>
    Renders where the tag sits. data-org: boomtown | match-point | queens-club.
    Optional data-api overrides the API origin. Honors the host page's colors via inherited
@@ -24,7 +24,7 @@
     '<input type="text" name="company" tabindex="-1" autocomplete="off" aria-hidden="true"' +
     ' style="position:absolute;left:-5000px;width:1px;height:1px;opacity:0">' +
     '<button type="submit" style="padding:11px 18px;font:inherit;font-weight:700;border:0;border-radius:8px;' +
-    'background:#D4AF37;color:#0B0B0D;cursor:pointer;min-height:44px">Sign up</button>' +
+    'background:var(--accent, #D4AF37);color:var(--gold-ink, #101418);cursor:pointer;min-height:44px">Sign up</button>' +
     '<p role="status" aria-live="polite" style="flex:100%;margin:2px 0 0;font-size:13px"></p></form>';
   s.parentNode.insertBefore(wrap, s);
 

@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<!-- Boomtown Platform — Organization settings · Version: v1.0 · Date: 2026-07-26 · Ships in: v0.31.0
+<!-- Boomtown Platform — Organization settings · Version: v1.1 · Date: 2026-08-01 · Ships in: v0.46.0
+     v1.1: Logo card — upload an image (org file store, kind=logo, public) or paste a URL; live preview.
      Where the document tokens get their values, and where the email sender name comes from.
      Until this screen existed, {{ENTITY}} and friends could refuse a publish with no way to fix it.
 
@@ -23,7 +24,7 @@
   <script>document.documentElement.dataset.theme = localStorage.getItem("bt_theme") || "dark";</script>
   <link rel="stylesheet" href="assets/tokens.css" />
   <link rel="stylesheet" href="assets/app.css" />
-  <link rel="stylesheet" href="assets/admin.css?v=0.45.0" />
+  <link rel="stylesheet" href="assets/admin.css?v=0.46.0" />
   <style>
     .og-wrap { max-width: 900px; margin: 0 auto; padding: 16px; }
     .og-h1 { font-size: 28px; margin: 8px 0 4px; }
@@ -80,6 +81,11 @@
     .btn-min:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
     .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
     @media (prefers-reduced-motion: reduce) { .btn-min:active:not(:disabled) { transform: none; } }
+      .og-logo-row { display: flex; align-items: center; gap: 14px; margin: 10px 0 4px; }
+    .og-logo-preview { width: 56px; height: 56px; border-radius: 12px; object-fit: contain;
+      background: var(--surface-2); border: 1px solid var(--border); flex: none; }
+    .og-logo-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .og-hint { color: var(--text-muted); font-size: 13.5px; margin: 2px 0 0; }
   </style>
 </head>
 <body>
@@ -201,9 +207,26 @@
             <span class="tok">{{RULES_REFERENCE}} · falls back to "posted at the facility"</span>
             <span class="err" data-e="rules_url"></span>
           </div>
+        </div>
+      </section>
+
+      <section class="og-card" aria-labelledby="logoH">
+        <h2 id="logoH">Logo</h2>
+        <p class="og-hint">Shown next to the organization name in the header. Square images look best.
+           PNG, JPG, WebP or GIF, up to 10&nbsp;MB.</p>
+        <div class="og-logo-row">
+          <img id="logoPreview" class="og-logo-preview" alt="" hidden />
+          <div class="og-logo-actions">
+            <input id="logoFile" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden />
+            <button class="btn-min" id="logoUpload" type="button">Upload image</button>
+            <span class="og-said" id="logoSaid" aria-live="polite"></span>
+          </div>
+        </div>
+        <div class="og-grid">
           <div class="og-field wide">
             <label for="f_logo_url">Logo URL</label>
             <input id="f_logo_url" data-f="logo_url" type="url" maxlength="500" placeholder="https://" />
+            <span class="tok">Uploading fills this in for you — or paste a hosted image URL.</span>
             <span class="err" data-e="logo_url"></span>
           </div>
         </div>
@@ -225,8 +248,8 @@
     </main>
   </div>
 
-  <script src="assets/config.js?v=0.45.0"></script>
-  <script src="assets/admin-nav.js?v=0.45.0"></script>
-  <script src="assets/admin-org-settings.js?v=0.45.0" defer></script>
+  <script src="assets/config.js?v=0.46.0"></script>
+  <script src="assets/admin-nav.js?v=0.46.0"></script>
+  <script src="assets/admin-org-settings.js?v=0.46.0" defer></script>
 </body>
 </html>

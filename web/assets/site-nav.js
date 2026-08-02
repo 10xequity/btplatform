@@ -1,5 +1,8 @@
 /* Boomtown Platform — Site-wide sidebar navigation (shared)
-   File: web/assets/site-nav.js · Version: v2.8 · Date: 2026-08-01 · Ships in: v0.45.0
+   File: web/assets/site-nav.js · Version: v2.9 · Date: 2026-08-01 · Ships in: v0.46.0
+   v2.9: brand — rail chip is now the boom icon + "Boomtown Volleyball" text (the wordmark PNG
+   read "Boomtown Athletics", contradicting the app brand); badge ink is var(--gold-ink)
+   (white-on-gold was an AA failure — contrast pass, uiux-review §1).
    v2.8: "Community Play" (lfg.html) in Explore — LFG board, v0.45.0.
    v2.7: "Help & FAQ" (help.html) in Explore (v0.40.0, owner req #21 phase 1) — public,
    works signed-out; the searchable article set lives in admin-faq.html.
@@ -52,11 +55,12 @@
     box-shadow: inset 2px 0 0 0 var(--accent); }
   .site-nav .nav-item:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .site-nav .badge { margin-left: auto; flex: none; min-width: 20px; height: 20px; padding: 0 6px;
-    border-radius: 999px; background: var(--accent); color: var(--bg); font-size: 12px; font-weight: 800;
+    border-radius: 999px; background: var(--accent); color: var(--gold-ink); font-size: 12px; font-weight: 800;
     display: grid; place-items: center; }
-  .site-nav .nav-brand { display: block; margin: 0 4px 14px; padding: 12px 14px; border-radius: var(--radius-card, 10px);
-    background: #000; border: 1px solid var(--border); line-height: 0; }
-  .site-nav .nav-brand img { width: 100%; height: auto; display: block; }
+  .site-nav .nav-brand { display: flex; align-items: center; gap: 10px; margin: 0 4px 14px; padding: 10px 12px; border-radius: var(--radius-card, 10px);
+    background: #000; border: 1px solid var(--border); text-decoration: none; }
+  .site-nav .nav-brand img { width: 36px; height: 36px; display: block; flex: none; }
+  .site-nav .nav-brand-name { color: #F2F0EA; font-weight: 700; font-size: 15px; line-height: 1.2; }
   .site-nav .nav-brand:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .site-layout > main, .site-layout > .site-content { flex: 1; min-width: 0; }
   @media (hover: hover) and (pointer: fine) { .site-nav .nav-item:hover { background: var(--surface); } }
@@ -154,8 +158,8 @@
     const aside = document.createElement("nav");
     aside.className = "site-nav";
     aside.setAttribute("aria-label", "Site navigation");
-    aside.innerHTML = `<a class="nav-brand" href="index.html" aria-label="Boomtown Athletics home">
-      <img src="assets/logo-boom-wordmark.png" alt="Boomtown Athletics" width="584" height="293"></a>` + NAV.map(g => `
+    aside.innerHTML = `<a class="nav-brand" href="index.html" aria-label="Boomtown Volleyball home">
+      <img src="assets/logo-boom-icon-512.png" alt="" width="36" height="36"><span class="nav-brand-name">Boomtown Volleyball</span></a>` + NAV.map(g => `
       <div class="nav-group" role="group" aria-label="${g.label}">
         <div class="nav-label">${g.label}</div>
         ${g.items.map(i => `<a class="nav-item${i.href.split("#")[0] === here ? " active" : ""}" href="${i.href}"
@@ -195,7 +199,7 @@
       if (window.BT_STATUS || document.getElementById("bt-status-js")) return;
       var s = document.createElement("script");
       s.id = "bt-status-js";
-      s.src = "assets/build-status.js?v=0.45.0";
+      s.src = "assets/build-status.js?v=0.46.0";
       s.async = false;
       document.head.appendChild(s);
     } catch (e) { /* indicators are never load-blocking */ }

@@ -6,6 +6,7 @@
  *       was reconstructed from live D1 — it was applied 2026-08-01 but its release ZIP was
  *       never uploaded; this bump lands in the same package as the file (standards §3).
  *
+ * v1.6: directory ratchet 31 → 32 (migration 0032, org reconciliation — D-ORG-5..9).
  * v1.5: directory ratchet 29 → 30 (migration 0030, Marketing SMS scope C — req #17).
  *
  * v1.4: directory ratchet 28 → 29 (migration 0029, SMS — req #17 phase 3). Shipped as a
@@ -141,9 +142,9 @@ test("pad produces the 4-digit form used in filenames and the ledger", () => {
   assert.equal(pad(2026), "2026");
 });
 
-test("the real db/migrations directory parses cleanly and reports 0031", () => {
+test("the real db/migrations directory parses cleanly and reports 0032", () => {
   const { highest, files, unparseable } = scanMigrations(DEFAULT_DIR);
   assert.deepEqual(unparseable, [], `unparseable migration filenames: ${unparseable.join(", ")}`);
-  assert.equal(highest, 31);
+  assert.equal(highest, 32);
   assert.ok(files >= 20, `expected at least 20 .sql files, saw ${files}`);
 });

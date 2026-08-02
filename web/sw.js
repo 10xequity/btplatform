@@ -46,7 +46,7 @@ self.addEventListener("fetch", (e) => {
 self.addEventListener("push", (e) => {
   let data = {};
   try { data = e.data ? e.data.json() : {}; } catch { data = { body: e.data && e.data.text() }; }
-  const title = data.title || "Boomtown Athletics";
+  const title = data.title || "Boomtown Volleyball";
   e.waitUntil(self.registration.showNotification(title, {
     body: data.body || "",
     icon: "./assets/logo-boom-icon-512.png",

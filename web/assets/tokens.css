@@ -1,6 +1,7 @@
 /* Boomtown Platform — Design Tokens
-   Version: v0.4.0 · Date: 2026-07-29 (v0.1 base 2026-07-21 · v0.2.1 contrast recovery · v0.3.0 F-23
-    · v0.4.0 F-35 focus-ring scope + F-36 body-size reconciliation)
+   Version: v0.5.0 · Date: 2026-08-01 (v0.1 base 2026-07-21 · v0.2.1 contrast recovery · v0.3.0 F-23
+    · v0.4.0 F-35 focus-ring scope + F-36 body-size reconciliation · v0.5.0 contrast pass:
+    --emphasis / --gold-ink / --ok, ships in v0.46.0)
    THIS FILE IS THE SOURCE OF TRUTH for colour, shape, type and motion. Nothing overrides it.
    Cited by: docs/2026-07-21_design-handoff_v0.1.md · 2026-07-27_standards_v0.32.1-r1.md §1
    (v0.2.1 pointed at "design spec §4" — boomtown-design-spec_v0_1/_v0_2 were deleted, see
@@ -26,6 +27,22 @@
   --text-dim: var(--text-muted); /* v0.3.0 F-23 — alias; 61 call sites, third spelling of muted */
   --danger: #B3261E;
   --border: #E3E2DD;
+
+  /* v0.5.0 — contrast pass (ships in v0.46.0). Gold as TEXT on a light surface is ~1.7:1 —
+     an AA failure the shipped pages hit on KPI numbers, amounts, scores, chips and links.
+     Rule (uiux-review_admin-shell §1): gold is a BACKGROUND (with dark ink) or a decorative
+     rule/dot — never gold text on a light surface, never light text on gold.
+       --emphasis  what "important number/text" uses INSTEAD of raw gold:
+                   navy in light (14.22:1 on --bg), gold in dark (8.9:1 on --bg).
+       --gold-ink  the only text colour permitted ON a gold fill. Literal, not var(--text):
+                   light-theme --text would pass too, but pinning the ink means a future
+                   --text edit cannot silently break on-gold contrast.
+                   #101418 on #E6B800 9.3:1 · on #D4AF37 8.4:1 — AA both themes.
+       --ok        alias of --positive (the --warning precedent): demo_admin-shell_v4's
+                   per-template CSS targets --ok; both shipped themes resolve it here. */
+  --emphasis: #1B2A4A;
+  --gold-ink: #101418;
+  --ok: var(--positive);
 
   /* Shape */
   --radius-card: 10px;
@@ -62,6 +79,9 @@
   --text-dim: var(--text-muted); /* re-declared for the same reason */
   --danger: #F2555A;
   --border: #26262B;
+  --emphasis: #D4AF37;       /* v0.5.0 — gold is legible as text on dark (8.9:1 on --bg) */
+  --gold-ink: #101418;       /* v0.5.0 — re-declared, not inherited (the --warning precedent) */
+  --ok: var(--positive);     /* v0.5.0 — re-declared, not inherited */
 }
 
 /* Glass — permitted on static chrome only (header/modals), with solid fallback (spec §4) */

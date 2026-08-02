@@ -1,5 +1,11 @@
 /**
- * tokens.test.mjs · v1.0 · 2026-07-29 · Ships in: v0.33.2
+ * tokens.test.mjs · v1.1 · 2026-08-01 · Ships in: v0.46.0
+ * v1.1: contrast-pass guard (uiux-review_admin-shell §1) — gold must never be TEXT on a light
+ *       surface, and text ON a gold fill must be --gold-ink. Scans the WIDEST set (every
+ *       web/*.html, web/assets/*.css, web/assets/*.js — CSS in JS template strings included),
+ *       COUNTS ITS OWN MISSES (the v0.45 lesson: a scanner that reads zero files reports clean),
+ *       and carries negative controls NC-7..NC-9 that prove each detector can fail.
+ * v1.0 · 2026-07-29 · Ships in: v0.33.2
  *
  * Guards web/assets/tokens.css v0.4.0 — F-35 (focus-ring scope + dark-mode colour) and
  * F-36 (body size single source).
@@ -189,4 +195,89 @@ test("NC-6: prose mentioning focus-visible in an HTML comment is not counted as 
                  <style>.c:focus-visible { outline: 2px solid var(--focus-ring); }</style>`;
   assert.equal(countDriftingFocusRules([prose]), 0,
     "an HTML comment was scored as a rule — the exact trap admin-facility.html line 6 sets");
+});
+
+
+/* ── v1.1 — contrast pass: gold is a fill or a rule, never text on a light surface ── */
+
+const ASSETS_URL = new URL("../../web/assets/", import.meta.url);
+const stripJsBlockComments = (s) => s.replace(/\/\*[\s\S]*?\*\//g, "");
+
+/** Corpus: Map<name, strippedText> across web/*.html + web/assets/*.{css,js}. */
+function contrastCorpus() {
+  const corpus = new Map();
+  for (const f of readdirSync(WEB_DIR).filter((f) => f.endsWith(".html"))) {
+    corpus.set(f, stripCssComments(stripHtmlComments(readFileSync(new URL(f, WEB_DIR), "utf8"))));
+  }
+  for (const f of readdirSync(ASSETS_URL).filter((f) => f.endsWith(".css") || f.endsWith(".js"))) {
+    const raw = readFileSync(new URL(f, ASSETS_URL), "utf8");
+    corpus.set("assets/" + f, f.endsWith(".css") ? stripCssComments(raw) : stripJsBlockComments(raw));
+  }
+  return corpus;
+}
+
+/** Gold-as-text: a `color:` (not border-color/outline-color) resolving to raw --accent. */
+function goldTextOffences(text) {
+  return [...text.matchAll(/(?<![-\w])color\s*:\s*var\(\s*--accent\b[^;}"']*/g)].map((m) => m[0]);
+}
+/** Light-on-gold: a gold fill whose ink is --bg (white in light theme) instead of --gold-ink. */
+function lightOnGoldOffences(text) {
+  return [...text.matchAll(/background\s*:\s*var\(\s*--accent\s*\)\s*;\s*color\s*:\s*var\(\s*--bg\s*\)/g)].map((m) => m[0]);
+}
+
+test("contrast: --emphasis / --gold-ink / --ok exist in both themes", () => {
+  for (const scope of [":root", '[data-theme="dark"]']) {
+    for (const t of ["--emphasis", "--gold-ink", "--ok"]) {
+      assert.ok(tokenIn(CSS, scope, t), `${t} missing in ${scope}`);
+    }
+  }
+});
+
+test("contrast: --emphasis is AA (>=4.5:1) as text on --bg and --surface in both themes", () => {
+  for (const [scope, label] of [[":root", "light"], ['[data-theme="dark"]', "dark"]]) {
+    const emph = tokenIn(CSS, scope, "--emphasis");
+    for (const surf of ["--bg", "--surface"]) {
+      const ratio = contrast(emph, tokenIn(CSS, scope, surf));
+      assert.ok(ratio >= 4.5, `${label} --emphasis on ${surf} = ${ratio.toFixed(2)}:1, below AA 4.5:1`);
+    }
+  }
+});
+
+test("contrast: --gold-ink is AA (>=4.5:1) on the gold fill in both themes", () => {
+  for (const [scope, label] of [[":root", "light"], ['[data-theme="dark"]', "dark"]]) {
+    const ratio = contrast(tokenIn(CSS, scope, "--gold-ink"), tokenIn(CSS, scope, "--accent"));
+    assert.ok(ratio >= 4.5, `${label} --gold-ink on --accent = ${ratio.toFixed(2)}:1, below AA 4.5:1`);
+  }
+});
+
+test("contrast sweep: zero gold-as-text and zero light-on-gold across the WIDEST set — and the scanner counts its own misses", () => {
+  const corpus = contrastCorpus();
+  // The v0.45 lesson: a guard that scanned nothing reported clean. 40 html files and the
+  // shared assets existed when this shipped; reading materially fewer means the scan is broken.
+  assert.ok(corpus.size >= 45, `scanned only ${corpus.size} files — the corpus read is broken, not clean`);
+  const bad = [];
+  for (const [name, text] of corpus) {
+    for (const o of goldTextOffences(text)) bad.push(`${name}: ${o.trim()}`);
+    for (const o of lightOnGoldOffences(text)) bad.push(`${name}: ${o.trim()} (use --gold-ink)`);
+  }
+  assert.deepEqual(bad, [], `gold used as text / light ink on gold — swap to --emphasis / --gold-ink:\n${bad.join("\n")}`);
+});
+
+test("NC-7: gold text and light-on-gold ARE caught; fills, borders and outlines are NOT", () => {
+  assert.equal(goldTextOffences(`.kpi .n { color: var(--accent); }`).length, 1, "gold text missed");
+  assert.equal(goldTextOffences(`.x { border-color: var(--accent); }`).length, 0, "border wrongly flagged");
+  assert.equal(goldTextOffences(`.x { outline: 2px solid var(--accent); }`).length, 0, "outline wrongly flagged");
+  assert.equal(goldTextOffences(`.x { background: var(--accent); }`).length, 0, "fill wrongly flagged");
+  assert.equal(lightOnGoldOffences(`.b { background: var(--accent); color: var(--bg); }`).length, 1, "light-on-gold missed");
+  assert.equal(lightOnGoldOffences(`.b { background: var(--accent); color: var(--gold-ink); }`).length, 0, "gold-ink wrongly flagged");
+});
+
+test("NC-8: an offence inside a stripped comment is invisible; the same offence live is not", () => {
+  const commented = stripCssComments(`/* .kpi .n { color: var(--accent); } */ .ok { color: var(--text); }`);
+  assert.equal(goldTextOffences(commented).length, 0, "comment stripping failed");
+  assert.equal(goldTextOffences(`.kpi .n { color: var(--accent); }`).length, 1);
+});
+
+test("NC-9: an empty corpus cannot pass the sweep's self-count", () => {
+  assert.ok(!(new Map().size >= 45), "an empty corpus must fail the miss-count floor");
 });

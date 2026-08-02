@@ -1,5 +1,7 @@
 /* Boomtown Platform — Organization settings (admin)
-   File: web/assets/admin-org-settings.js · Version: v1.0 · Date: 2026-07-26 · Ships in: v0.31.0
+   File: web/assets/admin-org-settings.js · Version: v1.1 · Date: 2026-08-01 · Ships in: v0.46.0
+   v1.1: logo upload — POST /api/uploads (kind=logo, visibility=public), absolute URL into
+   logo_url (server validator requires http(s)), preview, header-cache sync. Save stays explicit.
 
    Sends only the fields that actually changed. The server allow-lists again on arrival — this is
    a convenience, never the control (standards §7.2). Two consequences are surfaced at the moment
@@ -41,6 +43,12 @@
 
     renderVerify(org);
     senderPreview();
+    logoPreviewFrom(org.logo_url || "");
+    // Keep the header's cached logo honest the moment the profile is on screen (admin-nav v2.5).
+    try {
+      const key = "bt_org_logo:" + (localStorage.getItem("bt_org") || "");
+      org.logo_url ? localStorage.setItem(key, org.logo_url) : localStorage.removeItem(key);
+    } catch (e) {}
   }
 
   function renderVerify(org) {
@@ -115,6 +123,58 @@
   }
   document.querySelector('[data-f="email_sender_name"]').addEventListener("input", senderPreview);
   document.querySelector('[data-f="name"]').addEventListener("input", senderPreview);
+
+  /* ---------------- logo upload (v0.46.0) ----------------
+     Reuses the org file store: POST /api/uploads (kind=logo, visibility=public — the header
+     must render for signed-out visitors and members, and readUpload gates non-public rows).
+     The returned /api/uploads/:id is made ABSOLUTE against the API base before it goes into
+     logo_url, because the server validator requires http(s) (orgs.js VALIDATORS.logo_url).
+     Upload fills the field; the operator still clicks Save — one write path, no hidden save. */
+
+  function logoPreviewFrom(url) {
+    const img = $("logoPreview");
+    if (url) { img.src = url; img.hidden = false; } else { img.hidden = true; img.removeAttribute("src"); }
+  }
+  function setLogoSaid(msg, kind) {
+    const s = $("logoSaid");
+    s.textContent = msg || "";
+    s.className = "og-said" + (kind ? " " + kind : "");
+  }
+
+  $("logoUpload").onclick = () => $("logoFile").click();
+  $("logoFile").addEventListener("change", async () => {
+    const file = $("logoFile").files[0];
+    if (!file) return;
+    $("logoUpload").disabled = true;
+    setLogoSaid("Uploading…", "");
+    try {
+      const apiBase = (window.BT_CONFIG && window.BT_CONFIG.apiBase) || "";
+      const headers = { "Content-Type": file.type || "application/octet-stream" };
+      const t = sessionStorage.getItem("bt_token");
+      if (t) headers["Authorization"] = "Bearer " + t;
+      const orgId = localStorage.getItem("bt_org");
+      if (orgId) headers["X-Org-Id"] = orgId;
+      const q = new URLSearchParams({
+        filename: file.name || "logo", kind: "logo", visibility: "public",
+        entity: "org", entity_id: String(orgId || ""),
+      });
+      const resp = await fetch(apiBase + "/api/uploads?" + q, {
+        method: "POST", headers, credentials: "include", body: file,
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(data.error || "Upload failed.");
+      const abs = new URL(apiBase + "/api/uploads/" + data.upload.id, location.origin).href;
+      $("f_logo_url").value = abs;
+      logoPreviewFrom(abs);
+      setLogoSaid("Uploaded. Click \u201CSave changes\u201D to apply it.", "ok");
+    } catch (e) {
+      setLogoSaid(e.message || "Upload failed.", "bad");
+    } finally {
+      $("logoUpload").disabled = false;
+      $("logoFile").value = "";
+    }
+  });
+  $("f_logo_url").addEventListener("input", () => logoPreviewFrom($("f_logo_url").value.trim()));
 
   /* ---------------- save ---------------- */
 

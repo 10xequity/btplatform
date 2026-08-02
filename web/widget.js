@@ -1,4 +1,4 @@
-/* Boomtown Athletics — Embeddable Schedule Widget
+/* Boomtown Volleyball — Embeddable Schedule Widget
    Version: v0.4.0 · Date: 2026-07-22
    Usage on any website (boomtownvb.com, coloradoboom.com, …):
      <script src="https://10xequity.github.io/btplatform/web/widget.js"
@@ -18,7 +18,7 @@
 
   const frame = document.createElement("iframe");
   frame.src = `${base}schedule.html?embed=1&view=${encodeURIComponent(view)}&theme=${theme}`;
-  frame.title = "Boomtown Athletics schedule";
+  frame.title = "Boomtown Volleyball schedule";
   frame.style.cssText = "width:100%;border:0;display:block;min-height:320px;";
   frame.setAttribute("loading", "lazy");
   me.parentNode.insertBefore(frame, me.nextSibling);

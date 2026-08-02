@@ -1,5 +1,8 @@
 /* Boomtown Platform — Admin sidebar (shared)
-   Version: v2.13 · Date: 2026-07-30 · Ships in: v0.40.0
+   Version: v2.15 · Date: 2026-08-01 · Ships in: v0.46.0
+   v2.15 (v0.46.0): per-org header logo — renders orgs.logo_url from a localStorage cache
+   (instant paint), refreshes from /api/admin/org/profile in the background, falls back to
+   the boom icon. The Athletics wordmark PNG is retired from the header.
    v2.13: "Help & FAQ" (admin-faq.html) added to the People group after Documents
    v2.14 (v0.42.0): "Text Messages" (admin-sms.html) added after Marketing & Email
    (v0.40.0, owner req #21 phase 1) — write/publish the public help articles.
@@ -365,16 +368,33 @@
     URL.revokeObjectURL(url);
   }
 
-  /* v2.4 UX-06: put the logo in the header wordmark. Decorative — text stays for AT. */
+  /* v2.4 UX-06: put the logo in the header wordmark. Decorative — text stays for AT.
+     v2.5 (v0.46.0): per-org logo. Renders instantly from the localStorage cache (or the boom
+     icon — the Athletics wordmark PNG is retired from the header, its baked-in text contradicted
+     the Boomtown Volleyball brand), then refreshes the cache from the org profile in the
+     background and swaps only on change. Paint never waits on the network. */
   (function brandLogo() {
     const wm = document.querySelector(".wordmark");
     if (!wm || wm.querySelector(".brand-logo")) return;
+    const FALLBACK = "assets/logo-boom-icon-512.png?v=0.46.0";
+    const cacheKey = "bt_org_logo:" + (localStorage.getItem("bt_org") || "");
     const img = new Image();
-    img.src = "assets/logo-boom-wordmark.png?v=0.45.0";
+    img.src = localStorage.getItem(cacheKey) || FALLBACK;
     img.alt = "";
     img.className = "brand-logo";
-    img.onerror = () => img.remove(); // missing file → text wordmark exactly as before
+    img.onerror = () => { // a dead cached URL falls back; a dead fallback removes cleanly
+      if (img.src.indexOf("logo-boom-icon") === -1) { try { localStorage.removeItem(cacheKey); } catch (e) {} img.src = FALLBACK; }
+      else img.remove();
+    };
     wm.prepend(img);
+    api("/api/admin/org/profile").then((r) => {
+      if (!r.ok) return;
+      const fresh = (r.data.org && r.data.org.logo_url) || "";
+      const cached = localStorage.getItem(cacheKey) || "";
+      if (fresh === cached) return;
+      try { fresh ? localStorage.setItem(cacheKey, fresh) : localStorage.removeItem(cacheKey); } catch (e) {}
+      img.src = fresh || FALLBACK;
+    }).catch(() => {});
   })();
 
   /* v2.4: the role gate runs on EVERY admin page load — including pages that never call
@@ -405,7 +425,7 @@
       if (window.BT_STATUS || document.getElementById("bt-status-js")) return;
       var s = document.createElement("script");
       s.id = "bt-status-js";
-      s.src = "assets/build-status.js?v=0.45.0";
+      s.src = "assets/build-status.js?v=0.46.0";
       s.async = false;
       document.head.appendChild(s);
     } catch (e) { /* indicators are never load-blocking */ }

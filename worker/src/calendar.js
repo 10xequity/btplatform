@@ -181,7 +181,7 @@ export function icsUid(eventId, host) {
  * type, status, deleted_at, price_cents.
  */
 export function buildIcs(events, opts = {}) {
-  const name = opts.calName || "Boomtown Athletics";
+  const name = opts.calName || "Boomtown Volleyball";
   const host = opts.host || "boomtown";
   const appUrl = opts.appUrl || "";
   const stamp = toIcsUtc(opts.now || new Date().toISOString());
@@ -190,7 +190,7 @@ export function buildIcs(events, opts = {}) {
   const lines = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//Boomtown Athletics//Boomtown Platform v0.23.0//EN",
+    "PRODID:-//Boomtown Volleyball//Boomtown Platform v0.23.0//EN",
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
     `X-WR-CALNAME:${escapeIcsText(name)}`,
@@ -396,7 +396,7 @@ export async function icsFeed(env, url, request) {
     }
 
     const body = buildIcs(rows, {
-      calName: tok.kind === "calendar_public" ? "Boomtown Athletics — Events" : "Boomtown Athletics — My Schedule",
+      calName: tok.kind === "calendar_public" ? "Boomtown Volleyball — Events" : "Boomtown Volleyball — My Schedule",
       host: url.hostname,
       appUrl: env.APP_URL || "",
       tzid: await orgTimezone(env, tok.org_id),
