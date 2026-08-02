@@ -70,7 +70,7 @@
 
     /* --- Marketing --- */
     "admin-marketing.html":     { s: "wip",  n: "Sending is deliberately blocked in code until two things are done: the physical mailing address is saved in Settings, and the Brevo API key plus SPF/DKIM/DMARC are verified. You can build contacts, segments and campaigns; you cannot send. This is expected — not a bug." },
-    "admin-messages.html":      { s: "beta", n: "The report queue works. Muting a member still has to be done from their member record — one-click mute from this queue is not built yet." },
+    "admin-messages.html":      { s: "live" },
     "admin-announcements.html": { s: "beta", n: "Writing, scheduling and targeting all work. Anything that goes out by email is still sandboxed until the Brevo key is set." },
     "admin-sms.html":           { s: "wip",  n: "Texting is switched off at the platform level: Twilio A2P 10DLC registration is frozen by the owner. The screen, the recipient preview and the consent controls are all built and safe to look at, but no message can leave. Expected — not a bug." },
 

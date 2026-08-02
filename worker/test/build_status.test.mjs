@@ -138,6 +138,53 @@ test("NC-5: the code-side gate detector can actually fire", () => {
   assert.equal(checkinHasWaiverGate('const d = waiverGateDecision(row);'), true);
 });
 
+/* ── copy vs code: the one-click mute claim (v0.56.0) ── */
+
+const adminMsgJs = readFileSync(new URL("assets/admin-messages.js", WEB), "utf8");
+const adminMsgHtml = readFileSync(new URL("admin-messages.html", WEB), "utf8");
+
+/** The report queue renders a one-tap mute control per open row. */
+export function hasOneClickMute(src) {
+  return /data-mute=/.test(stripJsComments(src));
+}
+
+/** Copy asserting mute is NOT built. Three documents carried this after M16 shipped it. */
+export function muteNotBuiltClaimsIn(src) {
+  const claims = [];
+  for (const re of [
+    /one-click mute[^.]*is not built yet/gi,
+    /one-click mute button is parked/gi,
+    /muting a member still has to be done/gi,
+    /muting a repeat offender is a manual step/gi,
+  ]) {
+    for (const m of src.matchAll(re)) claims.push(m[0]);
+  }
+  return claims;
+}
+
+test("the report queue really does ship a one-click mute control", () => {
+  assert.equal(hasOneClickMute(adminMsgJs), true,
+    "admin-messages.js no longer renders a mute button — if that is deliberate, restore the 'not built' copy in the same commit");
+});
+
+test("no copy claims one-click mute is unbuilt while the button exists", () => {
+  for (const [name, src] of [["build-status.js", statusSrc], ["admin-messages.html", adminMsgHtml]]) {
+    assert.deepEqual(muteNotBuiltClaimsIn(src), [],
+      `${name} tells the reader one-click mute is not built. admin-messages.js v1.1 shipped it with M16.`);
+  }
+});
+
+test("NC-7: the stale mute sentences are still detectable if they return", () => {
+  const old = 'Muting a member still has to be done from their member record — one-click mute from ' +
+              'this queue is not built yet. … a one-click mute button is parked for M16.';
+  assert.ok(muteNotBuiltClaimsIn(old).length >= 2, `expected to catch the shipped-stale sentences, caught ${muteNotBuiltClaimsIn(old).length}`);
+});
+
+test("NC-8: the mute-control detector is not satisfied by a comment", () => {
+  assert.equal(hasOneClickMute('/* data-mute= is parked for M16 */'), false);
+  assert.equal(hasOneClickMute('<button data-mute="${id}">Mute</button>'), true);
+});
+
 test("NC-6: a gate named only inside a comment does NOT read as present", () => {
   // checkin.js's real header says: "REMOVED: waiverGateDecision(), … all three 409
   // { waiver_required: true } responses". Scanning raw text finds the gate in the sentence

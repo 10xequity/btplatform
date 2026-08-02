@@ -144,6 +144,7 @@ export async function messagesRoutes(request, env, url, ctx) {
   if (p === "/api/admin/messages/unmute" && m === "POST") return adminMute(request, env, ctx, false);
 
   if (p === "/api/admin/messages/flags" && m === "GET") return adminFlags(env, url, ctx);
+  if (p === "/api/admin/messages/flags/count" && m === "GET") return adminFlagCount(env, ctx);
   if (p === "/api/admin/messages/flags/resolve" && m === "POST") return adminResolveFlag(request, env, ctx);
 
   return null;
@@ -422,11 +423,41 @@ async function reportMessage(request, env, ctx) {
 
 /* ==================================== admin ==================================== */
 
+/**
+ * ONE definition of "a message report in this org, with this status" (F-26 lesson: the same
+ * predicate written twice drifts, and the two copies then disagree in public). The queue and the
+ * header badge count MUST select through this — a badge that says 3 over a queue showing 2 is
+ * worse than no badge, because the operator stops trusting the number and then stops looking.
+ * Params are positional and fixed: ?1 = org id, ?2 = status.
+ */
+export const MESSAGE_FLAG_SCOPE = "f.org_id=?1 AND f.target_type='message' AND f.status=?2";
+
+/** Statuses the queue and the badge both recognise. Anything else falls back to 'open'. */
+export const FLAG_STATUSES = ["open", "resolved", "dismissed"];
+
+/** Pure: the status a query should actually use. Unknown/absent → 'open' (what the badge counts). */
+export function flagStatusOf(raw) {
+  return FLAG_STATUSES.includes(raw) ? raw : "open";
+}
+
+/**
+ * Badge number for the static admin ✉ (#btHdrMail). Parked since v0.48.0 with the note "no badge
+ * yet: there is no admin unread-count endpoint" — this is that endpoint. Staff-only and
+ * org-scoped like every other admin read.
+ */
+async function adminFlagCount(env, ctx) {
+  const denied = await H.requireStaff(env, ctx);
+  if (denied) return denied;
+  const row = await env.DB.prepare(
+    `SELECT COUNT(*) AS n FROM content_flags f WHERE ${MESSAGE_FLAG_SCOPE}`
+  ).bind(ctx.orgId, "open").first();
+  return H.json({ open: (row && row.n) || 0 });
+}
+
 async function adminFlags(env, url, ctx) {
   const denied = await H.requireStaff(env, ctx);
   if (denied) return denied;
-  const status = ["open", "resolved", "dismissed"].includes(url.searchParams.get("status"))
-    ? url.searchParams.get("status") : "open";
+  const status = flagStatusOf(url.searchParams.get("status"));
   const rows = (await env.DB.prepare(
     `SELECT f.id, f.target_id AS message_id, f.reason, f.status, f.created_at, f.resolution_note,
             rep.full_name AS reporter_name, m.body AS message_body, snd.full_name AS sender_name,
@@ -438,7 +469,7 @@ async function adminFlags(env, url, ctx) {
      JOIN contacts rep ON rep.id = f.reporter_contact_id
      LEFT JOIN messages m ON m.id = f.target_id
      LEFT JOIN contacts snd ON snd.id = m.sender_contact_id
-     WHERE f.org_id=?1 AND f.target_type='message' AND f.status=?2
+     WHERE ${MESSAGE_FLAG_SCOPE}
      ORDER BY f.created_at DESC LIMIT 200`
   ).bind(ctx.orgId, status).all()).results;
   return H.json({ flags: rows });

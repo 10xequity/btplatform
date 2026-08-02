@@ -172,3 +172,43 @@ test("NC-7: moving the logout reveal back inside the /api/me branch fails the ve
     .replace("(function headerMailFill() {", "(function logoutReveal() {})();\n      (function headerMailFill() {");
   assert.equal(logoutRevealVerdict(mutated).ok, false);
 });
+
+/* ---------------- v0.56.0: the admin ✉ badge FILL (parked since v2.17) ---------------- */
+
+const adminNavSrc = read("assets/admin-nav.js");
+const stripJs = (s) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
+
+test("§6.5: mailBadgeFill is CALLED, not merely defined (F-15)", () => {
+  // The first draft of v2.20 defined this function and never invoked it. Every other guard in
+  // the suite went green, because a defined-and-unreferenced function is indistinguishable from
+  // a working one at the source level unless you assert the CALL SITE. Failure class 1, caught
+  // only by asking the question out loud. An import/definition must never satisfy this gate.
+  const code = stripJs(adminNavSrc);
+  const defined = /function mailBadgeFill\s*\(/.test(code);
+  const called = /mailBadgeFill\(\)/.test(code.replace(/(async\s+)?function mailBadgeFill\s*\([^)]*\)/, ""));
+  assert.ok(defined, "mailBadgeFill went missing");
+  assert.ok(called, "mailBadgeFill is defined but never invoked — the badge would never render (failure class 1)");
+});
+
+test("the admin badge fills only after the role gate resolves", () => {
+  const code = stripJs(adminNavSrc);
+  assert.match(code, /guard\(\)\s*\.then\([^)]*\)\s*=>\s*\{?\s*if \(me\) mailBadgeFill\(\)/,
+    "the count must hang off the memoized guard — fetching it for a visitor about to be bounced leaks that reports exist");
+});
+
+test("the admin badge is built with DOM APIs and is idempotent (v3.1(a) rule, extended)", () => {
+  const fn = adminNavSrc.slice(adminNavSrc.indexOf("async function mailBadgeFill"),
+                               adminNavSrc.indexOf("/* v0.11.0: standard dead-end recovery"));
+  assert.match(fn, /createElement\("span"\)/, "the badge must be built with DOM APIs, never innerHTML");
+  assert.doesNotMatch(fn, /innerHTML/, "innerHTML in a badge path is how markup gets parsed from a count");
+  assert.match(fn, /querySelector\("\.badge"\)/, "must look for an existing badge — reuse-or-remove, or a second run stacks a second badge");
+  assert.match(fn, /badge\.remove\(\)/, "a count that drops to zero must remove the badge, not leave a stale number");
+  assert.match(fn, /textContent/, "the count must be set as text, never parsed as markup");
+});
+
+test("NC: the call-site gate fails when the invocation is removed", () => {
+  const mutated = stripJs(adminNavSrc).replace(/guard\(\)\.then\(\(me\) => \{ if \(me\) mailBadgeFill\(\); \}\)\.catch\(\(\) => \{\}\);/, "guard();");
+  assert.notEqual(mutated, stripJs(adminNavSrc), "mutation did not land — NC is vacuous");
+  const called = /mailBadgeFill\(\)/.test(mutated.replace(/(async\s+)?function mailBadgeFill\s*\([^)]*\)/, ""));
+  assert.equal(called, false, "with the call deleted the gate must report uncalled");
+});

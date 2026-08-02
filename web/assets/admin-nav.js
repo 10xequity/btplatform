@@ -1,5 +1,11 @@
 /* Boomtown Platform — Admin sidebar (shared)
-   Version: v2.19 · Date: 2026-08-02 · Ships in: v0.52.0
+   Version: v2.20 · Date: 2026-08-02 · Ships in: v0.56.0
+   v2.20 (v0.56.0): the ✉ badge, unparked. v2.17 shipped the icon with "No badge yet: there is
+   no admin unread-count endpoint (queued follow-up)" — GET /api/admin/messages/flags/count now
+   exists (staff-only, org-scoped, counting through the SAME predicate as the queue itself so a
+   badge can never disagree with the list it points at). mailBadgeFill() mirrors site-nav.js
+   v2.14 exactly rather than inventing a second badge: DOM APIs only, idempotent, silent on
+   failure. Fill only — #btHdrMail is static markup (v2.19 inversion).
    v2.19 (v0.52.0): STATIC HEADER (uiux-review §6 step 4). The header icons this file used to
    inject (#btHdrMail v2.17, the .brand-logo img v2.4/v2.15) are now static markup on every
    admin page — injection deleted; brandLogo() keeps ONLY the per-org cache-refresh/swap on
@@ -356,6 +362,38 @@
     return me.data;
   }
 
+  /* v2.20 (v0.56.0): FILL the badge on the static ✉ (#btHdrMail → the message-report queue).
+     v2.17 shipped the icon with "No badge yet: there is no admin unread-count endpoint"; the
+     endpoint now exists (GET /api/admin/messages/flags/count, staff-only, org-scoped).
+
+     Deliberately mirrors site-nav.js v2.14's member fill rather than inventing a second badge:
+     DOM APIs only (textContent can never be parsed as markup), idempotent (reuse-or-remove, so a
+     second run cannot stack a second badge), and silent on failure — an operator whose worker is
+     offline should see no badge, never a broken header. Fill only; the element is static markup. */
+  async function mailBadgeFill() {
+    const a = document.getElementById("btHdrMail");
+    if (!a) return;
+    let open = 0;
+    try {
+      const r = await api("/api/admin/messages/flags/count");
+      if (r.ok) open = Number(r.data && r.data.open) || 0;
+    } catch (e) { /* offline, or a worker older than v0.56.0: no badge, no noise */ }
+    a.setAttribute("aria-label", open ? "Message reports — " + open + " waiting" : "Message reports");
+    let badge = a.querySelector(".badge");
+    if (open) {
+      a.style.position = "relative";
+      if (!badge) {
+        badge = document.createElement("span");
+        badge.className = "badge";
+        badge.setAttribute("style", "position:absolute;top:2px;right:2px;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:var(--accent);color:var(--gold-ink);font-size:11px;font-weight:800;display:grid;place-items:center");
+        a.appendChild(badge);
+      }
+      badge.textContent = open > 9 ? "9+" : String(open);
+    } else if (badge) {
+      badge.remove();
+    }
+  }
+
   /* v0.11.0: standard dead-end recovery — render an error WITH a way back. */
   function fail(el, msg) {
     if (typeof el === "string") el = document.getElementById(el);
@@ -474,8 +512,11 @@
   })();
 
   /* v2.4: the role gate runs on EVERY admin page load — including pages that never call
-     guard() themselves — so members never see admin options. */
-  guard();
+     guard() themselves — so members never see admin options.
+     v2.20: the ✉ badge fills off the SAME resolved gate. guard() is memoized, so this costs no
+     extra /api/me, and chaining it here means the count is never fetched for a visitor who is
+     about to be bounced. A rejected guard leaves the header exactly as it painted. */
+  guard().then((me) => { if (me) mailBadgeFill(); }).catch(() => {});
 
   window.BT_ADMIN = { api, guard, esc, money, fmtDT, openModal, closeModal, downloadText, fail };
 
@@ -501,7 +542,7 @@
       if (window.BT_STATUS || document.getElementById("bt-status-js")) return;
       var s = document.createElement("script");
       s.id = "bt-status-js";
-      s.src = "assets/build-status.js?v=0.53.1";
+      s.src = "assets/build-status.js?v=0.56.0";
       s.async = false;
       document.head.appendChild(s);
     } catch (e) { /* indicators are never load-blocking */ }

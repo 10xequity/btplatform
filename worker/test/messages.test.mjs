@@ -3,7 +3,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { tierClause, buildLibraryWhere, relayEmailHtml, overFlood, muteUntilIso, normalizeMuteBody, LIBRARY_ADULT_PREDICATE } from "../src/messages.js";
+import { tierClause, buildLibraryWhere, relayEmailHtml, overFlood, muteUntilIso, normalizeMuteBody, LIBRARY_ADULT_PREDICATE,
+         MESSAGE_FLAG_SCOPE, FLAG_STATUSES, flagStatusOf } from "../src/messages.js";
 
 const SRC = readFileSync(new URL("../src/messages.js", import.meta.url), "utf8");
 
@@ -141,4 +142,48 @@ test("normalizeMuteBody: reason trimmed and capped at 300 chars", () => {
   const r = normalizeMuteBody({ contact_id: 1, reason: "  spam  " });
   assert.equal(r.reason, "spam");
   assert.equal(normalizeMuteBody({ contact_id: 1, reason: long }).reason.length, 300);
+});
+
+/* ---------------- v0.56.0: admin flag count (the ✉ badge endpoint) ---------------- */
+
+test("flagStatusOf: known statuses pass, everything else falls back to 'open'", () => {
+  assert.equal(flagStatusOf("open"), "open");
+  assert.equal(flagStatusOf("resolved"), "resolved");
+  assert.equal(flagStatusOf("dismissed"), "dismissed");
+  assert.equal(flagStatusOf(null), "open");
+  assert.equal(flagStatusOf(""), "open");
+  assert.equal(flagStatusOf("OPEN"), "open", "case must not smuggle a status through");
+  assert.equal(flagStatusOf("open' OR 1=1 --"), "open", "an injection attempt resolves to the safe default");
+});
+
+test("the badge count and the queue select through ONE predicate (F-26)", () => {
+  // A badge reading 3 over a queue showing 2 is worse than no badge: the operator stops
+  // trusting the number, then stops looking. Both call sites must use MESSAGE_FLAG_SCOPE.
+  assert.match(MESSAGE_FLAG_SCOPE, /f\.org_id=\?1/, "the shared predicate must be org-scoped");
+  assert.match(MESSAGE_FLAG_SCOPE, /f\.target_type='message'/);
+  assert.match(MESSAGE_FLAG_SCOPE, /f\.status=\?2/);
+  const uses = (SRC.match(/\$\{MESSAGE_FLAG_SCOPE\}/g) || []).length;
+  assert.equal(uses, 2, `expected the queue AND the count to interpolate the shared predicate, saw ${uses}`);
+});
+
+test("NC: no second, hand-written copy of the flag WHERE clause survives", () => {
+  // The literal predicate must appear ONLY in the MESSAGE_FLAG_SCOPE definition itself.
+  const literal = (SRC.match(/f\.org_id=\?1 AND f\.target_type='message'/g) || []).length;
+  assert.equal(literal, 1,
+    `the flag predicate is written out ${literal} times — a second copy is exactly the drift MESSAGE_FLAG_SCOPE exists to prevent`);
+});
+
+test("the flag-count route is mounted, staff-gated and org-scoped", () => {
+  assert.match(SRC, /p === "\/api\/admin\/messages\/flags\/count" && m === "GET"/,
+    "the endpoint is defined but never dispatched — built-but-uncalled (failure class 1)");
+  const fn = SRC.slice(SRC.indexOf("async function adminFlagCount"), SRC.indexOf("async function adminFlags"));
+  assert.match(fn, /H\.requireStaff/, "an unauthenticated caller could count another org's reports");
+  assert.match(fn, /\.bind\(ctx\.orgId,/, "the count must bind ctx.orgId — never an org id from the client (F-11)");
+  assert.doesNotMatch(fn, /url\.searchParams/, "the badge counts open reports only; it must not take a status from the caller");
+});
+
+test("NC: the flag-count mount assertion can fail", () => {
+  const mutated = SRC.replace('p === "/api/admin/messages/flags/count" && m === "GET"', 'false');
+  assert.notEqual(mutated, SRC, "mutation did not land — NC is vacuous");
+  assert.doesNotMatch(mutated, /p === "\/api\/admin\/messages\/flags\/count" && m === "GET"/);
 });
