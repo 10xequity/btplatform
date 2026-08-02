@@ -217,6 +217,7 @@ import { subsRoutes, wireSubs } from "./subs.js"; // v0.38.0 league sub finder (
 import { kioskRoutes, wireKiosk } from "./kiosk.js"; // v0.39.0 kiosk check-in (owner req #20, migration 0027)
 import { faqRoutes, wireFaq } from "./faq.js"; // v0.40.0 Help & FAQ (owner req #21 phase 1, migration 0028)
 import { smsRoutes, wireSms } from "./sms.js"; // v0.42.0 SMS phase 3 (owner req #17, migration 0029, Twilio)
+import { lfgRoutes, wireLfg } from "./lfg.js"; // v0.45.0 LFG & community play (migration 0031)
 import { waiverReminderSweep, waiverExpirySweep, sendEmail, escapeHtml } from "./registrations.js";
 
 const MAGIC_LINK_TTL_MIN = 15;
@@ -271,6 +272,7 @@ wireSubs({ ...wiredHelpers, sendEmail, escapeHtml }); // v0.38.0 — same inject
 wireKiosk(wiredHelpers); // v0.39.0
 wireFaq(wiredHelpers); // v0.40.0
 wireSms(wiredHelpers); // v0.42.0 — fails closed until TWILIO_* secrets exist
+wireLfg(wiredHelpers); // v0.45.0
 wirePush(wiredHelpers); // v0.20.0
 wireWaivers(wiredHelpers); // v0.22.0
 wireCalendar(wiredHelpers); // v0.23.0
@@ -339,7 +341,7 @@ export default {
       } else if (url.pathname === "/api/orgs" && request.method === "GET") {
         res = await listOrgs(env);
       } else if (url.pathname === "/api/health") {
-        res = json({ ok: true, version: "v0.44.0" });
+        res = json({ ok: true, version: "v0.45.0" });
       } else if (url.pathname === "/api/webhooks/square" && request.method === "POST") {
         res = await membershipWebhook(request, env); // verifies signature; forwards payment.* to squareWebhook
       } else if (url.pathname.startsWith("/api/calendar/") && url.pathname.endsWith(".ics") && request.method === "GET") {
@@ -369,6 +371,7 @@ export default {
            || (await kioskRoutes(request, env, url, ctx)) // v0.39.0 — kiosk check-in (req #20)
            || (await faqRoutes(request, env, url, ctx)) // v0.40.0 — Help & FAQ (req #21 phase 1)
            || (await smsRoutes(request, env, url, ctx)) // v0.42.0 — SMS phase 3 (req #17)
+           || (await lfgRoutes(request, env, url, ctx)) // v0.45.0 — LFG & community play
            || (await leagueRoutes(request, env, url, ctx))
            || (await reportRoutes(request, env, url, ctx))
            || (await checkinRoutes(request, env, url, ctx))

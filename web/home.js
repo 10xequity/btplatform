@@ -1,5 +1,7 @@
 /* Boomtown Platform — My Dashboard
-   File: web/home.js · Version: v1.3.0 · Date: 2026-07-24 · Ships in: v0.14.0
+   File: web/home.js · Version: v1.4.0 · Date: 2026-08-01 · Ships in: v0.14.0 (v1.4.0 in v0.45.0)
+   v1.4.0: Community-play opportunities card. Per-category toggles are ON by default and
+   remembered per browser (localStorage bt_lfg_prefs); the feed is /api/lfg/opportunities.
    v1.3.0 (M12.5): waiver-status chips (self + children), Agreements card
    (/api/me/agreements), Request-court-time card gated by BT_CONFIG.RENTALS_ENABLED.
    RECOVERY of the lost v0.7.0 member dashboard. On load: silently links roster
@@ -44,6 +46,7 @@
     api("/api/profile/connect-teams", { method: "POST" }); // fire-and-forget roster link
     loadMembership();
     loadNotifications(); loadUpcoming(); loadTeams();
+    setupLfgCard();
     loadAgreements();
     setupRental();
   }
@@ -184,6 +187,57 @@
     box.innerHTML = `<div style="font-weight:700">${esc(s.plan_name)} <span style="color:var(--text-muted);font-weight:600">${price}</span></div>
       <p class="help-text" style="margin:6px 0 10px">${line}</p>
       <a class="btn ghost" href="membership.html" style="text-decoration:none">Manage membership</a>`;
+  }
+
+  /* ---------------- community play opportunities (v1.4.0) ---------------- */
+  const LFG_LABEL = { team_need: "Team recruiting", player_avail: "Player available", casual: "Casual game" };
+  function lfgPrefs() {
+    // Toggles are ON by default (owner spec); an entry only exists once someone turns one off.
+    try { return JSON.parse(localStorage.getItem("bt_lfg_prefs") || "{}"); } catch (e) { return {}; }
+  }
+  function setupLfgCard() {
+    const card = $("lfgCard");
+    if (!card) return;
+    const prefs = lfgPrefs();
+    card.querySelectorAll("[data-lfgk]").forEach((cb) => {
+      cb.checked = prefs[cb.dataset.lfgk] !== false;
+      cb.addEventListener("change", () => {
+        const p = lfgPrefs();
+        p[cb.dataset.lfgk] = cb.checked;
+        localStorage.setItem("bt_lfg_prefs", JSON.stringify(p));
+        renderLfg();
+      });
+    });
+    loadLfg();
+  }
+  let LFG_ROWS = [];
+  async function loadLfg() {
+    const r = await api("/api/lfg/opportunities");
+    const el = $("lfgList");
+    if (!r.ok) {
+      // 403 = under 18 or paused — the card stays quiet rather than nagging on every visit.
+      $("lfgCard").hidden = r.status === 403;
+      if (!$("lfgCard").hidden) el.innerHTML = `<p class="help-text" style="margin:0">Couldn't load community play right now.</p>`;
+      return;
+    }
+    LFG_ROWS = r.data.opportunities || [];
+    renderLfg();
+  }
+  function renderLfg() {
+    const el = $("lfgList");
+    const prefs = lfgPrefs();
+    const rows = LFG_ROWS.filter((o) => prefs[o.kind] !== false).slice(0, 5);
+    if (!rows.length) {
+      el.innerHTML = `<p class="help-text" style="margin:0">Nothing open right now. <a href="lfg.html">Post something &rarr;</a></p>`;
+      return;
+    }
+    el.innerHTML = rows.map((o) => {
+      const what = o.kind === "team_need" ? o.team_name : (o.kind === "player_avail" ? `${o.poster} wants to play` : (o.location_note || "Casual game"));
+      const bits = [LFG_LABEL[o.kind], o.skill_level !== "any" ? o.skill_level.toUpperCase() : null,
+        o.game_type !== "any" ? o.game_type : null, o.play_at ? fmt(o.play_at) : null].filter(Boolean).join(" · ");
+      return `<a class="up-row" href="lfg.html" style="text-decoration:none;color:inherit">
+        <div class="nm"><b>${esc(what)}</b><span>${esc(bits)}</span></div></a>`;
+    }).join("");
   }
 
 })();

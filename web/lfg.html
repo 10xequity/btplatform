@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<!-- Boomtown Platform — Community Play (LFG) · Version: v1.0 · Date: 2026-08-01 · Ships in: v0.45.0
+     Two-way board: teams recruiting, players available, casual games (owner spec 2026-08-01).
+     Reliability is a signal, never a rating — showed/bailed counts and the ⚠ caution marks are
+     the page's one signature element; everything else stays quiet house style (help.html
+     restraint: gold rule under the title is the only decoration). Tab switching and list swaps
+     are high-frequency → NO animation (emil framework, standards §5). Card stagger runs on
+     first paint only. 18+ and ban gates are server-side; this page just renders the sentences. -->
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Community Play — Boomtown Athletics</title>
+  <link rel="stylesheet" href="assets/tokens.css?v=0.45.0" />
+  <link rel="stylesheet" href="assets/app.css?v=0.45.0" />
+  <style>
+    .lfg-main { max-width: 760px; margin: 0 auto; padding: 16px; }
+    .lfg-main h1 { margin-bottom: 4px; }
+    .lfg-rule { height: 3px; width: 64px; background: var(--accent); border-radius: 2px; margin: 0 0 14px; }
+    .lfg-strip { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; }
+    .lfg-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 4px 12px;
+      border-radius: 999px; border: 1px solid var(--border); background: var(--surface); font-size: 14px; }
+    .lfg-chip.warn { border-color: var(--warning, #e6a23c); color: var(--warning, #e6a23c); }
+    .lfg-chip.danger { border-color: var(--danger); color: var(--danger); }
+    .lfg-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 12px; }
+    .lfg-tab { min-height: 44px; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--border);
+      background: var(--surface); color: var(--text); font: inherit; font-size: 14px; cursor: pointer; }
+    .lfg-tab[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); font-weight: 700; }
+    .lfg-tab:active { transform: scale(0.97); }
+    .lfg-post { margin: 0 0 14px; }
+    .lfg-form { border: 1px solid var(--border); border-radius: var(--radius-card, 10px);
+      background: var(--surface); padding: 14px; margin: 0 0 14px; display: grid; gap: 10px; }
+    .lfg-form label { display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+    .lfg-form input, .lfg-form select, .lfg-form textarea { min-height: 44px; font: inherit;
+      background: var(--surface-2, #1C1C21); color: var(--text); border: 1px solid var(--border);
+      border-radius: 8px; padding: 8px 10px; }
+    .lfg-form textarea { min-height: 64px; resize: vertical; }
+    .lfg-2col { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+    .lfg-card { border: 1px solid var(--border); border-radius: var(--radius-card, 10px);
+      background: var(--surface); padding: 14px; margin-bottom: 10px; }
+    @media (prefers-reduced-motion: no-preference) {
+      .lfg-card.enter { opacity: 0; transform: translateY(6px); animation: lfgIn 240ms cubic-bezier(0.23,1,0.32,1) forwards; }
+      @keyframes lfgIn { to { opacity: 1; transform: none; } }
+    }
+    .lfg-kind { font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+      color: var(--accent); }
+    .lfg-card h3 { margin: 4px 0 2px; font-size: 17px; }
+    .lfg-meta { font-size: 13.5px; color: var(--text-muted); margin: 0 0 8px; }
+    .lfg-note { font-size: 14px; margin: 0 0 10px; white-space: pre-line; overflow-wrap: anywhere; }
+    .lfg-roster { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
+    .lfg-name { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; padding: 3px 10px;
+      border-radius: 999px; border: 1px solid var(--border); background: var(--surface-2, #1C1C21); }
+    .lfg-name .caut { font-size: 12px; }
+    .lfg-name .caut.yellow { color: var(--warning, #e6a23c); }
+    .lfg-name .caut.red { color: var(--danger); }
+    .lfg-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .lfg-actions .btn { min-height: 44px; }
+    .lfg-empty { border: 1px dashed var(--border); border-radius: var(--radius-card, 10px);
+      padding: 22px; text-align: center; color: var(--text-muted); }
+    .btn:active { transform: scale(0.97); }
+  </style>
+  <script>
+    (function () {
+      document.documentElement.dataset.theme = localStorage.getItem("bt_theme") ||
+        (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+    })();
+  </script>
+</head>
+<body>
+  <div id="app">
+    <main class="lfg-main" id="main">
+      <h1>Community Play</h1>
+      <div class="lfg-rule" aria-hidden="true"></div>
+      <p class="muted">Find a team, offer to play, or set up a casual game. Games can be anywhere —
+        a park, another gym, your call. Contact happens in the inbox here; share your own info if you want to.</p>
+
+      <div class="lfg-strip" id="meStrip" aria-live="polite"></div>
+
+      <div class="lfg-tabs" role="group" aria-label="Filter posts">
+        <button class="lfg-tab" data-kind="" aria-pressed="true">All</button>
+        <button class="lfg-tab" data-kind="team_need" aria-pressed="false">Teams recruiting</button>
+        <button class="lfg-tab" data-kind="player_avail" aria-pressed="false">Players available</button>
+        <button class="lfg-tab" data-kind="casual" aria-pressed="false">Casual games</button>
+      </div>
+
+      <div class="lfg-post">
+        <button class="btn" id="postToggle" aria-expanded="false">Post something</button>
+      </div>
+      <form class="lfg-form" id="postForm" hidden>
+        <label>What are you posting?
+          <select id="fKind">
+            <option value="team_need">My team needs players</option>
+            <option value="player_avail">I'm available to play</option>
+            <option value="casual">A casual game</option>
+          </select>
+        </label>
+        <label id="fTeamWrap">Team name
+          <input id="fTeam" maxlength="80" placeholder="Even a working name — it becomes the team" />
+        </label>
+        <div class="lfg-2col">
+          <label>Skill level
+            <select id="fSkill"><option value="any">Any</option><option value="b">B</option>
+              <option value="bb">BB</option><option value="a">A</option><option value="aa">AA</option>
+              <option value="open">Open</option></select>
+          </label>
+          <label>Game type
+            <select id="fType"><option value="any">Any</option><option value="2s">2s</option>
+              <option value="4s">4s</option><option value="6s">6s</option></select>
+          </label>
+          <label>Division
+            <select id="fGender"><option value="any">Any</option><option value="coed">Coed</option>
+              <option value="mens">Men's</option><option value="womens">Women's</option>
+              <option value="reverse">Reverse</option></select>
+          </label>
+          <label>Spots (optional)
+            <input id="fSpots" type="number" min="1" max="50" inputmode="numeric" />
+          </label>
+        </div>
+        <div class="lfg-2col">
+          <label>When (optional)
+            <input id="fWhen" type="datetime-local" />
+          </label>
+          <label>Where (optional)
+            <input id="fWhere" maxlength="160" placeholder="Wash Park south courts, another gym…" />
+          </label>
+        </div>
+        <label>Positions needed (optional)
+          <input id="fPos" maxlength="120" placeholder="Setter, middle…" />
+        </label>
+        <label>Details (optional)
+          <textarea id="fNote" maxlength="500" placeholder="Anything people should know before committing"></textarea>
+        </label>
+        <div class="lfg-actions">
+          <button class="btn" type="submit" id="fSubmit">Post it</button>
+          <button class="btn ghost" type="button" id="fCancel">Cancel</button>
+        </div>
+      </form>
+
+      <div id="list" aria-live="polite"></div>
+    </main>
+  </div>
+  <script src="assets/config.js?v=0.45.0"></script>
+  <script src="assets/site-nav.js?v=0.45.0" defer></script>
+  <script src="assets/lfg.js?v=0.45.0"></script>
+</body>
+</html>

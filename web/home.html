@@ -1,5 +1,7 @@
 <!DOCTYPE html>
-<!-- Boomtown Platform — My Dashboard · Version: v1.4.0 · Date: 2026-07-25 · Ships in: v0.10.0 (v1.4.0 in v0.20.0)
+<!-- Boomtown Platform — My Dashboard · Version: v1.5.0 · Date: 2026-08-01 · Ships in: v0.10.0 (v1.5.0 in v0.45.0)
+     v1.5.0: Community-play opportunities card — per-category toggles ON by default
+     (localStorage bt_lfg_prefs), newest open posts from /api/lfg/opportunities.
      v1.4.0: PWA — manifest link, apple meta, theme-color, sw.js registration.
      RECOVERY of the v0.7.0 member dashboard (ZIP never uploaded). Signed-in home:
      notifications inbox, upcoming events, your teams (with captain invites + auto
@@ -14,8 +16,8 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="Boomtown" />
   <link rel="apple-touch-icon" href="assets/logo-boom-icon-512.png" />
-  <link rel="stylesheet" href="assets/tokens.css?v=0.44.0" />
-  <link rel="stylesheet" href="assets/app.css?v=0.44.0" />
+  <link rel="stylesheet" href="assets/tokens.css?v=0.45.0" />
+  <link rel="stylesheet" href="assets/app.css?v=0.45.0" />
   <style>
     .hm-wrap { max-width: 760px; margin: 0 auto; padding: 16px; }
     .hm-grid { display: grid; gap: 14px; }
@@ -83,6 +85,19 @@
         <div id="upList"><p class="help-text">Loading…</p></div>
       </section>
 
+      <section class="hm-card" id="lfgCard" aria-label="Community play opportunities">
+        <div style="display:flex;align-items:center;gap:10px">
+          <h2 style="margin:0">Community play</h2><div class="spacer" style="flex:1"></div>
+          <a class="btn ghost" href="lfg.html" style="text-decoration:none;min-height:36px;display:inline-flex;align-items:center">See all &rarr;</a>
+        </div>
+        <div id="lfgPrefs" style="display:flex;flex-wrap:wrap;gap:12px;margin:8px 0 4px;font-size:13.5px" aria-label="Which posts to show">
+          <label style="display:inline-flex;align-items:center;gap:6px;min-height:32px"><input type="checkbox" data-lfgk="team_need" checked> Teams recruiting</label>
+          <label style="display:inline-flex;align-items:center;gap:6px;min-height:32px"><input type="checkbox" data-lfgk="player_avail" checked> Players available</label>
+          <label style="display:inline-flex;align-items:center;gap:6px;min-height:32px"><input type="checkbox" data-lfgk="casual" checked> Casual games</label>
+        </div>
+        <div id="lfgList"><p class="help-text">Loading…</p></div>
+      </section>
+
       <section class="hm-card" aria-label="Membership">
         <h2>Membership</h2>
         <div id="memBox"><p class="help-text">Loading…</p></div>
@@ -117,9 +132,9 @@
     <div id="status" role="status" aria-live="polite" style="margin-top:10px"></div>
   </main>
 
-  <script src="assets/config.js?v=0.44.0"></script>
-  <script src="assets/site-nav.js?v=0.44.0" defer></script>
-  <script src="home.js?v=0.44.0" defer></script>
+  <script src="assets/config.js?v=0.45.0"></script>
+  <script src="assets/site-nav.js?v=0.45.0" defer></script>
+  <script src="home.js?v=0.45.0" defer></script>
   <script>if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(function(){});</script>
 </body>
 </html>
