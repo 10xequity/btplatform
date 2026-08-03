@@ -540,3 +540,65 @@ CREATE TABLE push_subscriptions (
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),
   deleted_at TEXT
 );
+
+-- Migration 0040 — King / Queen of the Court. Individuals enter, not teams, and a partnership lasts
+-- one game, so nothing in `teams` can hold this shape. Per-player standings are DERIVED from
+-- kotc_games and never stored. Mirrored here from live D1 (verified via sqlite_master after 0040 was
+-- applied) so route tests for this format run against the same schema the worker will meet.
+CREATE TABLE kotc_sessions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  org_id INTEGER NOT NULL REFERENCES orgs(id),
+  event_id INTEGER NOT NULL REFERENCES events(id),
+  name TEXT NOT NULL,
+  players_per_net INTEGER NOT NULL DEFAULT 4,
+  move_up INTEGER NOT NULL DEFAULT 1,
+  points_to INTEGER NOT NULL DEFAULT 21,
+  rounds_planned INTEGER,
+  status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','in_progress','completed')),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  deleted_at TEXT
+);
+CREATE TABLE kotc_rounds (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  org_id INTEGER NOT NULL REFERENCES orgs(id),
+  session_id INTEGER NOT NULL REFERENCES kotc_sessions(id),
+  round_no INTEGER NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  deleted_at TEXT
+);
+CREATE TABLE kotc_slots (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  org_id INTEGER NOT NULL REFERENCES orgs(id),
+  round_id INTEGER NOT NULL REFERENCES kotc_rounds(id),
+  net_no INTEGER NOT NULL,
+  seat INTEGER NOT NULL,
+  contact_id INTEGER NOT NULL REFERENCES contacts(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  deleted_at TEXT
+);
+CREATE TABLE kotc_games (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  org_id INTEGER NOT NULL REFERENCES orgs(id),
+  round_id INTEGER NOT NULL REFERENCES kotc_rounds(id),
+  net_no INTEGER NOT NULL,
+  game_no INTEGER NOT NULL,
+  a1_contact_id INTEGER NOT NULL REFERENCES contacts(id),
+  a2_contact_id INTEGER NOT NULL REFERENCES contacts(id),
+  b1_contact_id INTEGER NOT NULL REFERENCES contacts(id),
+  b2_contact_id INTEGER NOT NULL REFERENCES contacts(id),
+  score_a INTEGER,
+  score_b INTEGER,
+  points_to INTEGER NOT NULL DEFAULT 21,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  deleted_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_kotc_sessions_event ON kotc_sessions (org_id, event_id) WHERE deleted_at IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_kotc_rounds_no ON kotc_rounds (org_id, session_id, round_no) WHERE deleted_at IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_kotc_slots_seat ON kotc_slots (org_id, round_id, net_no, seat) WHERE deleted_at IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_kotc_slots_person ON kotc_slots (org_id, round_id, contact_id) WHERE deleted_at IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_kotc_games_no ON kotc_games (org_id, round_id, net_no, game_no) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_kotc_games_round ON kotc_games (org_id, round_id, net_no) WHERE deleted_at IS NULL;
