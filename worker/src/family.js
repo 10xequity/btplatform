@@ -366,6 +366,78 @@ export async function familyRoutes(request, env, url, ctx) {
   const p = url.pathname, m = request.method;
   const { json } = H;
 
+  /* ---- v1.3 (v0.58.0, owner 2026-08-03): CONNECTED-ACCOUNTS OVERVIEW.
+     `/api/family` answers "who is in my household". This answers "what do I have to deal with":
+     one read covering every connected account — what is unpaid, what is coming up, what passes
+     are left. A parent with three children currently has to open three profiles to discover they
+     owe money on one of them. That is the problem this closes.
+
+     Read-only and fully derived. It writes nothing and invents no state, so it cannot disagree
+     with the screens it summarises. Pass balances are counted the same way passes.js counts them
+     (live, unreversed redemptions) rather than kept as a second tally — F-26. ---- */
+  if (p === "/api/family/overview" && m === "GET") {
+    if (!ctx.session) return json({ error: "Sign in first." }, 401);
+    const self = await H.contactForSession(env, ctx);
+    if (!self) return json({ accounts: [], total_owed_cents: 0 });
+
+    // Self + every active minor under this guardian. Deliberately NOT "everyone sharing a
+    // family_id": guardianship is the relationship that grants visibility, and an adult who
+    // merely shares a family row is not someone whose balance you may read.
+    const minors = (await env.DB.prepare(
+      `SELECT c.id, c.full_name FROM guardianships g
+         JOIN contacts c ON c.id = g.minor_contact_id AND c.deleted_at IS NULL
+        WHERE g.org_id=?1 AND g.guardian_contact_id=?2 AND g.status='active' AND g.deleted_at IS NULL`
+    ).bind(ctx.orgId, self.id).all()).results || [];
+
+    const people = [{ id: self.id, full_name: self.full_name, self: true },
+                    ...minors.map((k) => ({ id: k.id, full_name: k.full_name, self: false }))];
+
+    const accounts = [];
+    for (const person of people) {
+      const unpaid = (await env.DB.prepare(
+        `SELECT r.id, r.status, r.price_cents, e.name AS event_name, e.starts_at
+           FROM registrations r JOIN events e ON e.id = r.event_id AND e.org_id = r.org_id
+          WHERE r.org_id=?1 AND r.contact_id=?2 AND r.deleted_at IS NULL
+            AND r.status IN ('pending','email-sent','cash-pending')
+          ORDER BY e.starts_at LIMIT 20`
+      ).bind(ctx.orgId, person.id).all()).results || [];
+
+      const upcoming = (await env.DB.prepare(
+        `SELECT e.id, e.name, e.starts_at, r.status
+           FROM registrations r JOIN events e ON e.id = r.event_id AND e.org_id = r.org_id
+          WHERE r.org_id=?1 AND r.contact_id=?2 AND r.deleted_at IS NULL
+            AND r.status != 'cancelled' AND e.starts_at >= datetime('now')
+          ORDER BY e.starts_at LIMIT 10`
+      ).bind(ctx.orgId, person.id).all()).results || [];
+
+      const passes = (await env.DB.prepare(
+        `SELECT p.id, p.name, p.total_sessions, p.expires_at,
+                (SELECT COUNT(*) FROM pass_redemptions r
+                  WHERE r.pass_id = p.id AND r.org_id = p.org_id
+                    AND r.deleted_at IS NULL AND r.reversed_at IS NULL) AS used
+           FROM passes p
+          WHERE p.org_id=?1 AND p.contact_id=?2 AND p.deleted_at IS NULL
+            AND (p.expires_at IS NULL OR p.expires_at > datetime('now'))
+          ORDER BY p.expires_at LIMIT 10`
+      ).bind(ctx.orgId, person.id).all()).results || [];
+
+      accounts.push({
+        contact_id: person.id,
+        name: person.full_name,
+        is_self: person.self,
+        owes_cents: unpaid.reduce((n, r) => n + (Number(r.price_cents) || 0), 0),
+        unpaid: unpaid.map((r) => ({ registration_id: r.id, event: r.event_name, starts_at: r.starts_at, status: r.status })),
+        upcoming: upcoming.map((e) => ({ event_id: e.id, name: e.name, starts_at: e.starts_at, status: e.status })),
+        passes: passes.map((q) => ({
+          id: q.id, name: q.name, expires_at: q.expires_at,
+          remaining: q.total_sessions === null ? null : Math.max(0, q.total_sessions - q.used),
+        })),
+      });
+    }
+
+    return json({ accounts, total_owed_cents: accounts.reduce((n, a) => n + a.owes_cents, 0) });
+  }
+
   /* ---- pre-flight age check. The registration form calls this BEFORE writing anything. ---- */
   if (p === "/api/family/age-check" && m === "POST") {
     const b = await request.json().catch(() => ({}));

@@ -220,6 +220,8 @@ import { smsRoutes, wireSms } from "./sms.js"; // v0.42.0 SMS phase 3 (owner req
 import { lfgRoutes, wireLfg } from "./lfg.js"; // v0.45.0 LFG & community play (migration 0031)
 import { announcementsRoutes, wireAnnouncements, publicOrgBrand } from "./announcements.js"; // v0.50.0 R3 member home (migration 0033)
 import { memberFieldsRoutes, wireMemberFields } from "./member_fields.js"; // v0.57.0 M22 membership custom fields (migration 0034)
+import { passesRoutes, wirePasses } from "./passes.js"; // v0.58.0 pass/credit ledger (migration 0035)
+import { staffPayRoutes, wireStaffPay } from "./staff_pay.js"; // v0.58.0 staff rates + shift pay (migration 0035)
 import { waiverReminderSweep, waiverExpirySweep, sendEmail, escapeHtml } from "./registrations.js";
 
 const MAGIC_LINK_TTL_MIN = 15;
@@ -277,6 +279,8 @@ wireSms(wiredHelpers); // v0.42.0 — fails closed until TWILIO_* secrets exist
 wireLfg(wiredHelpers); // v0.45.0
 wireAnnouncements(wiredHelpers); // v0.50.0
 wireMemberFields(wiredHelpers); // v0.57.0
+wirePasses(wiredHelpers); // v0.58.0
+wireStaffPay(wiredHelpers); // v0.58.0
 wirePush(wiredHelpers); // v0.20.0
 wireWaivers(wiredHelpers); // v0.22.0
 wireCalendar(wiredHelpers); // v0.23.0
@@ -345,7 +349,7 @@ export default {
       } else if (url.pathname === "/api/orgs" && request.method === "GET") {
         res = await listOrgs(env);
       } else if (url.pathname === "/api/health") {
-        res = json({ ok: true, version: "v0.57.0" });
+        res = json({ ok: true, version: "v0.58.0" });
       } else if (url.pathname === "/api/webhooks/square" && request.method === "POST") {
         res = await membershipWebhook(request, env); // verifies signature; forwards payment.* to squareWebhook
       } else if (url.pathname === "/api/public/org-brand" && request.method === "GET") {
@@ -382,6 +386,8 @@ export default {
            || (await lfgRoutes(request, env, url, ctx)) // v0.45.0 — LFG & community play
            || (await announcementsRoutes(request, env, url, ctx)) // v0.50.0 — R3 member home feed + announcements
            || (await memberFieldsRoutes(request, env, url, ctx)) // v0.57.0 — M22 membership custom-field registry
+           || (await passesRoutes(request, env, url, ctx)) // v0.58.0 — pass/credit ledger
+           || (await staffPayRoutes(request, env, url, ctx)) // v0.58.0 — staff rates + shift pay
            || (await leagueRoutes(request, env, url, ctx))
            || (await reportRoutes(request, env, url, ctx))
            || (await checkinRoutes(request, env, url, ctx))
