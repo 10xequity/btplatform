@@ -129,8 +129,9 @@
     $("qrUrl").textContent = url;
     $("copyUrl").onclick = () => navigator.clipboard.writeText(url);
     $("qr").innerHTML = "";
-    if (window.QRCode) new QRCode($("qr"), { text: url, width: 168, height: 168 });
-    else $("qr").textContent = "QR library blocked — use the link.";
+    // v0.68.0: was a CDN library that, when it failed, printed "QR library blocked". A QR code
+    // is used at the door of a gym — the worst place to need a third-party host reachable.
+    $("qr").innerHTML = window.BTQR.svg(url, { size: 168, label: "Self check-in QR code" });
     if (rotating) say("Code rotated — the old QR/link is dead.", true);
   }
 
