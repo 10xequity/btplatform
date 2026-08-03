@@ -67,6 +67,7 @@
     "admin-brackets.html":      { s: "beta", n: "Single elimination seeded from pool finish. Byes go to the top seeds — no play-in games. Winners move forward by recomputing the tree from the scores, so fixing a result that was typed in backwards also fixes the round above it." },
     "admin-score-links.html":   { s: "beta", n: "One scoring link per team, with a QR code. Teams record their own results in two taps; the page retires itself once a team has no games left. The QR is generated on the page — no outside service, so it works on venue wifi." },
     "admin-pool-board.html":    { s: "beta", n: "Drag teams into pools before any schedule exists. Drop on a + to start a pool; an empty one disappears on save. Notes typed on a tile stay with the team wherever it is dragged. Nothing is written until you press Save." },
+    "admin-divisions.html":     { s: "beta", n: "Set up divisions and the courts each one owns — overlapping court ranges are flagged as you type. The placement check reads how teams actually finished and suggests moves with the numbers behind them; nothing moves until you accept, and declining is recorded too." },
 
     /* --- Money --- */
     "admin-reports.html":       { s: "live" },

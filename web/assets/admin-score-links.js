@@ -25,7 +25,10 @@
       <h2 class="sl-team">${esc(l.team)}</h2>
       <div class="sl-qr">${qr}</div>
       <p class="sl-url">${esc(l.url)}</p>
-      <button class="btn ghost sl-copy" type="button" data-url="${esc(l.url)}">Copy link</button>
+      <div class="sl-actions">
+        <button class="btn ghost sl-copy" type="button" data-url="${esc(l.url)}">Copy link</button>
+        <button class="btn ghost sl-png" type="button" data-url="${esc(l.url)}" data-team="${esc(l.team)}">Save image</button>
+      </div>
     </div>`;
   }
 
@@ -53,6 +56,17 @@
           // browser trusts — that failing silently would look like a broken button.
           $("lNote").textContent = "Couldn't reach the clipboard — select the link and copy it.";
         }
+      });
+    });
+
+    // "Save image" writes a PNG. Owner 2026-08-03: the QR is for sending by text or email, and
+    // neither carries an inline SVG — mail clients strip it and SMS has no markup at all.
+    $("lCards").querySelectorAll(".sl-png").forEach((b) => {
+      b.addEventListener("click", () => {
+        const ok = window.BTQR && window.BTQR.download(b.dataset.url, `scoring-${b.dataset.team}`, { scale: 10 });
+        $("lNote").textContent = ok
+          ? `Saved a PNG for ${b.dataset.team}. Attach it to a text or an email — the link inside it is the same one.`
+          : "Couldn't make the image here — use Copy link instead.";
       });
     });
   }

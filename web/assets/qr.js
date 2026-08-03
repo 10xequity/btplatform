@@ -358,5 +358,59 @@
       `<path d="${d}" fill="${dark}"/></svg>`;
   }
 
-  root.BTQR = { modules, svg, _internals: { ecFor, genPoly, formatBits, M, ALIGN, dataCapacity, pickVersion, encodeData, interleave } };
+  /**
+   * A PNG data URL, for sending.
+   *
+   * Owner 2026-08-03: "The QR codes will be used to send via text or email, or link, not for pictures
+   * unless its a fixed picture." An inline SVG is the right thing on a page and the wrong thing in a
+   * message — most mail clients strip inline SVG, and no SMS carries markup at all. So sending needs
+   * a raster file, and this is it.
+   *
+   * `scale` is whole pixels per module, never a fractional size. Scaling a QR by a non-integer factor
+   * makes some modules a pixel wider than others, and a scanner reading a photo of that has to guess
+   * where the grid is. Integer scaling keeps every module identical.
+   *
+   * Browser only — it needs a canvas. Returns null where there isn't one, so a caller can fall back
+   * to the link rather than crash.
+   */
+  function png(text, opts = {}) {
+    if (typeof document === "undefined" || !document.createElement) return null;
+    const { modules: m, size } = modules(text);
+    const quiet = opts.quiet == null ? 4 : opts.quiet;
+    const scale = Math.max(1, Math.round(opts.scale || 8));
+    const total = (size + quiet * 2) * scale;
+
+    const cv = document.createElement("canvas");
+    cv.width = total; cv.height = total;
+    const g = cv.getContext("2d");
+    if (!g) return null;
+    // The light module is painted, not left transparent. A transparent QR dropped into a dark email
+    // template becomes dark-on-dark and stops scanning entirely.
+    g.fillStyle = opts.light || "#ffffff";
+    g.fillRect(0, 0, total, total);
+    g.fillStyle = opts.dark || "#000000";
+    for (let r = 0; r < size; r++) {
+      for (let c = 0; c < size; c++) {
+        if (m[r][c]) g.fillRect((c + quiet) * scale, (r + quiet) * scale, scale, scale);
+      }
+    }
+    return cv.toDataURL("image/png");
+  }
+
+  /** Save the PNG to disk under `filename`. Returns false when there is no canvas to draw on. */
+  function download(text, filename, opts = {}) {
+    const url = png(text, opts);
+    if (!url) return false;
+    const a = document.createElement("a");
+    a.href = url;
+    // A QR file called "download.png" is indistinguishable from every other one in a folder of
+    // twenty team codes, so the caller's name is used and only sanitised.
+    a.download = String(filename || "qr").replace(/[^\w.-]+/g, "-").replace(/^-+|-+$/g, "") + ".png";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    return true;
+  }
+
+  root.BTQR = { modules, svg, png, download, _internals: { ecFor, genPoly, formatBits, M, ALIGN, dataCapacity, pickVersion, encodeData, interleave } };
 })(typeof window !== "undefined" ? window : globalThis);

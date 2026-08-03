@@ -1,101 +1,72 @@
 <!DOCTYPE html>
-<!-- Boomtown Platform — Files (generic upload library) · Version: v1.0 · Date: 2026-07-26 · Ships in: v0.30.0
-     One org-scoped file store. Drop files, label them, set who can see them, attach them to a
-     record. No compliance, screening or approval fields — those live in an external system by
-     owner decision (2026-07-26).
-
-     DESIGN NOTES (standards §1–§3, /visual-design-principles, /emil-design-eng)
-       Hierarchy, three tiers: (1) the drop zone is the focal point — 28px heading, largest
-       target on the page; (2) the file table; (3) the filter row, deliberately quiet.
-       Motion: the drop zone changes BACKGROUND only on dragover — dragover fires continuously,
-       and per §2 a continuous event gets no transform. The progress bar is constant motion, so
-       it is `linear`; every other easing here is the §2 ease-out curve. Table rows do not
-       animate: list rendering is a tens-per-day interaction.
-       Spacing is the 4px scale only. No hardcoded hex — tokens.css owns colour. -->
+<!-- Boomtown Platform — Divisions (admin) · Version: v1.0 · Date: 2026-08-03 · Ships in: v0.71.0
+     Court ranges, and the balancer's suggestions. Everything on this page existed only as an API
+     call before now, which meant a director could not reach any of it.
+     Two divisions handed the same court is not caught by anyone until two teams walk onto it, so
+     overlaps are flagged here while you type — the server refuses them too, and that is the guard.
+     The balancer PROPOSES (owner 2026-08-03: "Propose, you approve"). Declining is recorded, because
+     "was this looked at?" gets asked after the fact. -->
 <html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Files — Boomtown Athletics</title>
-  <script>document.documentElement.dataset.theme = localStorage.getItem("bt_theme") || "dark";</script>
+  <title>Divisions — Boomtown Athletics</title>
   <script>/* Pre-paint state — collapse + theme (uiux-review §4/§6.4, v0.52.0): read the bt_nav cookie and the saved theme BEFORE the first stylesheet so the rail state AND the theme are right on frame one — no post-paint snap of either. admin-nav.js writes the cookie on rail toggle and bt_theme on theme toggle; the localStorage bt_nav fallback migrates pre-v0.51 sessions. */(function(){try{var m=document.cookie.match(/(?:^|; )bt_nav=([^;]*)/);var v=m?m[1]:((window.localStorage&&localStorage.getItem("bt_nav_collapsed")==="1")?"min":"");if(v==="min")document.documentElement.dataset.nav="min";var t=(window.localStorage&&localStorage.getItem("bt_theme"))||(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.dataset.theme=t;}catch(e){}})();</script>
   <link rel="stylesheet" href="assets/tokens.css?v=0.71.0" />
   <link rel="stylesheet" href="assets/app.css?v=0.71.0" />
   <link rel="stylesheet" href="assets/admin.css?v=0.71.0" />
   <style>
-    .up-wrap { max-width: 1100px; margin: 0 auto; padding: 16px; }
-    .up-h1 { font-size: 28px; margin: 8px 0 4px; }
-    .up-sub { color: var(--text-dim, var(--text-muted)); margin: 0 0 24px; max-width: 68ch; }
+    .mf-head { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; margin-bottom: 12px; }
+    .mf-head p { max-width: 74ch; }
+    .mf-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
+    .mf-inline { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 700; }
+    .mf-inline select { font: inherit; font-size: 16px; padding: 10px; min-height: 44px; background: var(--surface-2);
+      color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-control, 8px); }
+    .mf-note { font-size: 12px; color: var(--text-muted); margin: 8px 0 0; min-height: 1.3em; }
 
-    /* ---- tier 1: the drop zone ---- */
-    .up-drop {
-      position: relative; display: block; width: 100%;
-      border: 2px dashed var(--border); border-radius: 10px;
-      background: var(--surface); padding: 32px 16px; text-align: center;
-      cursor: pointer;
-      /* dragover fires continuously — colour only, never transform (§2) */
-      transition: background-color 120ms ease, border-color 120ms ease;
-    }
-    .up-drop:hover { border-color: var(--primary); }
-    .up-drop.over { background: var(--surface-2, var(--surface-raised)); border-color: var(--primary); }
-    .up-drop:focus-within { outline: 2px solid var(--primary); outline-offset: 2px; }
-    .up-drop .big { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
-    .up-drop .small { font-size: 13px; color: var(--text-dim, var(--text-muted)); }
-    .up-drop input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+    /* Unsaved is said in words as well as colour — never colour alone. */
+    .dv-state { font-size: 12px; font-weight: 700; color: var(--text-muted); }
+    .dv-state.dirty { color: var(--emphasis); }
+    .dv-state.dirty::before { content: "● "; }
 
-    .up-opts { display: flex; gap: 12px; flex-wrap: wrap; margin: 16px 0 0; align-items: flex-end; }
-    .up-field { display: flex; flex-direction: column; gap: 4px; min-width: 160px; }
-    .up-field label { font-size: 14px; font-weight: 600; }           /* labels ABOVE inputs, §3 */
-    .up-field select, .up-field input {
-      font: inherit; min-height: 44px; padding: 10px 12px; color: var(--text);
-      background: var(--surface-2, var(--surface-raised));
-      border: 1px solid var(--border); border-radius: 8px;
-    }
-    .up-field .hint { font-size: 12px; color: var(--text-dim, var(--text-muted)); }
+    .dv-card { background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-card, 10px); padding: 14px; margin-bottom: 16px; }
+    .dv-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    .dv-h { font-size: 15px; margin: 0 0 4px; }
+    .dv-sub { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); margin: 14px 0 6px; }
+    .dv-meta { font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+    .dv-intro { font-size: 13px; max-width: 74ch; margin: 4px 0 0; }
 
-    /* ---- upload progress: constant motion, therefore linear (§2) ---- */
-    .up-queue { margin: 16px 0 0; display: grid; gap: 8px; }
-    .up-item { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; }
-    .up-item .name { font-weight: 600; font-size: 15px; word-break: break-all; }
-    .up-item .meta { font-size: 13px; color: var(--text-dim, var(--text-muted)); margin-top: 2px; }
-    .up-bar { height: 6px; border-radius: 999px; background: var(--surface-2, var(--surface-raised)); margin-top: 8px; overflow: hidden; }
-    .up-bar > i { display: block; height: 100%; width: 0; background: var(--primary); transition: width 120ms linear; }
-    .up-item.err { border-color: var(--danger); }
-    .up-item.err .meta { color: var(--danger); }
-    .up-item.done .meta { color: var(--positive); }
+    .dv-scroll { overflow-x: auto; margin-top: 10px; }
+    .dv-table { width: 100%; border-collapse: collapse; min-width: 560px; }
+    .dv-table th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .04em;
+      color: var(--text-muted); padding: 4px 8px 6px; font-weight: 700; }
+    .dv-table td { padding: 4px 8px; vertical-align: middle; }
+    /* 16px keeps iOS from zooming the page on focus. */
+    .dv-in { font: inherit; font-size: 16px; padding: 8px; min-height: 44px; width: 100%;
+      background: var(--surface-2); color: var(--text); border: 1px solid var(--border);
+      border-radius: var(--radius-control, 8px); }
+    .dv-num { max-width: 92px; text-align: center; font-variant-numeric: tabular-nums; }
+    .dv-count { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+    .dv-empty { font-size: 13px; color: var(--text-muted); padding: 10px 8px; list-style: none; }
 
-    /* ---- tier 3: filters, deliberately quiet ---- */
-    .up-filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; margin: 32px 0 12px; }
+    .dv-warn { margin: 10px 0 0; padding-left: 20px; font-size: 13px; color: var(--emphasis); font-weight: 700; }
 
-    /* ---- tier 2: the table ---- */
-    .up-table { width: 100%; border-collapse: collapse; }
-    .up-table th, .up-table td { text-align: left; padding: 12px 8px; border-top: 1px solid var(--border); font-size: 15px; vertical-align: top; }
-    .up-table th { font-size: 13px; font-weight: 700; color: var(--text-dim, var(--text-muted)); border-top: 0; }
-    .up-table tr.gone td { opacity: 0.55; }
-    .up-name { font-weight: 600; word-break: break-all; }
-    .up-chip { display: inline-block; border-radius: 999px; padding: 3px 10px; font-size: 12px; font-weight: 700;
-               background: var(--surface-2, var(--surface-raised)); border: 1px solid var(--border); }
-    .up-chip.public { color: var(--warn, #e6a23c); }
-    .up-chip.members { color: var(--primary); }
-    .up-row-actions { display: flex; gap: 4px; flex-wrap: wrap; }
-    .up-row-actions button, .up-row-actions a {
-      min-height: 44px; min-width: 44px; padding: 8px 12px; font: inherit; font-size: 14px;
-      background: none; border: 1px solid var(--border); border-radius: 8px; color: var(--text);
-      cursor: pointer; display: inline-flex; align-items: center;
-    }
-    .up-row-actions button:active { transform: scale(0.97); }        /* §2 press feedback */
-    .up-row-actions button:focus-visible, .up-row-actions a:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
-    .up-row-actions .danger { color: var(--danger); border-color: var(--danger); }
+    .dv-plan { margin: 0; padding-left: 20px; font-size: 13px; line-height: 1.6; }
+    .dv-props { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+    .dv-prop { background: var(--surface-2); border: 1px solid var(--border);
+      border-radius: var(--radius-control, 8px); padding: 10px; }
+    .dv-prop-head { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+    .dv-prop-what { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--emphasis); font-weight: 700; }
+    /* The reason is the point of the whole screen, so it is not the small print. */
+    .dv-prop-why { font-size: 13px; line-height: 1.45; margin: 6px 0; }
+    .dv-prop-num { font-size: 11px; color: var(--text-muted); font-variant-numeric: tabular-nums; margin: 0 0 8px; }
+    .dv-prop-act { display: flex; gap: 8px; }
+    .dv-prop-act .btn { min-height: 44px; }
 
-    /* ---- skeleton, not a spinner: the shape of the answer arrives first (§3) ---- */
-    .sk { height: 16px; border-radius: 4px; background: var(--surface-2, var(--surface-raised)); }
-    .up-empty { padding: 32px 16px; text-align: center; color: var(--text-dim, var(--text-muted)); }
-    .up-empty b { color: var(--text); display: block; font-size: 18px; margin-bottom: 4px; }
-    .up-quota { font-size: 13px; color: var(--text-dim, var(--text-muted)); margin-top: 16px; }
-    .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-    @media (prefers-reduced-motion: reduce) {
-      .up-drop, .up-bar > i { transition: none; }
-      .up-row-actions button:active { transform: none; }
+    @media (max-width: 640px) {
+      .dv-props { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -178,71 +149,75 @@
       </nav>
       <button class="bt-edge" type="button" aria-label="Collapse or expand navigation"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
     </aside>
-    <main class="admin-main up-wrap">
-      <h1 class="up-h1">Files</h1>
-      <p class="up-sub">
-        One place for anything you need to keep — rosters, schedules, logos, receipts, imports.
-        Files belong to the organization you're currently switched into. Set who can see each one;
-        the default is staff only.
-      </p>
-
-      <fieldset style="border:0; padding:0; margin:0;">
-        <legend class="sr-only">Upload files</legend>
-
-        <label class="up-drop" id="drop">
-          <span class="big">Drop files here, or click to choose</span>
-          <span class="small" id="dropHint">Images, PDF, CSV, Word, Excel, ZIP · up to 10 MB each</span>
-          <input type="file" id="file" multiple aria-describedby="dropHint" />
-        </label>
-
-        <div class="up-opts">
-          <div class="up-field">
-            <label for="kind">Label these as</label>
-            <select id="kind"></select>
-          </div>
-          <div class="up-field">
-            <label for="vis">Who can see them</label>
-            <select id="vis">
-              <option value="private" selected>Staff only</option>
-              <option value="members">Signed-in members</option>
-              <option value="public">Anyone with the link</option>
-            </select>
-            <span class="hint" id="visHint">Staff only is the default.</span>
-          </div>
-          <div class="up-field">
-            <label for="notes">Note (optional)</label>
-            <input id="notes" type="text" maxlength="200" placeholder="What this is for" />
-          </div>
+    <main class="admin-main" id="main">
+      <div class="mf-head">
+        <div>
+          <h1>Divisions</h1>
+          <p class="muted">A division is a competitive tier that owns a set of courts and produces its own bracket. Give each one a range of courts — twelve courts split three ways is 1–4, 5–8 and 9–12 — then place teams on the Pool Board.</p>
         </div>
-
-        <div class="up-queue" id="queue" aria-live="polite"></div>
-      </fieldset>
-
-      <div class="up-filters">
-        <div class="up-field">
-          <label for="fKind">Filter by label</label>
-          <select id="fKind"><option value="">All labels</option></select>
-        </div>
-        <div class="up-field">
-          <label for="fQ">Search filenames</label>
-          <input id="fQ" type="search" placeholder="e.g. roster" />
-        </div>
-        <div class="up-field">
-          <label for="fDel">Show</label>
-          <select id="fDel">
-            <option value="0" selected>Current files</option>
-            <option value="1">Include removed</option>
-          </select>
+        <div class="mf-row" style="margin:0">
+          <label class="mf-inline">Event
+            <select id="dvEvent" aria-label="Choose an event"></select>
+          </label>
+          <span id="dvState" class="dv-state" role="status" aria-live="polite">Saved</span>
         </div>
       </div>
 
-      <div id="list"></div>
-      <p class="up-quota" id="quota"></p>
+      <section class="dv-card" aria-labelledby="dvSetupH">
+        <div class="dv-card-head">
+          <h2 class="dv-h" id="dvSetupH">The layout</h2>
+          <span class="dv-meta" id="dvCourts"></span>
+        </div>
+
+        <div class="dv-scroll">
+          <table class="dv-table">
+            <caption class="sr-only">Divisions, their rank and their courts</caption>
+            <thead>
+              <tr>
+                <th scope="col">Name</th>
+                <th scope="col">Rank</th>
+                <th scope="col">First court</th>
+                <th scope="col">Last court</th>
+                <th scope="col">Teams</th>
+                <th scope="col"><span class="sr-only">Actions</span></th>
+              </tr>
+            </thead>
+            <tbody id="dvRows"></tbody>
+          </table>
+        </div>
+
+        <ul class="dv-warn" id="dvWarn" role="alert" hidden></ul>
+
+        <div class="mf-row">
+          <button class="btn ghost" id="dvAdd" type="button">Add a division</button>
+          <button class="btn ghost" id="dvSuggest" type="button">Suggest from courts</button>
+          <button class="btn" id="dvSave" type="button" disabled>Save layout</button>
+        </div>
+        <p class="mf-note" id="dvNote" role="status" aria-live="polite"></p>
+        <p class="mf-note" id="dvUnassigned"></p>
+      </section>
+
+      <section class="dv-card" aria-labelledby="dvBalH">
+        <div class="dv-card-head">
+          <h2 class="dv-h" id="dvBalH">Is everyone in the right place?</h2>
+          <button class="btn ghost" id="dvCheck" type="button">Check placement</button>
+        </div>
+        <p class="muted dv-intro">Reads how every team actually finished and suggests moves. Nothing happens until you accept a suggestion — and declining one is recorded too, so there is always an answer to “was this looked at?”.</p>
+
+        <h3 class="dv-sub">The day as it stands</h3>
+        <ul class="dv-plan" id="dvPlan"></ul>
+
+        <h3 class="dv-sub">Suggestions</h3>
+        <ul class="dv-props" id="dvProps"></ul>
+        <div class="mf-row">
+          <button class="btn ghost" id="dvAll" type="button" hidden>Accept all</button>
+        </div>
+        <p class="mf-note" id="dvPlanNote" role="status" aria-live="polite"></p>
+      </section>
     </main>
   </div>
-
   <script src="assets/config.js?v=0.71.0"></script>
   <script src="assets/admin-nav.js?v=0.71.0"></script>
-  <script src="assets/admin-uploads.js?v=0.71.0" defer></script>
+  <script src="assets/admin-divisions.js?v=0.71.0"></script>
 </body>
 </html>
