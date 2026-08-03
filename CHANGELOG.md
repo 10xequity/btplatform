@@ -2,11 +2,172 @@
 
 ## v0.78.0 — 2026-08-03
 
-- Auto-recorded by CI on deploy. `/api/health` reported `v0.78.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
+Two owner requests from 2026-08-03 that turned out to need the same migration. **Migration 0041.**
+
+### A hand-placed team is now HELD
+
+Owner: *"Add admin edit scores if incorrect and allow movement in brackets to fix any errors."*
+
+v0.75.0 proved the manual bracket override reverted within minutes — advancement is derived from scores
+and runs on every score entered anywhere in the event — and deliberately stopped at making the warning
+honest, because whether a human's edit outranks a score is a product decision rather than something to
+infer. The owner has now answered it: **an edit that reverts itself does not fix anything.**
+
+So `matches.slot_locked_a/_b` hold the side. Advance skips a held side and **reports** that it did —
+"nothing moved" and "something wanted to move and a human is holding it" are different facts, and the
+second is a decision the director made and may want to undo. `release: true` hands it back, and so does
+clearing the slot: a director emptying a slot is undoing a mistake, not asking to freeze it empty.
+
+**ONE FLAG PER SIDE, NOT PER GAME, and that is the whole design.** A director substitutes for the team
+that went home and leaves the other alone. A per-game flag would freeze the untouched side too, so the
+next quarter-final's winner would have nowhere to go and the bracket would **silently stop advancing** —
+a bug indistinguishable from the software ignoring scores. Asserted directly: the held side survives, the
+other side still receives its winner, and neither is locked as a side effect.
+
+**The four v0.75.0 tests that asserted the opposite behaviour were rewritten, not patched around**, with
+a comment in the file saying so. They were correct then; the requirement changed. A test that quietly
+flips its expectation is indistinguishable from one that was wrong all along — and those four were the
+evidence for the v0.75.0 fix. The old behaviour is still reachable, and still tested, via `release`.
+
+### Exact scores, from the same route
+
+The 2-tap contract (winner + margin) is right for a captain on a phone at the net and **cannot express a
+correction**: a game entered 21–15 that was really 23–21 is unreachable through "winner and margin",
+which assumes the winner scored exactly `points_to`. So `POST /api/matches/:id/score` now also accepts
+`{score_a, score_b}` — from the *same* route, because a second one would be a second definition of what a
+score is, and the day the two disagree is the day the standings and the bracket disagree about who won a
+game. A correction is audited as one (from → to) and self-heals the tree below it, which is the whole
+reason advancement is recomputed rather than accumulated.
+
+A **tie is refused**: every other module here reads an equal score as UNPLAYED, so storing one would
+leave a game looking un-entered while the score sheet says it was played.
+
+### Courts that are actually fixed
+
+Owner: *"bracket generation should honor the fixed court number. However, as brackets collapse courts do
+become avialable. so there's a need for the scheduling time component if we overlap. We need ability to
+assign different courts to players based on availability of courts during bracket."*
+
+Three requirements that argue with each other, and v0.75.0 had satisfied only the middle one — it fixed
+the double bookings by treating every court as a single undifferentiated pile:
+
+| | |
+|---|---|
+| **Fixed** | a division owns courts 5–8 and may not wander onto 1–4 |
+| **Collapsing** | a bracket halves every round; the courts it stops needing are real and empty |
+| **Overlapping** | so two brackets can share a court — at different times |
+
+New **`worker/src/courts.js`** (pure, no database, no clock). Court resolution is **bracket range →
+division range → the whole event**, so the general case needs no configuration at all and the owner's
+exception — hand a finished division's courts to one still going — needs no edit to the *division*, whose
+range is a standing fact about the day rather than a scheduling detail.
+
+Allocation gives each bracket only the courts it is *allowed*. Brackets with disjoint ranges therefore
+run **simultaneously** (a scheduler that queued them would leave half the facility empty all morning);
+brackets sharing courts queue; and a bracket down to its final leaves its other courts to whoever else
+may use them — which falls out of the allocation rather than being special-cased.
+
+Two hard constraints, both asserted on the widest set (five brackets, five sizes, one facility):
+
+1. **No court holds two games at one time.**
+2. **Within a bracket, a round finishes before the next begins.** This one matters *more*: a double
+   booking is at least obvious on the day, whereas a semi-final scheduled before the quarter-final that
+   feeds it is a bracket that cannot physically be played.
+
+`matches.starts_at` is an **optional** wall-clock time, written only when a slot length is asked for.
+`NOT NULL` would have fabricated a time on every historical row, and a made-up time on a results sheet is
+worse than no time. And a new route moves a game to another court or time, which **warns and writes
+rather than refusing** — the same reason as every other override in this module: a director standing on
+court 3 knows the net on court 7 is broken, and refusing the move sends them to a paper grid, after which
+the software is no longer the record.
+
+### Migration 0041
+
+`sqlite_master` read live **before the design was fixed** (F-41): no lock of any kind, no clock time on a
+game, and a bracket's courts reachable only through its division. Applied via Cloudflare MCP before the
+push; ledger row 0041 and all five columns read back after. The schema-gate ratchet fired again and the
+number moved only after that read — twice in one day now.
+
+### Gates
+
+Suite **1058 → 1086**, measured before and after. 64 test files, 49 modules. No `web/**` file changed, so
+the cache buster stays `0.75.0` deliberately.
 
 ## v0.77.0 — 2026-08-03
 
-- Auto-recorded by CI on deploy. `/api/health` reported `v0.77.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
+Owner 2026-08-03: *"If modules fail, do not let it break or stop the system, simply allow it process as
+best as possible."*
+
+### What was wrong was worse than it sounded
+
+Route dispatch was one 42-long `||` chain inside a single try/catch. A chain asks every module *"is this
+path yours?"* in order and short-circuits on the first answer — so a module that **threw while declining a
+path it does not own** took down not just itself but **every module listed after it**. `uploadRoutes` was
+first: a fault there meant no brackets, no live board, no check-in, and a bare `500 Server error` that
+named nothing. Nothing in the code said any of this was possible.
+
+New **`worker/src/resilience.js`** (imports nothing, so no cycle):
+
+- **`dispatch`** runs each module isolated. A throw is recorded and treated as a *decline*, because a
+  module that cannot decide whether a path is its own must not get a veto over the other 41. If a later
+  module handles the request, the throw cost a log line. If nothing handles it, the response **names the
+  broken modules** — which the old bare 500 could not express, and which a 404 would have turned into an
+  outright lie: "no such route", when the route exists and its owner is down.
+- **`readParts` / `degradedNote`** for payloads assembled from many independent reads.
+
+### The line this draws
+
+"Never fail" and "fail closed" are both rules in this codebase, so the boundary is the design:
+**a failure may cost you information, never permission.**
+
+`buildCtx` and the F-11 org check run before any route sees `ctx` and are deliberately outside all of
+this. `requireStaff` **returns** a 403 Response rather than throwing, so authorization is a value on the
+success path and an error path cannot convert it into access. Both are asserted structurally, and the
+`requireStaff` one scans every module in `worker/src` rather than a sample.
+
+### The live board is the visible payoff
+
+It reads six independent things to answer one request, and one failing query used to lose all six. It now
+returns what it has, plus `degraded`, `unavailable` and a human `degraded_note`. A wall display in a gym
+is the least forgiving place for a 500 — nobody is watching the logs and the page simply goes blank
+mid-tournament. Standings plus "the bracket is unavailable for a moment" beats an empty screen.
+
+A missing **event** is still a 404: degrading must not invent a tournament that isn't there. And a
+missing part is deliberately distinguishable from an empty one — handed `[]`, a page cannot tell "there is
+no bracket" from "the bracket could not be loaded", and would render the second as the first, which is a
+wrong answer presented as a fact.
+
+### Dispatch is now one table, which is a second improvement
+
+Nine test files each grepped `index.js` for their own module's chain entry. That is nine *narrow* guards,
+and a module with no test file had none at all — **failure class 3 exactly**. Those nine now assert the
+table entry, and a new widest-set guard checks the mapping **both ways** for every module at once: every
+`*Routes` export in `worker/src` is in the table, every table entry is a real export, and every mounted
+module is imported. Order is asserted too — it decides which module wins an overlapping path — and was
+preserved byte-identically, verified programmatically: 42 modules in, 42 out, same sequence.
+
+### Also in this release
+
+**`CLAUDE.md` §1.1 — verification cadence, owner decision.** Both halves of what the owner said: *"do not
+believe release history as AI can make mistakes"* **and** *"do not audit every time, but catch it during
+testing or do periodic code reviews and audit the documentation."* As a table: `preflight` every session;
+`grep` the **one** claim you are about to build on; guards catch the rest for free; a full fresh-eyes pass
+plus a documentation audit *periodically*, not per session. The trap it replaces is treating "I read it in
+the handoff" as verification. The trap it must not create is re-deriving settled facts.
+
+**`/emil-design-eng` installed.** Mandated by standards §5 since the port and never actually present —
+every session so far silently substituted for it. Now at `~/.claude/skills/` from
+`github.com/emilkowalski/skill`: Emil Kowalski's own repo, MIT, **markdown only, no scripts or hooks**,
+verified before installing. Four companions came with it and are the right tools for the animation work
+still queued: `review-animations` (carries its own STANDARDS.md), `improve-animations`,
+`animation-vocabulary`, `find-animation-opportunities`. A skill installed mid-session is not in that
+session's skill list, so it becomes usable from the next start — `CLAUDE.md` §4 now says so rather than
+leaving a future session to rediscover it.
+
+### Gates
+
+Suite **1036 → 1058**, measured before and after. 63 test files, 48 modules. No `web/**` change, so the
+buster stays `0.75.0`.
 
 ## v0.76.0 — 2026-08-03
 
