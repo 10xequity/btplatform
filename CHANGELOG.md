@@ -2,7 +2,55 @@
 
 ## v0.70.0 — 2026-08-03
 
-- Auto-recorded by CI on deploy. `/api/health` reported `v0.70.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
+- **Pool play never offers four games again.** Owner 2026-08-03: *"if we do 6 on 2, with 4 games, we
+  would double the number of games to equal 8. So there will never be a situation we offer only 4
+  games for pool play."* Six teams on two courts reaches an equal count at 2, 4, 6, 8 … and the old
+  code returned **4** whenever 4 happened to be nearest the target. Four games is half a day for
+  somebody who paid for a full one. Below the floor the answer is more rounds — twelve instead of six
+  — and the rematches that come with it are the intended trade, not a defect.
+  - Overridable, because a league night legitimately plays three games and goes home. This is a
+    pool-play rule, not a law of the building.
+  - One existing test had to change and says so in its own comment: it asserted that 7 games was
+    unreachable, and 7 is now below the floor, so asking for it correctly returns 8. Retargeted at 9,
+    which is above the floor and genuinely unreachable on 10 teams / 4 courts.
+- **Pool sizing.** Owner: *"Most groupings will break down into ranges of 6-11 ... we would aim to do
+  larger pools. This is mostly for grass. Indoor tournaments are a lot more limited due to number of
+  courts."* So: the fewest pools that keeps every pool inside 6–11. 24 → 8/8/8, 13 → 7/6, 12 → 6/6
+  (twelve is over the maximum for a single pool). Checked for every field from 6 to 60. A field below
+  six reports that rather than failing — indoors that is normal.
+- **Migration 0039** (applied to live D1 and ledgered before the deploy): `pools.division_id`,
+  `sort_order`, `court_from`, `court_to`; `teams.pool_id`, `note`, `board_order`. Pool membership was
+  previously *implied* by `matches.pool_id` — readable only once a schedule existed and unwritable
+  before one did, which is backwards for a board whose entire job is arranging teams **before** any
+  schedule.
+- **`admin-pool-board.html` — the drag-and-drop board.** Owner: *"drag and drop for me to sort which
+  teams go where ... a note that is displayed on the tile ... if i drag to a square or block with +
+  it will add a pool. and if it is empty, itll auto delete ... a workspace area to arrange teams."*
+  - **The workspace is `pool_id IS NULL`,** not a magic pool row. Nothing to create, nothing that can
+    be scheduled by accident, and it is the state every team starts in.
+  - **A team in two pools is refused before anything is written.** A partly applied board is worse
+    than a rejected one, and a double-booked team is discovered on the morning of the event by the
+    people standing on two courts. Asserted from both directions: the request 400s, *and* no rows
+    changed.
+  - **The note lives on the team, not the placement,** so dragging a tile never loses it. Proved by
+    moving a team between divisions and reading the note back.
+  - **One request carries the whole arrangement.** Per-drag saves would leave a half-applied board
+    every time a connection dropped mid-drag.
+  - Nothing saves until you say so. The unsaved state is stated in words as well as colour — a
+    director who cannot separate the colours still sees it — and switching event or closing the tab
+    with unsaved work warns first. Twenty minutes of dragging silently discarded is the failure that
+    guard exists for.
+  - **Empty pools:** never created in the first place, and an existing one that loses its last team is
+    hard-deleted when it never held a game (no history worth keeping, and soft-deleted rows would
+    accumulate as invisible clutter) or soft-deleted when matches still reference it.
+  - Keyboard parity throughout: Enter picks up, arrows choose a destination, Enter drops, Escape
+    cancels. The 6–11 size hint is advisory and never blocks saving — a board that refused a pool of
+    four would be wrong indoors.
+- Tests **917** (+26), with negative controls: remove the duplicate-placement check and the
+  two-pools test fails. Preflight CLEAR.
+
+**NOT BUILT YET:** the same board for league night and for single players forming nets. The owner
+asked for it; the pool board is the general case, and the league variant is a separate screen.
 
 ## v0.69.0 — 2026-08-03
 
