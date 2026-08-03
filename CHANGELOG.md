@@ -2,7 +2,28 @@
 
 ## v0.61.0 — 2026-08-03
 
-- Auto-recorded by CI on deploy. `/api/health` reported `v0.61.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
+- **No shipped API is unreachable any more.** v0.57.0 and v0.58.0 delivered three tested modules
+  with no UI, so the owner could not use features they had already paid for. Passes got its screen
+  in v0.59.0; these are the other two, and the list is now empty.
+- **Membership fields** — the UI for the M22 registry. Add questions to member profiles, choose who
+  sees each one, reorder, hide, delete. The screen is built around the one thing it must not get
+  wrong: **hiding is not deleting**. The row reads "Hidden — answers kept", the button reads "Turn
+  back on", and Hide has *no* confirm because it is reversible — while Delete has one that points
+  you back at Hide. A director who believes Hide destroys data will never use it; one who believes
+  Delete is reversible loses a season of answers. Re-adding a hidden field surfaces the server's
+  409 verbatim rather than reworded here, so the message cannot drift from the rule behind it.
+- **Staff pay** — rate cards per person and optionally per role, plus a date-range report of what is
+  owed. Two refusals, both deliberate and both stated on the page: **approved and pending are
+  separate columns and are never summed** ("owed" and "might be owed" are different questions, and
+  one combined figure is how somebody gets overpaid); and **rates are never edited in place** — a
+  new rate is a new row with its own start date, so last month's approved shifts keep the number
+  they were approved at. Money is typed in **dollars** and converted client-side, because nobody
+  thinks in cents and `2500` in a rate box is the likeliest way to pay a coach a hundred times over.
+- **The rail generator wired both screens** — two `NAV` edits, two partial edits, one command, 31
+  pages. Third release running. Before v0.59.0 this release would have opened with 31 hand edits.
+- Both pages follow the v0.59.0 mobile work: 16px inputs (no iOS zoom), 44px targets, tabular
+  figures, tables collapsing to cards under 640px, every control labelled.
+- Suite **765/765**. Cache-buster swept to `0.61.0`.
 
 ## v0.60.0 — 2026-08-03
 
