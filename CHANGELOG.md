@@ -1,5 +1,9 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.67.0 — 2026-08-03
+
+- Auto-recorded by CI on deploy. `/api/health` reported `v0.67.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
+
 ## v0.66.0 — 2026-08-03
 
 - **Brackets you can actually play** (`admin-brackets.html`, `worker/src/brackets.js`). The repo
