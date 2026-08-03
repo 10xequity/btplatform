@@ -182,6 +182,57 @@ function circDist(x, y, n) {
   return Math.min(d, n - d);
 }
 
+/**
+ * Assign waiting teams to referee.
+ *
+ * Owner 2026-08-03: four byes at 12-on-4 is not acceptable as pure idling, but "there is a world
+ * where 12 on 4 does work with each team working" — and 6-on-2 exists precisely because it leaves
+ * two teams free to ref. A bye a team spends reffing is not the same as a bye they spend standing
+ * around, so this turns waiting into working.
+ *
+ * HARD: refs come only from the waiting set, so a team can never referee a match it is playing in.
+ * SOFT: spread the duty — whoever has reffed least goes first.
+ *
+ * Returns refs[round] = array parallel to that round’s matches; null where nobody was spare.
+ */
+export function assignRefs(plan, teams) {
+  const N = Number(teams);
+  const refCount = new Map(Array.from({ length: N }, (_, i) => [i + 1, 0]));
+  const refs = [];
+  plan.rounds.forEach((round, ri) => {
+    const waiting = (plan.byes[ri] || []).slice()
+      .sort((a, b) => refCount.get(a) - refCount.get(b) || a - b);
+    const perRound = [];
+    for (let i = 0; i < round.length; i++) {
+      const t = waiting[i];
+      if (t === undefined) { perRound.push(null); continue; }
+      perRound.push(t);
+      refCount.set(t, refCount.get(t) + 1);
+    }
+    refs.push(perRound);
+  });
+  plan.refs = refs;
+  plan.refLoad = Object.fromEntries(refCount);
+  return plan;
+}
+
+/**
+ * How many of the waiting teams can actually be given a job, and what is left over.
+ * Reported rather than hidden: at 12-on-4 four teams wait and only four courts need a ref, so
+ * every bye can be a working bye. At 12-on-5 two wait and five courts need refs — three courts
+ * go unrefereed, which the director needs to know before promising officials.
+ */
+export function refCoverage(teams, courts) {
+  const waiting = Number(teams) - 2 * Number(courts);
+  return {
+    waitingPerRound: waiting,
+    courtsNeedingRef: Number(courts),
+    refereedCourts: Math.min(waiting, Number(courts)),
+    unrefereedCourts: Math.max(0, Number(courts) - waiting),
+    everyByeWorks: waiting > 0 && waiting <= Number(courts),
+  };
+}
+
 /* ============================ the report ============================ */
 
 /**
@@ -412,8 +463,8 @@ export function repairRepeats(plan, teams, maxPasses = 6) {
 
 /* ============================ routes ============================ */
 
-let json, requireStaff;
-export function wireFormats(h) { ({ json, requireStaff } = h); }
+let json, requireStaff, audit;
+export function wireFormats(h) { ({ json, requireStaff, audit } = h); }
 
 /**
  * Staff-only planning endpoints. Read-only and stateless — they compute and return a schedule,
@@ -426,6 +477,7 @@ export function wireFormats(h) { ({ json, requireStaff } = h); }
  */
 export async function formatsRoutes(request, env, url, ctx) {
   const p = url.pathname, m = request.method;
+  let x;
 
   if (p === "/api/admin/formats/options" && m === "GET") {
     const denied = await requireStaff(env, ctx);
@@ -467,6 +519,99 @@ export async function formatsRoutes(request, env, url, ctx) {
         targetPoints: b.target_points ? Number(b.target_points) : undefined,
         targetHours: b.target_hours ? Number(b.target_hours) : undefined,
       }),
+    });
+  }
+
+  /* ---- commit a plan to a real event ----
+     Until this existed the generator was a calculator: it produced a schedule nobody could play.
+     This writes the plan into `matches` for a real event, mapping the planner's 1..N onto the
+     event's actual team ids in seed order.
+
+     REFUSES to overwrite silently. If the event already has matches the caller must pass
+     replace:true — and even then the old rows are SOFT-deleted, never destroyed, because a
+     director who regenerates after scores are in must be able to see what they replaced. */
+  if ((x = p.match(/^\/api\/admin\/events\/(\d+)\/generate-schedule$/)) && m === "POST") {
+    const denied = await requireStaff(env, ctx);
+    if (denied) return denied;
+    const eventId = +x[1];
+    const b = await request.json().catch(() => ({}));
+
+    const ev = await env.DB.prepare(
+      "SELECT id, name FROM events WHERE id=?1 AND org_id=?2 AND deleted_at IS NULL"
+    ).bind(eventId, ctx.orgId).first();
+    if (!ev) return json({ error: "That event doesn't exist." }, 404);
+
+    const teamRows = (await env.DB.prepare(
+      `SELECT id, name FROM teams WHERE org_id=?1 AND event_id=?2 AND deleted_at IS NULL
+        ORDER BY COALESCE(seed, 9999), id`
+    ).bind(ctx.orgId, eventId).all()).results || [];
+    if (teamRows.length < 2) return json({ error: "Add the teams first — there is nothing to schedule yet." }, 409);
+
+    const courts = Number(b.courts);
+    const rounds = Number(b.rounds);
+    const pointsTo = Number(b.points_to) > 0 ? Number(b.points_to) : 21;
+    const cap = Number(b.cap) > 0 ? Number(b.cap) : pointsTo + 2;
+    const minutesPerGame = Number(b.minutes_per_game) > 0 ? Number(b.minutes_per_game) : 22;
+
+    const plan = planBestPool({ teams: teamRows.length, courts, rounds, pointsTo, minutesPerGame });
+    if (!plan.ok) return json({ error: plan.error }, 400);
+    if (!plan.report.valid) {
+      return json({ error: "That schedule is not usable: " + plan.report.problems[0] }, 400);
+    }
+    if (b.assign_refs) assignRefs(plan, teamRows.length);
+
+    const existing = await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM matches WHERE org_id=?1 AND event_id=?2 AND deleted_at IS NULL"
+    ).bind(ctx.orgId, eventId).first();
+    if (existing.n > 0 && !b.replace) {
+      return json({
+        error: ev.name + " already has " + existing.n + " matches. Generating again would put a second schedule on top of the first.",
+        existing_matches: existing.n,
+        hint: "Send replace: true to set the current schedule aside and use this one instead.",
+      }, 409);
+    }
+
+    let replaced = 0;
+    if (existing.n > 0 && b.replace) {
+      const del = await env.DB.prepare(
+        "UPDATE matches SET deleted_at=datetime('now') WHERE org_id=?1 AND event_id=?2 AND deleted_at IS NULL"
+      ).bind(ctx.orgId, eventId).run();
+      replaced = del.meta.changes;
+    }
+
+    // Planner index (1..N) → real team id, in seed order.
+    const idOf = (n) => teamRows[n - 1].id;
+
+    let written = 0;
+    for (let ri = 0; ri < plan.rounds.length; ri++) {
+      const round = plan.rounds[ri];
+      for (let mi = 0; mi < round.length; mi++) {
+        const mt = round[mi];
+        const refIdx = plan.refs && plan.refs[ri] ? plan.refs[ri][mi] : null;
+        await env.DB.prepare(
+          `INSERT INTO matches (org_id, event_id, stage, round, court, team_a_id, team_b_id,
+                                ref_team_id, points_to, cap, game_number)
+           VALUES (?1,?2,'pool',?3,?4,?5,?6,?7,?8,?9,1)`
+        ).bind(ctx.orgId, eventId, ri + 1, mt.court, idOf(mt.a), idOf(mt.b),
+               refIdx ? idOf(refIdx) : null, pointsTo, cap).run();
+        written++;
+      }
+    }
+
+    await audit(env, ctx, "schedule.generate", "events", eventId,
+      { matches: written, replaced, teams: teamRows.length, courts, rounds });
+
+    return json({
+      ok: true,
+      event: ev.name,
+      teams: teamRows.length,
+      matches_written: written,
+      matches_replaced: replaced,
+      report: plan.report,
+      summary: reportLines(plan.report, { teams: teamRows.length }),
+      // Byes by NAME, not by number — a director reads names, and the planner's 1..N is an
+      // internal detail that should never reach a screen.
+      byes: plan.byes.map((round) => round.map((n) => teamRows[n - 1].name)),
     });
   }
 

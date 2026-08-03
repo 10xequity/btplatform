@@ -11,6 +11,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   equalGameOptions, chooseRounds, planPool, planBestPool, poolReport, reportLines, repairRepeats,
+  assignRefs, refCoverage,
 } from "../src/formats.js";
 
 /* ============================ the arithmetic ============================ */
@@ -179,4 +180,73 @@ test("raising the points target lifts points without changing the schedule shape
   const at25 = planBestPool({ teams: 12, courts: 4, rounds: 12, pointsTo: 25 });
   assert.equal(at25.report.budget.pointsPerTeam, 200, "8 games to 25 is 200 points");
   assert.equal(at25.report.gamesPerTeam.min, 8, "changing the points target must not change the games");
+});
+
+/* ============================ working / ref teams ============================ */
+
+test("refCoverage: which shapes can give every waiting team a job", () => {
+  // Owner 2026-08-03: four idle byes at 12-on-4 is not acceptable, but "there is a world where
+  // 12 on 4 does work with each team working". This is the arithmetic behind that.
+  assert.deepEqual(refCoverage(12, 4), {
+    waitingPerRound: 4, courtsNeedingRef: 4, refereedCourts: 4, unrefereedCourts: 0, everyByeWorks: true,
+  }, "12-on-4 has exactly enough waiting teams to referee every court");
+
+  const on5 = refCoverage(12, 5);
+  assert.equal(on5.waitingPerRound, 2);
+  assert.equal(on5.unrefereedCourts, 3,
+    "12-on-5 leaves three courts without an official — the director must know before promising refs");
+
+  assert.equal(refCoverage(6, 2).everyByeWorks, true, "6-on-2 frees two teams for two courts");
+});
+
+test("assignRefs never lets a team referee its own match, and spreads the duty", () => {
+  const p = planBestPool({ teams: 12, courts: 4, rounds: 12 });
+  assignRefs(p, 12);
+  p.rounds.forEach((round, ri) => {
+    round.forEach((mt, mi) => {
+      const ref = p.refs[ri][mi];
+      if (ref === null) return;
+      assert.notEqual(ref, mt.a, `round ${ri + 1}: team ${ref} is refereeing its own match`);
+      assert.notEqual(ref, mt.b, `round ${ri + 1}: team ${ref} is refereeing its own match`);
+      assert.ok(p.byes[ri].includes(ref), `round ${ri + 1}: referee ${ref} is not on a bye`);
+    });
+  });
+  const loads = Object.values(p.refLoad);
+  assert.equal(Math.max(...loads) - Math.min(...loads), 0,
+    `ref duty is uneven: ${loads.join(",")} — everyone waits the same amount, so everyone should work the same amount`);
+});
+
+test("NC-3: a referee drawn from the playing set would be caught", () => {
+  const p = planBestPool({ teams: 12, courts: 4, rounds: 12 });
+  assignRefs(p, 12);
+  // Force the error the guard above exists to catch.
+  p.refs[0][0] = p.rounds[0][0].a;
+  let caught = false;
+  try {
+    assert.ok(p.byes[0].includes(p.refs[0][0]), "referee must be on a bye");
+  } catch { caught = true; }
+  assert.equal(caught, true, "a playing team set as referee must fail the bye check");
+});
+
+test("12-on-5 is the shape to prefer, and the numbers say why", () => {
+  // Owner rejected 4 byes. This is the comparison that settles it.
+  const on4 = planBestPool({ teams: 12, courts: 4, rounds: 12 });
+  const on5 = planBestPool({ teams: 12, courts: 5, rounds: 12 });
+  assert.equal(on4.report.byesPerTeam.min, 4);
+  assert.equal(on5.report.byesPerTeam.min, 2, "the fifth court halves the waiting");
+  assert.equal(on5.report.gamesPerTeam.min, 10, "and lifts everyone from 8 games to 10");
+  assert.equal(on5.report.opponents.repeatedPairs, 0, "with no repeat match-ups");
+  assert.equal(on5.report.budget.pointsPerTeam, 210, "hitting the 210-point target exactly");
+});
+
+test("6-on-2 is clean at 6 rounds and unavoidably repeats beyond 7", () => {
+  // Only 15 possible pairings exist among 6 teams, so 2 courts × 8+ rounds must repeat. The
+  // report has to say that rather than quietly producing rematches.
+  const clean = planBestPool({ teams: 6, courts: 2, rounds: 6 });
+  assert.equal(clean.report.opponents.repeatedPairs, 0, "12 matches out of 15 pairings needs no repeats");
+  assert.equal(clean.report.gamesPerTeam.min, 4);
+
+  const forced = planBestPool({ teams: 6, courts: 2, rounds: 9 });
+  assert.ok(forced.report.opponents.repeatedPairs > 0,
+    "18 matches from 15 possible pairings must repeat — and must be reported as repeating");
 });
