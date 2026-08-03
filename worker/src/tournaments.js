@@ -10,6 +10,7 @@ import {
   FORMAT_TEMPLATES, feasibility, generatePairings, scheduleMatches, computeStandings, buildBracket,
 } from "./scheduler.js";
 import { autoClaimForEvent, releaseAutoClaims } from "./facility.js";
+import { advanceBracketFor } from "./brackets.js"; // v0.67.0 — brackets.js imports only scheduler.js, no cycle
 
 export async function tournamentRoutes(request, env, url, ctx) {
   const p = url.pathname;
@@ -244,7 +245,11 @@ async function scoreMatch(request, env, ctx, matchId) {
   await env.DB.prepare("UPDATE matches SET score_a=?1, score_b=?2, updated_at=datetime('now') WHERE id=?3").bind(sa, sb, matchId).run();
   await audit(env, ctx, "match.score", "matches", matchId, { winner, diff });
   await refreshStandings(env, mt.event_id, mt.org_id);
-  return json({ ok: true, score_a: sa, score_b: sb });
+  // Owner 2026-08-03: "brackets should auto advance." A director typing in a quarter-final result
+  // has their hands full; a second button to move the winner is a step that gets skipped, and a
+  // skipped step means the next court call is wrong. No-op on pool-only events.
+  const adv = await advanceBracketFor(env, mt.org_id, mt.event_id);
+  return json({ ok: true, score_a: sa, score_b: sb, bracket_advanced: adv.advanced });
 }
 
 export async function refreshStandings(env, eventId, orgId) {

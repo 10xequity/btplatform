@@ -160,6 +160,44 @@ export function pendingAdvances(matches) {
   return changes;
 }
 
+/* ---------------- applying advances ---------------- */
+
+/**
+ * Move every winner to where it belongs, and report what moved.
+ *
+ * ONE definition of "apply the advances", called from three places: the explicit advance route, and
+ * both score-write paths (staff at the desk, captain on their phone). The owner asked for brackets
+ * that advance on their own; wiring that up by copying this loop into each caller would give three
+ * copies to keep in step, and the one that drifts would be found on a Saturday.
+ *
+ * Safe to call on an event with no bracket — pool-only events hit this on every score.
+ */
+export async function advanceBracketFor(env, orgId, eventId) {
+  const rows = (await env.DB.prepare(
+    `SELECT id, bracket_id, bracket_round, bracket_slot, team_a_id, team_b_id, score_a, score_b
+       FROM matches WHERE org_id=?1 AND event_id=?2 AND bracket_id IS NOT NULL AND deleted_at IS NULL
+      ORDER BY bracket_id, bracket_round DESC, bracket_slot`
+  ).bind(orgId, eventId).all()).results || [];
+  if (!rows.length) return { hasBracket: false, advanced: 0, disturbed: 0, changes: [] };
+
+  const changes = [];
+  for (const bid of [...new Set(rows.map((r) => r.bracket_id))]) {
+    changes.push(...pendingAdvances(rows.filter((r) => r.bracket_id === bid)));
+  }
+  for (const c of changes) {
+    const col = c.side === "a" ? "team_a_id" : "team_b_id";
+    await env.DB.prepare(
+      `UPDATE matches SET ${col}=?1, updated_at=datetime('now') WHERE id=?2 AND org_id=?3`
+    ).bind(c.team_id, c.match_id, orgId).run();
+  }
+  return {
+    hasBracket: true,
+    advanced: changes.length,
+    disturbed: changes.filter((c) => c.disturbs_played_match).length,
+    changes,
+  };
+}
+
 /* ---------------- routes ---------------- */
 
 let json, requireStaff, audit;
@@ -190,6 +228,106 @@ async function seedOrder(env, ctx, eventId, explicit) {
   return { source: "entry seed", ids: bySeed.map((t) => t.id), names: known };
 }
 
+/**
+ * Draw the bracket(s) for an event and write them into `matches`.
+ *
+ * Separated from the route so the sandbox test-data generator can build its demo bracket through
+ * exactly this code rather than through hand-written SQL. Test data assembled by a second, parallel
+ * implementation is test data that can pass while the real thing is broken — which is the only way
+ * a fixture can actively lie to you.
+ *
+ * Returns `{ ok:false, error, status }` on refusal; the caller owns the HTTP shape.
+ */
+export async function generateBracketFor(env, ctx, eventId, b = {}) {
+  const ev = await env.DB.prepare(
+    "SELECT id, name, court_count FROM events WHERE id=?1 AND org_id=?2 AND deleted_at IS NULL"
+  ).bind(eventId, ctx.orgId).first();
+  if (!ev) return { ok: false, error: "That event doesn't exist.", status: 404 };
+
+  const seeds = await seedOrder(env, ctx, eventId, b.seeds);
+  if (seeds.error) return { ok: false, error: seeds.error, status: 400 };
+  if (seeds.ids.length < 2) {
+    return { ok: false, error: "Add the teams first — there is nothing to bracket yet.", status: 409 };
+  }
+
+  const existing = await env.DB.prepare(
+    `SELECT COUNT(*) AS n FROM matches
+      WHERE org_id=?1 AND event_id=?2 AND bracket_id IS NOT NULL AND deleted_at IS NULL`
+  ).bind(ctx.orgId, eventId).first();
+  if (existing.n > 0 && !b.replace) {
+    return {
+      ok: false, status: 409,
+      error: ev.name + " already has a bracket with " + existing.n + " games. Generating again would put a second bracket on top of the first.",
+      existing_matches: existing.n,
+      hint: "Send replace: true to set the current bracket aside and use this one instead.",
+    };
+  }
+  let replaced = 0;
+  if (existing.n > 0 && b.replace) {
+    const del = await env.DB.prepare(
+      `UPDATE matches SET deleted_at=datetime('now')
+        WHERE org_id=?1 AND event_id=?2 AND bracket_id IS NOT NULL AND deleted_at IS NULL`
+    ).bind(ctx.orgId, eventId).run();
+    replaced = del.meta.changes;
+    await env.DB.prepare(
+      "UPDATE brackets SET deleted_at=datetime('now') WHERE org_id=?1 AND event_id=?2 AND deleted_at IS NULL"
+    ).bind(ctx.orgId, eventId).run();
+  }
+
+  // "Top X into A, everyone else into BB." Splitting is what keeps a 16-team day meaningful for
+  // the teams that finished tenth — one bracket means half the field plays once and goes home.
+  const aSize = Number(b.a_size) > 0 ? Math.min(Number(b.a_size), seeds.ids.length) : seeds.ids.length;
+  const includeRest = b.include_rest !== false;
+  const groups = [{ name: "A", ids: seeds.ids.slice(0, aSize) }];
+  if (includeRest && seeds.ids.length > aSize) {
+    const rest = seeds.ids.slice(aSize);
+    if (rest.length >= 2) groups.push({ name: "BB", ids: rest });
+  }
+
+  const pointsTo = Number(b.points_to) > 0 ? Number(b.points_to) : 25;
+  const cap = Number(b.cap) > 0 ? Number(b.cap) : pointsTo + 2;
+  const courts = Number(b.courts) > 0 ? Number(b.courts) : (ev.court_count || 4);
+
+  const poolMax = await env.DB.prepare(
+    `SELECT COALESCE(MAX(round), 0) AS r FROM matches
+      WHERE org_id=?1 AND event_id=?2 AND bracket_id IS NULL AND deleted_at IS NULL`
+  ).bind(ctx.orgId, eventId).first();
+
+  const built = [];
+  let written = 0;
+  for (const g of groups) {
+    const tree = buildTree(g.ids.length);
+    if (!tree.ok) return { ok: false, error: tree.error, status: 400 };
+
+    const ins = await env.DB.prepare(
+      "INSERT INTO brackets (org_id, event_id, name, split_rule, config_json) VALUES (?1,?2,?3,?4,?5)"
+    ).bind(ctx.orgId, eventId, g.name, aSize < seeds.ids.length ? `top${aSize}` : "all",
+           JSON.stringify({ seeded_by: seeds.source, seeds: g.ids, points_to: pointsTo })).run();
+    const bracketId = ins.meta.last_row_id;
+
+    // Bracket rounds continue the schedule's round numbering, so the existing court grid and the
+    // drag-and-drop editor show pool play and the bracket as one continuous day.
+    for (const mt of tree.matches) {
+      const scheduleRound = poolMax.r + (tree.depth - mt.round + 1);
+      const court = ((mt.slot - 1) % courts) + 1;
+      await env.DB.prepare(
+        `INSERT INTO matches (org_id, event_id, stage, round, court, team_a_id, team_b_id,
+                              points_to, cap, game_number, bracket_id, bracket_round, bracket_slot)
+         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,1,?10,?11,?12)`
+      ).bind(ctx.orgId, eventId, stageForRound(mt.round), scheduleRound, court,
+             mt.a ? g.ids[mt.a - 1] : null, mt.b ? g.ids[mt.b - 1] : null,
+             pointsTo, cap, bracketId, mt.round, mt.slot).run();
+      written++;
+    }
+    built.push({
+      id: bracketId, name: g.name, teams: g.ids.length,
+      size: tree.size, rounds: tree.depth, byes: tree.byes, matches: tree.matches.length,
+    });
+  }
+
+  return { ok: true, event: ev.name, seededBy: seeds.source, built, written, replaced };
+}
+
 export async function bracketRoutes(request, env, url, ctx) {
   const p = url.pathname;
   const m = request.method;
@@ -202,96 +340,21 @@ export async function bracketRoutes(request, env, url, ctx) {
     const eventId = +x[1];
     const b = await request.json().catch(() => ({}));
 
-    const ev = await env.DB.prepare(
-      "SELECT id, name, court_count FROM events WHERE id=?1 AND org_id=?2 AND deleted_at IS NULL"
-    ).bind(eventId, ctx.orgId).first();
-    if (!ev) return json({ error: "That event doesn't exist." }, 404);
-
-    const seeds = await seedOrder(env, ctx, eventId, b.seeds);
-    if (seeds.error) return json({ error: seeds.error }, 400);
-    if (seeds.ids.length < 2) return json({ error: "Add the teams first — there is nothing to bracket yet." }, 409);
-
-    const existing = await env.DB.prepare(
-      `SELECT COUNT(*) AS n FROM matches
-        WHERE org_id=?1 AND event_id=?2 AND bracket_id IS NOT NULL AND deleted_at IS NULL`
-    ).bind(ctx.orgId, eventId).first();
-    if (existing.n > 0 && !b.replace) {
-      return json({
-        error: ev.name + " already has a bracket with " + existing.n + " games. Generating again would put a second bracket on top of the first.",
-        existing_matches: existing.n,
-        hint: "Send replace: true to set the current bracket aside and use this one instead.",
-      }, 409);
+    const g = await generateBracketFor(env, ctx, eventId, b);
+    if (!g.ok) {
+      const body = { error: g.error };
+      if (g.existing_matches !== undefined) { body.existing_matches = g.existing_matches; body.hint = g.hint; }
+      return json(body, g.status || 400);
     }
-    let replaced = 0;
-    if (existing.n > 0 && b.replace) {
-      const del = await env.DB.prepare(
-        `UPDATE matches SET deleted_at=datetime('now')
-          WHERE org_id=?1 AND event_id=?2 AND bracket_id IS NOT NULL AND deleted_at IS NULL`
-      ).bind(ctx.orgId, eventId).run();
-      replaced = del.meta.changes;
-      await env.DB.prepare(
-        "UPDATE brackets SET deleted_at=datetime('now') WHERE org_id=?1 AND event_id=?2 AND deleted_at IS NULL"
-      ).bind(ctx.orgId, eventId).run();
-    }
-
-    // "Top X into A, everyone else into BB." Splitting is what keeps a 16-team day meaningful for
-    // the teams that finished tenth — one bracket means half the field plays once and goes home.
-    const aSize = Number(b.a_size) > 0 ? Math.min(Number(b.a_size), seeds.ids.length) : seeds.ids.length;
-    const includeRest = b.include_rest !== false;
-    const groups = [{ name: "A", ids: seeds.ids.slice(0, aSize) }];
-    if (includeRest && seeds.ids.length > aSize) {
-      const rest = seeds.ids.slice(aSize);
-      if (rest.length >= 2) groups.push({ name: "BB", ids: rest });
-    }
-
-    const pointsTo = Number(b.points_to) > 0 ? Number(b.points_to) : 25;
-    const cap = Number(b.cap) > 0 ? Number(b.cap) : pointsTo + 2;
-    const courts = Number(b.courts) > 0 ? Number(b.courts) : (ev.court_count || 4);
-
-    const poolMax = await env.DB.prepare(
-      `SELECT COALESCE(MAX(round), 0) AS r FROM matches
-        WHERE org_id=?1 AND event_id=?2 AND bracket_id IS NULL AND deleted_at IS NULL`
-    ).bind(ctx.orgId, eventId).first();
-
-    const built = [];
-    let written = 0;
-    for (const g of groups) {
-      const tree = buildTree(g.ids.length);
-      if (!tree.ok) return json({ error: tree.error }, 400);
-
-      const ins = await env.DB.prepare(
-        "INSERT INTO brackets (org_id, event_id, name, split_rule, config_json) VALUES (?1,?2,?3,?4,?5)"
-      ).bind(ctx.orgId, eventId, g.name, aSize < seeds.ids.length ? `top${aSize}` : "all",
-             JSON.stringify({ seeded_by: seeds.source, seeds: g.ids, points_to: pointsTo })).run();
-      const bracketId = ins.meta.last_row_id;
-
-      // Bracket rounds continue the schedule's round numbering, so the existing court grid and the
-      // drag-and-drop editor show pool play and the bracket as one continuous day.
-      for (const mt of tree.matches) {
-        const scheduleRound = poolMax.r + (tree.depth - mt.round + 1);
-        const court = ((mt.slot - 1) % courts) + 1;
-        await env.DB.prepare(
-          `INSERT INTO matches (org_id, event_id, stage, round, court, team_a_id, team_b_id,
-                                points_to, cap, game_number, bracket_id, bracket_round, bracket_slot)
-           VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,1,?10,?11,?12)`
-        ).bind(ctx.orgId, eventId, stageForRound(mt.round), scheduleRound, court,
-               mt.a ? g.ids[mt.a - 1] : null, mt.b ? g.ids[mt.b - 1] : null,
-               pointsTo, cap, bracketId, mt.round, mt.slot).run();
-        written++;
-      }
-      built.push({
-        id: bracketId, name: g.name, teams: g.ids.length,
-        size: tree.size, rounds: tree.depth, byes: tree.byes, matches: tree.matches.length,
-      });
-    }
+    const { built, written, replaced } = g;
 
     await audit(env, ctx, "bracket.generate", "events", eventId,
-      { brackets: built.map((x2) => x2.name), matches: written, replaced, seeded_by: seeds.source });
+      { brackets: built.map((x2) => x2.name), matches: written, replaced, seeded_by: g.seededBy });
 
     return json({
       ok: true,
-      event: ev.name,
-      seeded_by: seeds.source,
+      event: g.event,
+      seeded_by: g.seededBy,
       brackets: built,
       matches_written: written,
       matches_replaced: replaced,
@@ -319,39 +382,22 @@ export async function bracketRoutes(request, env, url, ctx) {
     if (denied) return denied;
     const eventId = +x[1];
 
-    const rows = (await env.DB.prepare(
-      `SELECT id, bracket_id, bracket_round, bracket_slot, team_a_id, team_b_id, score_a, score_b
-         FROM matches WHERE org_id=?1 AND event_id=?2 AND bracket_id IS NOT NULL AND deleted_at IS NULL
-        ORDER BY bracket_id, bracket_round DESC, bracket_slot`
-    ).bind(ctx.orgId, eventId).all()).results || [];
-    if (!rows.length) return json({ error: "This event has no bracket yet." }, 404);
-
-    const changes = [];
-    for (const bid of [...new Set(rows.map((r) => r.bracket_id))]) {
-      changes.push(...pendingAdvances(rows.filter((r) => r.bracket_id === bid)));
-    }
-
-    for (const c of changes) {
-      const col = c.side === "a" ? "team_a_id" : "team_b_id";
-      await env.DB.prepare(
-        `UPDATE matches SET ${col}=?1, updated_at=datetime('now') WHERE id=?2 AND org_id=?3`
-      ).bind(c.team_id, c.match_id, ctx.orgId).run();
-    }
-    if (changes.length) {
+    const r = await advanceBracketFor(env, ctx.orgId, eventId);
+    if (!r.hasBracket) return json({ error: "This event has no bracket yet." }, 404);
+    if (r.advanced) {
       await audit(env, ctx, "bracket.advance", "events", eventId,
-        { moved: changes.length, disturbed: changes.filter((c) => c.disturbs_played_match).length });
+        { moved: r.advanced, disturbed: r.disturbed });
     }
 
     const loaded = await loadBrackets(env, ctx, eventId);
-    const disturbed = changes.filter((c) => c.disturbs_played_match).length;
     return json({
       ok: true,
-      advanced: changes.length,
-      disturbed,
-      note: changes.length === 0
+      advanced: r.advanced,
+      disturbed: r.disturbed,
+      note: r.advanced === 0
         ? "Nothing to move — every finished game already points at the right next game."
-        : `Moved ${changes.length} winner${changes.length === 1 ? "" : "s"} forward.` +
-          (disturbed ? ` ${disturbed} later game${disturbed === 1 ? " already had a score and its teams changed" : "s already had scores and their teams changed"} — check those.` : ""),
+        : `Moved ${r.advanced} winner${r.advanced === 1 ? "" : "s"} forward.` +
+          (r.disturbed ? ` ${r.disturbed} later game${r.disturbed === 1 ? " already had a score and its teams changed" : "s already had scores and their teams changed"} — check those.` : ""),
       ...loaded,
     });
   }

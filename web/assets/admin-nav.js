@@ -306,12 +306,31 @@
       });
       mainEl.prepend(bar);
     }
-    // Simpler, correct active marking (page match; hash refines within a page):
-    aside.querySelectorAll(".nav-item").forEach(a => {
-      const [page, hash] = a.getAttribute("href").split("#");
-      const match = page === here && (!hash ? !location.hash : location.hash === "#" + hash);
-      a.classList.toggle("active", match);
-    });
+    /* Active marking. Page match; hash refines within a page.
+       DETAIL PAGES NEED A PARENT. `admin-event.html` is one event — the page where a tournament is
+       actually built — and it is deliberately not a nav destination, so an exact match finds
+       nothing and the whole rail sits dark. The director's own report: "the buttons in tournaments
+       are not correctly highlighted." Falling back to the section the page belongs to is what every
+       other rail does, and it answers "where am I" instead of leaving it blank.
+       nav_highlight.test.mjs asserts every rail-bearing page resolves to exactly one item. */
+    const PARENT = {
+      "admin-event.html": "admin-events.html",     // one event → Events & Programs
+      "admin-consent.html": "admin-waivers.html",  // media consent → Waivers (same family of signed agreements)
+    };
+    const markActive = () => {
+      const items = [...aside.querySelectorAll(".nav-item")];
+      let hit = false;
+      items.forEach(a => {
+        const [page, hash] = a.getAttribute("href").split("#");
+        const match = page === here && (!hash ? !location.hash : location.hash === "#" + hash);
+        a.classList.toggle("active", match);
+        if (match) hit = true;
+      });
+      if (hit || !PARENT[here]) return;
+      const parent = items.find(a => a.getAttribute("href") === PARENT[here]);
+      if (parent) parent.classList.add("active");
+    };
+    markActive();
     window.addEventListener("hashchange", () => {
       aside.querySelectorAll(".nav-item").forEach(a => {
         const [page, hash] = a.getAttribute("href").split("#");
@@ -564,7 +583,7 @@
       if (window.BT_STATUS || document.getElementById("bt-status-js")) return;
       var s = document.createElement("script");
       s.id = "bt-status-js";
-      s.src = "assets/build-status.js?v=0.66.0";
+      s.src = "assets/build-status.js?v=0.67.0";
       s.async = false;
       document.head.appendChild(s);
     } catch (e) { /* indicators are never load-blocking */ }

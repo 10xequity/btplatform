@@ -80,6 +80,7 @@
  *   - webhook header x-square-hmacsha256-signature = base64 HMAC-SHA256(signature_key, notification_url + raw_body)
  */
 import { refreshStandings } from "./tournaments.js";
+import { advanceBracketFor } from "./brackets.js"; // v0.67.0 — no cycle: brackets.js imports only scheduler.js
 import { waitlistGate, markClaimed, offerNext, activeRegistrationCount, computeIsFull } from "./waitlists.js";
 import { pinFor, currentVersion } from "./waivers.js"; // v1.4 — one-way import, no cycle
 import { effectiveTierFor, applyTierDiscount } from "./tiers.js"; // v0.30.0 F-6 — tiers.js imports nothing, no cycle
@@ -658,14 +659,32 @@ async function teamByToken(env, token) {
 async function captainMatches(env, token) {
   const team = await teamByToken(env, token);
   if (!team) return json({ error: "This scoring link isn't valid. Ask the organizer for a new one." }, 404);
+  // v0.67.0: was `AND m.stage='pool'`. Bracket games were invisible to the teams playing them, so
+  // the self-scoring link silently stopped working at exactly the point in the day when the desk is
+  // busiest. A team's games are a team's games — pool and bracket alike.
   const matches = (await env.DB.prepare(
     `SELECT m.id, m.round, m.court, m.points_to, m.game_number, m.score_a, m.score_b, m.team_a_id, m.team_b_id,
-       ta.name AS team_a, tb.name AS team_b
+       m.bracket_id, m.bracket_round, ta.name AS team_a, tb.name AS team_b
      FROM matches m LEFT JOIN teams ta ON ta.id=m.team_a_id LEFT JOIN teams tb ON tb.id=m.team_b_id
-     WHERE m.event_id=?1 AND m.stage='pool' AND m.deleted_at IS NULL AND (m.team_a_id=?2 OR m.team_b_id=?2)
+     WHERE m.event_id=?1 AND m.deleted_at IS NULL AND (m.team_a_id=?2 OR m.team_b_id=?2)
      ORDER BY m.round, m.game_number`
   ).bind(team.event_id, team.id).all()).results;
-  return json({ team: { id: team.id, name: team.name }, event: team.event_name, matches });
+  const stageLabel = (r) =>
+    r.bracket_id == null ? "Pool"
+      : r.bracket_round === 1 ? "Final"
+      : r.bracket_round === 2 ? "Semi-final"
+      : r.bracket_round === 3 ? "Quarter-final"
+      : `Round of ${2 ** r.bracket_round}`;
+  const withLabels = matches.map((r) => ({ ...r, stage_label: stageLabel(r) }));
+  const remaining = withLabels.filter((r) => r.score_a === null || r.score_b === null).length;
+  return json({
+    team: { id: team.id, name: team.name }, event: team.event_name,
+    matches: withLabels,
+    // The page uses this to retire itself once there is nothing left to enter (owner 2026-08-03:
+    // "get rid of that page after scores are submitted").
+    remaining,
+    done: remaining === 0 && withLabels.length > 0,
+  });
 }
 
 async function captainScore(request, env, token) {
@@ -690,7 +709,17 @@ async function captainScore(request, env, token) {
   await env.DB.prepare("UPDATE matches SET score_a=?1, score_b=?2, updated_at=datetime('now') WHERE id=?3").bind(sa, sb, matchId).run();
   await audit(env, { orgId: mt.org_id, userId: null }, "match.score.captain", "matches", matchId, { team: team.id, winner, diff });
   await refreshStandings(env, mt.event_id, mt.org_id);
-  return json({ ok: true, score_a: sa, score_b: sb });
+  // A captain finishing a quarter-final on their phone must move the bracket on, same as the desk.
+  // Anything less means the bracket is only correct when staff happen to be the ones typing.
+  await advanceBracketFor(env, mt.org_id, mt.event_id);
+
+  // How much is left for this team, so the page can retire itself when they are done.
+  const left = await env.DB.prepare(
+    `SELECT COUNT(*) AS n FROM matches
+      WHERE event_id=?1 AND deleted_at IS NULL AND (team_a_id=?2 OR team_b_id=?2)
+        AND (score_a IS NULL OR score_b IS NULL)`
+  ).bind(mt.event_id, team.id).first();
+  return json({ ok: true, score_a: sa, score_b: sb, remaining: left.n, done: left.n === 0 });
 }
 
 /* ================================================================
