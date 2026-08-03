@@ -225,6 +225,7 @@ import { staffPayRoutes, wireStaffPay } from "./staff_pay.js"; // v0.58.0 staff 
 import { tryoutsRoutes, wireTryouts } from "./tryouts.js"; // v0.60.0 tryouts: cards, evaluations, team builder (migration 0036)
 import { formatsRoutes, wireFormats } from "./formats.js"; // v0.62.0 M-TF pool generator (no migration - stateless)
 import { bracketRoutes, wireBrackets } from "./brackets.js"; // v0.66.0 playable brackets (migration 0037)
+import { divisionRoutes, wireDivisions } from "./divisions.js"; // v0.69.0 divisions + bracket balancing (migration 0038)
 import { waiverReminderSweep, waiverExpirySweep, sendEmail, escapeHtml } from "./registrations.js";
 
 const MAGIC_LINK_TTL_MIN = 15;
@@ -287,6 +288,7 @@ wireStaffPay(wiredHelpers); // v0.58.0
 wireTryouts(wiredHelpers); // v0.60.0
 wireFormats(wiredHelpers); // v0.62.0
 wireBrackets(wiredHelpers); // v0.66.0
+wireDivisions(wiredHelpers); // v0.69.0
 wirePush(wiredHelpers); // v0.20.0
 wireWaivers(wiredHelpers); // v0.22.0
 wireCalendar(wiredHelpers); // v0.23.0
@@ -355,7 +357,7 @@ export default {
       } else if (url.pathname === "/api/orgs" && request.method === "GET") {
         res = await listOrgs(env);
       } else if (url.pathname === "/api/health") {
-        res = json({ ok: true, version: "v0.68.0" });
+        res = json({ ok: true, version: "v0.69.0" });
       } else if (url.pathname === "/api/webhooks/square" && request.method === "POST") {
         res = await membershipWebhook(request, env); // verifies signature; forwards payment.* to squareWebhook
       } else if (url.pathname === "/api/public/org-brand" && request.method === "GET") {
@@ -397,6 +399,7 @@ export default {
            || (await tryoutsRoutes(request, env, url, ctx)) // v0.60.0 — tryout cards, evaluations, team builder
            || (await formatsRoutes(request, env, url, ctx)) // v0.62.0 — pool schedule generator
            || (await bracketRoutes(request, env, url, ctx)) // v0.66.0 — playable brackets (seed, byes, advance)
+           || (await divisionRoutes(request, env, url, ctx)) // v0.69.0 — divisions, court ranges, balance proposals
            || (await leagueRoutes(request, env, url, ctx))
            || (await reportRoutes(request, env, url, ctx))
            || (await checkinRoutes(request, env, url, ctx))

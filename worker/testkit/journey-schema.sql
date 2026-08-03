@@ -251,7 +251,7 @@ CREATE TABLE teams (
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),
   deleted_at TEXT
-, score_token TEXT, level_num INTEGER);
+, score_token TEXT, level_num INTEGER, division_id INTEGER REFERENCES divisions(id));
 
 CREATE TABLE team_members (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -408,6 +408,44 @@ CREATE TABLE brackets (
   name TEXT NOT NULL DEFAULT 'A',
   split_rule TEXT,
   config_json TEXT DEFAULT '{}',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  deleted_at TEXT
+, division_id INTEGER REFERENCES divisions(id));
+
+-- 0038. Divisions own a COURT RANGE, not a court count: 12 courts split three ways is courts 1-4,
+-- 5-8 and 9-12, and which is which matters to everyone in the building.
+CREATE TABLE divisions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  org_id INTEGER NOT NULL REFERENCES orgs(id),
+  event_id INTEGER NOT NULL REFERENCES events(id),
+  name TEXT NOT NULL,
+  rank INTEGER NOT NULL DEFAULT 1,
+  court_from INTEGER,
+  court_to INTEGER,
+  target_bracket_size INTEGER,
+  notes TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  deleted_at TEXT
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_divisions_event_rank
+  ON divisions (org_id, event_id, rank) WHERE deleted_at IS NULL;
+
+CREATE TABLE division_moves (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  org_id INTEGER NOT NULL REFERENCES orgs(id),
+  event_id INTEGER NOT NULL REFERENCES events(id),
+  team_id INTEGER NOT NULL REFERENCES teams(id),
+  from_division_id INTEGER REFERENCES divisions(id),
+  to_division_id INTEGER REFERENCES divisions(id),
+  kind TEXT NOT NULL CHECK (kind IN ('move_down','move_up','drop_from_bracket','mini_bracket')),
+  reason TEXT NOT NULL,
+  wins INTEGER, losses INTEGER, games_played INTEGER, division_median_wins REAL,
+  status TEXT NOT NULL DEFAULT 'proposed' CHECK (status IN ('proposed','accepted','rejected')),
+  decided_by_user_id INTEGER REFERENCES users(id),
+  decided_at TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),
   deleted_at TEXT

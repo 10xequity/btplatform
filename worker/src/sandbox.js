@@ -70,16 +70,25 @@ const TEAM_NAMES = [
   "Set to Kill", "Block Party", "Net Gains", "Ace Ventura",
   "Bump in the Night", "Sets on the Beach", "Digging Deep", "Spike Lee's",
   "Served Cold", "Kill Switch", "Free Ball", "Pancake House",
+  "Six Pack", "Roof Party", "Short Set", "Deep Dish",
+  "Line Shot", "Tool Time", "Joust Kidding", "Sandbaggers",
+  "Hard Cut", "Off Speed", "Overpass", "Chasing Pancakes",
 ];
 const FIRSTS = [
   "Ava", "Ben", "Cami", "Drew", "Elle", "Finn", "Gia", "Hank",
   "Iris", "Jonah", "Kira", "Luis", "Mona", "Nate", "Opal", "Pax",
   "Quinn", "Rosa", "Sam", "Tess", "Uma", "Vic", "Wren", "Zane",
+  "Aria", "Bo", "Cleo", "Dane", "Esme", "Ford", "Gwen", "Hugo",
+  "Ines", "Jax", "Kit", "Lena", "Milo", "Nyla", "Orin", "Piper",
+  "Remy", "Sage", "Theo", "Vera", "Wes", "Xena", "Yuri", "Zoya",
 ];
 const LASTS = [
   "Stone", "Ortiz", "Reyes", "Park", "Nguyen", "Walker", "Romano", "Ellis",
   "Bailey", "Cruz", "Doyle", "Fisher", "Gray", "Hayes", "Imani", "Jensen",
   "Keller", "Lowe", "Mercer", "Novak", "Okafor", "Patel", "Quill", "Reed",
+  "Sato", "Torres", "Uddin", "Vance", "Ward", "Xu", "Yates", "Zimmer",
+  "Abbott", "Blake", "Chen", "Diaz", "Ewing", "Flores", "Gibbs", "Hoang",
+  "Iqbal", "Jordan", "Kaur", "Larsen", "Moss", "Nolan", "Oyelaran", "Price",
 ];
 const CITIES = ["Aurora", "Denver", "Pueblo", "Monument", "Fountain", "Castle Rock"];
 const NC = FIRSTS.length; // 24 test people
@@ -126,7 +135,11 @@ function teamRows(eventId, startId, count, contactOffset) {
  * fixture can never ship a standings table that disagrees with its own results — which would make
  * the bracket seeding demo quietly meaningless.
  */
-function roundRobin(eventId, startMatchId, teamIds, courts, pointsTo) {
+function roundRobin(eventId, startMatchId, teamIds, courts, pointsTo, opts = {}) {
+  // `adrift: k` makes the LAST k teams lose almost everything, so the balancer has something real
+  // to find. Without it every seeded division is a smooth ladder and the rebalancing rules — the
+  // whole point of the feature — never fire against the sample data.
+  const adrift = opts.adrift || 0;
   const n = teamIds.length, rows = [];
   const rec = new Map(teamIds.map((t) => [t, { w: 0, l: 0, pf: 0, pa: 0 }]));
   let id = startMatchId, round = 1, court = 1;
@@ -134,7 +147,10 @@ function roundRobin(eventId, startMatchId, teamIds, courts, pointsTo) {
     for (let j = i + 1; j < n; j++) {
       // The better seed usually wins, but not always — enough upsets that the final standings are
       // not just seed order, which is the only way a seeded bracket is worth looking at.
-      const aWins = (j - i) > 1 || (i + j) % 3 !== 0;
+      const iAdrift = i >= n - adrift, jAdrift = j >= n - adrift;
+      const aWins = iAdrift && !jAdrift ? false
+        : jAdrift && !iAdrift ? true
+        : (j - i) > 1 || (i + j) % 3 !== 0;
       const diff = 2 + ((i * 7 + j * 3) % 9);
       const [sa, sb] = aWins ? [pointsTo, pointsTo - diff] : [pointsTo - diff, pointsTo];
       rows.push(`(${id},1,${eventId},'pool',${round},${court},${teamIds[i]},${teamIds[j]},NULL,${pointsTo},${pointsTo + 2},${sa},${sb})`);
@@ -168,6 +184,31 @@ async function generate(env, ctx) {
 
   const rr4 = roundRobin(90004, 90401, ids(90201, 8), 3, 21);
   const rr5 = roundRobin(90005, 90501, ids(90301, 8), 3, 21);
+
+  // 90006 — the full house. Owner 2026-08-03: "build full tournaments (relate to number of courts
+  // 12 vb courts) and add x3 4 court divisions."
+  //
+  // Twelve courts, three divisions of eight, each on its own four courts: Open 1-4, A 5-8, BB 9-12.
+  // Every division has played a complete round-robin, so the balancer has real win records to read
+  // rather than a synthetic ladder.
+  //
+  // The win spreads are chosen to make each of the owner's rules visible on one screen:
+  //   Open  — 10 tight teams. The TOP-DIVISION TRIM fires: 9th and 10th have played 9 games each,
+  //           a full day, so both are proposed for dropping to hold the top bracket at 8.
+  //   A     — 8 competitive teams plus 2 adrift. Both proposed for a move down to BB.
+  //   BB    — 8 competitive plus 2 adrift, and nothing below it, so those two are offered a
+  //           two-team bracket against each other instead of being sent home.
+  //
+  //   TEN per division, not eight, because the arithmetic of an 8-team round-robin will not produce
+  //   the owner's own example. With two teams losing everything, the median falls far enough that a
+  //   1-win team sits only 2.5 below it and stops being flagged. Ten teams puts the median at 4.5
+  //   and both outliers back outside the threshold — which is also what a real full house looks like.
+  const t6open = teamRows(90006, 90601, 10, 0);
+  const t6a    = teamRows(90006, 90621, 10, 16);
+  const t6bb   = teamRows(90006, 90641, 10, 32);
+  const rr6open = roundRobin(90006, 90701, ids(90601, 10), 4, 21);
+  const rr6a    = roundRobin(90006, 90761, ids(90621, 10), 4, 21, { adrift: 2 });
+  const rr6bb   = roundRobin(90006, 90821, ids(90641, 10), 4, 21, { adrift: 2 });
 
   const stmts = [
     `INSERT INTO contacts (id, org_id, email, full_name, phone, city, state) VALUES
@@ -265,6 +306,48 @@ async function generate(env, ctx) {
      (90032,1,90005,90011,'paid','square'),
      (90033,1,90005,90013,'paid','square'),
      (90034,1,90005,90015,'pending',NULL)`,
+
+    /* --- 90006: twelve courts, three divisions of eight, every pool game played --- */
+    `INSERT INTO events (id, org_id, type, name, starts_at, ends_at, location, capacity, court_count, status, price_cents) VALUES
+     (90006,1,'tournament','TEST 12-Court Classic — 3 divisions, ready to balance (sample data)',datetime('now','+5 days','start of day','+8 hours'),datetime('now','+5 days','start of day','+18 hours'),'Boomtown Courts',30,12,'in_progress',6500)`,
+    `INSERT INTO divisions (id, org_id, event_id, name, rank, court_from, court_to) VALUES
+     (90001,1,90006,'Open',1,1,4),
+     (90002,1,90006,'A',2,5,8),
+     (90003,1,90006,'BB',3,9,12)`,
+    `INSERT INTO teams (id, org_id, event_id, name, level, gender_division, captain_contact_id, seed, score_token) VALUES
+     ${t6open.teams}`,
+    `INSERT INTO teams (id, org_id, event_id, name, level, gender_division, captain_contact_id, seed, score_token) VALUES
+     ${t6a.teams}`,
+    `INSERT INTO teams (id, org_id, event_id, name, level, gender_division, captain_contact_id, seed, score_token) VALUES
+     ${t6bb.teams}`,
+    `UPDATE teams SET division_id=90001 WHERE event_id=90006 AND id BETWEEN 90601 AND 90610`,
+    `UPDATE teams SET division_id=90002 WHERE event_id=90006 AND id BETWEEN 90621 AND 90630`,
+    `UPDATE teams SET division_id=90003 WHERE event_id=90006 AND id BETWEEN 90641 AND 90650`,
+    `INSERT INTO team_members (org_id, team_id, contact_id, member_name, member_email) VALUES
+     ${t6open.members}`,
+    `INSERT INTO team_members (org_id, team_id, contact_id, member_name, member_email) VALUES
+     ${t6a.members}`,
+    `INSERT INTO team_members (org_id, team_id, contact_id, member_name, member_email) VALUES
+     ${t6bb.members}`,
+    `INSERT INTO matches (id, org_id, event_id, stage, round, court, team_a_id, team_b_id, ref_team_id, points_to, cap, score_a, score_b) VALUES
+     ${rr6open.matches}`,
+    `INSERT INTO matches (id, org_id, event_id, stage, round, court, team_a_id, team_b_id, ref_team_id, points_to, cap, score_a, score_b) VALUES
+     ${rr6a.matches}`,
+    `INSERT INTO matches (id, org_id, event_id, stage, round, court, team_a_id, team_b_id, ref_team_id, points_to, cap, score_a, score_b) VALUES
+     ${rr6bb.matches}`,
+    `INSERT INTO standings (org_id, event_id, team_id, wins, losses, point_diff, points_for, points_against, rank) VALUES
+     ${rr6open.standings}`,
+    `INSERT INTO standings (org_id, event_id, team_id, wins, losses, point_diff, points_for, points_against, rank) VALUES
+     ${rr6a.standings}`,
+    `INSERT INTO standings (org_id, event_id, team_id, wins, losses, point_diff, points_for, points_against, rank) VALUES
+     ${rr6bb.standings}`,
+    `INSERT INTO registrations (id, org_id, event_id, contact_id, status, payment_method) VALUES
+     (90041,1,90006,90001,'paid','square'),
+     (90042,1,90006,90005,'paid','square'),
+     (90043,1,90006,90017,'paid','square'),
+     (90044,1,90006,90025,'cash-pending','cash'),
+     (90045,1,90006,90033,'paid','square'),
+     (90046,1,90006,90041,'comped','comp')`,
   ];
   for (const s of stmts) await env.DB.prepare(s).run();
 
@@ -281,10 +364,12 @@ async function generate(env, ctx) {
     ok: true,
     bracket_ok: !!drawn.ok,
     message:
-      "Test data created. Three tournaments, each parked where you can try something: " +
+      "Test data created. Four tournaments, each parked where you can try something: " +
       "Summer Open (12 teams, 5 courts, no schedule — generate pools, then drag them); " +
       "Fall Classic (8 teams, pools scored — generate a bracket); " +
       "Winter Jam (8 teams, " + bracketNote + " — enter a quarter-final score and watch it advance). " +
+      "12-Court Classic (30 teams, 3 divisions of 10 on 4 courts each, all pools played — run the " +
+      "balancer: Open trims to 8, A has 2 teams to move down, BB has 2 with nowhere to go). " +
       "Plus a finished tournament and a league. Every team has a scoring link token. " +
       "Everything is marked TEST and uses @example.com emails.",
   });
@@ -299,6 +384,8 @@ async function wipe(env, ctx) {
     // Bracket rows and their matches get real auto-increment ids, outside the 90000 range — the
     // event_id filter is what actually catches them, and it is why every delete below has one.
     `DELETE FROM brackets      WHERE event_id BETWEEN ${LO} AND ${HI}`,
+    `DELETE FROM division_moves WHERE event_id BETWEEN ${LO} AND ${HI}`,
+    `DELETE FROM divisions     WHERE id BETWEEN ${LO} AND ${HI} OR event_id BETWEEN ${LO} AND ${HI}`,
     `DELETE FROM registrations WHERE id BETWEEN ${LO} AND ${HI} OR event_id BETWEEN ${LO} AND ${HI}`,
     `DELETE FROM standings     WHERE event_id BETWEEN ${LO} AND ${HI}`,
     `DELETE FROM matches       WHERE id BETWEEN ${LO} AND ${HI} OR event_id BETWEEN ${LO} AND ${HI}`,

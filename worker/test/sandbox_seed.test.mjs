@@ -173,6 +173,67 @@ test("every seeded team has a scoring token", async () => {
   env.DB.close();
 });
 
+/* ---------------- the 12-court, three-division event ---------------- */
+
+test("the 12-Court Classic really is 12 courts, 3 divisions of 10, on 4 courts each", async () => {
+  const { env } = await seeded();
+  assert.equal(env.DB.one("SELECT court_count FROM events WHERE id=90006").court_count, 12);
+  const divs = env.DB.query("SELECT name, rank, court_from, court_to FROM divisions WHERE event_id=90006 ORDER BY rank");
+  assert.deepEqual(divs.map((d) => d.name), ["Open", "A", "BB"]);
+  assert.deepEqual(divs.map((d) => [d.court_from, d.court_to]), [[1, 4], [5, 8], [9, 12]]);
+  for (const d of divs) {
+    const n = env.DB.one("SELECT COUNT(*) AS n FROM teams t JOIN divisions v ON v.id=t.division_id WHERE v.name=?1 AND t.event_id=90006", d.name).n;
+    assert.equal(n, 10, `${d.name} should have 10 teams`);
+  }
+  env.DB.close();
+});
+
+test("every division has played a complete round-robin, so the balancer has real records", async () => {
+  const { env } = await seeded();
+  const m = env.DB.one("SELECT COUNT(*) AS n, SUM(score_a IS NULL) AS unscored FROM matches WHERE event_id=90006");
+  assert.equal(m.n, 45 * 3, "three round-robins of 10 is 135 games");
+  assert.equal(m.unscored, 0);
+  env.DB.close();
+});
+
+test("the fixture makes all three balancing rules fire at once", async () => {
+  // The sample data exists to demonstrate the feature. If the rules do not fire against it, the
+  // owner is looking at a screen that says nothing and has no way to tell whether that is correct.
+  const { env, token } = await seeded();
+  const r = await call(env, "GET", "/api/admin/events/90006/divisions/plan", { token });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  const byDiv = (name) => r.data.proposals.filter((p) => p.from_division === name);
+
+  // Open: the top-division trim. 10 teams, 9th and 10th have played a full day.
+  const open = byDiv("Open");
+  assert.equal(open.length, 2, "Open should trim its 9th and 10th");
+  assert.ok(open.every((p) => p.kind === "drop_from_bracket"), `got ${open.map((p) => p.kind).join(",")}`);
+  assert.ok(open.every((p) => p.games_played >= 8), "the trim must only apply to teams that have had their day");
+
+  // A: outliers with somewhere to go.
+  assert.equal(byDiv("A").length, 2, "A is seeded with 2 adrift teams");
+  assert.ok(byDiv("A").every((p) => p.kind === "move_down" && p.to_division === "BB"));
+
+  // BB: outliers with nowhere to go.
+  assert.equal(byDiv("BB").length, 2, "BB is seeded with 2 adrift teams");
+  assert.ok(byDiv("BB").every((p) => p.kind === "mini_bracket"),
+    "BB is the bottom division — its outliers play each other rather than being sent home");
+
+  // And the top bracket lands on 8 after the trim.
+  const openPlan = r.data.divisions.find((d) => d.name === "Open");
+  assert.deepEqual(openPlan.brackets.map((b) => b.size), [8]);
+  env.DB.close();
+});
+
+test("the seeded plan still moves nobody until it is accepted", async () => {
+  const { env, token } = await seeded();
+  const before = env.DB.query("SELECT id, division_id FROM teams WHERE event_id=90006 ORDER BY id");
+  await call(env, "GET", "/api/admin/events/90006/divisions/plan", { token });
+  const after = env.DB.query("SELECT id, division_id FROM teams WHERE event_id=90006 ORDER BY id");
+  assert.deepEqual(after, before);
+  env.DB.close();
+});
+
 /* ---------------- housekeeping ---------------- */
 
 test("generating twice is refused rather than stacking a second copy", async () => {
