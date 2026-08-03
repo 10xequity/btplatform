@@ -227,6 +227,7 @@ import { staffPayRoutes, wireStaffPay } from "./staff_pay.js"; // v0.58.0 staff 
 import { tryoutsRoutes, wireTryouts } from "./tryouts.js"; // v0.60.0 tryouts: cards, evaluations, team builder (migration 0036)
 import { formatsRoutes, wireFormats } from "./formats.js"; // v0.62.0 M-TF pool generator (no migration - stateless)
 import { bracketRoutes, wireBrackets } from "./brackets.js"; // v0.66.0 playable brackets (migration 0037)
+import { kotcRoutes, wireKotc } from "./kotcplay.js"; // v0.80.0 KOTC play surface (migrations 0040/0042)
 import { divisionRoutes, wireDivisions } from "./divisions.js"; // v0.69.0 divisions + bracket balancing (migration 0038)
 import { liveRoutes, wireLive } from "./live.js"; // v0.73.0 public live board (read-only, no auth)
 import { waiverReminderSweep, waiverExpirySweep, sendEmail, escapeHtml } from "./registrations.js";
@@ -291,6 +292,7 @@ wireStaffPay(wiredHelpers); // v0.58.0
 wireTryouts(wiredHelpers); // v0.60.0
 wireFormats(wiredHelpers); // v0.62.0
 wireBrackets(wiredHelpers); // v0.66.0
+wireKotc(wiredHelpers);
 wireDivisions(wiredHelpers); // v0.69.0
 wireLive({ json }); // v0.73.0 — read-only, so it needs nothing but json
 wirePush(wiredHelpers); // v0.20.0
@@ -361,7 +363,7 @@ export default {
       } else if (url.pathname === "/api/orgs" && request.method === "GET") {
         res = await listOrgs(env);
       } else if (url.pathname === "/api/health") {
-        res = json({ ok: true, version: "v0.79.0" });
+        res = json({ ok: true, version: "v0.80.0" });
       } else if (url.pathname === "/api/webhooks/square" && request.method === "POST") {
         res = await membershipWebhook(request, env); // verifies signature; forwards payment.* to squareWebhook
       } else if (url.pathname === "/api/public/org-brand" && request.method === "GET") {
@@ -426,6 +428,7 @@ export default {
     ["formats",       formatsRoutes],                       // v0.62.0 — pool schedule generator
     ["bracket",       bracketRoutes],                       // v0.66.0 — playable brackets (seed, byes, advance)
     ["division",      divisionRoutes],                      // v0.69.0 — divisions, court ranges, balance proposals
+    ["kotc",         kotcRoutes],                          // v0.80.0 — KOTC: entry list, per-player links, confirm-or-edit
     ["live",          liveRoutes],                          // v0.73.0 — public scoreboard, no login
     ["league",        leagueRoutes],
     ["report",        reportRoutes],

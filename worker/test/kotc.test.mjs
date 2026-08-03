@@ -514,33 +514,40 @@ test("a whole night runs: seed, play, tally, move, and nobody is lost or duplica
     "the pool-play game floor must NOT be enforced here — the owner ruled it does not apply");
 });
 
-/* ================================ failure class 1, faced up front ================================ */
+/* ================================ failure class 1, now closed ================================ */
 
-test("the engine is not yet reachable, and this test is the reminder", () => {
-  /* FAILURE CLASS 1 IS "BUILT, TESTED, AND UNCALLED", and that is precisely what this release ships:
-     a proved engine with no route and no screen. The spec ordered it this way
-     (`docs/2026-08-03_spec_kotc_v1_1.md` §4/§8: build the pure functions first, each testable without
-     the ones after it) and the owner's five open questions were answered before a line of it was
-     written — so this is a staged build, not drift. But the project's own history is four sessions
-     spent specifying a module that was already 70% built, and a rail that went dark on the page where
-     a tournament is created. Unreachable code does not announce itself.
+test("the engine is reachable: kotcplay.js is MOUNTED and WIRED (§6.5)", () => {
+  /* THIS TEST REPLACES A RATCHET, EXACTLY AS THE RATCHET INSTRUCTED.
+     v0.76.0 shipped this engine with no route and no screen — failure class 1 by construction ("built,
+     tested, and uncalled"). Rather than note that in a handoff nobody re-reads, the gap was held open by
+     a test asserting `index.js` did NOT mention `kotcRoutes`/`wireKotc`, whose failure message said:
+     delete this and put the dispatch-chain assertion in its place. v0.80.0 wired it, that test went red,
+     and this is the replacement. The mechanism worked: the gap could not be forgotten, because forgetting
+     it was not possible while the suite was green.
 
-     So the gap is a RATCHET rather than a paragraph in a handoff nobody re-reads. This test asserts
-     the current, deliberate state. The moment somebody adds `kotcRoutes`/`wireKotc` and mounts them,
-     it goes red and makes them come here and say so — the same mechanism that made the schema gate
-     catch migration 0040. Delete this test in the release that wires the routes; do not weaken it. */
+     Standards §6.5: assert the CALL SITE, never the import line. Since v0.77.0 the call site is an entry
+     in the isolated dispatch TABLE, so that is what is checked. */
   const index = readFileSync(new URL("../src/index.js", import.meta.url), "utf8");
-  assert.ok(!/kotcRoutes|wireKotc/.test(index),
-    "kotc.js now appears to be mounted in index.js — wire it properly, then DELETE this test and " +
-    "replace it with the usual dispatch-chain assertion (standards §6.5: assert the call site, " +
-    "never the import line).");
-  assert.ok(!/kotcRoutes|wireKotc/.test(SRC),
-    "kotc.js has grown routes. It is a pure engine; routes belong in their own module so this one " +
-    "stays testable without a fixture.");
+  assert.match(index, /\["kotc",\s+kotcRoutes\],/,
+    "kotcRoutes must appear in the dispatch table, not merely on an import line");
+  assert.match(index, /wireKotc\(wiredHelpers\)/, "wireKotc must be called, or the helpers are undefined");
+  assert.match(index, /import \{[^}]*\bkotcRoutes\b/, "and it must be imported");
 
-  // What is proved today, so the next session does not re-derive it: the format's arithmetic. What is
-  // NOT proved: that anybody can reach it. Both halves stated, because only one of them is code.
-  assert.equal(typeof netPlan, "function");
-  assert.equal(typeof gamesForRound, "function");
-  assert.equal(typeof nextRound, "function");
+  // The ENGINE stays pure. Routes live in kotcplay.js so this module remains testable with no fixture,
+  // and so the solver can be exercised without booting a router.
+  assert.ok(!/kotcRoutes|wireKotc/.test(SRC),
+    "kotc.js must stay a pure engine — routes belong in kotcplay.js");
+  assert.ok(!/env\.DB|request\./.test(SRC),
+    "kotc.js must not touch the database or a request; that is what makes every claim here provable");
+});
+
+test("the dispatch table puts kotc before live, so /api/kotc/:token reaches its owner", () => {
+  // Order in the table decides which module wins an overlapping path. Both modules serve public,
+  // token-or-header routes; if `live` were asked first and ever grew a /api/kotc prefix, a player's link
+  // would resolve to a scoreboard. Cheap to assert, and invisible if it ever regressed.
+  const index = readFileSync(new URL("../src/index.js", import.meta.url), "utf8");
+  const kotc = index.indexOf('["kotc",');
+  const live = index.indexOf('["live",');
+  assert.ok(kotc > 0 && live > 0, "both modules must be mounted");
+  assert.ok(kotc < live, "kotc must be dispatched before live");
 });

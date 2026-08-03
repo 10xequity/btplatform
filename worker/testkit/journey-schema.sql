@@ -613,3 +613,23 @@ CREATE INDEX IF NOT EXISTS idx_matches_court_time
   ON matches (org_id, event_id, court, starts_at) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_matches_held
   ON matches (org_id, event_id) WHERE deleted_at IS NULL AND (slot_locked_a = 1 OR slot_locked_b = 1);
+
+-- Migration 0042 — KOTC entry list, per-player links, confirmation.
+CREATE TABLE kotc_players (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  org_id INTEGER NOT NULL REFERENCES orgs(id),
+  session_id INTEGER NOT NULL REFERENCES kotc_sessions(id),
+  contact_id INTEGER NOT NULL REFERENCES contacts(id),
+  score_token TEXT,
+  seed INTEGER,
+  withdrawn_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  deleted_at TEXT
+);
+ALTER TABLE kotc_slots ADD COLUMN confirmed TEXT NOT NULL DEFAULT 'pending';
+ALTER TABLE kotc_slots ADD COLUMN confirmed_at TEXT;
+ALTER TABLE kotc_games ADD COLUMN entered_by_contact_id INTEGER REFERENCES contacts(id);
+ALTER TABLE kotc_games ADD COLUMN entered_at TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_kotc_players_once ON kotc_players (org_id, session_id, contact_id) WHERE deleted_at IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_kotc_players_token ON kotc_players (score_token) WHERE score_token IS NOT NULL AND deleted_at IS NULL;
