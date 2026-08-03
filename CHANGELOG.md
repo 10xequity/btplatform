@@ -2,7 +2,53 @@
 
 ## v0.67.0 — 2026-08-03
 
-- Auto-recorded by CI on deploy. `/api/health` reported `v0.67.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
+Two owner reports, one shape of problem underneath both: the feature existed, and the path to
+reaching it did not.
+
+- **The rail went dark on the tournament page.** Owner: *"the buttons in tournaments are not
+  correctly highlighted."* `admin-event.html` — the page where a tournament is actually built — is
+  deliberately not a nav destination, so exact-match marking found nothing and no item lit up at
+  all. Nothing was broken enough to fail: the page loaded, the rail rendered, every link worked. It
+  simply never answered "where am I." Detail pages now fall back to their section.
+  `admin-consent.html` had the identical hole and nobody had hit it yet.
+  - `nav_highlight.test.mjs` scans every page that ships the rail and asserts it resolves to exactly
+    one item — and that no parent points at a page the rail does not contain, which fails silently
+    and looks indistinguishable from having no parent at all.
+- **The test data could not reach the feature it was supposed to test.** Owner asked for tournaments
+  to try the drag editor on. The old seed's upcoming tournament had four registrations and **zero
+  teams** — so there was nothing to build a pool from, and the editor looked dead when it was fine.
+  The fixture is a product: when it is wrong, you cannot tell a broken feature from a broken
+  fixture, and you reasonably blame the feature.
+  - Three tournaments now sit at three points of a real event day. **Summer Open** — 12 teams, 5
+    courts, no schedule: generate pools, then drag them. **Fall Classic** — 8 teams, pool play
+    scored, standings ranked: generate a bracket and watch it seed off the finish. **Winter Jam** —
+    bracket already drawn with the quarter-finals unscored: enter one and watch the winner advance.
+  - Winter Jam's bracket is drawn by calling the **real generator**, never hand-written SQL. A
+    fixture assembled by a second implementation can pass while the real one is broken — the only
+    kind of test data that actively lies to you. Standings are computed from the fixture's own
+    scores for the same reason.
+  - Every seeded team ships a scoring token, in hex, because the route accepts hex and a fixture
+    token that 404s makes a working feature look broken.
+- **Brackets advance themselves** (owner: *"brackets should auto advance"*). One helper,
+  `advanceBracketFor`, called from the advance route and from **both** score-write paths — staff at
+  the desk and a captain on their phone. Copying the loop into each caller would leave three copies
+  to keep in step, and the one that drifted would be found on a Saturday. A director typing in a
+  quarter-final has their hands full; a second button is a step that gets skipped, and a skipped
+  step means the next court call is wrong.
+- **Captain self-scoring only ever showed pool play.** `AND m.stage='pool'` meant bracket games were
+  invisible to the teams playing them, so the self-scoring link quietly stopped working at exactly
+  the point in the day when the desk is busiest. It now lists every one of a team's games with its
+  stage named — "Quarter-final" is a different thing to walk onto a court for than "Pool" — and
+  scoring a bracket game from a phone advances the bracket, same as the desk.
+- **The scoring page retires itself** once a team has nothing left to enter (owner: *"get rid of
+  that page after scores are submitted"*). Their results stay visible; the controls do not. Leaving
+  the taps up invites someone to come back and re-score a finished game.
+- **My own bug, caught by the new fixture test:** the team name "TEST Spike Lee's" broke every seed
+  statement on first run. Fixed with a quoting helper rather than by renaming the team —
+  interpolating raw text into SQL is a habit worth not having even where it happens to be safe.
+- Tests **845** (+18, measured before and after), with negative controls that mutate real code:
+  remove the auto-advance call and the advance test fails; remove a page's parent entry and the rail
+  guard fails. Preflight CLEAR. No migration.
 
 ## v0.66.0 — 2026-08-03
 
