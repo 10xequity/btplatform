@@ -1,5 +1,9 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.61.0 — 2026-08-03
+
+- Auto-recorded by CI on deploy. `/api/health` reported `v0.61.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
+
 ## v0.60.0 — 2026-08-03
 
 - **Tryout evaluations** — the owner's spec, built as written: *"name · position · age · prev club
