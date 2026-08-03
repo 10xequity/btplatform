@@ -2,7 +2,118 @@
 
 ## v0.76.0 — 2026-08-03
 
-- Auto-recorded by CI on deploy. `/api/health` reported `v0.76.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
+**King / Queen of the Court — the engine.** Individuals enter, not teams. Migration **0040**.
+
+### The five open questions were asked, not guessed
+
+`docs/2026-08-03_spec_kotc_v1_0.md` §6 listed five things it said "should be asked rather than guessed
+at". All five were answered by the owner before a line of this was written.
+
+- **How many players move up per net.** The owner's own words held two rules that only agree at some
+  net counts — *"We take the top 8 scores amongst nets, usually its 1 per net for equity. But with
+  fewer nets, we may take more than 1."* Four candidate formulas were put up, including two that
+  reproduce "top 8" exactly (2 per net at four nets, 1 per net at eight). He declined all four:
+  **"Director sets it each session."** So **no formula is encoded anywhere.** `move_up` is a column,
+  defaulting to 1 — his own "usually 1 per net for equity" — and a test asserts the engine never
+  derives it from the net count. A guessed formula here would have been quoted back later as a
+  decision the owner never made.
+- **A field that is not a multiple of four.** *"we would fill each person to join an existing net and
+  do a 5 team rotation rotating pairs. However, this should not happen where people drop, we would go
+  in with even numbers."* So 14 players is **4 / 5 / 5** — not the 4 / 4 / 4 / 2 the spec proposed. A
+  net of two is not a net.
+- **Ranking tiebreak.** Total points, then **wins**, then point difference, then contact id so the
+  order is never random — a board that reshuffles while nobody is touching it is its own bug.
+- **Game length.** First to 21, no cap, set per session. There is deliberately **no `cap` column**: a
+  nullable one invites a default that quietly reinstates the thing the owner ruled out.
+- **The eight-game floor.** *"No — this format sets its own length."* No minimum-rounds column and no
+  check. That absence is a recorded decision, not an omission, and a test asserts the pool-play floor
+  has not crept in.
+
+### A net of five is a complete rotation, not a degraded four
+
+This came out of the owner's own answer and is better than what the spec asked for. Five players play
+**five games in which all ten pairs partner exactly once and every player sits out exactly one game** —
+C(5,2) = 10, and 5 games × 2 pairs = 10, so a perfect rotation exists at five and the construction
+either hits it exactly or is wrong. No scaling, no scoring adjustment, nothing to explain to a player.
+
+**And it is easy to get wrong in a way that looks right.** Pair the four non-sitting players as
+(k+1, k+2) against (k+3, k+4) — the arrangement most people write first — and you still get five
+games, everybody still plays four, everybody still sits out once. It just forms five distinct pairs
+twice each instead of ten once each, and quietly stops being fair. The negative control builds exactly
+that wrong rotation and proves only the pair count distinguishes them, because eyeballing it proves
+nothing.
+
+*(Distinct from the "rotating pairs" FORMAT the owner descoped on 2026-08-03 — that was a whole
+tournament shape. This is one net's internal rotation.)*
+
+### Two findings against the spec, recorded in the module rather than worked around
+
+1. **§4 item 5 asks for something that cannot exist.** It wants `partnerHistory` *"so `nextRound` can
+   prefer a fresh pairing when it has a free choice."* **It never has a free choice.** A net plays
+   *all* its pairings — three at four players, ten at five — so there is no pairing decision at either
+   size, only the order of the games, which does not change who partners whom. Partner repeats are
+   therefore decided entirely by who shares a net, and that is decided by the scores.
+
+   `partnerHistory` is consequently **reporting**, plus a tie-break of last resort when two level
+   players compete for one place. That is still exactly what the owner asked for — *"yes they can
+   repeat - idealy not if possible, but it can happen, not a fixed position"* — but the honest
+   mechanism is far smaller than the spec assumed. An optimiser with nothing to optimise would have
+   been theatre, and the next person to read this file would have gone looking for it. The finding is
+   written into the module header and asserted by a test, so it cannot be deleted by accident.
+2. **§3's proposed `games_per_round` column is dropped.** It is 3 or 5 depending on a net's size, so it
+   is per-net and derived — never a session-wide setting.
+
+### Migration 0040
+
+`kotc_sessions`, `kotc_rounds`, `kotc_slots`, `kotc_games`. `sqlite_master` was read live **before the
+design was fixed** (F-41): zero `kotc*` tables, and the live ledger at 0039 agreeing with the repo.
+Applied via Cloudflare MCP before the push; ledger row 0040 and all four tables read back after.
+
+- **Nothing that already exists can hold this.** `teams` is the unit of play everywhere else — a team
+  registers, is scheduled, appears in standings, wins. Here an individual registers and a partnership
+  lasts one game. Throwaway two-person `teams` rows would put roughly three rows per player per round
+  into the table every other report reads, and `standings` would fill with pairs that existed for
+  eleven minutes. There is no column that fixes that.
+- **The four players are stored ON each game**, not resolved through the seating. A director moves
+  people between nets on the day — that is the premise of the format — and a game resolved through
+  `kotc_slots` would silently change who played it every time somebody was dragged. A played result is
+  a fact about four named people at a moment.
+- **Per-player standings are DERIVED, always.** No stored counter anywhere. The F-26 lesson the passes
+  module already paid for: a counter and the rows it came from will disagree eventually, and the
+  counter is the one people will have been reading off a screen.
+- Unique indexes in **both** directions on `kotc_slots` — one player cannot be in two seats, one seat
+  cannot hold two players — because the board writes a whole round at a time and either mistake
+  produces a game nobody can play.
+
+### This ships unreachable, deliberately, and a guard says so
+
+**No route. No screen.** The spec ordered the pure functions first, each testable without the ones
+after it, and that order was followed.
+
+But *"built, tested, and uncalled"* is this project's **failure class 1** — the rail that went dark on
+the page where a tournament is created, the fixture that could not reach the feature it existed to
+test, the divisions engine that shipped with no screen. Unreachable code does not announce itself, and
+a note in a handoff is not a mechanism.
+
+So the gap is a **ratchet**. A test asserts `index.js` does *not* mention `kotcRoutes`/`wireKotc`, and
+goes red the moment somebody wires them — with a message telling them to delete it and put the
+dispatch-chain assertion in its place (standards §6.5: assert the call site, never the import line).
+The same mechanism caught migration 0040 in the schema gate this session, which is why it is trusted
+here.
+
+### Gates
+
+Suite **1007 → 1036**, measured before and after. 62 test files, 47 modules. The schema-gate ratchet
+fired on 0040 exactly as designed — the migration landed, the next full run went red, and the number
+moved only after `SELECT version FROM schema_migrations WHERE version='0040'` returned a row from live
+D1. Net sizes are asserted to survive **ten** rounds of movement at two different `move_up` values,
+because a leak of one player per round is invisible in a single step and a dropped player just stops
+appearing on the board.
+
+No `web/**` file changed, so the cache buster was **not** swept and stays a single value at `0.75.0`.
+Deliberate: the buster exists to invalidate changed assets, and sweeping 58 files that did not change
+is churn. (C6 in `docs/INDEX.md` remains open — the guard still checks the buster is *one* value, not
+the *current* one.)
 
 ## v0.75.0 — 2026-08-03
 
