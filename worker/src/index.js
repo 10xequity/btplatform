@@ -222,6 +222,7 @@ import { announcementsRoutes, wireAnnouncements, publicOrgBrand } from "./announ
 import { memberFieldsRoutes, wireMemberFields } from "./member_fields.js"; // v0.57.0 M22 membership custom fields (migration 0034)
 import { passesRoutes, wirePasses } from "./passes.js"; // v0.58.0 pass/credit ledger (migration 0035)
 import { staffPayRoutes, wireStaffPay } from "./staff_pay.js"; // v0.58.0 staff rates + shift pay (migration 0035)
+import { tryoutsRoutes, wireTryouts } from "./tryouts.js"; // v0.60.0 tryouts: cards, evaluations, team builder (migration 0036)
 import { waiverReminderSweep, waiverExpirySweep, sendEmail, escapeHtml } from "./registrations.js";
 
 const MAGIC_LINK_TTL_MIN = 15;
@@ -281,6 +282,7 @@ wireAnnouncements(wiredHelpers); // v0.50.0
 wireMemberFields(wiredHelpers); // v0.57.0
 wirePasses(wiredHelpers); // v0.58.0
 wireStaffPay(wiredHelpers); // v0.58.0
+wireTryouts(wiredHelpers); // v0.60.0
 wirePush(wiredHelpers); // v0.20.0
 wireWaivers(wiredHelpers); // v0.22.0
 wireCalendar(wiredHelpers); // v0.23.0
@@ -349,7 +351,7 @@ export default {
       } else if (url.pathname === "/api/orgs" && request.method === "GET") {
         res = await listOrgs(env);
       } else if (url.pathname === "/api/health") {
-        res = json({ ok: true, version: "v0.59.0" });
+        res = json({ ok: true, version: "v0.60.0" });
       } else if (url.pathname === "/api/webhooks/square" && request.method === "POST") {
         res = await membershipWebhook(request, env); // verifies signature; forwards payment.* to squareWebhook
       } else if (url.pathname === "/api/public/org-brand" && request.method === "GET") {
@@ -388,6 +390,7 @@ export default {
            || (await memberFieldsRoutes(request, env, url, ctx)) // v0.57.0 — M22 membership custom-field registry
            || (await passesRoutes(request, env, url, ctx)) // v0.58.0 — pass/credit ledger
            || (await staffPayRoutes(request, env, url, ctx)) // v0.58.0 — staff rates + shift pay
+           || (await tryoutsRoutes(request, env, url, ctx)) // v0.60.0 — tryout cards, evaluations, team builder
            || (await leagueRoutes(request, env, url, ctx))
            || (await reportRoutes(request, env, url, ctx))
            || (await checkinRoutes(request, env, url, ctx))

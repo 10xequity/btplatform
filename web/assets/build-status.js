@@ -59,6 +59,7 @@
     "admin-checkin.html":       { s: "beta", n: "Check-in never blocks anyone. A member with no current waiver still checks in — the door just shows a note so staff can follow up (owner decision 2026-07-29, \"no gating\"). Not built yet: the outstanding-balance chip and one-tap resolve." },
     "admin-facility.html":      { s: "beta", n: "Calendar, space presets and the conflict engine are finished. Public rental requests stay hidden until RENTALS_ENABLED is switched on." },
     "admin-calendar.html":      { s: "live" },
+    "admin-tryouts.html":       { s: "beta", n: "Evaluate players at a tryout: their registration details, your own notes, a 1-5 rating and offer / no. Your notes are private to you — the director sees everyone’s together. The drag-and-drop team builder that uses this data is the next piece." },
     "admin-event.html":         { s: "live" },
     "tournament.html":          { s: "live" },
     "admin-league.html":        { s: "live" },
