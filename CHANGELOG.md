@@ -2,7 +2,47 @@
 
 ## v0.68.0 — 2026-08-03
 
-- Auto-recorded by CI on deploy. `/api/health` reported `v0.68.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
+Owner asked for score submission by QR code as well as by link. Building it turned up that the QR
+this platform already had **never worked**: `admin-checkin.html` loaded `qrcodejs` from a CDN and,
+when that failed, printed *"QR library blocked — use the link."* A QR code is used at the door of a
+gym, which is the worst possible place to depend on a third-party host being reachable — and it was
+also someone else's script executing on a page where staff are signed in.
+
+- **`assets/qr.js` — a self-contained encoder.** Byte mode, error correction level M, versions 1–10
+  (up to 216 bytes; every URL here is well under a hundred characters). Nothing external, so it
+  works on whatever wifi a venue happens to have. Anything too long throws rather than quietly
+  producing something wrong.
+- **The spec tables were read from source** (the QR tutorial tables at thonky.com, 2026-08-03), not
+  written from memory. One wrong number produces a code that renders perfectly and will not scan —
+  the worst kind of failure, found by a captain at a tournament rather than by anyone at a desk.
+- **Two real bugs, both of which produced valid-*looking* codes**, caught only because the tests
+  attack from angles that do not share the encoder's assumptions:
+  1. The generator polynomial was built **reversed** — the `× x` and `× a^i` terms were swapped, so
+     every error-correction codeword was wrong. Caught by checking, with a GF(256) implementation
+     written separately at the top of the test file, that a codeword is divisible by its own
+     generator. That is the definition of a Reed-Solomon codeword, so it cannot be argued with.
+  2. Format information copy 2 was split **8 + 7 instead of 7 + 8**. Bit 7 landed on the
+     always-dark module and was overwritten, and `(8, size-8)` was left unreserved so a data bit
+     took it. The symbol rendered correctly and everything past that single cell decoded as noise.
+     Caught by a round-trip decoder written from the spec rather than by importing the encoder's
+     own placement code.
+- **Two of the negative controls also "passed" while proving nothing**, and are recorded because
+  the failure mode is instructive: one corrupted a parity module the decoder deliberately ignores,
+  the other corrupted the mode indicator, which does not change the recovered characters. A
+  negative control aimed at the wrong region is indistinguishable from a working one. It now
+  targets a payload bit.
+- **`admin-score-links.html`** — one card per team: name, link, QR, copy button. Printable, because
+  the way this is actually used is printing a sheet, cutting it up, and handing a captain a slip of
+  paper at the desk. The same link is what SMS will send when that is unfrozen; nothing needs to
+  change for it. The QR keeps a white background with dark ink in **both** themes — a gold or
+  dark-surface QR is a QR that does not scan, and the theme is not allowed to break it.
+- Tests **861** (+16). Preflight CLEAR. No migration.
+- Still external: `cropperjs` on `profile.html` for photo cropping. Left alone — a cropper is not
+  something to hand-roll, and it fails soft.
+
+**NOT VERIFIED:** that a phone camera reads these. The maths is checked from four independent
+angles — table consistency, Reed-Solomon by definition, a spec-derived round trip, and structural
+placement — but none of that is a camera. Scan one before relying on it at an event.
 
 ## v0.67.0 — 2026-08-03
 
