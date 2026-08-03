@@ -35,12 +35,27 @@
   const datePick = document.getElementById("datePick");
   const dateLabel = document.getElementById("dateLabel");
 
-  document.getElementById("prevBtn").addEventListener("click", () => move(view === "day" ? -1 : -7));
-  document.getElementById("nextBtn").addEventListener("click", () => move(view === "day" ? 1 : 7));
+  document.getElementById("prevBtn").addEventListener("click", () => step(-1));
+  document.getElementById("nextBtn").addEventListener("click", () => step(1));
+
+  /* v1.1: paging is view-aware. Month steps a MONTH — stepping 30 days from the 31st lands in
+     the wrong month roughly half the year, which is the classic calendar bug. */
+  function step(dir) {
+    if (view === "month") {
+      const d = new Date(anchor + "T00:00:00");
+      d.setDate(1);
+      d.setMonth(d.getMonth() + dir);
+      anchor = iso(d);
+      load();
+      return;
+    }
+    move(view === "day" ? dir : dir * 7);
+  }
   document.getElementById("todayBtn").addEventListener("click", () => { anchor = todayStr(); load(); });
   datePick.addEventListener("change", () => { if (datePick.value) { anchor = datePick.value; load(); } });
   document.getElementById("viewDay").addEventListener("click", () => setView("day"));
   document.getElementById("viewWeek").addEventListener("click", () => setView("week"));
+  document.getElementById("viewMonth").addEventListener("click", () => setView("month"));
   document.getElementById("newBtn").addEventListener("click", () => openModal(null, { is_closure: false }));
   document.getElementById("closureBtn").addEventListener("click", () => openModal(null, { is_closure: true }));
   document.getElementById("importBtn").addEventListener("click", openImport);
@@ -49,6 +64,7 @@
     view = v;
     document.getElementById("viewDay").setAttribute("aria-pressed", String(v === "day"));
     document.getElementById("viewWeek").setAttribute("aria-pressed", String(v === "week"));
+    document.getElementById("viewMonth").setAttribute("aria-pressed", String(v === "month"));
     load();
   }
   function move(days) {
@@ -60,12 +76,18 @@
 
   async function load() {
     datePick.value = anchor;
-    const [from, to] = view === "day" ? [anchor, anchor] : weekRange(anchor);
-    dateLabel.textContent = view === "day" ? longDate(anchor) : `${shortDate(from)} – ${shortDate(to)}`;
+    const [from, to] = view === "day" ? [anchor, anchor]
+      : view === "month" ? monthGridRange(anchor)
+      : weekRange(anchor);
+    dateLabel.textContent = view === "day" ? longDate(anchor)
+      : view === "month" ? monthLabel(anchor)
+      : `${shortDate(from)} – ${shortDate(to)}`;
     const res = await api(`/api/admin/facility/bookings?from=${from}&to=${to}`);
     if (!res.ok) return fail(res.data.error || "Could not load bookings.");
     bookings = res.data.bookings || [];
-    view === "day" ? renderDay() : renderWeek(from);
+    if (view === "day") renderDay();
+    else if (view === "month") renderMonth(from);
+    else renderWeek(from);
   }
 
   /* ---------- day grid ---------- */
@@ -140,6 +162,77 @@
       el.addEventListener("click", () => { anchor = el.dataset.day; setView("day"); }));
     root.querySelectorAll("[data-id]").forEach(el =>
       el.addEventListener("click", () => openModal(bookings.find(b => b.id === Number(el.dataset.id)))));
+  }
+
+  /* ---------- month grid (v1.1) ----------
+     The facility calendar only did day and week, which answers "what is on today" but never
+     "how busy is October" — the question a director actually asks when quoting a rental or
+     planning a season. This is that view.
+
+     It loads the whole visible GRID, not just the month: a month view that starts on a Wednesday
+     shows the preceding Sunday–Tuesday, and leaving those cells blank when there are bookings in
+     them is worse than not showing them at all. */
+
+  const iso = (d) => {
+    const z = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+    return z.toISOString().slice(0, 10);
+  };
+
+  /** First Sunday on or before the 1st → last Saturday on or after the last day. */
+  function monthGridRange(dateStr) {
+    const d = new Date(dateStr + "T00:00:00");
+    const first = new Date(d.getFullYear(), d.getMonth(), 1);
+    const last = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+    const gridStart = new Date(first); gridStart.setDate(1 - first.getDay());
+    const gridEnd = new Date(last); gridEnd.setDate(last.getDate() + (6 - last.getDay()));
+    return [iso(gridStart), iso(gridEnd)];
+  }
+
+  function monthLabel(dateStr) {
+    const d = new Date(dateStr + "T00:00:00");
+    return d.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  }
+
+  function renderMonth(from) {
+    const anchorDate = new Date(anchor + "T00:00:00");
+    const thisMonth = anchorDate.getMonth();
+    const todayIso = iso(new Date());
+
+    const cells = [];
+    const start = new Date(from + "T00:00:00");
+    for (let i = 0; i < 42; i++) {
+      const d = new Date(start); d.setDate(start.getDate() + i);
+      cells.push(d);
+      if (i >= 27 && d.getMonth() !== thisMonth && d.getDay() === 6) break; // stop at a full week
+    }
+
+    const dowNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    let html = `<div class="fc-month" role="grid" aria-label="${esc(monthLabel(anchor))}">`;
+    html += dowNames.map((n2) => `<div class="fc-dow" role="columnheader">${n2}</div>`).join("");
+
+    for (const d of cells) {
+      const day = iso(d);
+      const outside = d.getMonth() !== thisMonth;
+      const list = bookings.filter((b) => b.date === day).sort((a, b) => a.start_min - b.start_min);
+      const closures = list.filter((b) => b.is_closure).length;
+      // Show three, then a count. A cell that lists twelve bookings is unreadable at a glance,
+      // and glanceability is the entire reason this view exists.
+      const shown = list.slice(0, 3);
+      html += `<div class="fc-cell${outside ? " outside" : ""}${day === todayIso ? " today" : ""}" role="gridcell">
+        <button class="fc-daynum" data-day="${day}" aria-label="Open ${esc(longDate(day))}">${d.getDate()}</button>
+        ${closures ? `<span class="fc-closed" title="${closures} closure(s)">closed</span>` : ""}
+        ${shown.map((b) => `<button class="fc-pill" data-id="${b.id}" style="--op:${opColor[b.org_id] || "#7A7F87"}"
+             title="${esc(b.title)} · ${fmtMin(b.start_min)}–${fmtMin(b.end_min)}">${fmtMin(b.start_min)} ${esc(b.title)}</button>`).join("")}
+        ${list.length > 3 ? `<button class="fc-more" data-day="${day}">+${list.length - 3} more</button>` : ""}
+      </div>`;
+    }
+    html += `</div>`;
+    root.innerHTML = html;
+
+    root.querySelectorAll("[data-day]").forEach((el) =>
+      el.addEventListener("click", () => { anchor = el.dataset.day; setView("day"); }));
+    root.querySelectorAll("[data-id]").forEach((el) =>
+      el.addEventListener("click", () => openModal(bookings.find((b) => b.id === Number(el.dataset.id)))));
   }
 
   /* ---------- booking modal ---------- */

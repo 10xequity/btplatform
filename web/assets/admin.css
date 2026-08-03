@@ -160,3 +160,29 @@
 .tbl th { font-size: 12px; }
 .tbl td { padding: 11px 10px; }
 .stat-cards { gap: 12px; }
+
+/* v0.64.0 — facility MONTH grid. Tokens only; no hardcoded colour. */
+.fc-month { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 1px;
+  background: var(--border); border: 1px solid var(--border); border-radius: var(--radius-card, 10px); overflow: hidden; }
+.fc-dow { background: var(--surface-2); color: var(--text-muted); font-size: 12px; font-weight: 700;
+  text-align: center; padding: 6px 2px; text-transform: uppercase; letter-spacing: .04em; }
+.fc-cell { background: var(--surface); min-height: 96px; padding: 4px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.fc-cell.outside { background: var(--surface-2); }
+.fc-cell.outside .fc-daynum { color: var(--text-muted); }
+.fc-cell.today { box-shadow: inset 0 0 0 2px var(--accent); }
+.fc-daynum { align-self: flex-start; min-width: 28px; min-height: 28px; font: inherit; font-weight: 800;
+  background: none; border: 0; color: var(--text); cursor: pointer; border-radius: var(--radius-control, 8px); }
+.fc-daynum:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+.fc-pill { display: block; width: 100%; text-align: left; font: inherit; font-size: 11px; line-height: 1.3;
+  padding: 2px 5px; border: 0; border-left: 3px solid var(--op, var(--accent)); background: var(--surface-2);
+  color: var(--text); border-radius: 4px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fc-more { align-self: flex-start; font: inherit; font-size: 11px; background: none; border: 0;
+  color: var(--text-muted); text-decoration: underline; cursor: pointer; min-height: 24px; }
+.fc-closed { align-self: flex-start; font-size: 10px; font-weight: 800; letter-spacing: .04em;
+  text-transform: uppercase; color: var(--danger); }
+/* On a phone the 7-column grid is unreadable, so the month becomes a scrollable day list. */
+@media (max-width: 640px) {
+  .fc-month { grid-template-columns: repeat(7, minmax(44px, 1fr)); overflow-x: auto; }
+  .fc-cell { min-height: 64px; }
+  .fc-pill { font-size: 10px; }
+}

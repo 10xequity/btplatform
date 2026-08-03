@@ -1,5 +1,5 @@
 # Boomtown Athletics Platform
-**Version:** v0.59.0 · **Date:** 2026-08-03 · **Supersedes:** README @ v0.53.1 (2026-08-02)
+**Version:** v0.64.0 · **Date:** 2026-08-03 · **Supersedes:** README @ v0.59.0 (2026-08-03)
 
 Multi-org sports operations platform for **Boomtown Volleyball · Match Point Social · Queens Club**, plus 7 facility-operator orgs (Colorado Boom, Oda Up, RMR, Real Futsal, Special Olympics CO, Zara Gymnastics, External/Rental). Facility is in **Aurora, Colorado**.
 
@@ -62,7 +62,7 @@ the schema gate fails the build closed.
 |---|---|---|
 | `web/` | Static frontend, GitHub Pages. No build step; every page carries a `?v=` cache-bust. | Push to `main` |
 | `worker/src/` | Cloudflare Worker API. `index.js` mounts every module route. | Auto-deploys via Actions **Deploy Worker** on any `worker/**` push |
-| `worker/test/` | `node --test` suites. **743 passing at v0.59.0**, including an end-to-end harness that drives the real router against a real SQLite copy of the production schema. | — |
+| `worker/test/` | `node --test` suites. **792 passing at v0.64.0**, including an end-to-end harness that drives the real router against a real SQLite copy of the production schema. | — |
 | `db/migrations/` | Schema of record. **Ledger at 0035**, all applied live to D1 `boomtown-prod` (85 tables). | Applied by Claude via Cloudflare MCP, **additive-only**. The SQL files here are records — never re-run them. |
 | `docs/` | Install guides, handoffs, roadmaps. Naming: `YYYY-MM-DD_name_vX_Y.md`. | — |
 
@@ -124,11 +124,11 @@ It reconciles five separate backlog sources against the live tree, and it is the
 current. This section is a pointer by design: the queue that used to live here went stale, and
 its items 1 and 2 had already shipped as v0.51.0 and v0.52.0 while still being listed as upcoming.
 
-Headline order after v0.59.0: **admin screens** for the APIs that already ship without one
-(custom fields, staff rates and shift pay) → **M12C** public rental booking → **R-04** payment
-plans → **M18′** roster RSVP → **M-TF** tournament format engine ⚠ *FABLE-GATED*, then **M17**
-behind it. The SPA shell is no longer a blocker — `sync-rail.mjs` removed the reason it was
-urgent — and stays queued for its own benefit: content-only navigation.
+Headline order after v0.64.0: **drag-and-drop schedule editor** → **roster import** → **M12C**
+public rental booking → **R-04** payment plans → **M18′** roster RSVP → the **member-experience work
+order** (W1–W10, `docs/2026-08-03_workorder_member-experience_v1_1.md`). The pool format engine
+(M-TF slices 1–2) shipped in v0.62.0–v0.63.0: any team and court count, working/referee teams, and
+a generated schedule that commits straight into an event.
 
 **Go-live blockers** — owner-gated config, not build work: Brevo key + SPF/DKIM/DMARC
 (owner-paused) · Square SANDBOX → production (owner's call) · VAPID push secrets, never set ·
