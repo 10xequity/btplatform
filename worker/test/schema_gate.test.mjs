@@ -144,13 +144,13 @@ test("pad produces the 4-digit form used in filenames and the ledger", () => {
   assert.equal(pad(2026), "2026");
 });
 
-test("the real db/migrations directory parses cleanly and reports 0038", () => {
+test("the real db/migrations directory parses cleanly and reports 0039", () => {
   // This number is a deliberate ratchet, not a nuisance: it reddens on every new migration and
   // makes whoever added one confirm the scanner still reads the whole directory. Bump it in the
   // same commit as the migration, AFTER the ledger row exists in live D1 (v0.60.0 → 0036;
-  // v0.66.0 → 0037; v0.69.0 → 0038, ledger row read back from live D1 before this line moved).
+  // v0.66.0 → 0037; v0.69.0 → 0038; v0.70.0 → 0039, ledger row read back from live D1 before this line moved).
   const { highest, files, unparseable } = scanMigrations(DEFAULT_DIR);
   assert.deepEqual(unparseable, [], `unparseable migration filenames: ${unparseable.join(", ")}`);
-  assert.equal(highest, 38);
+  assert.equal(highest, 39);
   assert.ok(files >= 20, `expected at least 20 .sql files, saw ${files}`);
 });

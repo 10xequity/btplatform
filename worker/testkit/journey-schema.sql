@@ -251,7 +251,7 @@ CREATE TABLE teams (
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),
   deleted_at TEXT
-, score_token TEXT, level_num INTEGER, division_id INTEGER REFERENCES divisions(id));
+, score_token TEXT, level_num INTEGER, division_id INTEGER REFERENCES divisions(id), pool_id INTEGER REFERENCES pools(id), note TEXT, board_order INTEGER NOT NULL DEFAULT 0);
 
 CREATE TABLE team_members (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -397,7 +397,7 @@ CREATE TABLE pools (
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),
   deleted_at TEXT
-);
+, division_id INTEGER REFERENCES divisions(id), sort_order INTEGER NOT NULL DEFAULT 0, court_from INTEGER, court_to INTEGER);
 
 -- Verbatim from live sqlite_master 2026-08-03. It was missing from this capture, which is exactly
 -- the gap that lets a test pass against a table the real database does not have.

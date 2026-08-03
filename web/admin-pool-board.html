@@ -1,46 +1,94 @@
 <!DOCTYPE html>
-<!-- Boomtown Platform — Marketing & Email (M14 Phase A) · Version: v1.0 · Date: 2026-07-24 · Ships in: v0.16.0
-     Segments (who), Campaigns (what), Settings (compliance address). Sandbox-aware: without a
-     Brevo key everything works but no email leaves — the mode chip says so plainly. -->
+<!-- Boomtown Platform — Pool board (admin) · Version: v1.0 · Date: 2026-08-03 · Ships in: v0.70.0
+     Drag teams into pools, before any schedule exists. Drop on a + to start a pool; an empty pool
+     disappears on save. Dragging a team out returns them to the waiting area, which is simply
+     "no pool yet" rather than a special row.
+     Nothing is written until Save: one request carries the whole arrangement, so a dropped
+     connection cannot leave a team in two pools or in none. Keyboard parity throughout — Enter
+     picks up, arrows choose, Enter drops, Escape cancels. -->
 <html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Marketing &amp; Email — Boomtown Athletics</title>
+  <title>Pool board — Boomtown Athletics</title>
   <script>/* Pre-paint state — collapse + theme (uiux-review §4/§6.4, v0.52.0): read the bt_nav cookie and the saved theme BEFORE the first stylesheet so the rail state AND the theme are right on frame one — no post-paint snap of either. admin-nav.js writes the cookie on rail toggle and bt_theme on theme toggle; the localStorage bt_nav fallback migrates pre-v0.51 sessions. */(function(){try{var m=document.cookie.match(/(?:^|; )bt_nav=([^;]*)/);var v=m?m[1]:((window.localStorage&&localStorage.getItem("bt_nav_collapsed")==="1")?"min":"");if(v==="min")document.documentElement.dataset.nav="min";var t=(window.localStorage&&localStorage.getItem("bt_theme"))||(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.dataset.theme=t;}catch(e){}})();</script>
   <link rel="stylesheet" href="assets/tokens.css?v=0.70.0" />
   <link rel="stylesheet" href="assets/app.css?v=0.70.0" />
   <link rel="stylesheet" href="assets/admin.css?v=0.70.0" />
   <style>
-    .mkt-grid { display: grid; gap: 16px; grid-template-columns: 1fr 1fr; align-items: start; }
-    @media (max-width: 1020px) { .mkt-grid { grid-template-columns: 1fr; } }
-    .mkt-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card); padding: 16px; }
-    .mkt-card h2 { margin: 0 0 4px; font-size: 17px; }
-    .mkt-strip { display: flex; gap: 10px; flex-wrap: wrap; margin: 0 0 16px; }
-    .mkt-chip { background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 8px 14px; font-size: 14px; font-weight: 600; }
-    .mkt-chip b { color: var(--primary); }
-    .mkt-chip.warn { border-color: var(--danger); }
-    .mkt-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--border); flex-wrap: wrap; }
-    .mkt-row:first-of-type { border-top: 0; }
-    .mkt-row .grow { flex: 1; min-width: 180px; }
-    .mkt-row .k { font-weight: 700; }
-    .mkt-row .v { color: var(--text-muted); font-size: 13px; }
-    .status-pill { border-radius: 999px; padding: 3px 10px; font-size: 12px; font-weight: 800; background: var(--surface-raised); border: 1px solid var(--border); }
-    .status-pill.sent { color: var(--positive); }
-    .status-pill.sending { color: var(--emphasis); }
-    .mkt-form label { display: block; font-weight: 700; font-size: 14px; margin: 12px 0 4px; }
-    .mkt-form input, .mkt-form select, .mkt-form textarea { width: 100%; font: inherit; padding: 10px 12px;
-      border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface-raised); color: var(--text); }
-    .mkt-form textarea { min-height: 140px; resize: vertical; }
-    .mkt-hint { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
-    .mkt-actions { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
-    .snippet { font: 12px/1.5 ui-monospace, monospace; background: var(--surface-raised); border: 1px solid var(--border);
-      border-radius: var(--radius-control); padding: 10px 12px; word-break: break-all; user-select: all; }
-    .preview-box { border: 1px solid var(--border); border-radius: var(--radius-control); background: #fff; color: #111; padding: 14px; margin-top: 10px; max-height: 320px; overflow: auto; }
+    .mf-head { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; margin-bottom: 12px; }
+    .mf-head p { max-width: 74ch; }
+    .mf-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+    .mf-inline { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 700; }
+    .mf-inline select { font: inherit; font-size: 16px; padding: 10px; min-height: 44px; background: var(--surface-2);
+      color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-control, 8px); }
+    .mf-note { font-size: 12px; color: var(--text-muted); margin: 10px 0; min-height: 1.4em; }
+
+    /* Unsaved is stated in words as well as colour — status must never be colour-only. */
+    .pb-state { font-size: 12px; font-weight: 700; color: var(--text-muted); }
+    .pb-state.dirty { color: var(--emphasis); }
+    .pb-state.dirty::before { content: "● "; }
+
+    .pb-div { margin-bottom: 20px; }
+    .pb-div-h { font-size: 14px; margin: 0 0 8px; display: flex; align-items: baseline; gap: 10px; }
+    .pb-courts { font-size: 11px; font-weight: 400; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; }
+    .pb-pools { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 6px; align-items: flex-start; }
+
+    .pb-pool { flex: 0 0 auto; width: 208px; background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-card, 10px); padding: 8px; }
+    .pb-pool.target { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+    .pb-pool-head { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+    .pb-poolname { flex: 1 1 auto; min-width: 0; font: inherit; font-size: 13px; font-weight: 700; padding: 6px;
+      min-height: 36px; background: var(--surface-2); color: var(--text); border: 1px solid var(--border);
+      border-radius: var(--radius-control, 8px); }
+    .pb-ok, .pb-warn { font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .pb-ok { color: var(--text-muted); }
+    .pb-warn { color: var(--emphasis); font-weight: 700; }
+
+    .pb-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; min-height: 52px; }
+    .pb-list.over, #pbWork.over { outline: 2px dashed var(--accent); outline-offset: 2px; border-radius: 8px; }
+
+    .pb-tile { position: relative; background: var(--surface-2); border: 1px solid var(--border);
+      border-radius: var(--radius-control, 8px); padding: 8px 8px 8px 10px; cursor: grab;
+      display: grid; gap: 2px; min-height: 44px; }
+    .pb-tile:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+    .pb-tile.dragging { opacity: .45; }
+    .pb-tile.carrying { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+    .pb-name { font-size: 13px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pb-rec { position: absolute; top: 6px; right: 8px; font-size: 10px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+    /* The note the owner asked to see on the tile. Wraps rather than truncating — a note that is
+       cut off at "asked to finish by" is worse than no note. */
+    .pb-note { font-size: 11px; color: var(--text-muted); line-height: 1.35; white-space: normal; }
+    .pb-notebtn { justify-self: start; font: inherit; font-size: 10px; padding: 4px 6px; min-height: 28px;
+      background: transparent; color: var(--text-muted); border: 1px dashed var(--border);
+      border-radius: 6px; cursor: pointer; }
+    .pb-notebtn:hover { color: var(--text); border-style: solid; }
+    .pb-notebtn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+
+    .pb-add { flex: 0 0 auto; width: 64px; min-height: 96px; font-size: 24px; line-height: 1;
+      background: transparent; color: var(--text-muted); border: 2px dashed var(--border);
+      border-radius: var(--radius-card, 10px); cursor: pointer; }
+    .pb-add:hover, .pb-add.over { border-color: var(--accent); color: var(--text); border-style: solid; }
+    .pb-add:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+
+    .pb-workspace { background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-card, 10px); padding: 12px; margin-top: 8px;
+      position: sticky; bottom: 0; }
+    .pb-worklist { flex-direction: row; flex-wrap: wrap; }
+    .pb-worklist .pb-tile { width: 196px; }
+    .pb-empty { font-size: 12px; color: var(--text-muted); list-style: none; }
+
+    @media (max-width: 700px) {
+      /* The waiting area stops being sticky on a phone: it would eat most of the screen. */
+      .pb-workspace { position: static; }
+      .pb-pool { width: 178px; }
+      .pb-worklist .pb-tile { width: 100%; }
+    }
+    @media (prefers-reduced-motion: reduce) { .pb-tile { transition: none; } }
   </style>
 </head>
 <body>
-  <header class="header chrome-glass no-print">
+    <header class="header chrome-glass no-print">
     <a class="wordmark" href="admin.html" style="text-decoration:none;color:inherit"><img class="brand-logo" src="assets/logo-boom-icon-512.png?v=0.70.0" alt="" width="22" height="22" />Boomtown <span>Athletics</span></a>
     <div class="spacer"></div>
     <select id="orgSwitcher" class="org-switcher" aria-label="Switch organization"></select>
@@ -49,7 +97,7 @@
     <a class="btn ghost" href="index.html">Member site</a>
   </header>
 
-  <div class="admin-layout">
+  <div id="app" class="admin-layout">
     <aside class="sidebar" data-static="rail" aria-label="Admin sections">
       <nav class="nav-group" data-key="run">
         <div class="nav-label" role="button" tabindex="0" aria-expanded="true">Run events<span class="grp-chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></span></div>
@@ -117,49 +165,34 @@
       </nav>
       <button class="bt-edge" type="button" aria-label="Collapse or expand navigation"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
     </aside>
-  <main class="main wide admin-main" id="app" aria-live="polite">
-    <div class="page-head"><h1>Marketing</h1></div>
-
-    <div class="mkt-strip" id="overviewStrip"><span class="mkt-chip">Loading…</span></div>
-
-    <div class="mkt-grid">
-      <section class="mkt-card" aria-label="Segments">
-        <h2>Segments</h2>
-        <p class="help-text" style="margin:0 0 8px">Who gets it. Email leaves out the unsubscribed; texts only ever go to people who opted in — no exceptions.</p>
-        <button class="btn" id="newSegBtn">New segment</button>
-        <div id="segList" style="margin-top:8px"><p class="help-text">Loading…</p></div>
-      </section>
-
-      <section class="mkt-card" aria-label="Campaigns">
-        <h2>Campaigns</h2>
-        <p class="help-text" style="margin:0 0 8px">What you send — email or text. Drafts are editable; sent campaigns are a permanent record.</p>
-        <button class="btn" id="newCampBtn">New campaign</button>
-        <div id="campList" style="margin-top:8px"><p class="help-text">Loading…</p></div>
-      </section>
-
-      <section class="mkt-card" aria-label="Compliance settings">
-        <h2>Settings</h2>
-        <div class="mkt-form">
-          <label for="mailAddr">Physical mailing address (required by email law — sending is blocked without it)</label>
-          <input id="mailAddr" type="text" placeholder="Boomtown Athletics, [STREET ADDRESS], Aurora, CO [ZIP]" />
-          <div class="mkt-actions"><button class="btn" id="saveAddrBtn">Save address</button><span id="addrMsg" class="mkt-hint" role="status"></span></div>
+    <main class="admin-main" id="main">
+      <div class="mf-head">
+        <div>
+          <h1>Pool board</h1>
+          <p class="muted">Drag teams into pools. Drop on a <b>+</b> to start a new pool; a pool with nobody in it disappears when you save. Teams you drag out go back to the waiting area at the bottom. Nothing is written until you press Save.</p>
         </div>
-      </section>
+        <div class="mf-row" style="margin:0">
+          <label class="mf-inline">Event
+            <select id="pbEvent" aria-label="Choose an event"></select>
+          </label>
+          <span id="pbState" class="pb-state" role="status" aria-live="polite">Saved</span>
+          <button class="btn" id="pbSave" type="button" disabled>Save board</button>
+          <button class="btn ghost" id="pbReload" type="button">Reload</button>
+        </div>
+      </div>
 
-      <section class="mkt-card" aria-label="Website signup widget">
-        <h2>Website signup widget</h2>
-        <p class="help-text" style="margin:0 0 8px">Paste this one line into boomtownvb.com where the email box should appear. New signups land in Contacts with the <b>newsletter</b> tag and proper consent.</p>
-        <div class="snippet" id="widgetSnippet">&lt;script src="https://10xequity.github.io/btplatform/web/assets/signup-widget.js?v=0.70.0" data-org="boomtown" defer&gt;&lt;/script&gt;</div>
-        <p class="mkt-hint">Change <code>data-org</code> to <code>match-point</code> or <code>queens-club</code> on those sites.</p>
-      </section>
-    </div>
-  </main>
-  </div><!-- /admin-layout -->
+      <p class="mf-note" id="pbHint" role="status" aria-live="polite">Tip: click a tile and press Enter to pick it up, then use the arrow keys — no mouse needed.</p>
 
+      <div id="pbBoard" class="pb-board"></div>
+
+      <section class="pb-workspace" aria-labelledby="pbWorkH">
+        <h2 class="pb-div-h" id="pbWorkH">Waiting to be placed <span class="pb-courts" id="pbCount"></span></h2>
+        <ul id="pbWork" class="pb-list pb-worklist"></ul>
+      </section>
+    </main>
+  </div>
   <script src="assets/config.js?v=0.70.0"></script>
-  <script src="assets/admin-nav.js?v=0.70.0" defer></script>
-  <script src="assets/admin-marketing.js?v=0.70.0" defer></script>
+  <script src="assets/admin-nav.js?v=0.70.0"></script>
+  <script src="assets/admin-pool-board.js?v=0.70.0"></script>
 </body>
 </html>
-<!-- Changelog: v1.1 (2026-08-01, v0.44.0) — Marketing SMS scope C: page copy covers text campaigns; title simplified to Marketing. -->
-<!-- Changelog: v1.0 (2026-07-24) — initial Marketing & Email admin page (M14 Phase A). -->

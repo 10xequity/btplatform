@@ -66,6 +66,7 @@
     "admin-schedule-editor.html": { s: "beta", n: "Drag matches between rounds and courts; drop on an occupied slot to swap. It never blocks a move — the panel just tells you what it did to fairness. Moving a match that already has a score asks first." },
     "admin-brackets.html":      { s: "beta", n: "Single elimination seeded from pool finish. Byes go to the top seeds — no play-in games. Winners move forward by recomputing the tree from the scores, so fixing a result that was typed in backwards also fixes the round above it." },
     "admin-score-links.html":   { s: "beta", n: "One scoring link per team, with a QR code. Teams record their own results in two taps; the page retires itself once a team has no games left. The QR is generated on the page — no outside service, so it works on venue wifi." },
+    "admin-pool-board.html":    { s: "beta", n: "Drag teams into pools before any schedule exists. Drop on a + to start a pool; an empty one disappears on save. Notes typed on a tile stay with the team wherever it is dragged. Nothing is written until you press Save." },
 
     /* --- Money --- */
     "admin-reports.html":       { s: "live" },

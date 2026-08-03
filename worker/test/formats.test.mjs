@@ -11,7 +11,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   equalGameOptions, chooseRounds, planPool, planBestPool, poolReport, reportLines, repairRepeats,
-  assignRefs, refCoverage,
+  assignRefs, refCoverage, MIN_GAMES_PER_TEAM, poolSizes,
 } from "../src/formats.js";
 
 /* ============================ the arithmetic ============================ */
@@ -37,10 +37,75 @@ test("chooseRounds explains itself when the target is impossible", () => {
   assert.equal(ok.exact, true);
   assert.equal(ok.rounds, 12);
 
-  const no = chooseRounds(10, 4, 7);
-  assert.equal(no.exact, false, "7 games each is not achievable on 10 teams / 4 courts");
+  // Was 7 games; changed to 9 in v0.70.0. 7 is below the MIN_GAMES_PER_TEAM floor, so asking for it
+  // now correctly returns 8 and the old assertion no longer describes the behaviour. 9 is above the
+  // floor and still unreachable on 10 teams / 4 courts, which is what this test was always about.
+  const no = chooseRounds(10, 4, 9);
+  assert.equal(no.exact, false, "9 games each is not achievable on 10 teams / 4 courts");
   assert.match(no.note, /not possible/);
   assert.match(no.note, /Closest is/, "a director told 'no' must also be told what IS possible");
+});
+
+/* ============================ the eight-game floor ============================ */
+
+test("pool play never returns four games — the owner's 6-on-2 case", () => {
+  // Owner 2026-08-03: "if we do 6 on 2, with 4 games, we would double the number of games to equal
+  // 8. So there will never be a situation we offer only 4 games for pool play."
+  // Six on two reaches an equal count at 2, 4, 6, 8 … and the old code returned 4 whenever 4 was
+  // nearest to what was asked for.
+  const r = chooseRounds(6, 2, 4);
+  assert.equal(r.gamesPerTeam, 8);
+  assert.equal(r.rounds, 12, "doubling the rounds is what doubles the games");
+  assert.equal(r.raisedToFloor, true);
+  assert.match(r.note, /never goes below 8/);
+});
+
+test("no target, however low, gets under the floor", () => {
+  for (const target of [1, 2, 3, 4, 5, 6, 7, undefined, 0, -3]) {
+    for (const [teams, courts] of [[6, 2], [10, 4], [12, 5], [8, 3], [14, 5]]) {
+      const r = chooseRounds(teams, courts, target);
+      if (!r.ok || r.belowFloor) continue;   // unreachable is reported, never silently met
+      assert.ok(r.gamesPerTeam >= MIN_GAMES_PER_TEAM,
+        `${teams} on ${courts} asked ${target} → ${r.gamesPerTeam} games, under the floor`);
+    }
+  }
+});
+
+test("the floor is overridable, because a league night is not a tournament", () => {
+  // Leagues legitimately play three games and go home. This is a pool-play rule, not a law of the
+  // building, so it takes an explicit opt-out rather than being hard-wired.
+  const r = chooseRounds(6, 2, 4, { minGames: 2 });
+  assert.equal(r.gamesPerTeam, 4);
+  assert.equal(r.raisedToFloor, false);
+});
+
+/* ============================ pool sizing ============================ */
+
+test("pools come out at 6-11 teams, in as few pools as possible", () => {
+  // Owner: "Most groupings will break down into ranges of 6-11 ... we would aim to do larger pools."
+  assert.deepEqual(poolSizes(24).sizes, [8, 8, 8]);
+  assert.deepEqual(poolSizes(11).sizes, [11]);
+  assert.deepEqual(poolSizes(12).sizes, [6, 6], "12 is over the max for a single pool");
+  assert.deepEqual(poolSizes(13).sizes, [7, 6]);
+  assert.deepEqual(poolSizes(23).sizes, [8, 8, 7]);
+  assert.deepEqual(poolSizes(35).sizes, [9, 9, 9, 8]);
+});
+
+test("every field from 6 to 60 splits inside the range and adds up", () => {
+  for (let n = 6; n <= 60; n++) {
+    const { sizes, ok } = poolSizes(n);
+    assert.equal(sizes.reduce((a, b) => a + b, 0), n, `n=${n}: ${sizes} does not add to ${n}`);
+    assert.ok(ok, `n=${n}: ${sizes.join("+")} falls outside 6-11`);
+    for (const s of sizes) assert.ok(s >= 6 && s <= 11, `n=${n}: pool of ${s}`);
+  }
+});
+
+test("a field too small for the preferred range says so instead of failing", () => {
+  // Indoors on limited courts this is normal, and the owner said as much.
+  const r = poolSizes(5);
+  assert.equal(r.ok, false);
+  assert.deepEqual(r.sizes, [5]);
+  assert.match(r.note, /under the preferred 6/);
 });
 
 /* ============================ the fairness standard ============================ */

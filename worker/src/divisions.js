@@ -438,5 +438,196 @@ export async function divisionRoutes(request, env, url, ctx) {
     });
   }
 
+  /* ================= the pool board =================
+     Owner 2026-08-03: "Add drag and drop for me to sort which teams go where and allow me to write
+     a note that is displayed on the tile ... if i drag to a square or block with + it will add a
+     pool. and if it is empty, itll auto delete. i will also need a workspace area to arrange teams
+     to move."
+
+     The whole layout is read and written in ONE call each. A board is a single arrangement, and
+     per-drag endpoints would leave a half-saved board every time a phone drops signal mid-drag —
+     a team in two pools, or in none. One payload either lands or it does not. */
+
+  if ((x = p.match(/^\/api\/admin\/events\/(\d+)\/board$/)) && m === "GET") {
+    const denied = await requireStaff(env, ctx); if (denied) return denied;
+    const board = await loadBoard(env, ctx, +x[1]);
+    if (board.error) return json({ error: board.error }, board.status || 404);
+    return json(board);
+  }
+
+  if ((x = p.match(/^\/api\/admin\/events\/(\d+)\/board$/)) && m === "POST") {
+    const denied = await requireStaff(env, ctx); if (denied) return denied;
+    const eventId = +x[1];
+    const b = await request.json().catch(() => ({}));
+    const wanted = Array.isArray(b.pools) ? b.pools : [];
+
+    const ev = await env.DB.prepare(
+      "SELECT id FROM events WHERE id=?1 AND org_id=?2 AND deleted_at IS NULL"
+    ).bind(eventId, ctx.orgId).first();
+    if (!ev) return json({ error: "That event doesn't exist." }, 404);
+
+    // Only this event's teams may be placed. Without the check, a team id from another event lands
+    // in a pool here and appears on two boards at once.
+    const mine = new Set(((await env.DB.prepare(
+      "SELECT id FROM teams WHERE org_id=?1 AND event_id=?2 AND deleted_at IS NULL"
+    ).bind(ctx.orgId, eventId).all()).results || []).map((t) => t.id));
+
+    // A team in two pools is the one thing a drag board must never produce. Refused before anything
+    // is written, rather than resolved by whichever pool happened to be saved last.
+    const placed = new Set();
+    for (const pool of wanted) {
+      for (const tid of pool.team_ids || []) {
+        const id = Number(tid);
+        if (!mine.has(id)) return json({ error: "One of those teams isn't in this event." }, 400);
+        if (placed.has(id)) return json({ error: `A team can't be in two pools at once (team ${id}).` }, 400);
+        placed.add(id);
+      }
+    }
+
+    const existing = ((await env.DB.prepare(
+      "SELECT id FROM pools WHERE org_id=?1 AND event_id=?2 AND deleted_at IS NULL"
+    ).bind(ctx.orgId, eventId).all()).results || []).map((r) => r.id);
+    const kept = new Set();
+    let created = 0, updated = 0;
+
+    for (let i = 0; i < wanted.length; i++) {
+      const pool = wanted[i];
+      const teamIds = (pool.team_ids || []).map(Number);
+      // "if it is empty, itll auto delete" — so an empty pool is never created in the first place.
+      // Creating then deleting it in one request is the same outcome plus a wasted id.
+      if (!teamIds.length) continue;
+
+      const name = String(pool.name || `Pool ${i + 1}`).slice(0, 60);
+      const divisionId = pool.division_id ? Number(pool.division_id) : null;
+      let poolId = Number(pool.id) || null;
+
+      if (poolId && existing.includes(poolId)) {
+        await env.DB.prepare(
+          `UPDATE pools SET name=?1, division_id=?2, sort_order=?3, court_from=?4, court_to=?5,
+                            updated_at=datetime('now')
+            WHERE id=?6 AND org_id=?7 AND event_id=?8`
+        ).bind(name, divisionId, i, pool.court_from ?? null, pool.court_to ?? null,
+               poolId, ctx.orgId, eventId).run();
+        updated++;
+      } else {
+        const ins = await env.DB.prepare(
+          `INSERT INTO pools (org_id, event_id, name, division_id, sort_order, court_from, court_to)
+           VALUES (?1,?2,?3,?4,?5,?6,?7)`
+        ).bind(ctx.orgId, eventId, name, divisionId, i, pool.court_from ?? null, pool.court_to ?? null).run();
+        poolId = ins.meta.last_row_id;
+        created++;
+      }
+      kept.add(poolId);
+
+      for (let k = 0; k < teamIds.length; k++) {
+        await env.DB.prepare(
+          `UPDATE teams SET pool_id=?1, board_order=?2, division_id=COALESCE(?3, division_id),
+                            updated_at=datetime('now')
+            WHERE id=?4 AND org_id=?5 AND event_id=?6 AND deleted_at IS NULL`
+        ).bind(poolId, k, divisionId, teamIds[k], ctx.orgId, eventId).run();
+      }
+    }
+
+    // Everything not placed returns to the workspace, which IS `pool_id IS NULL`. Doing it after the
+    // placements means a team dragged out of a pool lands there without a second request.
+    const loose = [...mine].filter((id) => !placed.has(id));
+    for (const id of loose) {
+      await env.DB.prepare(
+        "UPDATE teams SET pool_id=NULL, updated_at=datetime('now') WHERE id=?1 AND org_id=?2"
+      ).bind(id, ctx.orgId).run();
+    }
+
+    // Pools that lost their last team. Hard-delete the ones that never held a game — an empty pool
+    // has no history worth keeping, and leaving soft-deleted rows makes the board accumulate
+    // invisible clutter. Soft-delete the ones matches still reference.
+    let removed = 0;
+    for (const id of existing) {
+      if (kept.has(id)) continue;
+      const used = await env.DB.prepare(
+        "SELECT COUNT(*) AS n FROM matches WHERE pool_id=?1 AND org_id=?2"
+      ).bind(id, ctx.orgId).first();
+      if (used.n > 0) {
+        await env.DB.prepare("UPDATE pools SET deleted_at=datetime('now') WHERE id=?1 AND org_id=?2")
+          .bind(id, ctx.orgId).run();
+      } else {
+        await env.DB.prepare("DELETE FROM pools WHERE id=?1 AND org_id=?2").bind(id, ctx.orgId).run();
+      }
+      removed++;
+    }
+
+    await audit(env, ctx, "board.save", "events", eventId, { created, updated, removed, placed: placed.size });
+    const board = await loadBoard(env, ctx, eventId);
+    return json({
+      ok: true, created, updated, removed,
+      note: `${placed.size} team${placed.size === 1 ? "" : "s"} placed` +
+        (loose.length ? `, ${loose.length} in the workspace` : "") +
+        (removed ? `, ${removed} empty pool${removed === 1 ? "" : "s"} removed` : "") + ".",
+      ...board,
+    });
+  }
+
+  /* ---- the note on a tile ----
+     Separate from the layout deliberately. Typing a note is not a rearrangement, and folding it in
+     would mean a stray keystroke resaved the whole board. */
+  if ((x = p.match(/^\/api\/admin\/events\/(\d+)\/board\/note$/)) && m === "POST") {
+    const denied = await requireStaff(env, ctx); if (denied) return denied;
+    const eventId = +x[1];
+    const b = await request.json().catch(() => ({}));
+    const teamId = Number(b.team_id);
+    if (!teamId) return json({ error: "Say which team the note is for." }, 400);
+    const note = b.note == null || String(b.note).trim() === "" ? null : String(b.note).slice(0, 500);
+    const r = await env.DB.prepare(
+      `UPDATE teams SET note=?1, updated_at=datetime('now')
+        WHERE id=?2 AND org_id=?3 AND event_id=?4 AND deleted_at IS NULL`
+    ).bind(note, teamId, ctx.orgId, eventId).run();
+    if (!r.meta.changes) return json({ error: "That team isn't in this event." }, 404);
+    return json({ ok: true, team_id: teamId, note });
+  }
+
   return null;
+}
+
+/**
+ * The board as it should be drawn: divisions, their pools in order, and the workspace.
+ *
+ * The workspace is every team with no pool. It needs no row of its own — an unplaced team is exactly
+ * a team with `pool_id IS NULL`, which is also the state every team starts in.
+ */
+async function loadBoard(env, ctx, eventId) {
+  const ev = await env.DB.prepare(
+    "SELECT id, name, court_count FROM events WHERE id=?1 AND org_id=?2 AND deleted_at IS NULL"
+  ).bind(eventId, ctx.orgId).first();
+  if (!ev) return { error: "That event doesn't exist.", status: 404 };
+
+  const divisions = (await env.DB.prepare(
+    `SELECT id, name, rank, court_from, court_to FROM divisions
+      WHERE org_id=?1 AND event_id=?2 AND deleted_at IS NULL ORDER BY rank`
+  ).bind(ctx.orgId, eventId).all()).results || [];
+
+  const pools = (await env.DB.prepare(
+    `SELECT id, name, division_id, sort_order, court_from, court_to FROM pools
+      WHERE org_id=?1 AND event_id=?2 AND deleted_at IS NULL ORDER BY sort_order, id`
+  ).bind(ctx.orgId, eventId).all()).results || [];
+
+  const teams = (await env.DB.prepare(
+    `SELECT t.id, t.name, t.pool_id, t.division_id, t.note, t.board_order, t.seed,
+            COALESCE(s.wins,0) AS wins, COALESCE(s.losses,0) AS losses
+       FROM teams t
+       LEFT JOIN standings s ON s.team_id=t.id AND s.event_id=t.event_id AND s.deleted_at IS NULL
+      WHERE t.org_id=?1 AND t.event_id=?2 AND t.deleted_at IS NULL
+      ORDER BY t.board_order, COALESCE(t.seed, 9999), t.id`
+  ).bind(ctx.orgId, eventId).all()).results || [];
+
+  const inPool = (pid) => teams.filter((t) => t.pool_id === pid);
+  return {
+    event: { id: ev.id, name: ev.name, court_count: ev.court_count },
+    divisions: divisions.map((d) => ({
+      ...d,
+      pools: pools.filter((pl) => pl.division_id === d.id).map((pl) => ({ ...pl, teams: inPool(pl.id) })),
+    })),
+    // Pools nobody has put in a division yet still have to be drawn, or the teams in them vanish
+    // from the screen while remaining in the database.
+    loose_pools: pools.filter((pl) => !pl.division_id).map((pl) => ({ ...pl, teams: inPool(pl.id) })),
+    workspace: teams.filter((t) => t.pool_id == null),
+  };
 }

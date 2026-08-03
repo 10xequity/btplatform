@@ -62,16 +62,91 @@ export function equalGameOptions(teams, courts, maxRounds = 24) {
  * Returns why when the target is not achievable, rather than silently rounding — a director who
  * asked for 8 games and got 7 without being told will find out on the day.
  */
-export function chooseRounds(teams, courts, targetGames) {
-  const opts = equalGameOptions(teams, courts);
-  if (!opts.length) return { ok: false, error: `${teams} teams on ${courts} courts never leaves anyone waiting — every team plays every round.` };
-  const exact = opts.find((o) => o.gamesPerTeam === targetGames);
-  if (exact) return { ok: true, ...exact, exact: true };
-  const near = opts.reduce((best, o) =>
-    Math.abs(o.gamesPerTeam - targetGames) < Math.abs(best.gamesPerTeam - targetGames) ? o : best);
+/**
+ * The floor on games per team. Owner 2026-08-03, unprompted and unambiguous:
+ *
+ *   "if we do 6 on 2, with 4 games, we would double the number of games to equal 8. So there will
+ *    never be a situation we offer only 4 games for pool play."
+ *
+ * Six teams on two courts hits an equal count at 2, 4, 6, 8, 10 … and the old code would hand back
+ * 4 whenever 4 was closest to what was asked for. Four games is half a day for somebody who paid
+ * for a full one. Below this number the answer is MORE ROUNDS, not fewer games — and the rematches
+ * that come with it are the intended trade, not a defect. Eight games among five opponents is three
+ * rematches, and `poolReport` counts them without calling the plan invalid.
+ */
+export const MIN_GAMES_PER_TEAM = 8;
+
+export function chooseRounds(teams, courts, targetGames, opts = {}) {
+  const minGames = Number(opts.minGames) > 0 ? Number(opts.minGames) : MIN_GAMES_PER_TEAM;
+  const all = equalGameOptions(teams, courts);
+  if (!all.length) return { ok: false, error: `${teams} teams on ${courts} courts never leaves anyone waiting — every team plays every round.` };
+
+  const asked = Number(targetGames) || minGames;
+  const wanted = Math.max(asked, minGames);
+  const eligible = all.filter((o) => o.gamesPerTeam >= minGames);
+
+  // The floor cannot be reached at all. Say so and hand back the most that can be, rather than
+  // quietly returning something short — the fix is another court or more teams, and the director is
+  // the only one who can decide which.
+  if (!eligible.length) {
+    const top = all[all.length - 1];
+    return {
+      ok: true, ...top, exact: false, belowFloor: true,
+      note: `${teams} teams on ${courts} courts cannot give everyone ${minGames} games with an equal count — the most is ${top.gamesPerTeam}. Add a court, add teams, or run the pool twice.`,
+    };
+  }
+
+  const raised = wanted > asked
+    ? ` ${asked} games each was asked for, and pool play never goes below ${minGames}.`
+    : "";
+
+  const exact = eligible.find((o) => o.gamesPerTeam === wanted);
+  if (exact) {
+    return { ok: true, ...exact, exact: true, raisedToFloor: wanted > asked, note: raised.trim() || undefined };
+  }
+
+  const near = eligible.reduce((best, o) =>
+    Math.abs(o.gamesPerTeam - wanted) < Math.abs(best.gamesPerTeam - wanted) ? o : best);
   return {
-    ok: true, ...near, exact: false,
-    note: `${targetGames} games each is not possible with ${teams} teams on ${courts} courts — every team can only have the same number of games at ${opts.map((o) => o.gamesPerTeam).join(", ")}. Closest is ${near.gamesPerTeam}.`,
+    ok: true, ...near, exact: false, raisedToFloor: wanted > asked,
+    note: `${wanted} games each is not possible with ${teams} teams on ${courts} courts — an equal count is only available at ${eligible.map((o) => o.gamesPerTeam).join(", ")}. Closest is ${near.gamesPerTeam}.${raised}`,
+  };
+}
+
+/**
+ * Split `n` teams into pools. Owner 2026-08-03: "Most groupings will break down into ranges of 6-11
+ * pools if possible ... generally speaking, we would aim to do larger pools. This is mostly for
+ * grass. Indoor tournaments are a lot more limited due to number of courts."
+ *
+ * So: as FEW pools as possible while keeping every pool inside 6–11 teams. Bigger pools mean more
+ * distinct opponents, which is what makes eight games worth turning up for.
+ *
+ * `ok` is false when n will not fit the range — honest rather than fatal. Five teams is still a
+ * pool, it is just a small one, and on limited indoor courts it may be the only option.
+ */
+export function poolSizes(n, opts = {}) {
+  const min = opts.min ?? 6, max = opts.max ?? 11;
+  const N = Number(n);
+  if (!Number.isInteger(N) || N < 2) return { ok: false, sizes: [], note: "A pool needs at least two teams." };
+
+  if (N < min) {
+    return { ok: false, sizes: [N], note: `${N} teams is one pool, under the preferred ${min}. Fine on grass with a small field; indoors it is often the only option.` };
+  }
+
+  // Fewest pools that keeps every pool at or under `max` …
+  let k = Math.ceil(N / max);
+  // … then back off if that would push any pool under `min`.
+  while (k > 1 && Math.floor(N / k) < min) k--;
+
+  const base = Math.floor(N / k), extra = N % k;
+  const sizes = Array.from({ length: k }, (_, i) => base + (i < extra ? 1 : 0));
+  const bad = sizes.filter((s) => s < min || s > max);
+  return {
+    ok: bad.length === 0,
+    sizes,
+    note: bad.length
+      ? `${N} teams will not divide into pools of ${min}–${max}; the closest is ${sizes.join(" + ")}.`
+      : `${N} teams into ${k} pool${k === 1 ? "" : "s"} of ${sizes.join(" + ")}.`,
   };
 }
 
