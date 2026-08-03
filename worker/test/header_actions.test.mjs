@@ -12,7 +12,7 @@
  *       /api/me branch, where a slow or 5xx response strands a signed-in member with no way out.
  *
  * v3.0 (v0.53.0): the MEMBER shell inverts too — the v2.10 mail and v2.11 Admin-switch
- * INJECTORS are deleted from site-nav.js; 13 canonical member pages ship the static header
+ * INJECTORS are deleted from site-nav.js; 14 canonical member pages ship the static header
  * (header_shell.test.mjs v2.0 holds those copies byte-identical). site-nav.js keeps only
  * a badge/aria FILL on the static ✉ (data fill — the brandLogo-swap precedent) and a
  * reveal of the static-but-hidden #btHdrAdmin (owner call 2026-08-02: static + hidden +
@@ -70,7 +70,7 @@ test("site-nav.js REVEALS the static role-gated Admin link (owner call: static +
     "Admin reveal missing, un-gated, or reverted to injection");
 });
 
-test("static btHdrMail on admin-nav pages AND the 13 canonical member pages — nowhere else, widest set", () => {
+test("static btHdrMail on admin-nav pages AND the 14 canonical member pages — nowhere else, widest set", () => {
   const all = pages();
   assert.ok(all.length >= 45, `web corpus shrank: ${all.length} html files`);
   let adminPages = 0, memberPages = 0;
@@ -85,12 +85,12 @@ test("static btHdrMail on admin-nav pages AND the 13 canonical member pages — 
     if (!admin && !member && has) extras.push(f);
   }
   assert.ok(adminPages >= 27, `guard floor: expected >=27 admin-nav pages, saw ${adminPages} (failure class 4)`);
-  assert.equal(memberPages, 13, `guard floor: expected exactly 13 canonical member pages, saw ${memberPages}`);
+  assert.equal(memberPages, 14, `guard floor: expected exactly 14 canonical member pages, saw ${memberPages}`);
   assert.deepEqual(missing, [], `pages missing the static ✉: ${missing.join(", ")}`);
   assert.deepEqual(extras, [], `static ✉ on excluded pages (index/chromeless): ${extras.join(", ")}`);
 });
 
-test("static btHdrAdmin ships hidden on exactly the 13 canonical member pages — and NO admin page", () => {
+test("static btHdrAdmin ships hidden on exactly the 14 canonical member pages — and NO admin page", () => {
   const offendersAdmin = [], missing = [];
   for (const f of pages()) {
     const html = read(f);

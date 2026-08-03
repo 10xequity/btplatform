@@ -226,6 +226,7 @@ import { tryoutsRoutes, wireTryouts } from "./tryouts.js"; // v0.60.0 tryouts: c
 import { formatsRoutes, wireFormats } from "./formats.js"; // v0.62.0 M-TF pool generator (no migration - stateless)
 import { bracketRoutes, wireBrackets } from "./brackets.js"; // v0.66.0 playable brackets (migration 0037)
 import { divisionRoutes, wireDivisions } from "./divisions.js"; // v0.69.0 divisions + bracket balancing (migration 0038)
+import { liveRoutes, wireLive } from "./live.js"; // v0.73.0 public live board (read-only, no auth)
 import { waiverReminderSweep, waiverExpirySweep, sendEmail, escapeHtml } from "./registrations.js";
 
 const MAGIC_LINK_TTL_MIN = 15;
@@ -289,6 +290,7 @@ wireTryouts(wiredHelpers); // v0.60.0
 wireFormats(wiredHelpers); // v0.62.0
 wireBrackets(wiredHelpers); // v0.66.0
 wireDivisions(wiredHelpers); // v0.69.0
+wireLive({ json }); // v0.73.0 — read-only, so it needs nothing but json
 wirePush(wiredHelpers); // v0.20.0
 wireWaivers(wiredHelpers); // v0.22.0
 wireCalendar(wiredHelpers); // v0.23.0
@@ -357,7 +359,7 @@ export default {
       } else if (url.pathname === "/api/orgs" && request.method === "GET") {
         res = await listOrgs(env);
       } else if (url.pathname === "/api/health") {
-        res = json({ ok: true, version: "v0.72.0" });
+        res = json({ ok: true, version: "v0.73.0" });
       } else if (url.pathname === "/api/webhooks/square" && request.method === "POST") {
         res = await membershipWebhook(request, env); // verifies signature; forwards payment.* to squareWebhook
       } else if (url.pathname === "/api/public/org-brand" && request.method === "GET") {
@@ -400,6 +402,7 @@ export default {
            || (await formatsRoutes(request, env, url, ctx)) // v0.62.0 — pool schedule generator
            || (await bracketRoutes(request, env, url, ctx)) // v0.66.0 — playable brackets (seed, byes, advance)
            || (await divisionRoutes(request, env, url, ctx)) // v0.69.0 — divisions, court ranges, balance proposals
+           || (await liveRoutes(request, env, url, ctx)) // v0.73.0 — public scoreboard, no login
            || (await leagueRoutes(request, env, url, ctx))
            || (await reportRoutes(request, env, url, ctx))
            || (await checkinRoutes(request, env, url, ctx))
@@ -675,10 +678,18 @@ function corsHeaders(origin, env) {
   return h;
 }
 
-function json(obj, status = 200) {
+/**
+ * `no-store` is the right default and stays the default: almost every response here is scoped to one
+ * signed-in person, and a cached copy of somebody else's data is the worst sort of bug.
+ *
+ * v0.73.0 adds `extra` so the public live board can opt into a short cache. Additive — every existing
+ * caller passes two arguments and behaves exactly as before — and opt-in per response, rather than a
+ * second json() that would eventually drift from this one.
+ */
+function json(obj, status = 200, extra = {}) {
   return new Response(JSON.stringify(obj), {
     status,
-    headers: { "content-type": "application/json", "cache-control": "no-store" },
+    headers: { "content-type": "application/json", "cache-control": "no-store", ...extra },
   });
 }
 

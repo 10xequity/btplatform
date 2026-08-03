@@ -11,12 +11,12 @@
  *   (b) nothing asserted that the nav module runs AFTER the header parses. The entire
  *       single-source binding model depends on it: if site-nav.js ran first,
  *       getElementById("btHdrMail") returns null, canonHdr goes false, and the theme toggle
- *       silently stops binding on all 13 pages with every string-scan still green. Member pages
+ *       silently stops binding on all 14 pages with every string-scan still green. Member pages
  *       satisfy this with `defer`, admin pages with end-of-body placement, so the guard accepts
  *       EITHER. (The first draft demanded defer and went red on 27 correct admin pages — the
  *       guard was wrong, not the code. Kept as a worked example of investigating before fixing.)
  *
- * v2.0 (v0.53.0): the MEMBER canonical header — 13 site-nav pages (every site-nav page
+ * v2.0 (v0.53.0): the MEMBER canonical header — 14 site-nav pages (every site-nav page
  * except index.html, whose reduced login header app.js owns) ship ONE static header,
  * byte-identical: brand-logo img + "Boomtown Athletics" wordmark · hidden #btHdrAdmin →
  * admin.html · #btHdrMail → member-inbox.html · #themeToggle · hidden #logoutBtn ·
@@ -254,9 +254,13 @@ const memberPageCopyVerdict = (src) => {
   return bad;
 };
 
-test("the 13 canonical member pages carry the complete member header, byte-identical", () => {
+test("the 14 canonical member pages carry the complete member header, byte-identical", () => {
+  // The count is a deliberate ratchet: it reddens whenever a member page is added, so whoever added
+  // one has to confirm it ships the real header rather than a lookalike. 13 → 14 in v0.73.0 for
+  // live.html, the public scoreboard, which passed the byte-identical check on its first run because
+  // it was generated from an existing member page rather than hand-written.
   const canon = htmlPages().filter((f) => isMemberCanonPage(f, read(f)));
-  assert.equal(canon.length, 13, `expected exactly 13 canonical member pages, saw ${canon.length}: ${canon.join(", ")}`);
+  assert.equal(canon.length, 14, `expected exactly 14 canonical member pages, saw ${canon.length}: ${canon.join(", ")}`);
   const headers = new Map();
   for (const f of canon) {
     const v = memberHeaderVerdict(read(f));

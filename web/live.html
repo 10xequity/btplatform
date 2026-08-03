@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<!-- Boomtown Platform — Live board (public) · Version: v1.0 · Date: 2026-08-03 · Ships in: v0.73.0
+     The second of the owner's two views (2026-08-03): admin creates, this one displays.
+     READ ONLY AND NO LOGIN. A parent beside court 3 will not sign in, and a TV by the door cannot.
+     "On now" sits above everything else because that is the question people open this for.
+     Refreshes every 25 seconds and shows when it last did — a board that has quietly stopped
+     updating is worse than one that is visibly stale, because nobody double-checks it.
+     Team names only. No player names, no notes, no contact details: the server does not send them. -->
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Live scores — Boomtown Athletics</title>
+  <script>/* Pre-paint theme (v0.53.0): saved bt_theme, else system preference, applied before the first stylesheet — the member header paints the right theme on frame one (admin pre-paint v2 precedent, theme half only; member pages carry no rail-collapse state). site-nav.js v2.12 owns the toggle listener. */(function(){try{var t=(window.localStorage&&localStorage.getItem("bt_theme"))||(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.dataset.theme=t;}catch(e){}})();</script>
+  <link rel="stylesheet" href="assets/tokens.css?v=0.73.0" />
+  <link rel="stylesheet" href="assets/app.css?v=0.73.0" />
+  <style>
+    /* A public scoreboard is read from three feet away on a phone and thirty feet away on a TV, so
+       the type scales with the viewport rather than sitting at one size. */
+    .lv-wrap { max-width: 1100px; margin: 0 auto; padding: 16px; }
+    .lv-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
+    .lv-title { font-size: clamp(20px, 3.2vw, 30px); margin: 0; }
+    .lv-when { font-size: 13px; color: var(--text-muted); }
+    .lv-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 10px 0 18px; }
+    .lv-bar select { font: inherit; font-size: 16px; padding: 10px; min-height: 44px; background: var(--surface-2);
+      color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-control, 8px); max-width: 100%; }
+    /* If the board has silently stopped refreshing, that is worse than obviously stale — so the
+       timestamp is always on screen and changes wording when a fetch fails. */
+    .lv-stamp { font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+    .lv-stamp.stale { color: var(--emphasis); font-weight: 700; }
+    .lv-progress { font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+
+    .lv-h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted);
+      margin: 22px 0 8px; }
+    .lv-h3 { font-size: clamp(15px, 1.8vw, 19px); margin: 16px 0 6px; }
+    .lv-h4 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); margin: 12px 0 4px; }
+    .lv-sub { font-size: 11px; font-weight: 400; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; }
+
+    /* On now — the reason anybody opened this page. */
+    .lv-courts { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px;
+      grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); }
+    .lv-court { background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-card, 10px); padding: 10px 12px; display: grid; gap: 3px; }
+    .lv-ct { font-size: clamp(13px, 1.6vw, 16px); font-weight: 700; color: var(--emphasis); }
+    .lv-stage { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); }
+    .lv-vs { display: flex; justify-content: space-between; gap: 8px; font-size: clamp(14px, 1.7vw, 17px); }
+    .lv-t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .lv-sc { font-variant-numeric: tabular-nums; font-weight: 700; min-width: 2ch; text-align: right; }
+    .lv-ref { font-size: 10px; color: var(--text-muted); }
+    .lv-none { font-size: 13px; color: var(--text-muted); list-style: none; }
+
+    .lv-div { margin-bottom: 18px; }
+    .lv-scroll { overflow-x: auto; }
+    .lv-table { width: 100%; border-collapse: collapse; min-width: 380px; }
+    .lv-table th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .04em;
+      color: var(--text-muted); padding: 4px 8px; }
+    .lv-table td { padding: 6px 8px; border-top: 1px solid var(--border); font-size: 14px; }
+    /* Compared numbers line up or they cannot be compared. */
+    .lv-table td:first-child, .lv-table td:nth-child(n+3) { font-variant-numeric: tabular-nums; text-align: right; }
+    .lv-table td:nth-child(2) { text-align: left; }
+    .lv-table th:first-child, .lv-table th:nth-child(n+3) { text-align: right; }
+
+    .lv-brscroll { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 6px; align-items: flex-start; }
+    .lv-brround { flex: 0 0 auto; min-width: 175px; }
+    .lv-brh { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); margin: 0 0 6px; }
+    .lv-brlist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+    .lv-brm { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-control, 8px);
+      padding: 6px 8px; display: grid; gap: 2px; font-size: 13px; }
+    .lv-brm span { display: flex; justify-content: space-between; gap: 8px; }
+    .lv-brm b { font-variant-numeric: tabular-nums; font-weight: 700; }
+    .lv-brm .won { color: var(--emphasis); font-weight: 700; }
+
+    @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+  </style>
+  <script>
+    (function () {
+      document.documentElement.dataset.theme = localStorage.getItem("bt_theme") ||
+        (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+    })();
+  </script>
+</head>
+<body>
+    <header class="header chrome-glass no-print">
+    <a class="wordmark" href="index.html" style="text-decoration:none;color:inherit"><img class="brand-logo" src="assets/logo-boom-icon-512.png?v=0.73.0" alt="" width="22" height="22" />Boomtown <span>Athletics</span></a>
+    <div class="spacer"></div>
+    <a id="btHdrAdmin" class="btn ghost hdr-admin" href="admin.html" aria-label="Switch to admin view" hidden>Admin</a>
+    <a id="btHdrMail" class="btn ghost hdr-mail" href="member-inbox.html" aria-label="Messages">✉</a>
+    <button id="themeToggle" class="btn ghost theme-toggle" aria-label="Toggle dark or light theme">◐</button>
+    <button id="logoutBtn" class="btn ghost" hidden>Sign out</button>
+  </header>
+
+  <main class="lv-wrap" id="app">
+    <div class="lv-head">
+      <h1 class="lv-title" id="lvTitle">Loading&#8230;</h1>
+      <span class="lv-when" id="lvWhen"></span>
+    </div>
+
+    <div class="lv-bar">
+      <label class="sr-only" for="lvEvent">Choose an event</label>
+      <select id="lvEvent"></select>
+      <button class="btn ghost" id="lvRefresh" type="button">Refresh</button>
+      <span class="spacer" style="flex:1"></span>
+      <span class="lv-progress" id="lvProgress"></span>
+      <span class="lv-stamp" id="lvStamp" role="status" aria-live="polite"></span>
+    </div>
+
+    <div id="lvBody">
+      <h2 class="lv-h2">On now</h2>
+      <ul class="lv-courts" id="lvNow"></ul>
+
+      <div id="lvNextWrap" hidden>
+        <h2 class="lv-h2">Up next</h2>
+        <ul class="lv-courts" id="lvNext"></ul>
+      </div>
+
+      <div id="lvBracketWrap" hidden>
+        <h2 class="lv-h2">Brackets</h2>
+        <div id="lvBrackets"></div>
+      </div>
+
+      <h2 class="lv-h2">Standings</h2>
+      <div id="lvStand"></div>
+    </div>
+  </main>
+
+  <script src="assets/site-nav.js?v=0.73.0" defer></script>
+  <script src="assets/config.js?v=0.73.0"></script>
+  <script src="assets/live.js?v=0.73.0" defer></script>
+</body>
+</html>

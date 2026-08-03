@@ -1,7 +1,7 @@
 /**
  * Boomtown Platform — page-shell prerequisites guard
  * File: worker/test/page_shell.test.mjs · Version: v1.3 · Date: 2026-08-02 · Ships in: v0.53.0 (v1.2 v0.52.0 · v1.1 v0.51.0 · v1.0 v0.49.1)
- * v1.3: MEMBER pre-paint theme snippet — the 13 canonical member pages + index.html apply
+ * v1.3: MEMBER pre-paint theme snippet — the 14 canonical member pages + index.html apply
  * saved bt_theme (else system preference) before the first stylesheet, byte-identical
  * (theme half only; member pages carry no rail-collapse state).
  *
