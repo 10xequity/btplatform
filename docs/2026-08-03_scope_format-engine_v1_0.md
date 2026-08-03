@@ -1,8 +1,10 @@
 # Boomtown Platform — Scope: Tournament format engine, league flexibility, drag-and-drop
 
-**File:** `docs/2026-08-03_scope_format-engine_v1_0.md` · **Version:** v1.0 · **Date:** 2026-08-03
-**Status:** SCOPE — not a decision. Written because the owner asked ("If this needs more details,
-please scope it"). Nothing here is built. **Supersedes:** nothing; this is the first M-TF scope.
+**File:** `docs/2026-08-03_scope_format-engine_v1_0.md` · **Version:** v1.1 · **Date:** 2026-08-03
+**Status:** SCOPE — not a decision. Nothing here is built.
+**v1.1:** owner answered three of the four decisions on 2026-08-03, and their real 10-team pool
+sheet was located in Drive and **analysed computationally** (§8). That analysis replaces guesswork
+about what "fair" means with a measured target the generator must reproduce.
 **Source:** owner message 2026-08-03, quoted verbatim in §1.
 
 ---
@@ -221,14 +223,170 @@ Building the mapper against the wrong file shape wastes the exercise.
 
 Nothing here is a blocker to *starting* slice 1. These block the later slices.
 
-1. **§3.1** — more rounds with fewer games each, or fewer rounds with more teams waiting?
+1. ~~**§3.1**~~ **ANSWERED 2026-08-03** — more waiting, less switching. See §8.6.
 2. **§3.5** — what number is "too many games"? Games, points, or minutes?
 3. **§3.7** — must M pairs meet all M pairs? Do partners rotate within gender only? Does a rotated
    pair keep its record?
-4. **§6** — where is the Colorado Boom roster?
+4. **§6 — STILL OPEN.** The linked Colorado Boom sheet is not reachable by the Drive connector, and
+   no roster is visible in `tt@coloradoboom.com`. Share it with the connected account or export a CSV.
 
 ---
 
-*Changelog: v1.0 (2026-08-03) — first scope of M-TF, league flexibility and the drag-and-drop
+---
+
+## 8. THE FAIRNESS TARGET, DERIVED FROM THE OWNER'S OWN SHEET (v1.1, 2026-08-03)
+
+The owner said: *"my 10 on 4 pool sheet is an example of modified pool play to ensure equality
+overall. i need that for other variations but have not been able to design it as fairly."*
+
+That sheet was located in Drive (**"Pool Sheet Library"**, `boomtownvball@gmail.com`), transcribed,
+and **analysed computationally**. This section replaces every guess about what "fair" means with a
+measured target the generator must reproduce. It is the most important section in this document.
+
+### 8.1 The schedule, as built by hand
+
+10 teams · 4 courts · 10 rounds · 2 teams idle per round.
+
+| | R1 | R2 | R3 | R4 | R5 | R6 | R7 | R8 | R9 | R10 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| **Court 1** | 1v2 | 8v10 | 5v8 | 4v10 | 2v4 | 2v3 | 5v7 | 1v3 | 6v9 | 3v8 |
+| **Court 2** | 3v4 | 4v7 | 7v9 | 3v9 | 3v5 | 4v5 | 6v8 | 2v5 | 3v10 | 2v9 |
+| **Court 3** | 5v6 | 5v9 | 2v10 | 1v8 | 6v10 | 6v7 | 4v9 | 4v6 | 1v7 | 1v4 |
+| **Court 4** | 7v8 | 3v6 | 1v6 | 2v7 | 1v9 | 8v9 | 1v10 | 7v10 | 2v8 | 5v10 |
+| **Bye** | 9,10 | 1,2 | 3,4 | 5,6 | 7,8 | 10,1 | 2,3 | 8,9 | 4,5 | 6,7 |
+
+### 8.2 What the analysis found
+
+| Property | Measured | Verdict |
+|---|---|---|
+| Games per team | **8, every team** | Perfectly equal |
+| Byes per team | **2, every team** | Perfectly equal |
+| Opponent pairs met | **40 of 45 possible** | |
+| **Repeated opponents** | **ZERO** | Nobody plays anybody twice |
+| Bye gap (rounds between a team's two byes) | **min 3, max 7** | Nobody sits twice in a row |
+| Teams per round | 10 distinct, sum 55 | The sheet's own **Check row** |
+
+**This is a very good schedule.** Perfectly equal games, perfectly equal byes, and zero rematches
+across 40 pairings. The generator's job is not to improve on it — it is to **reproduce these
+properties for any N and C**.
+
+### 8.3 The invariant the owner built, and why it is the key to generalising
+
+The **Check = 55** row is the whole trick, and it is worth naming because it generalises where the
+rest of the sheet does not.
+
+Every round, the team numbers on court plus the team numbers on bye sum to `1+2+…+N`. That is a
+compact way of asserting **every team appears exactly once per round, playing or waiting** — no
+team double-booked, none forgotten. It is a checksum a director can verify by eye in two seconds.
+
+**The generator should emit this same check row**, for exactly the reason the owner uses it: a
+schedule you cannot eyeball is a schedule you do not trust, and a director who does not trust the
+generator keeps using the spreadsheet.
+
+### 8.4 The structure underneath
+
+The bye sequence is the schedule's skeleton:
+
+```
+R1: 9,10   R2: 1,2   R3: 3,4   R4: 5,6   R5: 7,8      ← every team rests once, rounds 1-5
+R6: 10,1   R7: 2,3   R8: 8,9   R9: 4,5   R10: 6,7     ← every team rests again, rounds 6-10
+```
+
+Two complete passes over all 10 teams, five rounds each, the second offset from the first. That is
+what produces exactly 2 byes each with a comfortable gap — and it generalises directly:
+
+> With **N teams** and **C courts**, `W = N − 2C` teams wait each round. Over `R` rounds there are
+> `R × W` bye slots. When `R × W` is a multiple of `N`, **every team can take exactly `R×W/N` byes**,
+> and you get them by walking a rotating pointer around the team list in blocks of `W`.
+
+For 10 teams, 4 courts: W = 2, R = 10 → 20 bye slots ÷ 10 teams = **exactly 2 each**. The owner's
+sheet is the clean case, which is why it came out perfect.
+
+**When it does not divide evenly, the generator must say so rather than fudge it** — "13 teams on 4
+courts over 10 rounds: 50 bye slots, so 11 teams get 4 byes and 2 get 3" is information a director
+can act on. Silently giving one team an extra game is how a tournament ends in an argument.
+
+### 8.5 A real discrepancy worth knowing about
+
+The owner's stated target is **8–10 games and 210–250 points** in 3–4 hours of pool play.
+The 10-on-4 sheet delivers **8 games at 21 points = ~168 points**. That is **below the stated
+points range**, at the bottom of the stated game range.
+
+To hit both targets simultaneously:
+
+| Games | To | Points | Verdict |
+|---|---|---|---|
+| 8 | 21 | 168 | current sheet — under target |
+| 8 | 25 | 200 | still under |
+| **10** | **21** | **210** | in range, bottom |
+| **10** | **25** | **250** | in range, top |
+
+**So the target is 10 games, not 8** — which for 10 teams on 4 courts means running **12–13 rounds**
+rather than 10, or adding a court. At ~22 minutes a round, 13 rounds is ~4.8 hours, which then
+exceeds the 3–4 hour window. **The three targets — 8–10 games, 210–250 points, 3–4 hours — cannot
+all hold at once for 10 teams on 4 courts.** Something gives: more courts, shorter games, or a
+narrower target.
+
+This is exactly the kind of thing the **constraint report** (slice 2) exists to surface *before* the
+day, rather than at hour four with everybody still playing.
+
+### 8.6 Owner answers, 2026-08-03 — three of four decisions closed
+
+**§3.1 — more rounds or more waiting? ANSWERED: more waiting.**
+> *"idealy, all teams should have equal played games, so the aim is less switching and more teams
+> waiting but spreading the wait out to effectively ensure they are not waiting too long."*
+
+This is now a **hard ordering of objectives**, not a preference:
+1. **Equal games per team** — hard. Refuse a schedule that gives one team more games than another
+   when equality is arithmetically possible.
+2. **Spread the waiting** — maximise the minimum gap between a team's byes; never two in a row.
+3. **Minimise switching** — prefer a larger waiting set over more rounds.
+
+Note that 2 and 3 pull against each other, and the owner named both. The resolution: **minimise the
+number of rounds subject to equal games, then maximise the minimum bye gap within that round count.**
+That ordering reproduces the 10-on-4 sheet exactly.
+
+**§3.5 — what is "too many"? ANSWERED: 8–10 games, 210–250 points, 3–4 hours.**
+Now a scored objective with real numbers, plus the §8.5 warning when they conflict.
+
+**§3.7 — rotating pairs. ANSWERED, and descoped.**
+> *"that format is only for valentines speed dating when it is not co-ed rotating pairs, that is a
+> specialized format that i have not been able to solve."*
+
+Two distinct things, and separating them removes the hardest item from the critical path:
+- **Valentine's speed-dating format** — a one-off social event, once a year. Its constraint
+  ("every F pair meets every M pair") is real but the event is not load-bearing.
+- **Co-ed rotating pairs** — acknowledged as unsolved *by the owner*. Not a spec waiting to be
+  implemented; an open design problem.
+
+**Recommendation: descope both from M-TF.** They are one narrow annual event and one unsolved
+problem, and neither blocks running normal tournaments. Revisit rotating pairs as its own exercise
+once the general solver exists — the constraint machinery built for slices 1–2 is most of what a
+solution would need anyway.
+
+**§6 — the roster.** The linked Colorado Boom sheet is **not reachable** by the Drive connector
+(`Requested entity was not found`), and no roster is visible in `tt@coloradoboom.com`. Sharing it
+with the connected account, or exporting a CSV, unblocks the import mapper. Still open.
+
+### 8.7 What this changes in the build plan
+
+Slices 1 and 2 from §4 stand, with sharper acceptance criteria:
+
+**Slice 1 — the generator** must reproduce the owner's 10-on-4 sheet's *properties* (not
+necessarily the identical pairings): equal games, equal byes, zero repeats where arithmetically
+possible, no back-to-back byes, and the Check-row invariant. **The existing six templates plus this
+sheet become the regression suite** — a generator that cannot match a schedule a human built by hand
+is not ready.
+
+**Slice 2 — the constraint report** must state, before the event: games per team, points per team,
+estimated duration, bye distribution with the exact arithmetic, repeat pairings if any, and **a
+warning when the games / points / hours targets cannot all be met** (§8.5).
+
+**Descoped from M-TF:** rotating pairs and Valentine's speed dating (§8.6). **Still in:** arbitrary
+N-on-C, pools by division, waiting-team refs, multi-day, drag-and-drop editor, threes-combining.
+
+---
+
+*Changelog: v1.1 (2026-08-03) — owner answered three of four decisions; located and COMPUTATIONALLY ANALYSED their real 10-team pool sheet (§8): 8 games each, 2 byes each, ZERO repeat opponents, no back-to-back byes. Derived the generalising rule from their Check=55 invariant, found that their 8-10 games / 210-250 pts / 3-4 hrs targets cannot all hold at once for 10 teams on 4 courts, and descoped rotating pairs + Valentine speed dating from M-TF on the owner’s statement that one is a once-a-year social and the other is unsolved. v1.0 (2026-08-03) — first scope of M-TF, league flexibility and the drag-and-drop
 editor. Reframes eight requested features as one constraint solver, separates hard from soft
 constraints, proposes eight shippable slices, and records the real roster shape found in Drive.*
