@@ -23,6 +23,8 @@
  * only its own events.
  */
 
+import { personName, CAPTAIN_JOIN, CAPTAIN_COLS } from "./names.js"; // v0.74.0 — one name rule
+
 let json;
 export function wireLive(h) { ({ json } = h); }
 
@@ -71,9 +73,11 @@ export async function liveRoutes(request, env, url, ctx) {
     const teams = (await env.DB.prepare(
       `SELECT t.id, t.name, t.pool_id, t.division_id,
               COALESCE(s.wins,0) AS wins, COALESCE(s.losses,0) AS losses,
-              COALESCE(s.point_diff,0) AS point_diff, s.rank
+              COALESCE(s.point_diff,0) AS point_diff, s.rank,
+              ${CAPTAIN_COLS}
          FROM teams t
          LEFT JOIN standings s ON s.team_id=t.id AND s.event_id=t.event_id AND s.deleted_at IS NULL
+         ${CAPTAIN_JOIN}
         WHERE t.org_id=?1 AND t.event_id=?2 AND t.deleted_at IS NULL
         ORDER BY COALESCE(s.rank, 9999), t.name`
     ).bind(ctx.orgId, eventId).all()).results || [];
@@ -81,11 +85,17 @@ export async function liveRoutes(request, env, url, ctx) {
     const matches = (await env.DB.prepare(
       `SELECT m.id, m.round, m.court, m.bracket_id, m.bracket_round, m.bracket_slot,
               m.score_a, m.score_b, m.points_to,
-              ta.name AS team_a, tb.name AS team_b, tr.name AS ref_team
+              ta.name AS team_a, tb.name AS team_b, tr.name AS ref_team,
+              capa.full_name AS cap_a_name, cmpa.visibility AS cap_a_vis,
+              capb.full_name AS cap_b_name, cmpb.visibility AS cap_b_vis
          FROM matches m
          LEFT JOIN teams ta ON ta.id=m.team_a_id
          LEFT JOIN teams tb ON tb.id=m.team_b_id
          LEFT JOIN teams tr ON tr.id=m.ref_team_id
+         LEFT JOIN contacts capa ON capa.id=ta.captain_contact_id AND capa.deleted_at IS NULL
+         LEFT JOIN member_profiles cmpa ON cmpa.contact_id=capa.id AND cmpa.org_id=m.org_id AND cmpa.deleted_at IS NULL
+         LEFT JOIN contacts capb ON capb.id=tb.captain_contact_id AND capb.deleted_at IS NULL
+         LEFT JOIN member_profiles cmpb ON cmpb.contact_id=capb.id AND cmpb.org_id=m.org_id AND cmpb.deleted_at IS NULL
         WHERE m.org_id=?1 AND m.event_id=?2 AND m.deleted_at IS NULL
         ORDER BY m.round, m.court`
     ).bind(ctx.orgId, eventId).all()).results || [];
@@ -166,13 +176,21 @@ export async function liveRoutes(request, env, url, ctx) {
   return null;
 }
 
+/**
+ * A team as the public may see it. The captain is ABBREVIATED unless that person chose public
+ * visibility — standards §8, and the reason it matters here is that this endpoint needs no login, so
+ * a full name on it is published to anyone and indexed by anything that crawls.
+ */
 const publicTeam = (t) => ({
   name: t.name, wins: t.wins, losses: t.losses, point_diff: t.point_diff, rank: t.rank,
+  captain: personName(t.captain_name, { visibility: t.captain_visibility }),
 });
 
 const publicMatch = (mt) => ({
   court: mt.court, round: mt.round,
   team_a: mt.team_a, team_b: mt.team_b,
+  captain_a: personName(mt.cap_a_name, { visibility: mt.cap_a_vis }),
+  captain_b: personName(mt.cap_b_name, { visibility: mt.cap_b_vis }),
   score_a: mt.score_a, score_b: mt.score_b, points_to: mt.points_to,
   ref_team: mt.ref_team,
   stage: mt.bracket_id

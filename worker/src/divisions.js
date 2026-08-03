@@ -36,6 +36,8 @@
  * 12 would carry four byes, which he had already rejected for pool play. 3 is "if necessary".
  */
 
+import { personName, CAPTAIN_JOIN, CAPTAIN_COLS } from "./names.js"; // v0.74.0 — one name rule
+
 export const ALLOWED_BRACKET_SIZES = [8, 6, 4, 3, 2];
 export const TOP_DIVISION_TARGET = 8;
 /** A team is misplaced when it trails the division median by this many wins. */
@@ -269,9 +271,11 @@ async function loadDivisions(env, ctx, eventId) {
   const teams = (await env.DB.prepare(
     `SELECT t.id, t.name, t.division_id,
             COALESCE(s.wins,0) AS wins, COALESCE(s.losses,0) AS losses,
-            COALESCE(s.point_diff,0) AS pointDiff, COALESCE(s.points_for,0) AS pointsFor
+            COALESCE(s.point_diff,0) AS pointDiff, COALESCE(s.points_for,0) AS pointsFor,
+            ${CAPTAIN_COLS}
        FROM teams t
        LEFT JOIN standings s ON s.team_id = t.id AND s.event_id = t.event_id AND s.deleted_at IS NULL
+       ${CAPTAIN_JOIN}
       WHERE t.org_id=?1 AND t.event_id=?2 AND t.deleted_at IS NULL`
   ).bind(ctx.orgId, eventId).all()).results || [];
 
@@ -291,7 +295,7 @@ async function loadDivisions(env, ctx, eventId) {
   return divs.map((d) => ({
     ...d,
     teams: teams.filter((t) => t.division_id === d.id)
-      .map((t) => ({ ...t, gamesPlayed: gp.get(t.id) || 0 })),
+      .map((t) => ({ ...t, gamesPlayed: gp.get(t.id) || 0, captain: personName(t.captain_name, { full: true }) })),
   }));
 }
 
@@ -611,14 +615,19 @@ async function loadBoard(env, ctx, eventId) {
 
   const teams = (await env.DB.prepare(
     `SELECT t.id, t.name, t.pool_id, t.division_id, t.note, t.board_order, t.seed,
-            COALESCE(s.wins,0) AS wins, COALESCE(s.losses,0) AS losses
+            COALESCE(s.wins,0) AS wins, COALESCE(s.losses,0) AS losses,
+            ${CAPTAIN_COLS}
        FROM teams t
        LEFT JOIN standings s ON s.team_id=t.id AND s.event_id=t.event_id AND s.deleted_at IS NULL
+       ${CAPTAIN_JOIN}
       WHERE t.org_id=?1 AND t.event_id=?2 AND t.deleted_at IS NULL
       ORDER BY t.board_order, COALESCE(t.seed, 9999), t.id`
   ).bind(ctx.orgId, eventId).all()).results || [];
 
-  const inPool = (pid) => teams.filter((t) => t.pool_id === pid);
+  // A staff surface, so captains are named in full: this is the person a director goes looking for
+  // when a team has not turned up for its court.
+  const shaped = teams.map((t) => ({ ...t, captain: personName(t.captain_name, { full: true }) }));
+  const inPool = (pid) => shaped.filter((t) => t.pool_id === pid);
   return {
     event: { id: ev.id, name: ev.name, court_count: ev.court_count },
     divisions: divisions.map((d) => ({
@@ -628,6 +637,6 @@ async function loadBoard(env, ctx, eventId) {
     // Pools nobody has put in a division yet still have to be drawn, or the teams in them vanish
     // from the screen while remaining in the database.
     loose_pools: pools.filter((pl) => !pl.division_id).map((pl) => ({ ...pl, teams: inPool(pl.id) })),
-    workspace: teams.filter((t) => t.pool_id == null),
+    workspace: shaped.filter((t) => t.pool_id == null),
   };
 }

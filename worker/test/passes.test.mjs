@@ -371,8 +371,13 @@ test("live: a shift picks up the rate card, and approval freezes it", async () =
   await call(env, "POST", "/api/admin/staff-rates", {
     token: staff.token, body: { contact_id: coach.contactId, pay_basis: "hourly", rate_cents: 2500 },
   });
+  // RELATIVE, not a hardcoded date. This read '2026-08-03T17:00:00Z', which was a day in the future
+  // when the test was written and worked because the rate card is effective from "now". The moment
+  // real time reached 2026-08-03T17:00Z the shift began starting BEFORE the card that pays it, the
+  // rate lookup found nothing, and a passing test turned red on a calendar boundary with no code
+  // change at all. Anchor the shift to now and the test means the same thing on every day.
   env.DB.exec(`INSERT INTO staff_shifts (org_id, starts_at, ends_at, role_label)
-               VALUES (1, '2026-08-03T17:00:00Z', '2026-08-03T20:00:00Z', 'Coach')`);
+               VALUES (1, datetime('now','+1 day'), datetime('now','+1 day','+3 hours'), 'Coach')`);
   const shiftId = env.DB.one("SELECT id FROM staff_shifts").id;
 
   const assigned = await call(env, "POST", `/api/admin/shifts/${shiftId}/assign`, {

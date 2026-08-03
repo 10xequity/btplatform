@@ -95,8 +95,9 @@
   function tile(t) {
     const record = (t.wins || t.losses) ? `<span class="pb-rec">${t.wins}-${t.losses}</span>` : "";
     return `<li class="pb-tile" draggable="true" tabindex="0" data-team="${t.id}"
-        aria-label="${esc(t.name)}${t.note ? ", note: " + esc(t.note) : ""}. Press Enter to pick up.">
+        aria-label="${esc(t.name)}${t.captain ? ", captain " + esc(t.captain) : ""}${t.note ? ", note: " + esc(t.note) : ""}. Press Enter to pick up.">
       <span class="pb-name">${esc(t.name)}</span>${record}
+      ${t.captain ? `<span class="pb-cap">${esc(t.captain)}</span>` : ""}
       ${t.note ? `<span class="pb-note">${esc(t.note)}</span>` : ""}
       <button class="pb-notebtn" type="button" data-note="${t.id}"
         aria-label="${t.note ? "Edit" : "Add"} note for ${esc(t.name)}">${t.note ? "✎" : "+ note"}</button>

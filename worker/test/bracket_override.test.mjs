@@ -279,8 +279,12 @@ test("a forfeit is confirmed before it is recorded", () => {
   assert.match(PAGE, /window\.confirm\(`Record \$\{who\} as forfeiting\?/);
 });
 
-test("the page shows the pool origin on both the tile and the bench", () => {
-  assert.match(PAGE, /const origin = \(pool, rank\)/);
+test("the page shows the pool origin AND the captain on both the tile and the bench", () => {
+  assert.match(PAGE, /const origin = \(pool, rank, captain\)/);
   assert.match(PAGE, /class="br-from"/);
   assert.match(PAGE, /mt\.pool_a/);
+  // v0.74.0: the captain joined the same line, on the owner's request. Same reason as the pool —
+  // when a slot has to be filled, the person to go and find is the answer.
+  assert.match(PAGE, /mt\.captain_a/);
+  assert.match(PAGE, /if \(captain\) bits\.push\(captain\);/);
 });

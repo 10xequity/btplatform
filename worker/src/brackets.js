@@ -28,6 +28,7 @@
  * time, would leave the wrong team in the semi forever and the fix would be a manual edit.
  */
 import { bracketOrder } from "./scheduler.js";
+import { personName, CAPTAIN_JOIN, CAPTAIN_COLS } from "./names.js"; // v0.74.0 — one name rule
 
 /* ---------------- pure engine ---------------- */
 
@@ -541,10 +542,13 @@ async function loadBrackets(env, ctx, eventId) {
             m.team_a_id, m.team_b_id, m.score_a, m.score_b, m.points_to,
             ta.name AS team_a, tb.name AS team_b,
             pa.name AS pool_a, pb.name AS pool_b,
-            sa.rank AS rank_a, sb.rank AS rank_b
+            sa.rank AS rank_a, sb.rank AS rank_b,
+            capa.full_name AS captain_a, capb.full_name AS captain_b
        FROM matches m
        LEFT JOIN teams ta ON ta.id = m.team_a_id
        LEFT JOIN teams tb ON tb.id = m.team_b_id
+       LEFT JOIN contacts capa ON capa.id = ta.captain_contact_id AND capa.deleted_at IS NULL
+       LEFT JOIN contacts capb ON capb.id = tb.captain_contact_id AND capb.deleted_at IS NULL
        LEFT JOIN pools pa ON pa.id = ta.pool_id AND pa.deleted_at IS NULL
        LEFT JOIN pools pb ON pb.id = tb.pool_id AND pb.deleted_at IS NULL
        LEFT JOIN standings sa ON sa.team_id = ta.id AND sa.event_id = m.event_id AND sa.deleted_at IS NULL
@@ -572,6 +576,9 @@ async function loadBrackets(env, ctx, eventId) {
             // Where each team came from, for the substitution decision.
             pool_a: x.pool_a, pool_b: x.pool_b,
             rank_a: x.rank_a, rank_b: x.rank_b,
+            // Staff surface, so the captain is named in full — this is who gets found on a court.
+            captain_a: personName(x.captain_a, { full: true }),
+            captain_b: personName(x.captain_b, { full: true }),
             score_a: x.score_a, score_b: x.score_b, points_to: x.points_to,
             winner: w ? (w === "a" ? x.team_a : x.team_b) : null,
             // Which game each empty side is waiting on, said out loud.
@@ -601,10 +608,12 @@ async function loadBrackets(env, ctx, eventId) {
   // exactly the move the owner described, and filtering the list would hide the option.
   const bench = (await env.DB.prepare(
     `SELECT t.id, t.name, t.note, p.name AS pool,
-            COALESCE(s.wins,0) AS wins, COALESCE(s.losses,0) AS losses, s.rank
+            COALESCE(s.wins,0) AS wins, COALESCE(s.losses,0) AS losses, s.rank,
+            ${CAPTAIN_COLS}
        FROM teams t
        LEFT JOIN pools p ON p.id = t.pool_id AND p.deleted_at IS NULL
        LEFT JOIN standings s ON s.team_id = t.id AND s.event_id = t.event_id AND s.deleted_at IS NULL
+       ${CAPTAIN_JOIN}
       WHERE t.org_id=?1 AND t.event_id=?2 AND t.deleted_at IS NULL
       ORDER BY COALESCE(s.rank, 9999), t.name`
   ).bind(ctx.orgId, eventId).all()).results || [];
@@ -613,7 +622,11 @@ async function loadBrackets(env, ctx, eventId) {
   return {
     event: { id: ev.id, name: ev.name },
     brackets,
-    bench: bench.map((t) => ({ ...t, in_bracket: inBracket.has(t.id) })),
+    bench: bench.map((t) => ({
+      ...t,
+      captain: personName(t.captain_name, { full: true }),
+      in_bracket: inBracket.has(t.id),
+    })),
   };
 }
 

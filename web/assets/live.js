@@ -13,8 +13,11 @@
        differential in Pool B".
      - It refreshes itself every 25 seconds and says when it last did. A scoreboard that has silently
        stopped updating is worse than one that is obviously stale, because nobody double-checks it.
-     - No player names anywhere. Team names only — the server does not send anything else, and this
-       file could not display a roster of minors even if it tried.
+     - Captain names only, ABBREVIATED. Owner asked for captains on every tile (2026-08-03); the
+       standing rule is "First L. unless the member chose public visibility" (standards §8). A captain
+       in a junior league is often a minor, and a page with no login is published to anyone who loads
+       it — "Ava S." identifies a team to the people at the event and to nobody else. No other player
+       is named, and no email, phone or note is sent at all.
 
    It fetches ONE endpoint. Polling five would show five different moments of the same tournament. */
 (function () {
@@ -50,11 +53,11 @@
       <span class="lv-ct">Court ${mt.court}</span>
       <span class="lv-stage">${esc(mt.stage)}</span>
       <span class="lv-vs">
-        <span class="lv-t">${esc(mt.team_a)}</span>
+        <span class="lv-t">${esc(mt.team_a)}${mt.captain_a ? `<span class="lv-cap">${esc(mt.captain_a)}</span>` : ""}</span>
         <span class="lv-sc">${live ? "" : mt.score_a}</span>
       </span>
       <span class="lv-vs">
-        <span class="lv-t">${esc(mt.team_b)}</span>
+        <span class="lv-t">${esc(mt.team_b)}${mt.captain_b ? `<span class="lv-cap">${esc(mt.captain_b)}</span>` : ""}</span>
         <span class="lv-sc">${live ? "" : mt.score_b}</span>
       </span>
       ${mt.ref_team ? `<span class="lv-ref">ref ${esc(mt.ref_team)}</span>` : ""}
@@ -64,10 +67,11 @@
   function table(rows) {
     if (!rows.length) return `<p class="lv-none">No results yet.</p>`;
     return `<div class="lv-scroll"><table class="lv-table">
-      <thead><tr><th scope="col">#</th><th scope="col">Team</th><th scope="col">W</th><th scope="col">L</th><th scope="col">+/−</th></tr></thead>
+      <thead><tr><th scope="col">#</th><th scope="col">Team</th><th scope="col">Captain</th><th scope="col">W</th><th scope="col">L</th><th scope="col">+/−</th></tr></thead>
       <tbody>${rows.map((t, i) => `<tr>
         <td>${t.rank || i + 1}</td>
         <td>${esc(t.name)}</td>
+        <td class="lv-capcell">${esc(t.captain || "")}</td>
         <td>${t.wins}</td><td>${t.losses}</td>
         <td>${t.point_diff > 0 ? "+" : ""}${t.point_diff}</td>
       </tr>`).join("")}</tbody></table></div>`;

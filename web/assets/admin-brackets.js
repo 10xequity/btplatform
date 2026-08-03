@@ -29,10 +29,13 @@
 
   /* ---------- render ---------- */
 
-  const origin = (pool, rank) => {
+  // Pool, finish and captain on one line. The captain is here for the same reason the pool is: when
+  // a slot has to be filled or a team chased down, the name of the person to find is the answer.
+  const origin = (pool, rank, captain) => {
     const bits = [];
     if (pool) bits.push(pool);
     if (rank) bits.push(`${rank}${ord(rank)}`);
+    if (captain) bits.push(captain);
     return bits.length ? `<span class="br-from">${esc(bits.join(" · "))}</span>` : "";
   };
   const ord = (n) => (n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] || "th");
@@ -45,6 +48,7 @@
     const won = mt.winner && mt.winner === name;
     const pool = which === "a" ? mt.pool_a : mt.pool_b;
     const rank = which === "a" ? mt.rank_a : mt.rank_b;
+    const cap = which === "a" ? mt.captain_a : mt.captain_b;
     return `<button class="br-side${won ? " won" : ""}${name ? "" : " tbd"}"
         type="button" data-slot="${mt.id}:${which}"
         aria-label="${name ? esc(name) : esc(waiting || "empty")}. Choose a different team for this slot."
@@ -53,7 +57,7 @@
         <span class="br-name">${name ? esc(name) : esc(waiting || "To be decided")}</span>
         <span class="br-score">${score === null || score === undefined ? "" : score}</span>
       </span>
-      ${origin(pool, rank)}
+      ${origin(pool, rank, cap)}
     </button>`;
   }
 
@@ -92,9 +96,9 @@
     return list.map((t) => `<li>
       <button class="br-bench-tile${t.in_bracket ? " used" : ""}" type="button"
           draggable="true" data-drag="${t.id}"
-          aria-label="${esc(t.name)}${t.pool ? ", " + esc(t.pool) : ""}${t.rank ? ", finished " + t.rank + ord(t.rank) : ""}${t.in_bracket ? ", already in the bracket" : ""}">
+          aria-label="${esc(t.name)}${t.pool ? ", " + esc(t.pool) : ""}${t.rank ? ", finished " + t.rank + ord(t.rank) : ""}${t.captain ? ", captain " + esc(t.captain) : ""}${t.in_bracket ? ", already in the bracket" : ""}">
         <span class="br-name">${esc(t.name)}</span>
-        <span class="br-from">${esc([t.pool, t.rank ? `${t.rank}${ord(t.rank)}` : null, `${t.wins}-${t.losses}`].filter(Boolean).join(" · "))}</span>
+        <span class="br-from">${esc([t.pool, t.rank ? `${t.rank}${ord(t.rank)}` : null, `${t.wins}-${t.losses}`, t.captain].filter(Boolean).join(" · "))}</span>
         ${t.in_bracket ? `<span class="br-used">in bracket</span>` : ""}
       </button>
     </li>`).join("");
@@ -142,7 +146,7 @@
     const list = (data.bench || []);
     $("bPickList").innerHTML = list.map((t) => `<li>
       <button class="btn ghost br-pick" type="button" data-pick="${t.id}">
-        ${esc(t.name)} <span class="br-from">${esc([t.pool, t.rank ? `${t.rank}${ord(t.rank)}` : null].filter(Boolean).join(" · "))}</span>
+        ${esc(t.name)} <span class="br-from">${esc([t.pool, t.rank ? `${t.rank}${ord(t.rank)}` : null, t.captain].filter(Boolean).join(" · "))}</span>
       </button></li>`).join("") +
       `<li><button class="btn ghost br-pick" type="button" data-pick="">Leave empty</button></li>`;
     $("bPick").hidden = false;
