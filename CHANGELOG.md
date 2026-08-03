@@ -1,5 +1,9 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.64.0 — 2026-08-03
+
+- Auto-recorded by CI on deploy. `/api/health` reported `v0.64.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
+
 ## v0.63.0 — 2026-08-03
 
 - **The generator is no longer a calculator.** `POST /api/admin/events/:id/generate-schedule` writes
