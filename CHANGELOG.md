@@ -2,7 +2,62 @@
 
 ## v0.69.0 — 2026-08-03
 
-- Auto-recorded by CI on deploy. `/api/health` reported `v0.69.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
+Owner asked for 12-court tournaments split into three 4-court divisions, and a bracket that reads
+win records and rebalances teams that are misplaced. The schema could express none of it: `teams`
+carried a free-text `level` and nothing tied a court to anything.
+
+- **Migration 0038** (applied to live D1 and ledgered before the deploy): `divisions`,
+  `teams.division_id`, `brackets.division_id`, and `division_moves`.
+  - **Courts are a range, not a count.** Twelve courts split three ways is courts 1-4, 5-8 and 9-12,
+    and which is which matters to everyone in the building. A count would let two divisions be
+    handed the same physical court with nothing noticing until two teams walked onto it.
+  - **`rank` is the ordering, 1 = top.** Every balancing rule is expressed in terms of it. Sorting
+    by name would put "A" above "AA" on the one day it matters.
+  - **`division_moves` keeps rejected proposals on purpose.** Moving a team down is a conversation
+    with a parent, and the question that follows is always *why*. A row answers it with the numbers
+    as they stood — 2 wins against a division median of 6. Keeping only the accepted moves would
+    discard the record of a decision that was considered and deliberately not taken, which is
+    exactly the one somebody asks about later.
+
+- **The engine proposes; the director decides.** Asked directly whether rebalancing should be
+  automatic, the owner chose *"propose, you approve."* The plan endpoint is a read — it never writes
+  a team's division. Asserted twice, and worth recording why twice was not enough at first: the
+  negative control revealed one of those assertions was weak, because its fixture only produced
+  `drop` proposals and so could not have caught a plan that applied a `move_down`. Strengthened
+  until the mutation actually fails it.
+
+- **The rules, each with a test naming the sentence it enforces:**
+  - **The top division holds at 8 — but only trims to get there.** The owner said both *"if they are
+    9th or 10th, we will drop them to get to 8"* and that 22 teams should become 8/8/6. Those look
+    contradictory until you notice the scale each is about: one or two over is a trim, fourteen over
+    is a second and third bracket. Dropping fourteen teams to protect a number would send most of a
+    division home.
+  - **A trim only applies to teams that have played 8+ games** — *"they will have received
+    sufficient game play."* Dropping a team that has played four sends them home early, which is the
+    opposite of the intent. A 9th-place team short of a full day is moved down instead.
+  - **Misplacement is measured against the median, never the mean.** One hopeless team drags a mean
+    down far enough to stop flagging the next one, which is precisely backwards.
+  - **Below the top division:** move down if there is somewhere to go; if it is the bottom division,
+    two adrift teams get a bracket against each other rather than being sent home.
+  - **A division is never gutted to fix it.** If removing the outliers leaves too few to bracket,
+    the division is not misbalanced — it is just small.
+  - **A trailing group of six stays whole when competitive and splits 4 + 2 when its own bottom two
+    are adrift** — judged *within* the group, because a team adrift of a whole division can be an
+    even match for the ones immediately around it.
+  - **Splits prefer fewer, larger brackets** from 8 / 6 / 4 / 3 / 2. Nine teams is 6 + 3, not 8 + 1
+    — greedy-largest-first leaves one team standing alone, and one team is not a bracket.
+
+- **Test data: a 12-court, 30-team, three-division event** with all 135 pool games played. Ten teams
+  per division rather than eight, because an 8-team round-robin *cannot* produce the owner's own
+  example — with two teams losing everything, the median falls far enough that a 1-win team sits
+  only 2.5 below it and stops being flagged. At ten the median holds at 4.5, both outliers are
+  caught, and all three rules are visible on one screen: Open trims to 8, A moves two down to BB,
+  and BB offers its two a bracket against each other.
+
+- Tests **891** (+30). Preflight CLEAR.
+
+**NOT BUILT YET:** the admin screen for this. The engine and the API are done and tested; the
+divisions UI is the next release.
 
 ## v0.68.0 — 2026-08-03
 
