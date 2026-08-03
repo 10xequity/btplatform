@@ -2,7 +2,85 @@
 
 ## v0.79.0 — 2026-08-03
 
-- Auto-recorded by CI on deploy. `/api/health` reported `v0.79.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
+Owner 2026-08-03: *"each individual is a captain, 1 person can input scores for everyone or each person
+can put in scores. If most of the data is entered, build the math logic to calculate the final missing
+person(s) based on constraints or given data for the algebra."*
+
+### Why there is anything to solve
+
+In every other format a team has one captain and one score link. Here **the pairing lasts one game**, so
+there is no team to own the result and nobody whose job it is to write it down. Whoever is nearest the
+pole types what they know — sometimes all three games, sometimes only their own points, sometimes only a
+total. What arrives is partial evidence about the same six numbers, from up to four people who each saw
+the round from a different side.
+
+### The constraint that makes it solvable is the shape of a volleyball score, not the arithmetic
+
+A game played first-to-21 with no cap (the owner's choice) can only end two ways: **21 to something 19 or
+less**, or **n to n−2 for n above 21**. So a game is not two free numbers between 0 and 40 — it is **one
+unknown (its total) plus which side won.** That is what turns "four people gave me fragments" into a
+system with an answer.
+
+### And for a net of four there is a closed form
+
+```
+d1 = (A + B − C − D) / 2        d_i = game i's margin, side A minus side B
+d2 = (A + C − B − D) / 2        A,B,C,D = the four players' point totals
+d3 = (A + D − B − C) / 2
+T1 + T2 + T3 = (A + B + C + D) / 2
+```
+
+**Every margin falls out of the four player totals alone.** Verified empirically over 4000 randomised
+shape-valid rounds *before* a line of it went into the module, then asserted in the tests across every
+combination of a representative sample. The shape rule then finishes the job: a margin **wider than two**
+can only have come from a game that ended exactly on 21, so that game's total is pinned.
+
+So **four player totals usually determine all six scores.** That is the answer to "calculate the final
+missing person" — the missing person's numbers were never independent.
+
+### What it will not do is guess
+
+Where the evidence genuinely admits two answers, the game comes back **unresolved, with its candidates**.
+A plausible invented scoreline looks like a result, ranks people, and nobody ever finds out it was
+fiction. The 200-round round-trip test asserts both halves: solved rounds must match the original
+exactly, and *declined* rounds must have the real score among the candidates offered.
+
+Also **`reconcile`**, because "1 person can input scores for everyone or each person can put in scores"
+means the same game arrives twice and the two versions can differ — on a net of four all four players saw
+every game. Last-write-wins would silently pick a side in an argument the software never reported. A
+disputed game is left **unset** on purpose: an unset game is visibly unfinished, whereas a wrong one that
+has quietly picked a side looks finished.
+
+### Two bugs and two wrong assumptions, all found by tests rather than by reading
+
+1. **The solution cap poisoned the agreement check, and it would have invented scores.** A game is
+   reported solved when every surviving solution agrees on it — but the search is depth-first, so the
+   first 65 solutions all share the same choice for the games decided *early* and differ only in the
+   last. Those early games therefore looked unanimous when the search simply never got round to
+   contradicting them. Truncation now poisons the check: only a game narrowed to one candidate by the
+   **input** counts as resolved. Found by the negative control that runs the solver on an empty net —
+   nothing else caught it, and it is the most dangerous defect this feature could have shipped with.
+2. **The closed form was computed and then ignored.** The margins were derived and the full space searched
+   anyway, at ~70 ms a round. That is the same defect as a guard that is computed and never asserted on.
+   Filtering candidates by the known margin usually leaves exactly one: **14.6 s → 150 ms** for the file.
+3. **I asserted one player's total could finish a round. It cannot.** A total is the sum of *their* side's
+   scores, so it pins their side of the missing game and says nothing about the opponent — and the shape
+   rule still allows 21 to have beaten anything from 0 to 19. The limit is now a test in its own right,
+   because the intuition is appealing and wrong.
+4. **I asserted that two games finishing by exactly two makes a round ambiguous. Also wrong.** A
+   margin-two game has a *minimum* total of 40 (21–19), so two of them totalling 80 can only have been
+   40 and 40 — the round is fully determined. Ambiguity is about whether the round total can be **split**
+   more than one way, not about counting narrow margins. Recorded in the test with the reasoning, since
+   the first version of that test encoded the wrong rule and the solver was right.
+
+### Gates
+
+Suite **1086 → 1107**, measured before and after. 65 test files, 49 modules. Pure functions only, so no
+migration and no `web/**` change — the buster stays `0.75.0`.
+
+**Still unbuilt for this feature:** the per-player score links and the routes that accept a report. The
+solver was the part that needed the thinking; the plumbing is next, and the `kotc.test.mjs` ratchet still
+holds the whole module's unreachability open until it is wired.
 
 ## v0.78.0 — 2026-08-03
 

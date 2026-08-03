@@ -13,7 +13,7 @@ Claude Desktop project-knowledge doc set (9 markdown files + 1 HTML demo, dated 
 
 | Step | File | When |
 |---|---|---|
-| 1 | `docs/2026-08-03_handoff_v0_76_0.md` | **Every session.** State of record. §0 delivery + the order-of-operations rules, §1 measured build state, §3 the review pass and the finding that a CHANGELOG claimed a fix it had not applied, §4 owner answers (incl. all five KOTC answers), §6 next build, §7 the next-session prompt. |
+| 1 | `docs/2026-08-03_handoff_v0_79_0.md` | **Every session.** State of record. §0 delivery + the order-of-operations rules, §1 measured build state, §2 the owner's eight items and which shipped, §3 the review pass and the four defects this session's own code produced, §4 owner answers, §6 next build, §7 the next-session prompt. |
 | 2 | `docs/2026-07-30_standards_v2_0.md` | **Every session.** Build/design law. |
 | 3 | `docs/2026-08-02_roadmap_v1_0.md` | **Every session.** What is unbuilt and in what order. |
 | 4 | `docs/INDEX.md` | **Every session.** Read-order, doc status, and the open contradiction register. |

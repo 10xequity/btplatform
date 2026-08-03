@@ -1,6 +1,6 @@
 # Boomtown Platform — Document Index
 
-**File:** docs/INDEX.md · **Version:** v1.6 · **Created:** 2026-08-02 · **Updated:** 2026-08-03
+**File:** docs/INDEX.md · **Version:** v1.7 · **Created:** 2026-08-02 · **Updated:** 2026-08-03
 **Status:** ACTIVE · **Supersedes:** nothing — first index of the doc set.
 **Purpose:** what each document is, whether it is live, and where the live documents disagree
 with each other. Read with `CLAUDE.md`.
@@ -11,10 +11,10 @@ with each other. Read with `CLAUDE.md`.
 
 | File | Ver | Date | What it is |
 |---|---|---|---|
-| `2026-08-03_handoff_v0_76_0.md` | v1.0 | 2026-08-03 | **State of record.** Delivery (§0), measured build state (§1), v0.75.0–v0.76.0 (§2), **§3 the review pass — six proved defects, four untested, and the finding that v0.74.0's CHANGELOG claimed a fix it had not applied**, owner answers incl. **all five KOTC answers** (§4), owed items (§5), next build (§6), next-session prompt (§7). Supersedes and replaces handoff v0.74.0. |
+| `2026-08-03_handoff_v0_79_0.md` | v1.0 | 2026-08-03 | **State of record.** Delivery (§0), measured build state (§1), **§2 the owner's eight numbered items and which of them shipped**, §3 the v0.75.0 review pass plus **the four defects this session's own code produced — including a solver that would have invented scorelines**, owner answers incl. all KOTC answers and the held-slot decision (§4), owed items (§5), next build (§6), next-session prompt (§7). Supersedes and replaces handoff v0.76.0. |
 | `2026-07-30_standards_v2_0.md` | **v2.1** | 2026-08-02 | **Build and design law.** Trust order, versioning, DB rules, worker module pattern, design roster (§5), testing gates (§6), CI, member copy (§8), templating (§10). Reconstructed after a doc-set loss; §5/§6.5/§8/§10 anchors preserved so in-code citations stay valid. |
 | `2026-08-02_roadmap_v1_0.md` | v1.0 | 2026-08-02 | **Roadmap of record.** 8 unbuilt modules, 5 small gaps, 4 engineering tracks, 5 owner-gated config items, 4 doc-debt items, suggested sequence. Supersedes the README roadmap block and the stale half of `build-status.js`. |
-| `INDEX.md` | v1.5 | 2026-08-03 | This file. |
+| `INDEX.md` | v1.7 | 2026-08-03 | This file. |
 
 ## 2. Live reference — open when the topic comes up
 
@@ -25,7 +25,7 @@ with each other. Read with `CLAUDE.md`.
 | `2026-08-01_uiux-review_admin-shell_v1_0.md` | **v1.1** | 2026-08-02 | Touching any shell, rail, header, or contrast. Names the real AA offenders by file and line. Steps 1–3 of §6 shipped; **step 4 (SPA shell) is the last open item.** |
 | `2026-08-03_workorder_member-experience_v1_1.md` | v1.1 | 2026-08-03 | Member-experience scope W1-W10, accepted onto the roadmap. Read §0 FIRST — it lists the seven assumptions that went stale since the Desktop original. Four owner decisions open. |
 | `2026-08-03_scope_format-engine_v1_0.md` | **v1.1** | 2026-08-03 | Scoping M-TF, league flexibility or the drag-and-drop editor. Reframes the eight requested features as ONE constraint solver, splits hard from soft constraints, proposes 8 shippable slices, and records the real roster shape found in Drive. Four owner decisions listed at the end. |
-| `2026-08-03_spec_kotc_v1_1.md` | **v1.1** | 2026-08-03 | Building King/Queen of the Court. **Engine BUILT in v0.76.0 (migration 0040); routes and screen unbuilt — §8 has the order.** All **five** of v1.0's open questions are answered verbatim in §6, including "director sets `move_up` each session" (no formula is encoded anywhere — do not add one). §7 records two findings against v1.0, the larger being that the soft-constraint optimiser it asked for has nothing to optimise: a net plays *all* its pairings. Supersedes and replaces v1.0. |
+| `2026-08-03_spec_kotc_v1_1.md` | **v1.1** | 2026-08-03 | Building King/Queen of the Court. **Engine BUILT (v0.76.0, migration 0040) and the SCORING SOLVER BUILT (v0.79.0) — four player totals usually determine all six scores of a net, and it never guesses. Routes, board and scoring surface unbuilt; §8 has the order and a `kotc.test.mjs` ratchet holds it open.** All **five** of v1.0's open questions are answered verbatim in §6, including "director sets `move_up` each session" (no formula is encoded anywhere — do not add one). §7 records two findings against v1.0, the larger being that the soft-constraint optimiser it asked for has nothing to optimise: a net plays *all* its pairings. Supersedes and replaces v1.0. |
 | `2026-08-01_demo_admin-shell_v4_0.html` | v4.0 | 2026-08-01 | Working the SPA shell. Open it in a browser and toggle the theme — it is the target model, not a mockup to copy verbatim. |
 
 ## 3. Archive — never read during a normal build
@@ -144,11 +144,12 @@ it is a failing test, not a sentence.
 | 2026-08-02 | **This port.** Doc set moved to `docs/`, archive tier separated, `CLAUDE.md` and `INDEX.md` added. No source document was edited — contradictions are recorded here rather than silently patched. |
 | 2026-08-03 | Eighteen releases under direct commit (v0.57.0–v0.74.0). Handoff v0.56.0 superseded and **deleted**; `2026-08-03_handoff_v0_66_0.md` is the state of record. **C6 stays OPEN** and gains a second finding: the sweep had never covered `.js` at all. **C7 opened** (shell-slice tag duplication, fixed and guarded). New documents: `spec_roster-sheet_v1_0`, `scope_format-engine_v1_1`, `workorder_member-experience_v1_1`. |
 
+| 2026-08-03 | Twenty-three releases under direct commit (v0.57.0–v0.79.0). Handoff v0.76.0 superseded and **deleted**; `2026-08-03_handoff_v0_79_0.md` is the state of record. Migration **0041** applied live (held bracket slots, bracket court ranges, optional game times), ledger row read back. Owner's eight numbered items: seven delivered, live-view animations deferred with the reason recorded. `/emil-design-eng` installed after five sessions of silently substituting for it. **C9's ruling encoded as cadence in `CLAUDE.md` §1.1** at the owner's instruction — periodic review and documentation audit, not a per-session sweep. |
 | 2026-08-03 | Twenty releases under direct commit (v0.57.0–v0.76.0). Handoff v0.74.0 superseded and **deleted**; `2026-08-03_handoff_v0_76_0.md` is the state of record. KOTC spec v1.0 superseded and **deleted** by v1.1 (all five open questions answered). **C9 opened** — a CHANGELOG entry claimed a fix that was never applied. C6 stays open. Migration **0040** applied live (KOTC), ledger row read back. |
 
 ---
 
-*Changelog: v1.6 (2026-08-03) — handoff row repointed to v0.76.0 (v0.74.0 deleted); KOTC spec row repointed to v1.1 (v1.0 deleted, its five open questions now answered); **C9 opened** with the ratchet-not-a-paragraph corollary; consolidation log extended through v0.76.0. v1.5 (2026-08-03) — handoff row repointed to v0.74.0 (v0.70.0 deleted); KOTC spec registered. v1.4 (2026-08-03) — handoff row repointed to v0.70.0 (v0.68.0 deleted); consolidation log extended through v0.70.0. v1.3 (2026-08-03) — handoff row repointed to v0.68.0 (v0.66.0 deleted); C8 opened and
+*Changelog: v1.7 (2026-08-03) — handoff row repointed to v0.79.0 (v0.76.0 deleted); consolidation log extended through v0.79.0; C9's ruling noted as now encoded in `CLAUDE.md` §1.1 rather than living only here. v1.6 (2026-08-03) — handoff row repointed to v0.76.0 (v0.74.0 deleted); KOTC spec row repointed to v1.1 (v1.0 deleted, its five open questions now answered); **C9 opened** with the ratchet-not-a-paragraph corollary; consolidation log extended through v0.76.0. v1.5 (2026-08-03) — handoff row repointed to v0.74.0 (v0.70.0 deleted); KOTC spec registered. v1.4 (2026-08-03) — handoff row repointed to v0.70.0 (v0.68.0 deleted); consolidation log extended through v0.70.0. v1.3 (2026-08-03) — handoff row repointed to v0.68.0 (v0.66.0 deleted); C8 opened and
 closed in the same release (the CDN QR that never rendered). v1.2 (2026-08-03) — handoff row repointed to v0.66.0 (v0.56.0 deleted); C6 closed with
 the finding that the buster sweep had never covered `.js`; consolidation log extended through
 v0.66.0. v1.1 (2026-08-02) — handoff row repointed to v0.56.0 (v0.53.0 deleted); standards→v2.1 and
