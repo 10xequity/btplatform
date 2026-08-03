@@ -2,7 +2,56 @@
 
 ## v0.71.0 — 2026-08-03
 
-- Auto-recorded by CI on deploy. `/api/health` reported `v0.71.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
+Two gaps named in v0.70.0's own release notes, both closeable without an answer from the owner. The
+league-night board is deliberately **not** here — "single players that are forming nets" is a
+different object model from teams in pools, and that question is open rather than guessed at.
+
+- **`admin-divisions.html` — the screen everything else was gated behind.** The divisions engine
+  shipped in v0.69.0 with 26 tests and no page, so none of it could be reached: court ranges, team
+  counts and the balancer were API-only. The Pool Board could only tell a director that no divisions
+  existed, with no way to create one.
+  - **Overlapping court ranges are flagged while typing**, not at Save. Two divisions handed court 5
+    is caught by nobody until two teams walk onto it, and finding out when you press Save is one step
+    too late. The server still refuses it — that is the guard; this is the courtesy.
+  - **"Suggest from courts"** builds four-court divisions from the event's court count and gives any
+    remainder to the bottom division. An unclaimed court is a court nobody schedules.
+  - **The suggestions show the reasoning, not just the verdict.** Each card carries the sentence the
+    balancer wrote plus the numbers behind it — wins, games played, and the division median it was
+    judged against. "Move Team 14 down" asks a director to trust an unexplained decision; *"2 wins
+    against an A median of 6, and BB is a closer match"* can be read out loud to a parent. Games
+    played is half of the top-division rule, so it is on the card too.
+  - **Accept and Decline are both real actions.** Declining POSTs a rejected decision rather than
+    hiding the row — because *"was this looked at?"* is asked after the fact, and the answer has to
+    exist. Proven by mutating Decline into a local row-removal and confirming the test fails.
+  - **Every decision re-reads the plan** instead of patching the list on screen. Each acceptance moves
+    the medians, so leaving the earlier suggestions up would display conclusions that no longer follow
+    from the data.
+  - **Save warns before it clears team placements.** The route replaces the layout, which nulls every
+    team's division; silently discarding a Pool Board arrangement somebody spent twenty minutes on
+    would be its own small betrayal.
+  - Every input in the table is labelled — a row of five bare number boxes is unusable with a screen
+    reader, and this table is nothing but number boxes. Inputs are 16px so iOS does not zoom on focus.
+    Problems are announced through `role="alert"`, and the unsaved indicator is stated in words as
+    well as colour.
+- **The QR can be saved as a PNG.** Owner 2026-08-03: the code will be used *"to send via text or
+  email, or link, not for pictures unless its a fixed picture."* An inline SVG is the right thing on a
+  page and the wrong thing in a message — most mail clients strip it and SMS carries no markup at all.
+  "Save image" on each scoring-link card writes a file named after the team, because twenty files
+  called `download.png` in one folder is twenty files nobody can tell apart.
+  - **Whole pixels per module.** A fractional scale makes some modules a pixel wider than others, and
+    a scanner reading a photograph of that has to guess where the grid is.
+  - **The light modules are painted, not left transparent.** A transparent QR dropped into a dark
+    email template is dark-on-dark and does not scan at all.
+  - `png()` and `svg()` read the same encoder. A second one would eventually disagree, and only one of
+    them would be the version anybody actually scanned.
+  - Returns null where there is no canvas, and the page falls back to Copy link rather than failing
+    silently.
+- Tests **935** (+18). Preflight CLEAR. No migration.
+
+**NOT VERIFIED:** the PNG's pixels. Node has no canvas, so `png()` cannot execute in the suite. The
+module grid it draws *is* round-trip verified by `qr.test.mjs`, and the invariants that matter
+(integer scale, painted background, one shared encoder) are asserted against the source — but nobody
+has pointed a camera at the output file. Still worth one real scan before an event.
 
 ## v0.70.0 — 2026-08-03
 
