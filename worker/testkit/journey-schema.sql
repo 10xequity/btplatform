@@ -602,3 +602,14 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_kotc_slots_seat ON kotc_slots (org_id, rou
 CREATE UNIQUE INDEX IF NOT EXISTS idx_kotc_slots_person ON kotc_slots (org_id, round_id, contact_id) WHERE deleted_at IS NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_kotc_games_no ON kotc_games (org_id, round_id, net_no, game_no) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_kotc_games_round ON kotc_games (org_id, round_id, net_no) WHERE deleted_at IS NULL;
+
+-- Migration 0041 — held bracket slots, bracket court ranges, optional wall-clock times.
+ALTER TABLE matches ADD COLUMN slot_locked_a INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE matches ADD COLUMN slot_locked_b INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE matches ADD COLUMN starts_at TEXT;
+ALTER TABLE brackets ADD COLUMN court_from INTEGER;
+ALTER TABLE brackets ADD COLUMN court_to INTEGER;
+CREATE INDEX IF NOT EXISTS idx_matches_court_time
+  ON matches (org_id, event_id, court, starts_at) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_matches_held
+  ON matches (org_id, event_id) WHERE deleted_at IS NULL AND (slot_locked_a = 1 OR slot_locked_b = 1);

@@ -232,24 +232,78 @@ async function patchMatch(request, env, ctx, matchId) {
   return json({ ok: true, warnings: rescheduleWarnings(rows) });
 }
 
-/** 2-tap score entry: { winner: 'a'|'b', diff: N }. Winner gets points_to; loser points_to − diff. */
+/**
+ * Score, or CORRECT, one game.
+ *
+ * Two ways in, ONE definition of what a score is:
+ *   { winner: 'a'|'b', diff: N }   — the 2-tap contract, right for a captain at the net on a phone.
+ *   { score_a: N, score_b: N }     — exact, which is the only way to fix a mistake.
+ *
+ * Owner 2026-08-03: "Add admin edit scores if incorrect." The 2-tap form CANNOT express a correction —
+ * a game entered as 21–15 that was really 23–21 is unreachable through "winner and margin", because
+ * that form assumes the winner scored exactly `points_to`. A separate edit route would have been a
+ * second definition of a score, and the day the two disagree is the day the standings and the bracket
+ * disagree about who won a game.
+ *
+ * Editing needs no special permission and no separate audit action: `requireStaff` already gates this,
+ * and the audit row carries the old and new values, so a correction is legible AS a correction.
+ */
 async function scoreMatch(request, env, ctx, matchId) {
   const mt = await env.DB.prepare("SELECT * FROM matches WHERE id=?1 AND deleted_at IS NULL").bind(matchId).first();
   if (!mt) return json({ error: "Match not found." }, 404);
   const deny = await requireStaff(env, ctx, mt.org_id);
   if (deny) return deny;
-  const { winner, diff } = await request.json();
-  if (!["a", "b"].includes(winner) || !(diff >= 1)) return json({ error: "Send winner ('a'|'b') and diff ≥ 1." }, 400);
-  const w = mt.points_to, l = Math.max(0, mt.points_to - diff);
-  const [sa, sb] = winner === "a" ? [w, l] : [l, w];
+  const body = await request.json().catch(() => ({}));
+  const { winner, diff } = body;
+
+  let sa, sb;
+  const exact = body.score_a !== undefined || body.score_b !== undefined;
+  if (exact) {
+    sa = Number(body.score_a); sb = Number(body.score_b);
+    const bad = (n) => !Number.isInteger(n) || n < 0 || n > 200;
+    if (bad(sa) || bad(sb)) {
+      return json({ error: "Send both scores as whole numbers, 0 to 200." }, 400);
+    }
+    if (sa === sb) {
+      // A tie is not a result anywhere else here — `winnerOf` returns null and a bracket refuses to
+      // advance on one — so accepting it would write a row every other module reads as UNPLAYED, and
+      // the game would sit there looking un-entered while the sheet says it was played.
+      return json({ error: "A tied score can't be recorded — volleyball is won by two. Check the sheet." }, 400);
+    }
+  } else {
+    if (!["a", "b"].includes(winner) || !(diff >= 1)) {
+      return json({ error: "Send winner ('a' or 'b') and diff ≥ 1, or send score_a and score_b." }, 400);
+    }
+    const w = mt.points_to, l = Math.max(0, mt.points_to - diff);
+    [sa, sb] = winner === "a" ? [w, l] : [l, w];
+  }
+
+  const wasScored = mt.score_a !== null && mt.score_b !== null;
   await env.DB.prepare("UPDATE matches SET score_a=?1, score_b=?2, updated_at=datetime('now') WHERE id=?3").bind(sa, sb, matchId).run();
-  await audit(env, ctx, "match.score", "matches", matchId, { winner, diff });
+  await audit(env, ctx, "match.score", "matches", matchId,
+    wasScored
+      ? { corrected: true, from: `${mt.score_a}-${mt.score_b}`, to: `${sa}-${sb}`, exact }
+      : { winner, diff, score: `${sa}-${sb}`, exact });
   await refreshStandings(env, mt.event_id, mt.org_id);
   // Owner 2026-08-03: "brackets should auto advance." A director typing in a quarter-final result
   // has their hands full; a second button to move the winner is a step that gets skipped, and a
   // skipped step means the next court call is wrong. No-op on pool-only events.
+  //
+  // A CORRECTION SELF-HEALS THE TREE, which is the reason advancement is recomputed rather than
+  // accumulated: fix a quarter-final typed in backwards and the semi it feeds is right on this pass.
+  // Sides a director is HOLDING are left alone, and reported (v0.78.0).
   const adv = await advanceBracketFor(env, mt.org_id, mt.event_id);
-  return json({ ok: true, score_a: sa, score_b: sb, bracket_advanced: adv.advanced });
+  return json({
+    ok: true, score_a: sa, score_b: sb,
+    corrected: wasScored,
+    bracket_advanced: adv.advanced,
+    bracket_held: adv.held || 0,
+    note: wasScored
+      ? `Corrected from ${mt.score_a}–${mt.score_b} to ${sa}–${sb}.` +
+        (adv.advanced ? ` ${adv.advanced} later game${adv.advanced === 1 ? "" : "s"} updated to match.` : "") +
+        (adv.held ? ` ${adv.held} slot${adv.held === 1 ? " is" : "s are"} being held by hand and did not change.` : "")
+      : undefined,
+  });
 }
 
 export async function refreshStandings(env, eventId, orgId) {

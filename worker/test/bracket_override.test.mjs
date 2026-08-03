@@ -164,100 +164,135 @@ test("a pool game is not a bracket slot and says so", async () => {
   env.DB.close();
 });
 
-/* ================================ the overwrite warning ================================ */
+/* ================================ the hold ================================
+   BEHAVIOUR CHANGED IN v0.78.0 AND THE TESTS BELOW WERE REWRITTEN, NOT PATCHED AROUND.
 
-test("placing a team where a winner will land warns that it will be replaced", async () => {
-  // A quarter-final feeds a semi-final. Hand-placing a team into that semi slot before the QF is
-  // played is legitimate — and the next advance pass will overwrite it, because advancement is
-  // derived from scores. Silence here would look like the software discarding the edit.
-  const { env, token } = await withBracket();
-  const semi = env.DB.one("SELECT id FROM matches WHERE event_id=1 AND bracket_round=2 AND bracket_slot=1");
-  const r = await call(env, "POST", "/api/admin/events/1/brackets/slot", {
-    token, body: { match_id: semi.id, side: "a", team_id: 9 },
-  });
-  assert.equal(r.status, 200, JSON.stringify(r.data));
-  assert.equal(r.data.overwritten_by_advance_risk, true);
-  assert.match(r.data.note, /has not been played yet/);
-  env.DB.close();
-});
+   v0.75.0 asserted the opposite of what this file now asserts: that a hand-placed team WOULD be
+   overwritten, and that the response warned about it. That was correct then, and finding it was that
+   release's main result. The owner has since asked for something different — "allow movement in brackets
+   to fix any errors" — and an edit that reverts itself fixes nothing. So a hand-placed side is now HELD,
+   and the old behaviour remains reachable, and still tested, through `release: true`.
 
-test("placing a team in a first-round slot carries no such warning — nothing feeds it", async () => {
-  const { env, token } = await withBracket();
-  const m = qf(env, 1);
-  const r = await call(env, "POST", "/api/admin/events/1/brackets/slot", {
-    token, body: { match_id: m.id, side: "a", team_id: 9 },
-  });
-  assert.equal(r.data.overwritten_by_advance_risk, false);
-  assert.ok(!/has not been played yet/.test(r.data.note));
-  env.DB.close();
-});
+   Recorded here because a test that quietly flips its expectation is indistinguishable from a test that
+   was wrong all along, and the four tests replaced here were the evidence for the v0.75.0 fix. */
 
-test("placing a team where a winner has ALREADY landed warns too — this is the case that was silent", async () => {
-  /* THE CASE THE OLD GUARD COULD NOT SEE, AND THE ONLY ONE THE OWNER ACTUALLY DESCRIBED.
-     The test above covers a feeder with no result. This covers a feeder that has been WON — a team
-     takes its quarter-final and then goes home, so somebody is substituted into the semi. That is
-     verbatim why this route exists ("teams might forfeit so we can replace them in the bracket").
-
-     The old check was `feeder.score_a === null`, so a played feeder scored FALSE: the response said
-     "Placed." and nothing else, and the next advance pass — which fires on every score entered
-     anywhere in the event — put the original winner back. The two tests above both passed the whole
-     time. A warning wired to the rarer branch is indistinguishable from no warning at all. */
+test("a hand-placed team is HELD, and advance does not take the slot back", async () => {
+  // The core of the owner's request. The feeder is played, its winner is in the semi, that team goes
+  // home, a bench team is substituted in — and then somebody scores an unrelated game.
   const { env, token } = await withBracket();
   const feeder = qf(env, 1);
   const semi = env.DB.one("SELECT id FROM matches WHERE event_id=1 AND bracket_round=2 AND bracket_slot=1");
-
-  // Afternoon of the tournament: the quarter-final is played and its winner is in the semi.
   env.DB.exec(`UPDATE matches SET score_a=25, score_b=10 WHERE id=${feeder.id}`);
   await call(env, "POST", "/api/admin/events/1/brackets/advance", { token });
   assert.equal(env.DB.one("SELECT team_a_id FROM matches WHERE id=?1", semi.id).team_a_id, feeder.team_a_id,
-    "precondition: the winner should be in the semi before the override is attempted");
+    "precondition: the winner reached the semi on its own");
 
-  const r = await call(env, "POST", "/api/admin/events/1/brackets/slot", {
+  const placed = await call(env, "POST", "/api/admin/events/1/brackets/slot", {
     token, body: { match_id: semi.id, side: "a", team_id: 10 },
   });
-  assert.equal(r.status, 200, JSON.stringify(r.data));
-  assert.equal(r.data.overwritten_by_advance_risk, true, "a played feeder is the HIGHER risk, not no risk");
-  assert.equal(r.data.advance_reverts_immediately, true);
-  assert.match(r.data.note, /already been won/, "the note must say the edit is about to be undone");
-  assert.match(r.data.note, /forfeit/, "and must name the thing to do instead");
-  env.DB.close();
-});
+  assert.equal(placed.status, 200, JSON.stringify(placed.data));
+  assert.equal(placed.data.slot_held, true, "placing by hand must hold the slot");
+  assert.match(placed.data.note, /held/i);
+  assert.match(placed.data.note, /release/, "and must say how to hand it back");
+  assert.equal(env.DB.one("SELECT slot_locked_a FROM matches WHERE id=?1", semi.id).slot_locked_a, 1);
 
-test("and that warning is true as well: the very next advance takes the slot back", async () => {
-  // The claim above is worthless if the behaviour differs, and this is the mechanism the owner will
-  // hit — a score somewhere ELSE in the bracket is enough, not a score on the feeder.
-  const { env, token } = await withBracket();
-  const feeder = qf(env, 1);
-  const semi = env.DB.one("SELECT id FROM matches WHERE event_id=1 AND bracket_round=2 AND bracket_slot=1");
-  env.DB.exec(`UPDATE matches SET score_a=25, score_b=10 WHERE id=${feeder.id}`);
-  await call(env, "POST", "/api/admin/events/1/brackets/advance", { token });
-  await call(env, "POST", "/api/admin/events/1/brackets/slot", {
-    token, body: { match_id: semi.id, side: "a", team_id: 10 },
-  });
-  assert.equal(env.DB.one("SELECT team_a_id FROM matches WHERE id=?1", semi.id).team_a_id, 10,
-    "the placement must land in the first place");
-
-  // An UNRELATED quarter-final is scored. Nothing about slot 1 was touched.
+  // An unrelated quarter-final is scored — the exact path that reverted the edit before v0.78.0.
   const other = qf(env, 2);
   env.DB.exec(`UPDATE matches SET score_a=25, score_b=12 WHERE id=${other.id}`);
-  await call(env, "POST", "/api/admin/events/1/brackets/advance", { token });
-  assert.equal(env.DB.one("SELECT team_a_id FROM matches WHERE id=?1", semi.id).team_a_id, feeder.team_a_id,
-    "scoring a different game reverted the edit — which is why the warning has to be given");
+  const adv = await call(env, "POST", "/api/admin/events/1/brackets/advance", { token });
+  assert.equal(env.DB.one("SELECT team_a_id FROM matches WHERE id=?1", semi.id).team_a_id, 10,
+    "the held team must survive — this is the whole point of the change");
+  assert.ok(adv.data.held >= 1, "and the advance must REPORT that it left something alone");
   env.DB.close();
 });
 
-test("and the warning is true: advancing really does overwrite the hand-placed team", async () => {
-  // Asserted rather than assumed, because the whole warning is worthless if the behaviour differs.
+test("only the placed SIDE is held — the other keeps advancing", async () => {
+  /* The reason the lock is per side and not per game. A director substitutes for the team that went
+     home; freezing the other side too would leave the next quarter-final winner nowhere to go, and the
+     bracket would silently stop moving — which looks exactly like the software ignoring scores. */
   const { env, token } = await withBracket();
   const semi = env.DB.one("SELECT id FROM matches WHERE event_id=1 AND bracket_round=2 AND bracket_slot=1");
   await call(env, "POST", "/api/admin/events/1/brackets/slot", {
-    token, body: { match_id: semi.id, side: "a", team_id: 9 },
+    token, body: { match_id: semi.id, side: "a", team_id: 10 },
   });
+
+  // Slot 2 of the quarters feeds side B of this same semi. Score it.
+  const feedsB = qf(env, 2);
+  env.DB.exec(`UPDATE matches SET score_a=25, score_b=11 WHERE id=${feedsB.id}`);
+  await call(env, "POST", "/api/admin/events/1/brackets/advance", { token });
+
+  const after = env.DB.one("SELECT team_a_id, team_b_id, slot_locked_a, slot_locked_b FROM matches WHERE id=?1", semi.id);
+  assert.equal(after.team_a_id, 10, "the held side is untouched");
+  assert.equal(after.slot_locked_a, 1);
+  assert.equal(after.team_b_id, feedsB.team_a_id, "the OTHER side must still receive its winner");
+  assert.equal(after.slot_locked_b, 0, "and must not have been locked as a side effect");
+  env.DB.close();
+});
+
+test("release: true hands the slot back, and the scores take it over again", async () => {
+  // A lock nobody can undo is a trap: the person who set it in the morning is not the person looking at
+  // it in the afternoon. This also re-asserts the pre-v0.78.0 behaviour, which is still correct — it is
+  // now opt-in rather than unavoidable.
+  const { env, token } = await withBracket();
   const feeder = qf(env, 1);
+  const semi = env.DB.one("SELECT id FROM matches WHERE event_id=1 AND bracket_round=2 AND bracket_slot=1");
   env.DB.exec(`UPDATE matches SET score_a=25, score_b=10 WHERE id=${feeder.id}`);
   await call(env, "POST", "/api/admin/events/1/brackets/advance", { token });
+  await call(env, "POST", "/api/admin/events/1/brackets/slot", {
+    token, body: { match_id: semi.id, side: "a", team_id: 10 },
+  });
+  assert.equal(env.DB.one("SELECT team_a_id FROM matches WHERE id=?1", semi.id).team_a_id, 10);
+
+  const rel = await call(env, "POST", "/api/admin/events/1/brackets/slot", {
+    token, body: { match_id: semi.id, side: "a", team_id: 10, release: true },
+  });
+  assert.equal(rel.status, 200, JSON.stringify(rel.data));
+  assert.equal(rel.data.slot_held, false);
+  assert.match(rel.data.note, /follows the scores again/);
+  assert.equal(env.DB.one("SELECT slot_locked_a FROM matches WHERE id=?1", semi.id).slot_locked_a, 0);
+
+  await call(env, "POST", "/api/admin/events/1/brackets/advance", { token });
   assert.equal(env.DB.one("SELECT team_a_id FROM matches WHERE id=?1", semi.id).team_a_id, feeder.team_a_id,
-    "the feeder's winner should have taken the slot back");
+    "released, the feeding game winner must take the slot back");
+  env.DB.close();
+});
+
+test("clearing a slot releases it too — emptying is not freezing", async () => {
+  // A director clearing a slot is undoing a mistake, not asking to hold it empty forever. If clearing
+  // left the lock on, the slot would never fill again and nothing would say why.
+  const { env, token } = await withBracket();
+  const m = qf(env, 1);
+  await call(env, "POST", "/api/admin/events/1/brackets/slot", {
+    token, body: { match_id: m.id, side: "a", team_id: 10 },
+  });
+  assert.equal(env.DB.one("SELECT slot_locked_a FROM matches WHERE id=?1", m.id).slot_locked_a, 1);
+
+  const cleared = await call(env, "POST", "/api/admin/events/1/brackets/slot", {
+    token, body: { match_id: m.id, side: "a", team_id: null },
+  });
+  assert.equal(cleared.data.slot_held, false);
+  assert.match(cleared.data.note, /follows the scores again/);
+  assert.equal(env.DB.one("SELECT slot_locked_a FROM matches WHERE id=?1", m.id).slot_locked_a, 0);
+  env.DB.close();
+});
+
+test("NC: the hold can fail to hold — with the lock off, advance still overwrites", async () => {
+  /* The control for every assertion above. If `advanceBracketFor` had simply stopped overwriting slots
+     for some unrelated reason, the survival tests would all pass while the lock did nothing at all. So
+     the same scenario runs with the lock cleared directly in SQL — mutating the REAL input the guard
+     reads — and the team MUST be replaced. */
+  const { env, token } = await withBracket();
+  const feeder = qf(env, 1);
+  const semi = env.DB.one("SELECT id FROM matches WHERE event_id=1 AND bracket_round=2 AND bracket_slot=1");
+  env.DB.exec(`UPDATE matches SET score_a=25, score_b=10 WHERE id=${feeder.id}`);
+  await call(env, "POST", "/api/admin/events/1/brackets/advance", { token });
+  await call(env, "POST", "/api/admin/events/1/brackets/slot", {
+    token, body: { match_id: semi.id, side: "a", team_id: 10 },
+  });
+  env.DB.exec(`UPDATE matches SET slot_locked_a=0 WHERE id=${semi.id}`);
+  await call(env, "POST", "/api/admin/events/1/brackets/advance", { token });
+  assert.equal(env.DB.one("SELECT team_a_id FROM matches WHERE id=?1", semi.id).team_a_id, feeder.team_a_id,
+    "with the lock off the winner must reclaim the slot — otherwise the lock proves nothing");
   env.DB.close();
 });
 

@@ -29,6 +29,7 @@
  */
 import { bracketOrder } from "./scheduler.js";
 import { personName, CAPTAIN_JOIN, CAPTAIN_COLS } from "./names.js"; // v0.74.0 — one name rule
+import { courtsFor, allocate, slotsFrom, conflicts } from "./courts.js"; // v0.78.0 — fixed ranges, real times
 
 /* ---------------- pure engine ---------------- */
 
@@ -141,6 +142,27 @@ export function pendingAdvances(matches) {
       const current = to.side === "a" ? next.team_a_id : next.team_b_id;
       if (current === teamId) continue;                     // already correct — idempotent
 
+      /* A HELD SIDE IS NOT TOUCHED (v0.78.0, migration 0041).
+         Owner 2026-08-03: "allow movement in brackets to fix any errors." An edit that reverts itself
+         fixes nothing, and v0.75.0 proved the revert happened within minutes: advance derives the tree
+         from scores and runs on every score entered anywhere in the event. So a side a director placed
+         by hand is skipped here — deliberately, and only that side, because the other one must keep
+         advancing normally or the bracket silently stops moving and looks like scores being ignored. */
+      if (to.side === "a" ? next.slot_locked_a : next.slot_locked_b) {
+        // Reported as a change that WOULD have happened, flagged `held`, rather than dropped. Silence
+        // makes "nothing to move" and "something wanted to move and a human is holding it" identical,
+        // and the second is a decision the director made and may well want to undo.
+        changes.push({
+          match_id: next.id, round: to.round, slot: to.slot, side: to.side,
+          team_id: teamId, from_match_id: m.id, replaced_team_id: current || null,
+          disturbs_played_match: next.score_a !== null && next.score_b !== null,
+          held: true,
+        });
+        // The in-memory copy is deliberately NOT updated: the held team is who is actually playing, so
+        // whatever they win must carry forward from THEM, not from the team advance wanted to put here.
+        continue;
+      }
+
       changes.push({
         match_id: next.id,
         round: to.round,
@@ -175,17 +197,21 @@ export function pendingAdvances(matches) {
  */
 export async function advanceBracketFor(env, orgId, eventId) {
   const rows = (await env.DB.prepare(
-    `SELECT id, bracket_id, bracket_round, bracket_slot, team_a_id, team_b_id, score_a, score_b
+    `SELECT id, bracket_id, bracket_round, bracket_slot, team_a_id, team_b_id, score_a, score_b,
+            slot_locked_a, slot_locked_b
        FROM matches WHERE org_id=?1 AND event_id=?2 AND bracket_id IS NOT NULL AND deleted_at IS NULL
       ORDER BY bracket_id, bracket_round DESC, bracket_slot`
   ).bind(orgId, eventId).all()).results || [];
-  if (!rows.length) return { hasBracket: false, advanced: 0, disturbed: 0, changes: [] };
+  if (!rows.length) return { hasBracket: false, advanced: 0, disturbed: 0, held: 0, changes: [] };
 
   const changes = [];
   for (const bid of [...new Set(rows.map((r) => r.bracket_id))]) {
     changes.push(...pendingAdvances(rows.filter((r) => r.bracket_id === bid)));
   }
-  for (const c of changes) {
+  // Only the ones nobody is holding get written. `held` entries are carried in the return so the
+  // caller can say so — see migration 0041 for why the lock exists at all.
+  const applied = changes.filter((c) => !c.held);
+  for (const c of applied) {
     const col = c.side === "a" ? "team_a_id" : "team_b_id";
     await env.DB.prepare(
       `UPDATE matches SET ${col}=?1, updated_at=datetime('now') WHERE id=?2 AND org_id=?3`
@@ -193,8 +219,9 @@ export async function advanceBracketFor(env, orgId, eventId) {
   }
   return {
     hasBracket: true,
-    advanced: changes.length,
-    disturbed: changes.filter((c) => c.disturbs_played_match).length,
+    advanced: applied.length,
+    disturbed: applied.filter((c) => c.disturbs_played_match).length,
+    held: changes.length - applied.length,
     changes,
   };
 }
@@ -254,7 +281,7 @@ async function seedOrder(env, ctx, eventId, explicit) {
  */
 export async function generateBracketFor(env, ctx, eventId, b = {}) {
   const ev = await env.DB.prepare(
-    "SELECT id, name, court_count FROM events WHERE id=?1 AND org_id=?2 AND deleted_at IS NULL"
+    "SELECT id, name, court_count, starts_at FROM events WHERE id=?1 AND org_id=?2 AND deleted_at IS NULL"
   ).bind(eventId, ctx.orgId).first();
   if (!ev) return { ok: false, error: "That event doesn't exist.", status: 404 };
 
@@ -316,13 +343,26 @@ export async function generateBracketFor(env, ctx, eventId, b = {}) {
     plans.push({ g, tree });
   }
 
+  /* A bracket may carry its own court range, and may belong to a division that has one. Both are read
+     back after the insert so the allocator sees exactly what the database holds rather than what this
+     function believes it just wrote — the same reason standings are derived and never stored. */
+  const divisionFor = (name) => {
+    const d = Number(b.division_id) || null;
+    return name === "A" ? d : (Number(b.bb_division_id) || d);
+  };
   const built = [];
   for (const p of plans) {
     const ins = await env.DB.prepare(
-      "INSERT INTO brackets (org_id, event_id, name, split_rule, config_json) VALUES (?1,?2,?3,?4,?5)"
+      `INSERT INTO brackets (org_id, event_id, name, split_rule, config_json, division_id, court_from, court_to)
+       VALUES (?1,?2,?3,?4,?5,?6,?7,?8)`
     ).bind(ctx.orgId, eventId, p.g.name, aSize < seeds.ids.length ? `top${aSize}` : "all",
-           JSON.stringify({ seeded_by: seeds.source, seeds: p.g.ids, points_to: pointsTo })).run();
+           JSON.stringify({ seeded_by: seeds.source, seeds: p.g.ids, points_to: pointsTo }),
+           divisionFor(p.g.name),
+           Number(b.court_from) || null, Number(b.court_to) || null).run();
     p.bracketId = ins.meta.last_row_id;
+    p.bracketRow = await env.DB.prepare(
+      "SELECT id, division_id, court_from, court_to FROM brackets WHERE id=?1 AND org_id=?2"
+    ).bind(p.bracketId, ctx.orgId).first();
     built.push({
       id: p.bracketId, name: p.g.name, teams: p.g.ids.length,
       size: p.tree.size, rounds: p.tree.depth, byes: p.tree.byes, matches: p.tree.matches.length,
@@ -343,29 +383,56 @@ export async function generateBracketFor(env, ctx, eventId, b = {}) {
 
      Stage is measured from the FIRST game played (`depth - round`), not from the final, so a 4-team
      BB starts alongside an 8-team A's quarter-finals instead of alongside its final. */
-  const stages = Math.max(...plans.map((p) => p.tree.depth));
-  let scheduleRound = poolMax.r;
-  let written = 0;
-  for (let stage = 0; stage < stages; stage++) {
-    const wave = [];
-    for (const p of plans) {
-      for (const mt of p.tree.matches) if (p.tree.depth - mt.round === stage) wave.push({ p, mt });
-    }
-    if (!wave.length) continue;
-    for (let i = 0; i < wave.length; i++) {
-      const { p, mt } = wave[i];
-      const round = scheduleRound + 1 + Math.floor(i / courts);
-      const court = (i % courts) + 1;
+  /* v0.78.0 — COURTS ARE ALLOCATED BY RANGE, AND TIME IS A REAL THING NOW.
+     Owner 2026-08-03: "bracket generation should honor the fixed court number. However, as brackets
+     collapse courts do become avialable. so there's a need for the scheduling time component if we
+     overlap."
+
+     v0.75.0 fixed the double bookings by treating every court as one undifferentiated pile: it pooled
+     each stage's games and started a new round when the pile ran out. That stopped two teams being
+     sent to one net, and it threw away both halves of what the owner is asking for — a division's
+     courts were not fixed (an A bracket could be put on the BB division's courts), and the courts a
+     collapsing bracket stopped needing were never offered to anyone else.
+
+     `courts.js` does the allocation now: each bracket gets the courts it is ALLOWED (its own range, or
+     its division's, or the whole event), and games take the earliest slot with a free allowed court.
+     Brackets with disjoint ranges therefore run simultaneously; brackets that share courts queue; and a
+     bracket down to its final leaves its other courts free for whoever else may use them. */
+  const divisions = new Map(((await env.DB.prepare(
+    "SELECT id, court_from, court_to FROM divisions WHERE org_id=?1 AND event_id=?2 AND deleted_at IS NULL"
+  ).bind(ctx.orgId, eventId).all()).results || []).map((d) => [d.id, d]));
+
+  const alloc = allocate(plans.map((p) => ({
+    bracketId: p.bracketId,
+    depth: p.tree.depth,
+    matches: p.tree.matches,
+    courts: courtsFor(p.bracketRow, divisions.get(p.bracketRow && p.bracketRow.division_id), courts),
+  })));
+
+  // Wall-clock times only if the event has a start and a slot length. Otherwise `starts_at` stays NULL
+  // — migration 0041: a fabricated time on a results sheet is worse than no time.
+  const slotMinutes = Number(b.slot_minutes) > 0 ? Number(b.slot_minutes) : null;
+  const times = slotMinutes ? slotsFrom(ev.starts_at, slotMinutes, alloc.slots) : null;
+
+  const byKey = new Map(alloc.assignments.map((a) => [`${a.bracketId}:${a.round}:${a.slot}`, a]));
+  let written = 0, unplaced = 0;
+  for (const p of plans) {
+    for (const mt of p.tree.matches) {
+      const a = byKey.get(`${p.bracketId}:${mt.round}:${mt.slot}`);
+      // No allocation means the bracket's court range was empty or unusable. The game is still written
+      // — a missing fixture is worse than one a director has to place by hand — with no court claimed.
+      if (!a) unplaced++;
       await env.DB.prepare(
         `INSERT INTO matches (org_id, event_id, stage, round, court, team_a_id, team_b_id,
-                              points_to, cap, game_number, bracket_id, bracket_round, bracket_slot)
-         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,1,?10,?11,?12)`
-      ).bind(ctx.orgId, eventId, stageForRound(mt.round), round, court,
+                              points_to, cap, game_number, bracket_id, bracket_round, bracket_slot, starts_at)
+         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,1,?10,?11,?12,?13)`
+      ).bind(ctx.orgId, eventId, stageForRound(mt.round),
+             poolMax.r + 1 + (a ? a.wave : 0), a ? a.court : 0,
              mt.a ? p.g.ids[mt.a - 1] : null, mt.b ? p.g.ids[mt.b - 1] : null,
-             pointsTo, cap, p.bracketId, mt.round, mt.slot).run();
+             pointsTo, cap, p.bracketId, mt.round, mt.slot,
+             times && a ? times[a.wave] : null).run();
       written++;
     }
-    scheduleRound += Math.ceil(wave.length / courts);
   }
 
   return { ok: true, event: ev.name, seededBy: seeds.source, built, written, replaced };
@@ -433,14 +500,21 @@ export async function bracketRoutes(request, env, url, ctx) {
     }
 
     const loaded = await loadBrackets(env, ctx, eventId);
+    // `held` is reported separately from `advanced` because "nothing moved" and "something wanted to
+    // move and a human is holding it" are different facts, and the second is a decision the director
+    // made and may want to undo. Silence would make them identical (v0.78.0, migration 0041).
+    const heldNote = r.held
+      ? ` ${r.held} slot${r.held === 1 ? " is" : "s are"} held by hand and ${r.held === 1 ? "was" : "were"} left alone — send release: true on the slot to hand ${r.held === 1 ? "it" : "them"} back.`
+      : "";
     return json({
       ok: true,
       advanced: r.advanced,
       disturbed: r.disturbed,
-      note: r.advanced === 0
+      held: r.held || 0,
+      note: (r.advanced === 0
         ? "Nothing to move — every finished game already points at the right next game."
         : `Moved ${r.advanced} winner${r.advanced === 1 ? "" : "s"} forward.` +
-          (r.disturbed ? ` ${r.disturbed} later game${r.disturbed === 1 ? " already had a score and its teams changed" : "s already had scores and their teams changed"} — check those.` : ""),
+          (r.disturbed ? ` ${r.disturbed} later game${r.disturbed === 1 ? " already had a score and its teams changed" : "s already had scores and their teams changed"} — check those.` : "")) + heldNote,
       ...loaded,
     });
   }
@@ -482,11 +556,24 @@ export async function bracketRoutes(request, env, url, ctx) {
       if (other && other === teamId) return json({ error: "A team can't play itself." }, 400);
     }
 
+    /* PLACING BY HAND HOLDS THE SIDE (v0.78.0, migration 0041).
+       Owner 2026-08-03: "allow movement in brackets to fix any errors." Until now this route wrote the
+       team and the next advance pass wrote over it — v0.75.0 proved that took minutes, because advance
+       runs on every score entered anywhere in the event. An edit that reverts itself fixes nothing.
+
+       `release: true` hands the side back to the algorithm, and `team_id: null` (clearing a slot) also
+       releases it: a director emptying a slot is not asking to freeze it empty, they are undoing a
+       mistake. Only THIS side is affected — the other must keep advancing or the bracket quietly
+       stops moving, which looks exactly like the software ignoring scores. */
+    const release = b.release === true || teamId === null;
+    const lockCol = side === "a" ? "slot_locked_a" : "slot_locked_b";
     await env.DB.prepare(
-      `UPDATE matches SET ${side === "a" ? "team_a_id" : "team_b_id"}=?1, updated_at=datetime('now')
-        WHERE id=?2 AND org_id=?3`
-    ).bind(teamId, matchId, ctx.orgId).run();
-    await audit(env, ctx, "bracket.slot", "matches", matchId, { side, team_id: teamId });
+      `UPDATE matches SET ${side === "a" ? "team_a_id" : "team_b_id"}=?1, ${lockCol}=?2,
+                          updated_at=datetime('now')
+        WHERE id=?3 AND org_id=?4`
+    ).bind(teamId, release ? 0 : 1, matchId, ctx.orgId).run();
+    await audit(env, ctx, "bracket.slot", "matches", matchId,
+      { side, team_id: teamId, held: !release });
 
     // A hand-placed team must NOT be undone by the next advance pass. `advanceBracketFor` derives
     // everything from scores, so it would happily overwrite this slot the moment the feeding game is
@@ -526,16 +613,74 @@ export async function bracketRoutes(request, env, url, ctx) {
     return json({
       ok: true,
       note: teamId
-        ? "Placed." + (feederWinner
-          ? ` Careful — ${feederName.replace(/^Winner of /, "")} has already been won, so the next score entered anywhere in this bracket puts its winner back in this slot. If that team has gone home, record their forfeit instead.`
-          : fragile
-            ? " Note: the game that feeds this slot has not been played yet, so scoring it will replace this team with its winner."
-            : "")
-        : "Slot cleared.",
-      overwritten_by_advance_risk: fragile,
-      // Which of the two, so the page can shout about the imminent one and merely mention the other.
-      advance_reverts_immediately: !!feederWinner,
+        ? (release
+          ? "Placed, and this slot follows the scores again — the next result that feeds it will take it over."
+          : `Placed and held. ${feederName ? feederName.replace(/^Winner of /, "") : "The feeding game"} will not take this slot back, whatever it finishes. Send release: true to hand it back to the bracket.`)
+        : "Slot cleared, and it follows the scores again.",
+      // Held, so no longer a risk — but the page still needs to know which state it is in.
+      slot_held: !release && !!teamId,
+      // Kept for the page's benefit: whether a feeding game exists and whether it is already decided.
+      overwritten_by_advance_risk: fragile && release,
+      advance_reverts_immediately: !!feederWinner && release,
       ...loaded,
+    });
+  }
+
+  /* ---- move a game to a different court, or a different time ----
+     Owner 2026-08-03: "We need ability to assign different courts to players based on availability of
+     courts during bracket."
+
+     WARNS, NEVER REFUSES. Every other override in this module works the same way and for the same
+     reason the owner gave about bracket seeding: "many people quit at this point too, so we want to
+     have flexibility to modify." A director standing on court 3 knows something the schedule does not —
+     that court 7's net is broken, that a team has a flight. Refusing the move would send them to a
+     paper grid, and then the software is not the record any more. So a double booking is reported in a
+     sentence with the game it collides with, and written anyway. */
+  if ((x = p.match(/^\/api\/admin\/events\/(\d+)\/matches\/(\d+)\/court$/)) && m === "POST") {
+    const denied = await requireStaff(env, ctx);
+    if (denied) return denied;
+    const eventId = +x[1], matchId = +x[2];
+    const b = await request.json().catch(() => ({}));
+
+    const mt = await env.DB.prepare(
+      `SELECT id, court, round, starts_at FROM matches
+        WHERE id=?1 AND org_id=?2 AND event_id=?3 AND deleted_at IS NULL`
+    ).bind(matchId, ctx.orgId, eventId).first();
+    if (!mt) return json({ error: "That game isn't part of this event." }, 404);
+
+    const court = b.court === undefined ? mt.court : Number(b.court);
+    if (!Number.isInteger(court) || court < 0 || court > 200) {
+      return json({ error: "Send a court number from 1 to 200, or 0 to take it off a court." }, 400);
+    }
+    // `starts_at: null` clears the time; omitting it leaves the existing one alone. The two are
+    // different intents and collapsing them would make clearing a time impossible.
+    const startsAt = b.starts_at === undefined ? mt.starts_at
+      : (b.starts_at === null || b.starts_at === "" ? null : String(b.starts_at));
+    if (startsAt !== null && Number.isNaN(Date.parse(startsAt))) {
+      return json({ error: "That start time isn't a date we can read." }, 400);
+    }
+
+    await env.DB.prepare(
+      "UPDATE matches SET court=?1, starts_at=?2, updated_at=datetime('now') WHERE id=?3 AND org_id=?4"
+    ).bind(court, startsAt, matchId, ctx.orgId).run();
+    await audit(env, ctx, "match.court", "matches", matchId,
+      { from: { court: mt.court, starts_at: mt.starts_at }, to: { court, starts_at: startsAt } });
+
+    // Checked AFTER the write, against what the table now holds — the honest question is "what does the
+    // schedule say now", not "what did this request intend".
+    const all = (await env.DB.prepare(
+      `SELECT id, court, round, starts_at FROM matches
+        WHERE org_id=?1 AND event_id=?2 AND deleted_at IS NULL AND court > 0`
+    ).bind(ctx.orgId, eventId).all()).results || [];
+    const clash = conflicts(all).filter((c) => c.match_ids.includes(matchId));
+
+    return json({
+      ok: true,
+      court, starts_at: startsAt,
+      conflicts: clash,
+      note: clash.length
+        ? `Moved to court ${court}. Careful — game ${clash[0].match_ids.filter((i2) => i2 !== matchId).join(", ")} ${clash[0].match_ids.length > 2 ? "are" : "is"} also on court ${court} at the same time.`
+        : `Moved to court ${court}.`,
     });
   }
 

@@ -144,16 +144,17 @@ test("pad produces the 4-digit form used in filenames and the ledger", () => {
   assert.equal(pad(2026), "2026");
 });
 
-test("the real db/migrations directory parses cleanly and reports 0040", () => {
+test("the real db/migrations directory parses cleanly and reports 0041", () => {
   // This number is a deliberate ratchet, not a nuisance: it reddens on every new migration and
   // makes whoever added one confirm the scanner still reads the whole directory. Bump it in the
   // same commit as the migration, AFTER the ledger row exists in live D1 (v0.60.0 → 0036;
-  // v0.66.0 → 0037; v0.69.0 → 0038; v0.70.0 → 0039; v0.76.0 → 0040 — in every case the ledger row was
-  // read back from live D1 before this line moved. It earned its keep again on 0040: the KOTC
-  // migration landed in the tree, the next full run went red here, and it went green only after
-  // `SELECT version FROM schema_migrations WHERE version='0040'` returned a row.)
+  // v0.66.0 → 0037; v0.69.0 → 0038; v0.70.0 → 0039; v0.76.0 → 0040; v0.78.0 → 0041 — in every case the
+  // ledger row was read back from live D1 before this line moved. It earned its keep twice on
+  // 2026-08-03: the KOTC migration and then the bracket-locks one each landed in the tree, the next
+  // full run went red here, and the number moved only after `SELECT MAX(version) FROM
+  // schema_migrations` came back with it.)
   const { highest, files, unparseable } = scanMigrations(DEFAULT_DIR);
   assert.deepEqual(unparseable, [], `unparseable migration filenames: ${unparseable.join(", ")}`);
-  assert.equal(highest, 40);
+  assert.equal(highest, 41);
   assert.ok(files >= 20, `expected at least 20 .sql files, saw ${files}`);
 });
