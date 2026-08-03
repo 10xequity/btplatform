@@ -1,5 +1,9 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.60.0 — 2026-08-03
+
+- Auto-recorded by CI on deploy. `/api/health` reported `v0.60.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
+
 ## v0.59.0 — 2026-08-03
 
 - **The 27-page rail tax is gone — and it never needed the SPA shell.** Measured before building:
