@@ -2,7 +2,51 @@
 
 ## v0.66.0 — 2026-08-03
 
-- Auto-recorded by CI on deploy. `/api/health` reported `v0.66.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
+- **Brackets you can actually play** (`admin-brackets.html`, `worker/src/brackets.js`). The repo
+  already had a bracket: it seeded a first round, wrote those games, and stopped. Semis and finals
+  were never generated, no winner ever moved anywhere, and the bracket row was not even linked to
+  its own games. A director could see round one and then ran the rest of the day on paper. That is
+  failure class 1 — built, and not usable — and this replaces it rather than sitting beside it.
+  - **Byes to the top seeds. No play-in games, ever.** Owner, 2026-08-03: *"we try to avoid
+    pigtails as often as possible with too many people waiting."* When the field is not a power of
+    two you either sit the top seeds out for a round or you play extra games while everyone else
+    watches. Standard seeding pairs positions (i, size+1−i), so the missing high numbers fall
+    opposite the best teams on their own. Twelve teams is four first-round games and four byes.
+  - **Winners move forward by recomputing the tree from the scores** — not by pushing a winner
+    forward once when a score is typed. That makes it idempotent, and it makes a correction
+    self-healing: fix a quarter-final that went in backwards and the semi it feeds is fixed too.
+    The accumulating version passes the happy path and strands the wrong team in the semi forever.
+  - A tie is not a winner. `24–24` is an unfinished game, and guessing would seed the next round
+    with the wrong team.
+  - Every empty slot names the game it is waiting on — *"Winner of Quarter-final 2"*. An empty box
+    answers nothing at the moment a director is trying to say who is on court 3 next.
+  - Seeded by pool finish when standings exist, entry seed when they do not, or a hand-picked list.
+    A/BB split so the team that finished tenth still has a day.
+- **Migration 0037**, applied to live D1 and ledgered before the deploy: `matches.bracket_id`,
+  `bracket_round`, `bracket_slot`.
+  - **One match table.** A bracket game is a game — played on a court, in a round, by two teams,
+    with someone typing a score into the same phone. Keeping it in `matches` means score entry,
+    court assignment and the new drag-and-drop editor work on brackets for free; a second table
+    would have meant a second version of each, and four chances for them to disagree.
+  - `bracket_round` counts **backwards** from the final (1 = final, 2 = semi, 3 = quarter). Forward
+    numbering changes what "round 1" means the moment a bracket grows from eight teams to sixteen.
+  - `matches.stage` stays the coarse legacy label, clamped at `quarter`, because widening its CHECK
+    needs a full non-additive table rebuild against a live database holding real scores. Said out
+    loud here and in the migration so nobody later reads `stage` and believes it.
+  - Feeds-into is **derived** — `(r−1, ceil(s/2))`, side A when the slot is odd — never stored. A
+    stored copy of a fact arithmetic already gives is a copy that can drift.
+- **A guard for a defect that was compounding in silence.** New admin pages are built by slicing
+  the shell off an existing page. If the source carries a stray `</main>`, the new page inherits it
+  *and adds one* — and browsers discard an unmatched closing tag without a word, so the page looks
+  perfect. By v0.65.0 five pages were affected and climbing: 5, 4, 4, 3, 2. Swept them all, and
+  `page_structure.test.mjs` now scans every shipped HTML file for unbalanced or doubled landmarks.
+  It caught my own bracket-page generator on its first run.
+- Also swept: the `?v=` cache buster **inside** `admin-nav.js`, `site-nav.js` and
+  `signup-widget.js`. The release sweep had only ever touched `.html` — a guard narrower than its
+  subject, reporting clean.
+- Tests **827** (+24, measured before and after), including negative controls that mutate the real
+  code: break the seeding and the bye assertions fail; remove the idempotency short-circuit and the
+  advancement assertions fail. Preflight CLEAR.
 
 ## v0.65.0 — 2026-08-03
 
