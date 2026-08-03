@@ -1,5 +1,9 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.58.0 — 2026-08-03
+
+- Auto-recorded by CI on deploy. `/api/health` reported `v0.58.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
+
 ## v0.57.0 — 2026-08-03
 
 - **End-to-end operating-loop harness** (roadmap §3.2 — "before more feature surface, not after").
