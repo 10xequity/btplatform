@@ -1,13 +1,23 @@
 /* Boomtown Platform — Brackets (admin page script)
-   File: web/assets/admin-brackets.js · Version: v1.0 · Date: 2026-08-03 · Ships in: v0.66.0
+   File: web/assets/admin-brackets.js · Version: v2.0 · Date: 2026-08-03 · Ships in: v0.72.0
 
    The bracket is drawn as one column per round, earliest on the left, so it reads the way a bracket
-   on a gym wall reads. Every slot that has no team yet says which game it is waiting on — "Winner of
-   Quarter-final 2" — because an empty box tells a director nothing at the moment they most need to
-   answer "who is on court 3 next?".
+   on a gym wall reads.
 
-   The server does the seeding, the byes and the advancing. This file draws what comes back and asks
-   for the next thing. Nothing here decides who won. */
+   v2.0 — THE SEEDING IS A STARTING POINT, NOT AN ANSWER. Owner 2026-08-03: "brackets should auto
+   populate but can be overrided with drag and drop or type entry ... teams might forfeit so we can
+   replace them in the bracket ... The assignment of bracket will be dependent on the admin running
+   it, and reviewing the scores of the game. many people quit at this point too, so we want to have
+   flexibility to modify."
+
+   So every slot takes any team in the event: drag one off the bench, or pick it from a list. The
+   bench shows the POOL each team came out of and where they finished, because when three teams have
+   gone home the only question that matters is who is available and how they did.
+
+   ONE WARNING IS LOAD-BEARING. Advancement is recomputed from scores, so a team placed by hand into
+   a slot whose feeding game has not been played yet WILL be replaced by that game's winner. The
+   server says so and this page repeats it, because a change that silently reverts itself looks like
+   the software losing your work. */
 (function () {
   "use strict";
   const { api, esc, fail } = window.BT_ADMIN;
@@ -15,22 +25,48 @@
 
   let eventId = null;
   let data = null;
+  let picking = null;        // { matchId, side } while the chooser is open
 
-  function side(name, waiting, isWinner, score) {
-    const cls = "br-side" + (isWinner ? " won" : "") + (name ? "" : " tbd");
-    return `<span class="${cls}">
-      <span class="br-name">${name ? esc(name) : esc(waiting || "To be decided")}</span>
-      <span class="br-score">${score === null || score === undefined ? "" : score}</span>
-    </span>`;
+  /* ---------- render ---------- */
+
+  const origin = (pool, rank) => {
+    const bits = [];
+    if (pool) bits.push(pool);
+    if (rank) bits.push(`${rank}${ord(rank)}`);
+    return bits.length ? `<span class="br-from">${esc(bits.join(" · "))}</span>` : "";
+  };
+  const ord = (n) => (n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] || "th");
+
+  function side(mt, which) {
+    const name = which === "a" ? mt.team_a : mt.team_b;
+    const id = which === "a" ? mt.team_a_id : mt.team_b_id;
+    const waiting = which === "a" ? mt.waiting_a : mt.waiting_b;
+    const score = which === "a" ? mt.score_a : mt.score_b;
+    const won = mt.winner && mt.winner === name;
+    const pool = which === "a" ? mt.pool_a : mt.pool_b;
+    const rank = which === "a" ? mt.rank_a : mt.rank_b;
+    return `<button class="br-side${won ? " won" : ""}${name ? "" : " tbd"}"
+        type="button" data-slot="${mt.id}:${which}"
+        aria-label="${name ? esc(name) : esc(waiting || "empty")}. Choose a different team for this slot."
+        ${id ? `draggable="true" data-drag="${id}"` : ""}>
+      <span class="br-line">
+        <span class="br-name">${name ? esc(name) : esc(waiting || "To be decided")}</span>
+        <span class="br-score">${score === null || score === undefined ? "" : score}</span>
+      </span>
+      ${origin(pool, rank)}
+    </button>`;
   }
 
   function matchCard(mt) {
-    const aWon = mt.winner && mt.winner === mt.team_a;
-    const bWon = mt.winner && mt.winner === mt.team_b;
-    return `<li class="br-match"${mt.winner ? ' data-done="1"' : ""}>
+    const done = !!mt.winner;
+    return `<li class="br-match"${done ? ' data-done="1"' : ""} data-match="${mt.id}">
       <span class="br-court">Ct ${mt.court}</span>
-      ${side(mt.team_a, mt.waiting_a, aWon, mt.score_a)}
-      ${side(mt.team_b, mt.waiting_b, bWon, mt.score_b)}
+      ${side(mt, "a")}
+      ${side(mt, "b")}
+      ${!done && mt.team_a_id && mt.team_b_id ? `<span class="br-ff">
+        <button class="br-ffbtn" type="button" data-ff="${mt.id}:a" aria-label="${esc(mt.team_a)} forfeited">${esc(mt.team_a)} forfeits</button>
+        <button class="br-ffbtn" type="button" data-ff="${mt.id}:b" aria-label="${esc(mt.team_b)} forfeited">${esc(mt.team_b)} forfeits</button>
+      </span>` : ""}
     </li>`;
   }
 
@@ -50,11 +86,116 @@
     </section>`;
   }
 
+  function benchHtml() {
+    const list = (data && data.bench) || [];
+    if (!list.length) return `<li class="br-empty">No teams on this event yet.</li>`;
+    return list.map((t) => `<li>
+      <button class="br-bench-tile${t.in_bracket ? " used" : ""}" type="button"
+          draggable="true" data-drag="${t.id}"
+          aria-label="${esc(t.name)}${t.pool ? ", " + esc(t.pool) : ""}${t.rank ? ", finished " + t.rank + ord(t.rank) : ""}${t.in_bracket ? ", already in the bracket" : ""}">
+        <span class="br-name">${esc(t.name)}</span>
+        <span class="br-from">${esc([t.pool, t.rank ? `${t.rank}${ord(t.rank)}` : null, `${t.wins}-${t.losses}`].filter(Boolean).join(" · "))}</span>
+        ${t.in_bracket ? `<span class="br-used">in bracket</span>` : ""}
+      </button>
+    </li>`).join("");
+  }
+
   function render() {
     const list = (data && data.brackets) || [];
     $("bEmpty").hidden = list.length > 0;
     $("bTrees").innerHTML = list.map(treeHtml).join("");
+    $("bBench").innerHTML = benchHtml();
+    wire();
   }
+
+  /* ---------- editing a slot ---------- */
+
+  async function setSlot(matchId, sideKey, teamId) {
+    const r = await api(`/api/admin/events/${eventId}/brackets/slot`, {
+      method: "POST",
+      body: JSON.stringify({ match_id: Number(matchId), side: sideKey, team_id: teamId }),
+    });
+    if (!r.ok) return fail("bTrees", r.data.error || "Couldn't change that slot.");
+    data = r.data;
+    render();
+    $("bNote").textContent = r.data.note;
+  }
+
+  async function forfeit(matchId, sideKey) {
+    const mt = allMatches().find((m) => m.id === Number(matchId));
+    const who = sideKey === "a" ? mt.team_a : mt.team_b;
+    if (!window.confirm(`Record ${who} as forfeiting? The other team is credited with the win and moves on.`)) return;
+    const r = await api(`/api/admin/events/${eventId}/brackets/forfeit`, {
+      method: "POST", body: JSON.stringify({ match_id: Number(matchId), side: sideKey }),
+    });
+    if (!r.ok) return fail("bTrees", r.data.error || "Couldn't record that forfeit.");
+    data = r.data;
+    render();
+    $("bNote").textContent = r.data.note;
+  }
+
+  const allMatches = () => ((data && data.brackets) || []).flatMap((b) => b.rounds).flatMap((r) => r.matches);
+
+  /** The type-entry path the owner asked for, alongside dragging. */
+  function openChooser(matchId, sideKey) {
+    picking = { matchId, side: sideKey };
+    const list = (data.bench || []);
+    $("bPickList").innerHTML = list.map((t) => `<li>
+      <button class="btn ghost br-pick" type="button" data-pick="${t.id}">
+        ${esc(t.name)} <span class="br-from">${esc([t.pool, t.rank ? `${t.rank}${ord(t.rank)}` : null].filter(Boolean).join(" · "))}</span>
+      </button></li>`).join("") +
+      `<li><button class="btn ghost br-pick" type="button" data-pick="">Leave empty</button></li>`;
+    $("bPick").hidden = false;
+    $("bPickFilter").value = "";
+    $("bPickFilter").focus();
+    $("bPick").querySelectorAll("[data-pick]").forEach((b) => {
+      b.addEventListener("click", () => {
+        const id = b.dataset.pick === "" ? null : Number(b.dataset.pick);
+        closeChooser();
+        setSlot(matchId, sideKey, id);
+      });
+    });
+  }
+
+  function closeChooser() { picking = null; $("bPick").hidden = true; }
+
+  function wire() {
+    document.querySelectorAll("[data-slot]").forEach((el) => {
+      el.addEventListener("click", () => {
+        const [id, s] = el.dataset.slot.split(":");
+        openChooser(id, s);
+      });
+      el.addEventListener("dragover", (e) => { e.preventDefault(); el.classList.add("over"); });
+      el.addEventListener("dragleave", () => el.classList.remove("over"));
+      el.addEventListener("drop", (e) => {
+        e.preventDefault();
+        el.classList.remove("over");
+        const teamId = Number(e.dataTransfer.getData("text/plain"));
+        if (!teamId) return;
+        const [id, s] = el.dataset.slot.split(":");
+        setSlot(id, s, teamId);
+      });
+    });
+
+    document.querySelectorAll("[data-drag]").forEach((el) => {
+      el.addEventListener("dragstart", (e) => {
+        e.dataTransfer.setData("text/plain", el.dataset.drag);
+        e.dataTransfer.effectAllowed = "copy";
+        el.classList.add("dragging");
+      });
+      el.addEventListener("dragend", () => el.classList.remove("dragging"));
+    });
+
+    document.querySelectorAll("[data-ff]").forEach((b) => {
+      b.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const [id, s] = b.dataset.ff.split(":");
+        forfeit(id, s);
+      });
+    });
+  }
+
+  /* ---------- load / generate / advance ---------- */
 
   async function load() {
     if (!eventId) return;
@@ -72,9 +213,6 @@
       courts: Number($("bCourts").value) || undefined,
     };
     let r = await api(`/api/admin/events/${eventId}/brackets`, { method: "POST", body: JSON.stringify(body) });
-
-    // A bracket already exists. Say how big it is and what regenerating costs before doing it —
-    // the old one is only ever set aside, never destroyed, but the director should still choose.
     if (r.status === 409 && r.data.existing_matches) {
       if (!window.confirm(`${r.data.error}\n\nReplace it? The current bracket is kept and can be restored.`)) return;
       r = await api(`/api/admin/events/${eventId}/brackets`, {
@@ -82,7 +220,7 @@
       });
     }
     if (!r.ok) return fail("bTrees", r.data.error || "Couldn't generate that bracket.");
-    $("bNote").textContent = r.data.summary.join(" · ");
+    $("bNote").textContent = r.data.summary.join(" · ") + " Drag from the bench to change any slot.";
     load();
   }
 
@@ -110,6 +248,15 @@
     $("bReload").addEventListener("click", load);
     $("bGen").addEventListener("click", generate);
     $("bAdvance").addEventListener("click", advance);
+    $("bPickClose").addEventListener("click", closeChooser);
+    $("bPickFilter").addEventListener("input", () => {
+      const q = $("bPickFilter").value.toLowerCase();
+      $("bPickList").querySelectorAll("li").forEach((li) => {
+        li.hidden = q && !li.textContent.toLowerCase().includes(q);
+      });
+    });
+    // Escape closes the chooser — a dialog with no keyboard exit is a trap.
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape" && picking) closeChooser(); });
     loadEvents();
   });
 })();

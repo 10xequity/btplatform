@@ -402,6 +402,117 @@ export async function bracketRoutes(request, env, url, ctx) {
     });
   }
 
+  /* ---- manual override of a single bracket slot ----
+     Owner 2026-08-03: "brackets should auto populate but can be overrided with drag and drop or type
+     entry ... teams might forfeit so we can replace them in the bracket. additionally, this allows us
+     to move teams from other pools down as needed or around as desired." And: "The assignment of
+     bracket will be dependent on the admin running it, and reviewing the scores of the game. many
+     people quit at this point too, so we want to have flexibility to modify."
+
+     So the seeding is a starting point and this is the escape hatch. It accepts ANY team in the event,
+     including one from another pool or another division, because on the day that is exactly what has
+     to happen — three teams have gone home and the bracket still has to be played. */
+  if ((x = p.match(/^\/api\/admin\/events\/(\d+)\/brackets\/slot$/)) && m === "POST") {
+    const denied = await requireStaff(env, ctx);
+    if (denied) return denied;
+    const eventId = +x[1];
+    const b = await request.json().catch(() => ({}));
+    const matchId = Number(b.match_id);
+    const side = b.side === "a" || b.side === "b" ? b.side : null;
+    if (!matchId || !side) return json({ error: "Say which game and which side." }, 400);
+
+    const mt = await env.DB.prepare(
+      `SELECT id, bracket_id, bracket_round, bracket_slot, team_a_id, team_b_id, score_a, score_b
+         FROM matches WHERE id=?1 AND org_id=?2 AND event_id=?3 AND deleted_at IS NULL`
+    ).bind(matchId, ctx.orgId, eventId).first();
+    if (!mt) return json({ error: "That game isn't part of this event." }, 404);
+    if (!mt.bracket_id) return json({ error: "That game is pool play, not a bracket game." }, 400);
+
+    // null clears the slot — the way to undo a mistake without inventing a placeholder team.
+    let teamId = b.team_id == null || b.team_id === "" ? null : Number(b.team_id);
+    if (teamId) {
+      const ok = await env.DB.prepare(
+        "SELECT id FROM teams WHERE id=?1 AND org_id=?2 AND event_id=?3 AND deleted_at IS NULL"
+      ).bind(teamId, ctx.orgId, eventId).first();
+      if (!ok) return json({ error: "That team isn't in this event." }, 400);
+      const other = side === "a" ? mt.team_b_id : mt.team_a_id;
+      if (other && other === teamId) return json({ error: "A team can't play itself." }, 400);
+    }
+
+    await env.DB.prepare(
+      `UPDATE matches SET ${side === "a" ? "team_a_id" : "team_b_id"}=?1, updated_at=datetime('now')
+        WHERE id=?2 AND org_id=?3`
+    ).bind(teamId, matchId, ctx.orgId).run();
+    await audit(env, ctx, "bracket.slot", "matches", matchId, { side, team_id: teamId });
+
+    // A hand-placed team must NOT be undone by the next advance pass. `advanceBracketFor` derives
+    // everything from scores, so it would happily overwrite this slot the moment the feeding game is
+    // scored — which is correct for an untouched bracket and wrong for one a director has edited. The
+    // warning is explicit rather than silent, because the alternative is a change that reverts itself
+    // and looks like the software losing the edit.
+    const feeder = await env.DB.prepare(
+      `SELECT id, score_a, score_b FROM matches
+        WHERE org_id=?1 AND event_id=?2 AND bracket_id=?3 AND bracket_round=?4 AND bracket_slot=?5
+          AND deleted_at IS NULL`
+    ).bind(ctx.orgId, eventId, mt.bracket_id, mt.bracket_round + 1,
+           side === "a" ? mt.bracket_slot * 2 - 1 : mt.bracket_slot * 2).first();
+    const fragile = !!(feeder && feeder.score_a === null);
+
+    const loaded = await loadBrackets(env, ctx, eventId);
+    return json({
+      ok: true,
+      note: teamId
+        ? "Placed." + (fragile ? " Note: the game that feeds this slot has not been played yet, so scoring it will replace this team with its winner." : "")
+        : "Slot cleared.",
+      overwritten_by_advance_risk: fragile,
+      ...loaded,
+    });
+  }
+
+  /* ---- forfeit ----
+     A team that has gone home is not a slot to be emptied — it is a result. Recording it as a score
+     means the bracket advances on its own and the other team is not left waiting for a game that will
+     never be played. Replacing the team instead is also supported (the slot route above); which one
+     is right depends on whether somebody is available to take their place. */
+  if ((x = p.match(/^\/api\/admin\/events\/(\d+)\/brackets\/forfeit$/)) && m === "POST") {
+    const denied = await requireStaff(env, ctx);
+    if (denied) return denied;
+    const eventId = +x[1];
+    const b = await request.json().catch(() => ({}));
+    const matchId = Number(b.match_id);
+    const side = b.side === "a" || b.side === "b" ? b.side : null;
+    if (!matchId || !side) return json({ error: "Say which game, and which team forfeited." }, 400);
+
+    const mt = await env.DB.prepare(
+      `SELECT id, bracket_id, team_a_id, team_b_id, points_to FROM matches
+        WHERE id=?1 AND org_id=?2 AND event_id=?3 AND deleted_at IS NULL`
+    ).bind(matchId, ctx.orgId, eventId).first();
+    if (!mt) return json({ error: "That game isn't part of this event." }, 404);
+    if (!mt.bracket_id) return json({ error: "That game is pool play, not a bracket game." }, 400);
+    const winnerSide = side === "a" ? "b" : "a";
+    if (!(winnerSide === "a" ? mt.team_a_id : mt.team_b_id)) {
+      return json({ error: "There is no opponent in that game yet, so nobody can win it." }, 409);
+    }
+
+    // A forfeit is the full game to nil. Any other number would be inventing a scoreline nobody played.
+    const pts = mt.points_to || 25;
+    const [sa, sb] = winnerSide === "a" ? [pts, 0] : [0, pts];
+    await env.DB.prepare(
+      "UPDATE matches SET score_a=?1, score_b=?2, updated_at=datetime('now') WHERE id=?3 AND org_id=?4"
+    ).bind(sa, sb, matchId, ctx.orgId).run();
+    await audit(env, ctx, "bracket.forfeit", "matches", matchId, { forfeited_side: side, score: `${sa}-${sb}` });
+
+    const adv = await advanceBracketFor(env, ctx.orgId, eventId);
+    const loaded = await loadBrackets(env, ctx, eventId);
+    return json({
+      ok: true,
+      note: `Recorded as ${sa}–${sb}. ` + (adv.advanced
+        ? `The other team moves on.`
+        : `Nothing to advance yet.`),
+      ...loaded,
+    });
+  }
+
   return null;
 }
 
@@ -421,13 +532,23 @@ async function loadBrackets(env, ctx, eventId) {
       WHERE org_id=?1 AND event_id=?2 AND deleted_at IS NULL ORDER BY id`
   ).bind(ctx.orgId, eventId).all()).results || [];
 
+  // The pool a team came out of travels with it. Owner 2026-08-03: "Please list the pool they were
+  // from in their tile." When a team forfeits and somebody has to be pulled in to replace them, the
+  // only question that matters is where they came from — a name alone does not answer it, and
+  // "Pool B, 2nd" is the difference between a defensible substitution and a guess.
   const rows = (await env.DB.prepare(
     `SELECT m.id, m.bracket_id, m.bracket_round, m.bracket_slot, m.round, m.court,
             m.team_a_id, m.team_b_id, m.score_a, m.score_b, m.points_to,
-            ta.name AS team_a, tb.name AS team_b
+            ta.name AS team_a, tb.name AS team_b,
+            pa.name AS pool_a, pb.name AS pool_b,
+            sa.rank AS rank_a, sb.rank AS rank_b
        FROM matches m
        LEFT JOIN teams ta ON ta.id = m.team_a_id
        LEFT JOIN teams tb ON tb.id = m.team_b_id
+       LEFT JOIN pools pa ON pa.id = ta.pool_id AND pa.deleted_at IS NULL
+       LEFT JOIN pools pb ON pb.id = tb.pool_id AND pb.deleted_at IS NULL
+       LEFT JOIN standings sa ON sa.team_id = ta.id AND sa.event_id = m.event_id AND sa.deleted_at IS NULL
+       LEFT JOIN standings sb ON sb.team_id = tb.id AND sb.event_id = m.event_id AND sb.deleted_at IS NULL
       WHERE m.org_id=?1 AND m.event_id=?2 AND m.bracket_id IS NOT NULL AND m.deleted_at IS NULL
       ORDER BY m.bracket_id, m.bracket_round DESC, m.bracket_slot`
   ).bind(ctx.orgId, eventId).all()).results || [];
@@ -448,6 +569,9 @@ async function loadBrackets(env, ctx, eventId) {
             id: x.id, slot: x.bracket_slot, round: x.round, court: x.court,
             team_a: x.team_a, team_b: x.team_b,
             team_a_id: x.team_a_id, team_b_id: x.team_b_id,
+            // Where each team came from, for the substitution decision.
+            pool_a: x.pool_a, pool_b: x.pool_b,
+            rank_a: x.rank_a, rank_b: x.rank_b,
             score_a: x.score_a, score_b: x.score_b, points_to: x.points_to,
             winner: w ? (w === "a" ? x.team_a : x.team_b) : null,
             // Which game each empty side is waiting on, said out loud.
@@ -472,7 +596,25 @@ async function loadBrackets(env, ctx, eventId) {
     };
   });
 
-  return { event: { id: ev.id, name: ev.name }, brackets };
+  // Every team in the event, with where they finished — the bench a director substitutes from.
+  // ALL of them, not just the unplaced ones: pulling a team from another pool or another division is
+  // exactly the move the owner described, and filtering the list would hide the option.
+  const bench = (await env.DB.prepare(
+    `SELECT t.id, t.name, t.note, p.name AS pool,
+            COALESCE(s.wins,0) AS wins, COALESCE(s.losses,0) AS losses, s.rank
+       FROM teams t
+       LEFT JOIN pools p ON p.id = t.pool_id AND p.deleted_at IS NULL
+       LEFT JOIN standings s ON s.team_id = t.id AND s.event_id = t.event_id AND s.deleted_at IS NULL
+      WHERE t.org_id=?1 AND t.event_id=?2 AND t.deleted_at IS NULL
+      ORDER BY COALESCE(s.rank, 9999), t.name`
+  ).bind(ctx.orgId, eventId).all()).results || [];
+
+  const inBracket = new Set(rows.flatMap((r) => [r.team_a_id, r.team_b_id]).filter(Boolean));
+  return {
+    event: { id: ev.id, name: ev.name },
+    brackets,
+    bench: bench.map((t) => ({ ...t, in_bracket: inBracket.has(t.id) })),
+  };
 }
 
 /** "Winner of Quarter-final 2" — the game an empty slot is waiting on. */

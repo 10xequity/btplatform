@@ -1,5 +1,11 @@
 <!DOCTYPE html>
-<!-- Boomtown Platform — Brackets (admin) · Version: v1.0 · Date: 2026-08-03 · Ships in: v0.66.0
+<!-- Boomtown Platform — Brackets (admin) · Version: v2.0 · Date: 2026-08-03 · Ships in: v0.72.0
+     v2.0: every slot is editable. Drag a team from the bench or click the slot to pick one — the
+     seeding is a starting point, not an answer (owner 2026-08-03). Each tile names the pool the team
+     came out of, because when a team goes home the question is who is available and how they did.
+     A team placed by hand into a slot whose feeder has not been played will be replaced by that
+     game's winner; the page says so rather than letting the edit silently revert.
+     v1.0 shipped in v0.66.0:
      Single elimination, seeded from pool finish. Byes go to the TOP seeds and there are no play-in
      games — owner 2026-08-03: "we try to avoid pigtails as often as possible with too many people
      waiting." Every empty slot names the game it is waiting on, because an empty box answers
@@ -12,9 +18,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Brackets — Boomtown Athletics</title>
   <script>/* Pre-paint state — collapse + theme (uiux-review §4/§6.4, v0.52.0): read the bt_nav cookie and the saved theme BEFORE the first stylesheet so the rail state AND the theme are right on frame one — no post-paint snap of either. admin-nav.js writes the cookie on rail toggle and bt_theme on theme toggle; the localStorage bt_nav fallback migrates pre-v0.51 sessions. */(function(){try{var m=document.cookie.match(/(?:^|; )bt_nav=([^;]*)/);var v=m?m[1]:((window.localStorage&&localStorage.getItem("bt_nav_collapsed")==="1")?"min":"");if(v==="min")document.documentElement.dataset.nav="min";var t=(window.localStorage&&localStorage.getItem("bt_theme"))||(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.dataset.theme=t;}catch(e){}})();</script>
-  <link rel="stylesheet" href="assets/tokens.css?v=0.71.0" />
-  <link rel="stylesheet" href="assets/app.css?v=0.71.0" />
-  <link rel="stylesheet" href="assets/admin.css?v=0.71.0" />
+  <link rel="stylesheet" href="assets/tokens.css?v=0.72.0" />
+  <link rel="stylesheet" href="assets/app.css?v=0.72.0" />
+  <link rel="stylesheet" href="assets/admin.css?v=0.72.0" />
   <style>
     .mf-head { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; margin-bottom: 12px; }
     .mf-head p { max-width: 68ch; }
@@ -47,15 +53,67 @@
     .br-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .br-score { font-variant-numeric: tabular-nums; min-width: 2ch; text-align: right; }
 
+    /* v0.72.0 — the bracket is editable, so a slot is a button and the bench sits beside it. */
+    .br-layout { display: grid; grid-template-columns: minmax(0, 1fr) 240px; gap: 16px; align-items: start; }
+    .br-bench { background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-card, 10px); padding: 12px; position: sticky; top: 12px; }
+    .br-bench-list { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px;
+      max-height: 60vh; overflow-y: auto; }
+    .br-bench-tile { width: 100%; text-align: left; font: inherit; cursor: grab; display: grid; gap: 2px;
+      min-height: 44px; padding: 6px 8px; background: var(--surface-2); color: var(--text);
+      border: 1px solid var(--border); border-radius: var(--radius-control, 8px); }
+    .br-bench-tile:focus-visible, .br-side:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+    .br-bench-tile.used { opacity: .6; }
+    .br-bench-tile.dragging, .br-side.dragging { opacity: .45; }
+    .br-used { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); }
+
+    /* A slot is now a control. It keeps the row shape so the bracket still reads as a bracket. */
+    .br-side { display: grid; gap: 1px; width: 100%; text-align: left; font: inherit; cursor: pointer;
+      background: transparent; color: var(--text); border: 1px solid transparent; border-radius: 6px;
+      padding: 3px 4px; min-height: 34px; }
+    .br-side:hover { border-color: var(--border); background: var(--surface-2); }
+    .br-side.over { border-color: var(--accent); background: var(--surface-2); }
+    .br-line { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; }
+    /* The pool the team came out of, which is the whole reason this line exists. */
+    .br-from { font-size: 10px; color: var(--text-muted); }
+
+    .br-ff { grid-column: 1 / -1; display: flex; gap: 4px; flex-wrap: wrap; margin-top: 2px; }
+    .br-ffbtn { font: inherit; font-size: 9px; padding: 3px 5px; min-height: 26px; cursor: pointer;
+      background: transparent; color: var(--text-muted); border: 1px dashed var(--border); border-radius: 5px; }
+    .br-ffbtn:hover { color: var(--text); border-style: solid; }
+    .br-ffbtn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+
+    .br-pick { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: grid; place-items: center;
+      padding: 16px; z-index: 60; }
+    .br-pick-box { background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-card, 10px); padding: 14px; width: min(420px, 100%); max-height: 80vh;
+      display: flex; flex-direction: column; }
+    .br-pick-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+    #bPickFilter { font: inherit; font-size: 16px; padding: 10px; min-height: 44px; width: 100%;
+      background: var(--surface-2); color: var(--text); border: 1px solid var(--border);
+      border-radius: var(--radius-control, 8px); }
+    .br-pick-list { list-style: none; margin: 10px 0 0; padding: 0; overflow-y: auto; display: flex;
+      flex-direction: column; gap: 6px; }
+    .br-pick-list .btn { width: 100%; text-align: left; min-height: 44px; }
+    .br-empty { font-size: 12px; color: var(--text-muted); list-style: none; }
+
+    @media (max-width: 860px) {
+      /* The bench moves above the bracket rather than squeezing it. */
+      .br-layout { grid-template-columns: 1fr; }
+      .br-bench { position: static; order: -1; }
+      .br-bench-list { max-height: 200px; flex-direction: row; flex-wrap: wrap; }
+      .br-bench-tile { width: 180px; }
+    }
     @media (max-width: 430px) {
       .mf-inline input[type="number"] { max-width: 90px; }
       .br-round { min-width: 165px; }
+      .br-bench-tile { width: 100%; }
     }
   </style>
 </head>
 <body>
     <header class="header chrome-glass no-print">
-    <a class="wordmark" href="admin.html" style="text-decoration:none;color:inherit"><img class="brand-logo" src="assets/logo-boom-icon-512.png?v=0.71.0" alt="" width="22" height="22" />Boomtown <span>Athletics</span></a>
+    <a class="wordmark" href="admin.html" style="text-decoration:none;color:inherit"><img class="brand-logo" src="assets/logo-boom-icon-512.png?v=0.72.0" alt="" width="22" height="22" />Boomtown <span>Athletics</span></a>
     <div class="spacer"></div>
     <select id="orgSwitcher" class="org-switcher" aria-label="Switch organization"></select>
     <a id="btHdrMail" class="btn ghost hdr-mail" href="admin-messages.html" aria-label="Messages">✉</a>
@@ -136,7 +194,7 @@
       <div class="mf-head">
         <div>
           <h1>Brackets</h1>
-          <p class="muted">Seeded from how teams finished pool play. Byes go to the top seeds — there are no play-in games, so nobody stands around watching two teams decide who joins the draw.</p>
+          <p class="muted">Seeded from how teams finished pool play, with byes to the top seeds and no play-in games. <b>Every slot is editable</b> — drag a team from the bench, or click a slot to pick one. Use it when a team goes home, or to pull somebody across from another pool.</p>
         </div>
         <div class="mf-row" style="margin:0">
           <label class="mf-inline">Event
@@ -165,12 +223,34 @@
         <p class="mf-note" id="bNote" role="status" aria-live="polite"></p>
       </section>
 
-      <div id="bTrees"></div>
-      <p class="empty" id="bEmpty" hidden>No bracket yet. Set the size above and generate one — you can regenerate any time before the first game is played.</p>
+      <div class="br-layout">
+        <div class="br-main">
+          <div id="bTrees"></div>
+          <p class="empty" id="bEmpty" hidden>No bracket yet. Set the size above and generate one — you can regenerate any time before the first game is played.</p>
+        </div>
+
+        <aside class="br-bench" aria-labelledby="brBenchH">
+          <h2 class="mf-sub" id="brBenchH">Every team</h2>
+          <p class="mf-note">Drag one onto any slot. Shows the pool they came out of and where they finished, so a substitution can be defended.</p>
+          <ul id="bBench" class="br-bench-list"></ul>
+        </aside>
+      </div>
+
+      <div id="bPick" class="br-pick" role="dialog" aria-modal="true" aria-labelledby="bPickH" hidden>
+        <div class="br-pick-box">
+          <div class="br-pick-head">
+            <h2 class="mf-sub" id="bPickH">Who plays here?</h2>
+            <button class="btn ghost" id="bPickClose" type="button" aria-label="Close without changing anything">Close</button>
+          </div>
+          <label class="sr-only" for="bPickFilter">Filter teams</label>
+          <input id="bPickFilter" type="search" placeholder="Type to filter…" autocomplete="off" />
+          <ul id="bPickList" class="br-pick-list"></ul>
+        </div>
+      </div>
     </main>
   </div>
-  <script src="assets/config.js?v=0.71.0"></script>
-  <script src="assets/admin-nav.js?v=0.71.0"></script>
-  <script src="assets/admin-brackets.js?v=0.71.0"></script>
+  <script src="assets/config.js?v=0.72.0"></script>
+  <script src="assets/admin-nav.js?v=0.72.0"></script>
+  <script src="assets/admin-brackets.js?v=0.72.0"></script>
 </body>
 </html>
