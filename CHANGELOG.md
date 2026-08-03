@@ -2,7 +2,44 @@
 
 ## v0.74.0 — 2026-08-03
 
-- Auto-recorded by CI on deploy. `/api/health` reported `v0.74.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
+Owner 2026-08-03: *"Please add captains names for all the tiles - including live scores."* Done — with
+a distinction the owner's own standing rule already required (standards §8, recorded in CLAUDE.md §4):
+*"Names render 'First L.' unless the member chose public visibility."*
+
+- **`worker/src/names.js` — one definition of how a person's name is written.** Two would be one too
+  many: the day they disagree is the day a minor's full name is on a wall display while every admin
+  screen insists the rule is being followed. A test asserts no second, hand-rolled abbreviation has
+  appeared beside it.
+- **Staff surfaces get the full name** — pool board tiles, bracket tiles, the bracket bench, the slot
+  chooser. A director chasing a team that has not turned up for its court needs the real name.
+- **The public live board abbreviates** to "Ava S." unless that member set their profile to public, in
+  which case they get their full name because they asked for it. A junior-league captain is frequently
+  a minor, and a page with no login is published to anyone who loads it and indexed by anything that
+  crawls it.
+- **Abbreviating is the default with no argument passed.** If the default were the full name, every
+  new public surface would leak until somebody remembered a flag — defaults decide what happens when
+  nobody is thinking about it. Proven by flipping the default and watching three tests fail.
+- **The initial comes from the second word, not the last.** "Mary Jo Van Dyke" becomes "Mary J.", not
+  "Mary D." — which is a different person to everyone who knows her, and exactly the kind of wrong
+  nobody reports; they just quietly stop trusting the board. Single-word names are left alone, running
+  it twice is harmless, and a team with no captain reports nothing rather than "undefined U."
+- Corrected the live board's own header comment, which claimed "no player names anywhere" and had
+  stopped being true the moment this shipped.
+
+**Two pre-existing defects surfaced, neither caused by this change:**
+
+1. **A staff-pay test carried a hardcoded date**, `'2026-08-03T17:00:00Z'`. It passed because that was
+   tomorrow when it was written and the rate card is effective from "now". The moment real time
+   crossed `2026-08-03T17:00Z`, the shift began starting *before* the card that pays it, the rate
+   lookup found nothing, and a green test went red on a calendar boundary with **no code change at
+   all**. Now anchored to `datetime('now','+1 day')`, so it means the same thing on every day. Worth
+   recording that the first assumption was that this release had broken it; a stash-and-rerun bisect
+   showed it had not.
+2. **Cache-buster sweep and rail sync are order-dependent.** Sweeping `?v=` inside
+   `rail.partial.html` and inside the pages as separate passes leaves them byte-different, and
+   `rail_static` caught it. Sync the rail *after* the sweep.
+
+- Tests **989** (+15). Preflight CLEAR. No migration.
 
 ## v0.73.0 — 2026-08-03
 
