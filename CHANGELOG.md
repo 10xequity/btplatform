@@ -2,7 +2,34 @@
 
 ## v0.64.0 — 2026-08-03
 
-- Auto-recorded by CI on deploy. `/api/health` reported `v0.64.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
+- **The facility calendar only did days and weeks.** Confirmed in source. Day and week answer "what
+  is on today"; they never answer "how busy is October", which is the question a director asks when
+  quoting a rental or planning a season. Added a **month grid**.
+  - It loads the whole **visible grid**, not just the month. A month starting on a Wednesday shows
+    the preceding Sunday–Tuesday, and leaving those cells blank when there are bookings in them is
+    worse than not showing them at all.
+  - Paging steps a **month** via `setMonth`, not 30 days. Stepping 30 days from the 31st lands in the
+    wrong month about half the year — the classic calendar bug.
+  - Cells show three bookings then **"+N more"**. A cell listing twelve is unreadable, and
+    glanceability is the entire reason the view exists.
+  - Keyboard reachable (grid/gridcell roles, labelled day numbers), token-only styling, and on a
+    phone the seven-column grid scrolls horizontally rather than crushing to nothing.
+- **`facility_calendar.test.mjs` guards the wiring** — button, handler, renderer *and* paging must
+  exist together, because it is entirely possible to leave one behind in a refactor and ship a button
+  that does nothing. The file states plainly that it proves the wiring, not the pixels.
+- **Speed test, measured:** `/api/health` 0.26–0.29 s · member home 0.44 s / 14 KB · `tokens.css`
+  0.35 s / 14 KB · 49 pages averaging 17 KB. **No action needed.** Worth recording: the static rail
+  is ~14.6 KB of every admin page, duplicated across 31 pages — the price of the rail painting with
+  the page instead of popping in after JavaScript. Still the right trade, now written down.
+- **Historical decisions archived** into the library's Appendix A, per the owner's request to keep
+  settled reasoning out of the working set: why ZIP delivery existed and why it went; the five
+  green-but-broken checks and the pattern behind them; the three guards that were narrower than
+  their subject; how the scheduling fairness target was derived from the owner's own sheet; and the
+  answered infrastructure questions — no database upgrade, no Supabase, no TruVolley pull — so none
+  of them get re-litigated.
+- README to v0.64.0 with a corrected queue; roadmap M-TF row struck — pool play is done, and
+  brackets, Swiss, ladder, multi-day and the drag-and-drop editor are what remain.
+- Suite **785 → 792**. Cache-buster swept to `0.64.0`. No migration.
 
 ## v0.63.0 — 2026-08-03
 
