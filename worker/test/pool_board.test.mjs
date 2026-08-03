@@ -301,3 +301,51 @@ test("the pool-size hint is advisory, never blocking", () => {
   assert.match(PBJS, /over 11/);
   assert.ok(!/disabled.*pool.*size|cannot save/i.test(PBJS), "a size warning must not block saving");
 });
+
+/* ================================ withdrawn teams and pool deletion ================================
+   v0.75.0. An empty pool is HARD deleted ("if it is empty, itll auto delete" — a soft-deleted empty
+   pool is invisible clutter). The reset loop that clears `teams.pool_id` walks the LIVE roster, so a
+   withdrawn team was skipped and kept pointing at a row that was then deleted outright.
+   `teams.pool_id REFERENCES pools(id)` (migration 0039), so on live D1 that is a foreign-key
+   violation which fails the entire board save — the director loses the whole arrangement, not one
+   pointer. The in-memory harness does not enforce foreign keys, so the pointer is asserted directly. */
+
+test("a withdrawn team's pool pointer is cleared before its pool is deleted", async () => {
+  const env = boot(3);
+  const token = await staff(env);
+  let r = await save(env, token, [{ name: "Pool A", team_ids: [1, 2] }]);
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  const poolId = env.DB.one("SELECT id FROM pools WHERE event_id=1").id;
+
+  // Team 2 withdraws mid-setup. Soft-deleted, and `pool_id` is deliberately left on the row.
+  env.DB.exec("UPDATE teams SET deleted_at=datetime('now') WHERE id=2");
+  assert.equal(env.DB.one("SELECT pool_id FROM teams WHERE id=2").pool_id, poolId,
+    "precondition: the withdrawn team still points at the pool");
+
+  // The director clears the board. The pool has no matches, so it is deleted outright.
+  r = await save(env, token, []);
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  assert.equal(env.DB.one("SELECT COUNT(*) AS n FROM pools WHERE id=?1", poolId).n, 0,
+    "an empty pool with no games is still hard-deleted — that behaviour must not have changed");
+  assert.equal(env.DB.one("SELECT pool_id FROM teams WHERE id=2").pool_id, null,
+    "the withdrawn team is left pointing at a pool row that no longer exists");
+  env.DB.close();
+});
+
+test("a pool that matches still reference is soft-deleted, and keeps its teams' history", async () => {
+  // The negative control for the test above: if every removed pool were hard-deleted, clearing the
+  // pointer would prove nothing about the distinction the code is making.
+  const env = boot(3);
+  const token = await staff(env);
+  await save(env, token, [{ name: "Pool A", team_ids: [1, 2] }]);
+  const poolId = env.DB.one("SELECT id FROM pools WHERE event_id=1").id;
+  env.DB.exec(`INSERT INTO matches (org_id, event_id, pool_id, stage, round, court, team_a_id, team_b_id, score_a, score_b)
+               VALUES (1,1,${poolId},'pool',1,1,1,2,21,15)`);
+
+  const r = await save(env, token, []);
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  const row = env.DB.one("SELECT deleted_at FROM pools WHERE id=?1", poolId);
+  assert.ok(row, "a pool a played game refers to must survive as a row");
+  assert.ok(row.deleted_at, "and must be soft-deleted, not left live");
+  env.DB.close();
+});

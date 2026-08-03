@@ -7,8 +7,11 @@
    also a script from someone else's server running on a page where staff are signed in. Roughly two
    hundred lines of arithmetic removes both problems and works offline.
 
-   SCOPE, DELIBERATELY SMALL. Byte mode, error correction level M, versions 1–10 (up to 216 data
-   bytes). Everything this platform encodes is a URL of well under a hundred characters. Level M
+   SCOPE, DELIBERATELY SMALL. Byte mode, error correction level M, versions 1–10 — 216 data
+   codewords, of which 213 bytes are payload once the 4-bit mode indicator and 16-bit length field
+   are paid for. (This read "up to 216 data bytes" until v0.75.0, conflating the codeword count with
+   the payload it can carry.) Everything this platform encodes is a URL of well under a hundred
+   characters. Level M
    recovers from about 15% damage, which is the right trade for a code printed on paper and handled
    in a gym. Anything longer than version 10 throws rather than silently producing something wrong.
 
@@ -96,7 +99,7 @@
       const countBits = v < 10 ? 8 : 16;
       if (4 + countBits + byteLen * 8 <= dataCapacity(v) * 8) return v;
     }
-    throw new Error("QR: " + byteLen + " bytes is more than version 10 at level M can hold (216).");
+    throw new Error("QR: " + byteLen + " bytes is more than version 10 at level M can hold (213).");
   }
 
   function encodeData(bytes, version) {

@@ -237,6 +237,108 @@ test("A and BB brackets: the field is split so tenth place still has a day", asy
   env.DB.close();
 });
 
+/* ================================ courts and times ================================
+   A DOUBLE-BOOKED COURT IS INVISIBLE UNTIL TWO TEAMS WALK TO THE SAME NET. Nothing in the schema
+   forbids it, no route complains, and the court grid draws both games happily. So it is asserted
+   directly, on the widest set: every bracket game on the event, grouped by when and where. */
+
+/** Every (round, court) pair holding more than one bracket game. Empty is the only acceptable answer. */
+const clashes = (env) => env.DB.query(
+  `SELECT round, court, COUNT(*) AS n FROM matches
+    WHERE event_id=1 AND bracket_id IS NOT NULL AND deleted_at IS NULL
+    GROUP BY round, court HAVING n > 1 ORDER BY round, court`);
+
+test("no two bracket games share a court at the same time — one bracket, more games than courts", async () => {
+  // 16 teams on 4 courts. The round of 16 is EIGHT games; `slot mod courts` gave every court two of
+  // them, all in the same schedule round. Now the round splits into waves instead.
+  const env = boot(16);
+  const token = await staff(env);
+  const r = await call(env, "POST", "/api/admin/events/1/brackets", { token, body: { points_to: 25 } });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  assert.equal(r.data.matches_written, 15, "16 teams is 15 games");
+  assert.deepEqual(clashes(env), [], "two bracket games were put on one court at one time");
+
+  const rows = env.DB.query("SELECT DISTINCT round FROM matches WHERE event_id=1 AND bracket_id IS NOT NULL ORDER BY round");
+  assert.ok(rows.length >= 5, `8 first-round games on 4 courts needs two waves, so at least 5 rounds — got ${rows.length}`);
+  env.DB.close();
+});
+
+test("no two bracket games share a court at the same time — A and BB drawn together", async () => {
+  // Both brackets used to number their own courts from 1, so A's quarter-final 1 and BB's quarter-
+  // final 1 were both court 1 in the same round. Sixteen teams split 8/8 collided seven times.
+  const env = boot(16);
+  const token = await staff(env);
+  const r = await call(env, "POST", "/api/admin/events/1/brackets", { token, body: { a_size: 8, points_to: 25 } });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  assert.deepEqual(r.data.brackets.map((b) => b.teams), [8, 8]);
+  assert.deepEqual(clashes(env), [], "the A and BB brackets were put on the same courts at the same time");
+  env.DB.close();
+});
+
+test("bracket games still start after pool play, not on top of it", async () => {
+  // The reason courts are allocated at all: pool play and the bracket are one continuous day on one
+  // court grid. Fixing the collisions must not have detached the bracket from the schedule.
+  const env = boot(8);
+  const token = await staff(env);
+  for (let round = 1; round <= 3; round++) {
+    env.DB.exec(`INSERT INTO matches (org_id, event_id, stage, round, court, team_a_id, team_b_id)
+                 VALUES (1,1,'pool',${round},1,1,2)`);
+  }
+  await call(env, "POST", "/api/admin/events/1/brackets", { token, body: { points_to: 25 } });
+  const firstBracketRound = env.DB.one(
+    "SELECT MIN(round) AS r FROM matches WHERE event_id=1 AND bracket_id IS NOT NULL").r;
+  assert.equal(firstBracketRound, 4, "the bracket must begin in the round after the last pool round");
+  assert.deepEqual(clashes(env), []);
+  env.DB.close();
+});
+
+test("NC: the clash detector can fail — a deliberately doubled booking is caught", () => {
+  // The three assertions above all read `deepEqual(clashes(env), [])`, and an empty result is also
+  // what a detector that queried the wrong table would return. So the detector is fed a real
+  // collision and must report it, using the same SQL.
+  const DB = createD1(SCHEMA);
+  DB.exec("INSERT INTO orgs (id, name, slug, active) VALUES (1,'Boomtown','boomtown',1)");
+  DB.exec("INSERT INTO events (id, org_id, type, name, status, court_count) VALUES (1,1,'tournament','X','published',4)");
+  DB.exec("INSERT INTO brackets (id, org_id, event_id, name) VALUES (9,1,1,'A')");
+  DB.exec(`INSERT INTO matches (org_id, event_id, stage, round, court, bracket_id, bracket_round, bracket_slot)
+           VALUES (1,1,'quarter',7,2,9,3,1),(1,1,'quarter',7,2,9,3,2)`);
+  const found = clashes({ DB });
+  assert.equal(found.length, 1, "the detector missed a court holding two games in one round");
+  assert.deepEqual([found[0].round, found[0].court, found[0].n], [7, 2, 2]);
+  DB.close();
+});
+
+/* ================================ hand-typed seeds ================================ */
+
+test("a seed list naming the same team twice is refused, not drawn", async () => {
+  // [1, 1, 2, 3] is four entries and four teams that exist, so the count check passed and the bracket
+  // was built with team 1 in BOTH semi-finals — playing itself in the final. The /slot route already
+  // refuses a team on both sides of one game; generation was the way around it.
+  const env = boot(8);
+  const token = await staff(env);
+  const r = await call(env, "POST", "/api/admin/events/1/brackets", { token, body: { seeds: [1, 1, 2, 3] } });
+  assert.equal(r.status, 400, JSON.stringify(r.data));
+  assert.match(r.data.error, /more than once/);
+  assert.match(r.data.error, /Team 1/, "the error must name the team, not just the rule");
+  assert.equal(env.DB.one("SELECT COUNT(*) AS n FROM matches WHERE bracket_id IS NOT NULL").n, 0,
+    "a refused draw must leave nothing behind");
+  assert.equal(env.DB.one("SELECT COUNT(*) AS n FROM brackets").n, 0);
+  env.DB.close();
+});
+
+test("a valid hand-typed seed list is still accepted, in the order given", async () => {
+  // The negative control for the check above: if it rejected any explicit list, the refusal proves
+  // nothing about duplicates.
+  const env = boot(8);
+  const token = await staff(env);
+  const r = await call(env, "POST", "/api/admin/events/1/brackets", { token, body: { seeds: [5, 6, 7, 8] } });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  assert.equal(r.data.seeded_by, "chosen by hand");
+  const semi = env.DB.query("SELECT team_a_id, team_b_id FROM matches WHERE bracket_round=2 ORDER BY bracket_slot");
+  assert.deepEqual([semi[0].team_a_id, semi[0].team_b_id], [5, 8], "first listed plays last listed");
+  env.DB.close();
+});
+
 test("the bye count is reported in words the director can act on", async () => {
   const env = boot(6);
   const token = await staff(env);

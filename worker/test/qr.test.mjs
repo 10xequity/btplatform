@@ -70,6 +70,43 @@ test("alignment centres are inside the symbol and start at 6", () => {
   assert.deepEqual(ALIGN[1], [], "version 1 has no alignment pattern");
 });
 
+test("every alignment centre is the one the spec computes — including the middle ones", () => {
+  /* THE CHECK ABOVE COULD NOT SEE THE MIDDLE COORDINATE, AND VERSIONS 7-10 HAVE ONE.
+     It pinned the first value (6), the last (size-7) and the range, which leaves 22/24/26/28 —
+     the only genuinely memorable-and-mistypeable numbers in the table — asserted by nothing. The
+     round-trip test cannot catch it either: `functionMap` IMPORTS `ALIGN` from the encoder, so a
+     wrong number is wrong identically on both sides and the decode still succeeds. A code that
+     renders perfectly and will not scan is exactly the failure this file's header warns about, so
+     the coordinates are DERIVED here from the spec rule rather than compared against themselves.
+
+     ISO 18004: there are floor(v/7)+2 centres. The first is always 6 and the last always size-7;
+     the rest are spaced evenly back from the last by a step rounded UP to an even number, because
+     every centre must sit on an even coordinate to agree with the timing pattern. */
+  for (let v = 2; v <= 10; v++) {
+    const size = v * 4 + 17;
+    const count = Math.floor(v / 7) + 2;
+    const step = count === 2 ? 0 : Math.ceil((v * 4 + 4) / (2 * count - 2)) * 2;
+    const want = [6];
+    for (let k = count - 2; k >= 0; k--) want.push(size - 7 - k * step);
+    assert.deepEqual(ALIGN[v], want, `version ${v}: table says ${ALIGN[v]}, the spec rule gives ${want}`);
+    for (const p of ALIGN[v]) {
+      assert.equal(p % 2, 0, `version ${v}: centre ${p} is odd, so it would fight the timing pattern`);
+    }
+  }
+});
+
+test("NC: that derivation can fail — a plausibly mistyped centre is rejected", () => {
+  // Without this, a derivation that quietly agreed with anything would look like a guard. Version 7's
+  // middle centre is 22; 24 is the value one version up and the likeliest transcription slip.
+  const size = 45, v = 7;
+  const count = Math.floor(v / 7) + 2;
+  const step = Math.ceil((v * 4 + 4) / (2 * count - 2)) * 2;
+  const want = [6];
+  for (let k = count - 2; k >= 0; k--) want.push(size - 7 - k * step);
+  assert.deepEqual(want, [6, 22, 38], "the derivation itself must give the real version-7 centres");
+  assert.notDeepEqual(want, [6, 24, 38], "and must reject the neighbouring version's middle value");
+});
+
 /* ================================ 2. Reed-Solomon ================================ */
 
 test("the error-correction codewords are, by definition, correct", () => {

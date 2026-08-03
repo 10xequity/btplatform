@@ -324,15 +324,43 @@ export async function divisionRoutes(request, env, url, ctx) {
 
     // Courts are a range, and two divisions cannot own the same court. Nobody notices an overlap
     // until two teams are told to play on court 5 at the same time.
+    //
+    // RANK IS CHECKED HERE FOR THE SAME REASON, and it was not. `idx_divisions_event_rank` is a
+    // UNIQUE index, so two divisions at the same rank are refused by the database — but they were
+    // refused DURING the insert loop, after earlier rows had already been written and with no
+    // transaction to roll them back. Posting Open/A/BB at ranks 1/1/3 wrote "Open", then answered
+    // `500 Server error` and left a one-division layout the director never asked for. A guard that
+    // covers courts and not the column right beside it is narrower than its subject.
     const seen = new Map();
-    for (const d of list) {
+    const ranks = new Map();
+    for (let i = 0; i < list.length; i++) {
+      const d = list[i];
       const from = Number(d.court_from), to = Number(d.court_to);
       if (!d.name) return json({ error: "Every division needs a name." }, 400);
+      // The same expression the INSERT below uses, or the check tests a different number.
+      const rank = Number(d.rank) || i + 1;
+      if (ranks.has(rank)) {
+        return json({ error: `${ranks.get(rank)} and ${d.name} are both in place ${rank}. Divisions run top to bottom, so each needs its own place.` }, 400);
+      }
+      ranks.set(rank, String(d.name));
       if (from && to) {
         if (to < from) return json({ error: `${d.name}: the last court can't be before the first.` }, 400);
         for (let c = from; c <= to; c++) {
           if (seen.has(c)) return json({ error: `Court ${c} is given to both ${seen.get(c)} and ${d.name}.` }, 400);
           seen.set(c, d.name);
+        }
+      }
+    }
+
+    // Adding to an existing layout collides with the ranks already taken. Same partial-write problem,
+    // reached from the other direction.
+    if (!b.replace) {
+      const taken = (await env.DB.prepare(
+        "SELECT name, rank FROM divisions WHERE org_id=?1 AND event_id=?2 AND deleted_at IS NULL"
+      ).bind(ctx.orgId, eventId).all()).results || [];
+      for (const t of taken) {
+        if (ranks.has(t.rank)) {
+          return json({ error: `${t.name} is already in place ${t.rank}. Send replace: true to lay the divisions out again from scratch.` }, 409);
         }
       }
     }
@@ -367,6 +395,21 @@ export async function divisionRoutes(request, env, url, ctx) {
     const eventId = +x[1];
     const b = await request.json().catch(() => ({}));
     const pairs = Array.isArray(b.assign) ? b.assign : [];
+
+    // THE DIVISION HAS TO BELONG TO THIS EVENT. It was never checked, so a division id from another
+    // event was accepted and written: the team then sits in a division that no screen for its own
+    // event lists, which reads to a director as the team having been deleted. Checked for ALL pairs
+    // before the first write, because a refusal halfway through leaves half the board moved.
+    const valid = new Set(((await env.DB.prepare(
+      "SELECT id FROM divisions WHERE org_id=?1 AND event_id=?2 AND deleted_at IS NULL"
+    ).bind(ctx.orgId, eventId).all()).results || []).map((d) => d.id));
+    for (const a of pairs) {
+      const want = a.division_id ? Number(a.division_id) : null;
+      if (want !== null && !valid.has(want)) {
+        return json({ error: "One of those divisions isn't part of this event." }, 400);
+      }
+    }
+
     let moved = 0;
     for (const a of pairs) {
       const r = await env.DB.prepare(
@@ -408,6 +451,20 @@ export async function divisionRoutes(request, env, url, ctx) {
     const eventId = +x[1];
     const b = await request.json().catch(() => ({}));
     const decisions = Array.isArray(b.decisions) ? b.decisions : [];
+
+    // Same check as /assign, for the same reason: an accepted move writes `division_id` straight from
+    // the request, and nothing confirmed the division was one of this event's.
+    const valid = new Set(((await env.DB.prepare(
+      "SELECT id FROM divisions WHERE org_id=?1 AND event_id=?2 AND deleted_at IS NULL"
+    ).bind(ctx.orgId, eventId).all()).results || []).map((x2) => x2.id));
+    for (const d of decisions) {
+      if (d.status !== "accepted") continue;
+      if (d.kind !== "move_down" && d.kind !== "move_up") continue;
+      if (!valid.has(Number(d.to_division_id))) {
+        return json({ error: "One of those moves points at a division that isn't part of this event." }, 400);
+      }
+    }
+
     let accepted = 0, rejected = 0;
 
     for (const d of decisions) {
@@ -554,6 +611,14 @@ export async function divisionRoutes(request, env, url, ctx) {
         await env.DB.prepare("UPDATE pools SET deleted_at=datetime('now') WHERE id=?1 AND org_id=?2")
           .bind(id, ctx.orgId).run();
       } else {
+        // CLEAR THE POINTER FIRST, ON EVERY TEAM — INCLUDING WITHDRAWN ONES. The loop above walks
+        // `mine`, which is the live roster, so a soft-deleted team kept `pool_id` aimed at this pool.
+        // Deleting the row outright then leaves `teams.pool_id` referencing something that no longer
+        // exists (`REFERENCES pools(id)`, migration 0039) — which on live D1 is a foreign-key
+        // violation that fails the whole board save, not a quiet inconsistency.
+        await env.DB.prepare(
+          "UPDATE teams SET pool_id=NULL WHERE org_id=?1 AND event_id=?2 AND pool_id=?3"
+        ).bind(ctx.orgId, eventId, id).run();
         await env.DB.prepare("DELETE FROM pools WHERE id=?1 AND org_id=?2").bind(id, ctx.orgId).run();
       }
       removed++;

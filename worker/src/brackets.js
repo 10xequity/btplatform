@@ -214,6 +214,19 @@ async function seedOrder(env, ctx, eventId, explicit) {
   if (Array.isArray(explicit) && explicit.length) {
     const picked = explicit.map(Number).filter((id) => known.has(id));
     if (picked.length !== explicit.length) return { error: "One of those teams isn't in this event." };
+    // A REPEATED TEAM PASSES THE LENGTH CHECK ABOVE. Four seeds of [1, 1, 2, 3] are four entries and
+    // four known teams, so the count matched and the bracket was drawn with team 1 in both
+    // semi-finals — a team playing itself one round later. The /slot route refuses exactly that;
+    // generation was the way round it.
+    const once = new Set(), twice = [];
+    for (const id of picked) {
+      if (once.has(id) && !twice.includes(id)) twice.push(id);
+      once.add(id);
+    }
+    if (twice.length) {
+      const who = twice.map((id) => known.get(id).name).join(", ");
+      return { error: `${who} ${twice.length === 1 ? "is" : "are"} in that list more than once — a team can only hold one seed.` };
+    }
     return { source: "chosen by hand", ids: picked, names: known };
   }
 
@@ -294,36 +307,65 @@ export async function generateBracketFor(env, ctx, eventId, b = {}) {
       WHERE org_id=?1 AND event_id=?2 AND bracket_id IS NULL AND deleted_at IS NULL`
   ).bind(ctx.orgId, eventId).first();
 
-  const built = [];
-  let written = 0;
+  // Every tree is built and checked BEFORE anything is written. A refusal on the second group after
+  // the first has already been inserted leaves half a bracket on the table and no way to tell.
+  const plans = [];
   for (const g of groups) {
     const tree = buildTree(g.ids.length);
     if (!tree.ok) return { ok: false, error: tree.error, status: 400 };
+    plans.push({ g, tree });
+  }
 
+  const built = [];
+  for (const p of plans) {
     const ins = await env.DB.prepare(
       "INSERT INTO brackets (org_id, event_id, name, split_rule, config_json) VALUES (?1,?2,?3,?4,?5)"
-    ).bind(ctx.orgId, eventId, g.name, aSize < seeds.ids.length ? `top${aSize}` : "all",
-           JSON.stringify({ seeded_by: seeds.source, seeds: g.ids, points_to: pointsTo })).run();
-    const bracketId = ins.meta.last_row_id;
+    ).bind(ctx.orgId, eventId, p.g.name, aSize < seeds.ids.length ? `top${aSize}` : "all",
+           JSON.stringify({ seeded_by: seeds.source, seeds: p.g.ids, points_to: pointsTo })).run();
+    p.bracketId = ins.meta.last_row_id;
+    built.push({
+      id: p.bracketId, name: p.g.name, teams: p.g.ids.length,
+      size: p.tree.size, rounds: p.tree.depth, byes: p.tree.byes, matches: p.tree.matches.length,
+    });
+  }
 
-    // Bracket rounds continue the schedule's round numbering, so the existing court grid and the
-    // drag-and-drop editor show pool play and the bracket as one continuous day.
-    for (const mt of tree.matches) {
-      const scheduleRound = poolMax.r + (tree.depth - mt.round + 1);
-      const court = ((mt.slot - 1) % courts) + 1;
+  /* COURTS AND TIMES ARE ALLOCATED ACROSS EVERY BRACKET AT ONCE, NEVER PER BRACKET.
+     Numbering each bracket's courts on its own was wrong twice over, and both were invisible in the
+     database and discovered by two teams walking to the same net:
+       - An A and a BB drawn together each started at slot 1 on court 1 in the same round. Sixteen
+         teams split 8/8 on four courts put TWO games on every court for the whole bracket.
+       - One bracket whose round has more games than there are courts did the same to itself: a
+         16-team round of 16 is eight games, and `slot mod 4` gave every court two of them.
+     So the games that play at the same STAGE — the first bracket round of every bracket, then the
+     next — are gathered together, laid across the courts in order, and a new schedule round starts
+     each time the courts run out. Bracket rounds still continue the schedule's own numbering, so the
+     court grid and the drag-and-drop editor show pool play and the bracket as one continuous day.
+
+     Stage is measured from the FIRST game played (`depth - round`), not from the final, so a 4-team
+     BB starts alongside an 8-team A's quarter-finals instead of alongside its final. */
+  const stages = Math.max(...plans.map((p) => p.tree.depth));
+  let scheduleRound = poolMax.r;
+  let written = 0;
+  for (let stage = 0; stage < stages; stage++) {
+    const wave = [];
+    for (const p of plans) {
+      for (const mt of p.tree.matches) if (p.tree.depth - mt.round === stage) wave.push({ p, mt });
+    }
+    if (!wave.length) continue;
+    for (let i = 0; i < wave.length; i++) {
+      const { p, mt } = wave[i];
+      const round = scheduleRound + 1 + Math.floor(i / courts);
+      const court = (i % courts) + 1;
       await env.DB.prepare(
         `INSERT INTO matches (org_id, event_id, stage, round, court, team_a_id, team_b_id,
                               points_to, cap, game_number, bracket_id, bracket_round, bracket_slot)
          VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,1,?10,?11,?12)`
-      ).bind(ctx.orgId, eventId, stageForRound(mt.round), scheduleRound, court,
-             mt.a ? g.ids[mt.a - 1] : null, mt.b ? g.ids[mt.b - 1] : null,
-             pointsTo, cap, bracketId, mt.round, mt.slot).run();
+      ).bind(ctx.orgId, eventId, stageForRound(mt.round), round, court,
+             mt.a ? p.g.ids[mt.a - 1] : null, mt.b ? p.g.ids[mt.b - 1] : null,
+             pointsTo, cap, p.bracketId, mt.round, mt.slot).run();
       written++;
     }
-    built.push({
-      id: bracketId, name: g.name, teams: g.ids.length,
-      size: tree.size, rounds: tree.depth, byes: tree.byes, matches: tree.matches.length,
-    });
+    scheduleRound += Math.ceil(wave.length / courts);
   }
 
   return { ok: true, event: ev.name, seededBy: seeds.source, built, written, replaced };
@@ -457,15 +499,42 @@ export async function bracketRoutes(request, env, url, ctx) {
           AND deleted_at IS NULL`
     ).bind(ctx.orgId, eventId, mt.bracket_id, mt.bracket_round + 1,
            side === "a" ? mt.bracket_slot * 2 - 1 : mt.bracket_slot * 2).first();
-    const fragile = !!(feeder && feeder.score_a === null);
+
+    /* THERE ARE TWO WAYS THIS PLACEMENT GETS UNDONE, AND ONLY ONE OF THEM USED TO BE REPORTED.
+       The old test was `feeder.score_a === null` — "the feeding game has not been played" — which
+       warned about the SLOWER of the two and stayed silent on the faster:
+
+         feeder has no result yet  → scoring it later replaces this team with its winner. Warned.
+         feeder ALREADY has a winner → the next advance pass puts that winner straight back, and
+                                       advance runs on every score entered anywhere in this event.
+                                       So the edit is gone within minutes. Was NOT warned.
+
+       The second case is the one the owner actually described — a team wins its quarter-final and
+       then goes home, so somebody is substituted into the semi. That is the whole reason this route
+       exists, and it was the case that reported "Placed." and then quietly reverted. A warning aimed
+       at the rarer branch is indistinguishable from no warning at all.
+
+       Note this is still a WARNING, not a lock. Advancement is derived from scores by design
+       (`advanceBracketFor`), and making a hand-placed slot survive needs somewhere to record that it
+       was hand-placed. That is a schema change and an owner decision, not something to infer here. */
+    const feederWinner = feeder ? winnerOf(feeder.score_a, feeder.score_b) : null;
+    const fragile = !!feeder;
+    const feederName = feeder ? feederLabel(mt.bracket_round, mt.bracket_slot, side,
+      (r) => (r === 1 ? "Final" : r === 2 ? "Semi-final" : r === 3 ? "Quarter-final" : `Round of ${2 ** r}`)) : null;
 
     const loaded = await loadBrackets(env, ctx, eventId);
     return json({
       ok: true,
       note: teamId
-        ? "Placed." + (fragile ? " Note: the game that feeds this slot has not been played yet, so scoring it will replace this team with its winner." : "")
+        ? "Placed." + (feederWinner
+          ? ` Careful — ${feederName.replace(/^Winner of /, "")} has already been won, so the next score entered anywhere in this bracket puts its winner back in this slot. If that team has gone home, record their forfeit instead.`
+          : fragile
+            ? " Note: the game that feeds this slot has not been played yet, so scoring it will replace this team with its winner."
+            : "")
         : "Slot cleared.",
       overwritten_by_advance_risk: fragile,
+      // Which of the two, so the page can shout about the imminent one and merely mention the other.
+      advance_reverts_immediately: !!feederWinner,
       ...loaded,
     });
   }

@@ -13,11 +13,22 @@
  * bracket from now. One payload is one consistent picture.
  *
  * WHAT IS DELIBERATELY NOT HERE:
- *   - No player names. Team names only. A public board that lists who is on which team publishes a
+ *   - No ROSTERS. One name per team, the captain's, and abbreviated to "Ava S." unless that person
+ *     set their profile to public (owner 2026-08-03: "captains on every tile, including live scores";
+ *     standards §8 and `names.js` own the rule). Listing everyone on every team would publish a
  *     roster of minors to anyone who loads the page, and nobody asked for that.
+ *
+ *     [This paragraph said "No player names. Team names only." until v0.75.0. Captains shipped on
+ *     this endpoint in v0.74.0 and the comment was not changed with them, so the file documented a
+ *     rule it no longer followed — failure class 2, found by reading the code against its own header.]
  *   - No email, no phone, no notes. `teams.note` is a director's private aide-memoire ("two players
  *     have a flight at 4") and has no business on a wall.
  *   - No draft events. Only published, in progress, or completed — a draft is a plan, not news.
+ *
+ * WITHDRAWN TEAMS KEEP THEIR NAMES, DELIBERATELY. The team joins below carry no `deleted_at` filter
+ * while the standings query does. That is not an oversight: a game that was played happened, and
+ * blanking one side of a finished result would make the board lie about the afternoon. The cost is
+ * that a withdrawn team still appears in an unplayed fixture until a director clears or forfeits it.
  *
  * The org comes from the same X-Org-Id header every other route uses, so a white-labelled site shows
  * only its own events.

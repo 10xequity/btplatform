@@ -376,3 +376,133 @@ test("the module is actually mounted (failure class 1)", () => {
   assert.match(IDX, /wireDivisions\(wiredHelpers\)/);
   assert.match(IDX, /await divisionRoutes\(request, env, url, ctx\)/);
 });
+
+/* ================================ v0.75.0 — guards that were narrower than their subject ================================ */
+
+test("two divisions in the same place are refused with a sentence, and nothing is written", async () => {
+  /* `idx_divisions_event_rank` is UNIQUE, so the DATABASE always refused this. The route did not —
+     it validated court overlaps carefully and never looked at the column beside them, then inserted
+     one division at a time with no transaction. So the first row landed, the second hit the index,
+     and the director got `500 Server error` plus a one-division layout they never asked for.
+     Standards §8: errors are human sentences, not codes. */
+  const env = boot();
+  const token = await staff(env);
+  const r = await call(env, "POST", "/api/admin/events/1/divisions", {
+    token, body: { divisions: [{ name: "Open", rank: 1 }, { name: "A", rank: 1 }, { name: "BB", rank: 3 }] },
+  });
+  assert.equal(r.status, 400, JSON.stringify(r.data));
+  assert.match(r.data.error, /both in place 1/);
+  assert.match(r.data.error, /Open/, "the message must name the divisions, not just the rule");
+  assert.equal(env.DB.one("SELECT COUNT(*) AS n FROM divisions").n, 0,
+    "the layout was half-written before the refusal — a refusal must leave nothing behind");
+  env.DB.close();
+});
+
+test("the same check catches a collision with a layout that already exists", async () => {
+  const env = boot();
+  const token = await staff(env);
+  await call(env, "POST", "/api/admin/events/1/divisions", { token, body: THREE });
+  const r = await call(env, "POST", "/api/admin/events/1/divisions", {
+    token, body: { divisions: [{ name: "Late entry", rank: 2 }] },
+  });
+  assert.equal(r.status, 409, JSON.stringify(r.data));
+  assert.match(r.data.error, /already in place 2/);
+  assert.match(r.data.error, /replace/, "the message must say how to get past it");
+  assert.equal(env.DB.one("SELECT COUNT(*) AS n FROM divisions WHERE deleted_at IS NULL").n, 3);
+  env.DB.close();
+});
+
+test("NC: distinct places are still accepted, and replace still relays the whole layout", async () => {
+  // Without this, a route that rejected every layout would satisfy both tests above.
+  const env = boot();
+  const token = await staff(env);
+  const first = await call(env, "POST", "/api/admin/events/1/divisions", { token, body: THREE });
+  assert.equal(first.status, 200, JSON.stringify(first.data));
+  assert.equal(env.DB.one("SELECT COUNT(*) AS n FROM divisions WHERE deleted_at IS NULL").n, 3);
+
+  // Replace reuses ranks 1-3, which are taken by the rows it is about to soft-delete. The unique
+  // index is partial (WHERE deleted_at IS NULL), so this must succeed — the check must not have
+  // widened into blocking the one path that legitimately reuses a rank.
+  const again = await call(env, "POST", "/api/admin/events/1/divisions", {
+    token, body: { ...THREE, replace: true },
+  });
+  assert.equal(again.status, 200, JSON.stringify(again.data));
+  assert.equal(env.DB.one("SELECT COUNT(*) AS n FROM divisions WHERE deleted_at IS NULL").n, 3);
+  env.DB.close();
+});
+
+test("a team cannot be filed under a division belonging to another event", async () => {
+  /* Nothing checked that the division id in the request was one of THIS event's. The write is
+     org-scoped and event-scoped on the TEAM, so it looked safe — but the division did not have to
+     be. The team then sits in a division that no screen for its own event lists, which to a director
+     is indistinguishable from the team having been deleted. */
+  const env = boot();
+  const token = await staff(env);
+  env.DB.exec("INSERT INTO events (id, org_id, type, name, status) VALUES (2,1,'tournament','Other','published')");
+  env.DB.exec("INSERT INTO divisions (id, org_id, event_id, name, rank) VALUES (77,1,2,'Foreign',1)");
+  await call(env, "POST", "/api/admin/events/1/divisions", { token, body: THREE });
+  env.DB.exec("INSERT INTO teams (id, org_id, event_id, name) VALUES (1,1,1,'Mine')");
+
+  const r = await call(env, "POST", "/api/admin/events/1/divisions/assign", {
+    token, body: { assign: [{ team_id: 1, division_id: 77 }] },
+  });
+  assert.equal(r.status, 400, JSON.stringify(r.data));
+  assert.match(r.data.error, /isn't part of this event/);
+  assert.equal(env.DB.one("SELECT division_id FROM teams WHERE id=1").division_id, null,
+    "nothing may be written when one pair in the batch is bad");
+  env.DB.close();
+});
+
+test("and an accepted MOVE cannot point at another event's division either", async () => {
+  // The same hole, reached through the propose-then-approve path instead of the assign path.
+  const env = boot();
+  const token = await staff(env);
+  env.DB.exec("INSERT INTO events (id, org_id, type, name, status) VALUES (2,1,'tournament','Other','published')");
+  env.DB.exec("INSERT INTO divisions (id, org_id, event_id, name, rank) VALUES (77,1,2,'Foreign',1)");
+  await call(env, "POST", "/api/admin/events/1/divisions", { token, body: THREE });
+  const open = env.DB.one("SELECT id FROM divisions WHERE event_id=1 AND rank=1").id;
+  env.DB.exec(`INSERT INTO teams (id, org_id, event_id, name, division_id) VALUES (1,1,1,'Mine',${open})`);
+
+  const r = await call(env, "POST", "/api/admin/events/1/divisions/moves", {
+    token, body: { decisions: [
+      { team_id: 1, kind: "move_down", from_division_id: open, to_division_id: 77, reason: "x", status: "accepted" },
+    ] },
+  });
+  assert.equal(r.status, 400, JSON.stringify(r.data));
+  assert.equal(env.DB.one("SELECT division_id FROM teams WHERE id=1").division_id, open);
+  assert.equal(env.DB.one("SELECT COUNT(*) AS n FROM division_moves").n, 0,
+    "not even the audit row, since the decision was never valid to record");
+  env.DB.close();
+});
+
+test("NC: a legitimate assign and a legitimate move both still go through", async () => {
+  // The control for the two tests above. If the new check rejected every division id, they would
+  // pass while the feature was dead.
+  const env = boot();
+  const token = await staff(env);
+  await call(env, "POST", "/api/admin/events/1/divisions", { token, body: THREE });
+  const [open, a] = env.DB.query("SELECT id FROM divisions WHERE event_id=1 ORDER BY rank").map((d) => d.id);
+  env.DB.exec(`INSERT INTO teams (id, org_id, event_id, name) VALUES (1,1,1,'T1'),(2,1,1,'T2')`);
+
+  const asg = await call(env, "POST", "/api/admin/events/1/divisions/assign", {
+    token, body: { assign: [{ team_id: 1, division_id: open }, { team_id: 2, division_id: open }] },
+  });
+  assert.equal(asg.status, 200, JSON.stringify(asg.data));
+  assert.equal(asg.data.moved, 2);
+
+  const mv = await call(env, "POST", "/api/admin/events/1/divisions/moves", {
+    token, body: { decisions: [
+      { team_id: 1, kind: "move_down", from_division_id: open, to_division_id: a, reason: "x", status: "accepted" },
+    ] },
+  });
+  assert.equal(mv.status, 200, JSON.stringify(mv.data));
+  assert.equal(env.DB.one("SELECT division_id FROM teams WHERE id=1").division_id, a);
+
+  // Clearing a division (null) must also still work — it is not a division id to validate.
+  const clear = await call(env, "POST", "/api/admin/events/1/divisions/assign", {
+    token, body: { assign: [{ team_id: 2, division_id: null }] },
+  });
+  assert.equal(clear.status, 200, JSON.stringify(clear.data));
+  assert.equal(env.DB.one("SELECT division_id FROM teams WHERE id=2").division_id, null);
+  env.DB.close();
+});

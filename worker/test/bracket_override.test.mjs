@@ -192,6 +192,60 @@ test("placing a team in a first-round slot carries no such warning — nothing f
   env.DB.close();
 });
 
+test("placing a team where a winner has ALREADY landed warns too — this is the case that was silent", async () => {
+  /* THE CASE THE OLD GUARD COULD NOT SEE, AND THE ONLY ONE THE OWNER ACTUALLY DESCRIBED.
+     The test above covers a feeder with no result. This covers a feeder that has been WON — a team
+     takes its quarter-final and then goes home, so somebody is substituted into the semi. That is
+     verbatim why this route exists ("teams might forfeit so we can replace them in the bracket").
+
+     The old check was `feeder.score_a === null`, so a played feeder scored FALSE: the response said
+     "Placed." and nothing else, and the next advance pass — which fires on every score entered
+     anywhere in the event — put the original winner back. The two tests above both passed the whole
+     time. A warning wired to the rarer branch is indistinguishable from no warning at all. */
+  const { env, token } = await withBracket();
+  const feeder = qf(env, 1);
+  const semi = env.DB.one("SELECT id FROM matches WHERE event_id=1 AND bracket_round=2 AND bracket_slot=1");
+
+  // Afternoon of the tournament: the quarter-final is played and its winner is in the semi.
+  env.DB.exec(`UPDATE matches SET score_a=25, score_b=10 WHERE id=${feeder.id}`);
+  await call(env, "POST", "/api/admin/events/1/brackets/advance", { token });
+  assert.equal(env.DB.one("SELECT team_a_id FROM matches WHERE id=?1", semi.id).team_a_id, feeder.team_a_id,
+    "precondition: the winner should be in the semi before the override is attempted");
+
+  const r = await call(env, "POST", "/api/admin/events/1/brackets/slot", {
+    token, body: { match_id: semi.id, side: "a", team_id: 10 },
+  });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  assert.equal(r.data.overwritten_by_advance_risk, true, "a played feeder is the HIGHER risk, not no risk");
+  assert.equal(r.data.advance_reverts_immediately, true);
+  assert.match(r.data.note, /already been won/, "the note must say the edit is about to be undone");
+  assert.match(r.data.note, /forfeit/, "and must name the thing to do instead");
+  env.DB.close();
+});
+
+test("and that warning is true as well: the very next advance takes the slot back", async () => {
+  // The claim above is worthless if the behaviour differs, and this is the mechanism the owner will
+  // hit — a score somewhere ELSE in the bracket is enough, not a score on the feeder.
+  const { env, token } = await withBracket();
+  const feeder = qf(env, 1);
+  const semi = env.DB.one("SELECT id FROM matches WHERE event_id=1 AND bracket_round=2 AND bracket_slot=1");
+  env.DB.exec(`UPDATE matches SET score_a=25, score_b=10 WHERE id=${feeder.id}`);
+  await call(env, "POST", "/api/admin/events/1/brackets/advance", { token });
+  await call(env, "POST", "/api/admin/events/1/brackets/slot", {
+    token, body: { match_id: semi.id, side: "a", team_id: 10 },
+  });
+  assert.equal(env.DB.one("SELECT team_a_id FROM matches WHERE id=?1", semi.id).team_a_id, 10,
+    "the placement must land in the first place");
+
+  // An UNRELATED quarter-final is scored. Nothing about slot 1 was touched.
+  const other = qf(env, 2);
+  env.DB.exec(`UPDATE matches SET score_a=25, score_b=12 WHERE id=${other.id}`);
+  await call(env, "POST", "/api/admin/events/1/brackets/advance", { token });
+  assert.equal(env.DB.one("SELECT team_a_id FROM matches WHERE id=?1", semi.id).team_a_id, feeder.team_a_id,
+    "scoring a different game reverted the edit — which is why the warning has to be given");
+  env.DB.close();
+});
+
 test("and the warning is true: advancing really does overwrite the hand-placed team", async () => {
   // Asserted rather than assumed, because the whole warning is worthless if the behaviour differs.
   const { env, token } = await withBracket();
