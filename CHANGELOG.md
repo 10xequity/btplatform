@@ -1,5 +1,9 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.69.0 — 2026-08-03
+
+- Auto-recorded by CI on deploy. `/api/health` reported `v0.69.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
+
 ## v0.68.0 — 2026-08-03
 
 Owner asked for score submission by QR code as well as by link. Building it turned up that the QR
