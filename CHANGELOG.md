@@ -2,7 +2,45 @@
 
 ## v0.73.0 — 2026-08-03
 
-- Auto-recorded by CI on deploy. `/api/health` reported `v0.73.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
+Owner 2026-08-03: *"there needs to be 2 views, an admin view where they are created, then a display
+view for members and public for those who are wanting to see. similar to volleyballlife."* This is the
+second view.
+
+- **`live.html` + `/api/live/*` — read only, no login.** A parent standing beside court 3 on venue wifi
+  will not sign in, and a TV plugged in by the door cannot.
+- **One request returns the whole board.** A display screen polls, and a screen that polls five
+  endpoints shows five different moments of the same tournament — the standings from four seconds ago
+  beside a bracket from now.
+- **"On now" is first**, above standings and brackets, because the question people open this for is
+  which court and who is up next. And "now" is the earliest round with an unplayed game, **not** the
+  time of day: tournaments run late, and a board that read the clock would be wrong all afternoon.
+- **What is deliberately absent is the part worth reviewing.** No player names, no emails, no phone
+  numbers, no scoring tokens, and not the private team note — a director's aide-memoire (*"two players
+  have a flight at 4"*) with no business on a wall. Team names only. This endpoint needs no login, so
+  anything it returns is published to anyone who loads the page; a leak here would be silent, with no
+  error and no warning, just a field nobody meant to send.
+  - Asserted against the **raw JSON**, not against the queries that produced it, so a join added later
+    that pulls a name in fails whatever shape it arrives in. Proven by returning the private note and
+    watching the test fail.
+  - Draft events answer **404, not 403** — a 403 confirms the thing exists, and an unannounced
+    tournament is precisely what is not worth confirming.
+- **It says when it last refreshed, and says so louder when a fetch fails**, keeping the last good
+  board on screen rather than replacing live scores with an error. A scoreboard that has silently
+  stopped updating is worse than one that is visibly stale, because nobody double-checks it. Polling
+  stops while the tab is hidden.
+- Small events never set up divisions, so there is a **flat table as well as the grouped one** —
+  otherwise those events show an empty screen and look broken. Teams in a division but not yet in a
+  pool are listed too, or somebody hunts for their team and concludes the board is wrong.
+- `json()` gained an optional third argument so this one route can opt into a 20-second cache.
+  Additive: every existing caller passes two arguments and still gets `no-store`, which a test asserts
+  directly — a cached copy of anything behind a login is the worst sort of bug.
+
+Two existing guards caught things on the way in: NAV/rail parity refused the new page until it had a
+rail entry, and the member-header ratchet refused it until 13 was bumped to 14. The byte-identical
+header check passed first try, because the page was generated from an existing member page rather
+than hand-written.
+
+- Tests **974** (+21). Preflight CLEAR. No migration.
 
 ## v0.72.0 — 2026-08-03
 
