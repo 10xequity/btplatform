@@ -2,7 +2,123 @@
 
 ## v0.75.0 — 2026-08-03
 
-- Auto-recorded by CI on deploy. `/api/health` reported `v0.75.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
+No new feature. A fresh-eyes review of the ten releases v0.65.0–v0.74.0, on the standing suspicion
+that a session which finds five defects in its own same-day code has not found the sixth. It had not.
+
+**Six real defects, four of them in code no test touched.** Every one was proved against the real
+router before it was fixed — eight probes, not eight opinions — because the failure mode this project
+keeps hitting is a conclusion that reads as sound and is wrong.
+
+### The one that mattered most
+
+**The manual bracket override was silently undone in exactly the case the owner asked for it.**
+The route warned "this will be replaced" only when the game feeding the slot had *not* been played.
+But the owner's stated reason for the feature is a team that **won** and then went home — *"teams
+might forfeit so we can replace them in the bracket."* In that case the response said `Placed.` and
+nothing else, and the next advance pass put the original winner straight back. Advance runs on every
+score entered anywhere in the event, so the edit survived minutes. Proved: place a bench team in a
+semi-final, confirm it saved, score an *unrelated* quarter-final, and it is gone.
+
+Two tests already covered this route's warning — one for "nothing feeds this slot", one for "the
+feeder is unplayed" — and both passed the whole time. **A warning wired to the rarer branch is
+indistinguishable from no warning at all.** Now reported in both cases, with the imminent one named
+separately (`advance_reverts_immediately`) and the forfeit route offered as the thing to do instead.
+
+Deliberately still a warning and not a lock: advancement is derived from scores by design, and making
+a hand-placed slot *survive* means recording that it was hand-placed. That is a schema change and an
+owner decision, not something to infer. Carried to the handoff.
+
+### Courts booked twice
+
+**Bracket generation put two games on one court at one time, two different ways.** Neither is visible
+in the database, neither route complains, and the court grid draws both happily — it is discovered by
+two teams walking to the same net.
+
+- An A and a BB drawn together each numbered their own courts from 1. Sixteen teams split 8/8 on four
+  courts collided on **seven** court-and-time slots.
+- One bracket did it to itself whenever a round had more games than courts: a 16-team round of 16 is
+  eight games, and `slot mod 4` gave every court two of them, all in the same schedule round.
+
+Courts and times are now allocated across every bracket at once, by stage rather than per bracket,
+starting a new schedule round each time the courts run out. Bracket rounds still continue the
+schedule's own numbering, so pool play and the bracket remain one continuous day on one grid —
+asserted, because fixing the collision must not detach the bracket from the schedule.
+
+### The rest
+
+- **A hand-typed seed list naming the same team twice was accepted.** `[1,1,2,3]` returned `200` and
+  drew team 1 into *both* semi-finals — playing itself one round later. The length check meant to
+  catch bad input passes duplicates. The slot route already refuses a team on both sides of a game;
+  generation was the way around it. Now refused, naming the team.
+- **Two divisions at the same rank returned `500 Server error` and left a half-written layout.** The
+  unique index always refused it. The route validated court overlaps carefully, never looked at the
+  column beside them, and inserted one row at a time with no transaction — so Open/A/BB at ranks
+  1/1/3 wrote "Open" and then died. Now checked up front, both within the payload and against the
+  layout already there, in a sentence that names the divisions and says how to get past it.
+- **A team could be filed under a division belonging to another event**, through `/assign` or an
+  accepted move. Both writes were org- and event-scoped on the *team*; the division never had to be.
+  The team then appeared in no division on its own event's screens, which to a director is
+  indistinguishable from the team having been deleted.
+- **Saving the pool board could lose the whole arrangement.** An empty pool is hard-deleted by design,
+  but the loop clearing `teams.pool_id` walks the live roster — so a withdrawn team kept pointing at
+  the row about to be deleted. `teams.pool_id REFERENCES pools(id)` (migration 0039), so on live D1
+  that is a foreign-key violation failing the entire save, not one dangling pointer.
+
+### Two documentation defects, and the sharper version of one of them
+
+- **`live.js` documented a privacy rule it no longer followed.** Its header read *"No player names.
+  Team names only."* while the module published captain names — correctly, abbreviated, per the
+  owner's decision.
+
+  **And v0.74.0's own CHANGELOG entry claims this was already corrected:** *"Corrected the live
+  board's own header comment, which claimed 'no player names anywhere' and had stopped being true the
+  moment this shipped."* It was not. `git show` on that commit shows a **new** comment added above
+  `publicTeam` explaining abbreviation, and the stale header line untouched. A comment was written
+  near the problem and mistaken for a fix.
+
+  This is failure class 2 in its most literal form — *a decision recorded is not a decision in
+  force* — and it lands on the CHANGELOG itself. **A CHANGELOG line saying a thing was fixed is not
+  evidence the thing was fixed.** The only evidence is the file.
+- **The `qr.js` alignment-pattern table had a hole no guard could see.** The structural test checked
+  the first coordinate (6), the last (`size-7`) and the range — leaving the **middle** coordinate of
+  versions 7–10 (22 / 24 / 26 / 28) asserted by nothing at all. The round-trip test cannot catch it
+  either: it *imports* `ALIGN` from the encoder, so a wrong number is wrong identically on both sides
+  and the decode still succeeds. A mistyped centre there produces a QR that renders perfectly, is
+  square, has its three corner squares, and will not scan — the exact failure that file's own header
+  warns about, found by a captain at a tournament. Now **derived** from the ISO 18004 spacing rule and
+  compared against the table, with a negative control that rejects the neighbouring version's value
+  and a check that every centre is even (an odd one would fight the timing pattern). All ten rows
+  verified; none were wrong.
+- `qr.js` claimed "up to 216 data bytes", conflating the data *codeword* count with the payload it can
+  carry. The byte-mode limit at version 10 level M is **213**, once the 4-bit mode indicator and
+  16-bit length field are paid for.
+- Recorded as *deliberate*, rather than left ambiguous: the team joins in the live and bracket match
+  queries carry no `deleted_at` filter while the standings query does. A game that was played
+  happened, and blanking one side of a finished result would make the board lie about the afternoon.
+  The cost — a withdrawn team still appearing in an unplayed fixture until a director clears or
+  forfeits it — is now written down instead of being rediscovered.
+
+### Verified correct, so it is not re-reviewed
+
+Recorded because "we looked and it was fine" is worth as much as a defect list, and cheaper than
+looking again: the QR spec tables (all ten versions against `blocks × (data + ec) = total` *and*
+against the ISO level-M figures), the GF(256) initialisation, the generator polynomial (hand-checked
+at n=2 → `[1,3,2]`), both BCH codes (mask 0 → `101010000010010`, mask 1 → `101000100100101`,
+version 7 → `000111110010010100`, each matching the spec table), all eight mask patterns, the zigzag
+walk and its column-6 skip, all four penalty rules, and the 7+8 format split. `buildTree`'s claim that
+a seeded pair can never be empty is genuinely provable (the low seed of every standard pair is
+≤ size/2 < n). `bestSplit` is right at every size checked, including 22 teams → 8/8/6 as the owner
+asked for. And the three negative controls v0.74.0 flagged as proving nothing were genuinely repaired,
+not merely annotated — confirmed in source.
+
+### Gates
+
+Suite **989 → 1007**, measured before and after, never projected. 61 test files, unchanged. Every new
+guard ships a negative control, and each control was checked against *what its assertion actually
+reads* — the lesson v0.74.0 paid for, applied rather than restated. The court-clash detector is fed a
+real double booking and must report it; the seed-duplicate refusal is paired with a valid hand-typed
+list that must still be accepted; the division-rank check is paired with a `replace` that legitimately
+reuses ranks 1–3 and must still succeed.
 
 ## v0.74.0 — 2026-08-03
 
