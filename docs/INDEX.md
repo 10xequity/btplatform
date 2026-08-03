@@ -1,6 +1,6 @@
 # Boomtown Platform — Document Index
 
-**File:** docs/INDEX.md · **Version:** v1.2 · **Created:** 2026-08-02 · **Updated:** 2026-08-03
+**File:** docs/INDEX.md · **Version:** v1.3 · **Created:** 2026-08-02 · **Updated:** 2026-08-03
 **Status:** ACTIVE · **Supersedes:** nothing — first index of the doc set.
 **Purpose:** what each document is, whether it is live, and where the live documents disagree
 with each other. Read with `CLAUDE.md`.
@@ -11,10 +11,10 @@ with each other. Read with `CLAUDE.md`.
 
 | File | Ver | Date | What it is |
 |---|---|---|---|
-| `2026-08-03_handoff_v0_66_0.md` | v1.0 | 2026-08-03 | **State of record.** Delivery (§0), measured build state (§1), what shipped v0.65.0–v0.66.0 (§2), **§3 the two silently-compounding defects found by measurement**, owner answers (§4), owed items (§5), next build (§6), next-session prompt (§7). Supersedes and replaces handoff v0.56.0. |
+| `2026-08-03_handoff_v0_68_0.md` | v1.0 | 2026-08-03 | **State of record.** Delivery (§0), measured build state (§1), what shipped v0.65.0–v0.68.0 (§2), **§3 the one pattern behind six defects that all reported clean**, owner answers (§4), owed items (§5), next build (§6), next-session prompt (§7). Supersedes and replaces handoff v0.66.0. |
 | `2026-07-30_standards_v2_0.md` | **v2.1** | 2026-08-02 | **Build and design law.** Trust order, versioning, DB rules, worker module pattern, design roster (§5), testing gates (§6), CI, member copy (§8), templating (§10). Reconstructed after a doc-set loss; §5/§6.5/§8/§10 anchors preserved so in-code citations stay valid. |
 | `2026-08-02_roadmap_v1_0.md` | v1.0 | 2026-08-02 | **Roadmap of record.** 8 unbuilt modules, 5 small gaps, 4 engineering tracks, 5 owner-gated config items, 4 doc-debt items, suggested sequence. Supersedes the README roadmap block and the stale half of `build-status.js`. |
-| `INDEX.md` | v1.2 | 2026-08-03 | This file. |
+| `INDEX.md` | v1.3 | 2026-08-03 | This file. |
 
 ## 2. Live reference — open when the topic comes up
 
@@ -99,6 +99,14 @@ looked wrong: by v0.65.0 five pages carried 5, 4, 4, 3 and 2 of them. **Ruling: 
 `page_structure.test.mjs` scans every shipped HTML file for unbalanced or doubled landmarks and
 caught the very next generator run. Generate new pages only from a page that passes it.
 
+**C8 — the QR code never worked, and said so only where nobody would read it. ~~OPEN~~ RESOLVED v0.68.0.**
+`admin-checkin.html` loaded `qrcodejs` from a CDN and fell back to the on-screen text "QR library
+blocked — use the link." That sentence was the only record the feature was dead, and it appears at
+exactly the moment someone needs a QR and has no time to read it. **Ruling: closed.** `assets/qr.js`
+encodes locally; no page makes an external request for it.
+*Left deliberately:* `cropperjs` on `profile.html` is still a CDN dependency. It fails soft, and a
+photo cropper is not worth hand-rolling.
+
 ---
 
 ## 5. Consolidation log
@@ -110,11 +118,12 @@ caught the very next generator run. Generate new pages only from a page that pas
 | 2026-08-02 | `roadmap` v1.0 created, reconciling five separate backlog sources against the live v0.52.0 tree. |
 | 2026-08-02 | Three releases under direct commit (v0.54.0–v0.56.0). Handoff v0.53.0 superseded and **deleted**; `2026-08-02_handoff_v0_56_0.md` is the state of record. C1/C4/C5 closed, C6 opened. |
 | 2026-08-02 | **This port.** Doc set moved to `docs/`, archive tier separated, `CLAUDE.md` and `INDEX.md` added. No source document was edited — contradictions are recorded here rather than silently patched. |
-| 2026-08-03 | Ten releases under direct commit (v0.57.0–v0.66.0). Handoff v0.56.0 superseded and **deleted**; `2026-08-03_handoff_v0_66_0.md` is the state of record. **C6 stays OPEN** and gains a second finding: the sweep had never covered `.js` at all. **C7 opened** (shell-slice tag duplication, fixed and guarded). New documents: `spec_roster-sheet_v1_0`, `scope_format-engine_v1_1`, `workorder_member-experience_v1_1`. |
+| 2026-08-03 | Twelve releases under direct commit (v0.57.0–v0.68.0). Handoff v0.56.0 superseded and **deleted**; `2026-08-03_handoff_v0_66_0.md` is the state of record. **C6 stays OPEN** and gains a second finding: the sweep had never covered `.js` at all. **C7 opened** (shell-slice tag duplication, fixed and guarded). New documents: `spec_roster-sheet_v1_0`, `scope_format-engine_v1_1`, `workorder_member-experience_v1_1`. |
 
 ---
 
-*Changelog: v1.2 (2026-08-03) — handoff row repointed to v0.66.0 (v0.56.0 deleted); C6 closed with
+*Changelog: v1.3 (2026-08-03) — handoff row repointed to v0.68.0 (v0.66.0 deleted); C8 opened and
+closed in the same release (the CDN QR that never rendered). v1.2 (2026-08-03) — handoff row repointed to v0.66.0 (v0.56.0 deleted); C6 closed with
 the finding that the buster sweep had never covered `.js`; consolidation log extended through
 v0.66.0. v1.1 (2026-08-02) — handoff row repointed to v0.56.0 (v0.53.0 deleted); standards→v2.1 and
 uiux-review→v1.1 rows corrected; C1, C4 and C5 closed with their rulings recorded as audit trail; C6
