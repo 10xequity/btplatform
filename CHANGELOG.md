@@ -2,7 +2,49 @@
 
 ## v0.58.0 — 2026-08-03
 
-- Auto-recorded by CI on deploy. `/api/health` reported `v0.58.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
+- **Pass / credit ledger** (`passes.js`, owner: "assign like class pass or mindbody").
+  `membership_tiers.guest_passes_per_month` has shipped for several releases — staff could set it,
+  the tier screen displayed it, and **nothing in the codebase could ever spend one**. The platform
+  promised guest passes it had no way to honour. This makes that column mean something.
+  - A pass is *N sessions, valid between two dates, for one contact*. That one shape is
+    simultaneously a class pass, a lesson pack and a guest allowance — three products from one
+    primitive instead of three subsystems.
+  - **The balance is derived, never stored.** There is no `used_sessions` column: remaining =
+    total − COUNT(live redemptions), through one interpolated `PASS_USED_SQL`. A stored counter is
+    a second source of truth for one fact and this repo carries the scar (F-26); it drifts on
+    reversal, soft-delete or retry, and a `COUNT()` cannot. A test asserts the literal count
+    appears exactly once in the file.
+  - **Reversal is a state change, not a delete** — the desk mis-scans, and the correction must sit
+    next to the mistake. Reversing twice is refused; it would credit a session never spent.
+  - Guest passes require a guest name, because a guest pass spent on nobody is an unaccounted entry.
+- **Staff / coach pay** (`staff_pay.js`) — the foundation the future payroll build needs.
+  Rate cards (hourly / flat / per-session, optionally per role, date-bounded) are what someone is
+  paid *going forward*; the shift records what they were *actually* paid, **frozen at approval**.
+  Raise a coach's rate in September and August's approved shifts must not restate — the same
+  discipline as pinning a waiver version to a signature, applied to money. Proven by test.
+  - `computePay` returns a **reason**, never a silent zero: a `0` in a pay column is
+    indistinguishable from "worked for free", and somebody will believe it.
+  - The pay report keeps **approved and pending separate** and never pre-sums them. "Owed" and
+    "might be owed" are different questions, and merging them is how someone gets overpaid.
+  - **No payroll export, no tax, no clock-in** — stated plainly in the module header, because a
+    half-built payroll feature that looks finished is how people get paid wrong.
+- **Family connected-accounts view** (`family.js` v1.3). `/api/family` answers "who is in my
+  household"; the new `/api/family/overview` answers "what do I have to deal with" — every
+  connected account with what is unpaid, what is coming up, what passes remain, and a household
+  total. A parent with three children currently opens three profiles to find out they owe money on
+  one. Scoped by **guardianship**, not by shared `family_id`: an adult who merely shares a family
+  row is not someone whose balance you may read. Tested that another family's child cannot appear.
+- **Migration 0035** applied to live D1 via Cloudflare MCP before the push (ledger 35): `passes`,
+  `pass_redemptions`, `staff_rates`, eight pay columns on `staff_shifts`, and four configurable
+  pricing columns on `plans` (`pricing_type` / `sessions_included` / `pass_valid_days` /
+  `signup_fee_cents`) carrying the Gymdesk vocabulary without disturbing the Square subscription
+  path that `billing_interval` already drives.
+- **Three guard fixes found while writing the tests**, all of them my own guards being narrower
+  than their subject — the exact failure class they exist to catch: the derived-balance scan read
+  comments and "found" `used_sessions` in the sentence explaining there is none; the org-scope scan
+  rejected correlated subqueries (`r.org_id = p.org_id`) that are scoped by inheritance; and it read
+  only backtick templates, so it saw 4 statements in `staff_pay.js` where there are 9.
+- Suite **709 → 737**, all passing.
 
 ## v0.57.0 — 2026-08-03
 
