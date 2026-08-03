@@ -1,5 +1,9 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.79.0 — 2026-08-03
+
+- Auto-recorded by CI on deploy. `/api/health` reported `v0.79.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
+
 ## v0.78.0 — 2026-08-03
 
 Two owner requests from 2026-08-03 that turned out to need the same migration. **Migration 0041.**
