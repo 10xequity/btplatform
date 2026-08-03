@@ -115,16 +115,16 @@ test("NC-3: an over-long value is refused rather than silently truncated", () =>
 /* ============================ 2. source guards ============================ */
 
 test("§6.5: index.js MOUNTS and WIRES the module (F-15 — call sites, not imports)", () => {
-  assert.ok(INDEX_SRC.includes("|| (await memberFieldsRoutes(request, env, url, ctx))"),
+  assert.ok(/\["memberFields",\s+memberFieldsRoutes\],/.test(INDEX_SRC),
     "memberFieldsRoutes is imported but never dispatched — built-but-uncalled (failure class 1)");
   assert.match(INDEX_SRC, /wireMemberFields\(wiredHelpers\)/,
     "wireMemberFields is never called — every helper would be undefined at runtime");
 });
 
 test("NC-4: the mount gate can fail", () => {
-  const mutated = INDEX_SRC.replace("|| (await memberFieldsRoutes(request, env, url, ctx))", "|| false");
+  const mutated = INDEX_SRC.replace(/\["memberFields",\s+memberFieldsRoutes\],/, "");
   assert.notEqual(mutated, INDEX_SRC, "mutation did not land — NC is vacuous");
-  assert.ok(!mutated.includes("|| (await memberFieldsRoutes(request, env, url, ctx))"));
+  assert.ok(!/\["memberFields",\s+memberFieldsRoutes\],/.test(mutated));
 });
 
 test("every SQL statement in the module is org-scoped (F-11)", () => {

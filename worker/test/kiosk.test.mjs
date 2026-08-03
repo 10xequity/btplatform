@@ -157,14 +157,14 @@ test("negative control: the org-scope guard CAN fail on an unscoped statement", 
 
 /* ---------------- wiring guard on the DISPATCH CHAIN (§6.5) + negative control ---------------- */
 
-test("index.js CALLS kioskRoutes in the dispatch chain and wires it — an import alone must not pass", () => {
-  assert.ok(/\|\|\s*\(await kioskRoutes\(/.test(indexSrc), "kioskRoutes missing from the dispatch chain");
+test("index.js CALLS kioskRoutes in the dispatch table and wires it — an import alone must not pass", () => {
+  assert.ok(/\["kiosk",\s+kioskRoutes\],/.test(indexSrc), "kioskRoutes missing from the dispatch table");
   assert.ok(/\bwireKiosk\(/.test(indexSrc), "wireKiosk() never called");
 });
 
 test("negative control: the wiring guard CAN fail on an import-only source", () => {
   const importOnly = 'import { kioskRoutes, wireKiosk } from "./kiosk.js";';
-  assert.ok(!/\|\|\s*\(await kioskRoutes\(/.test(importOnly));
+  assert.ok(!/\["kiosk",\s+kioskRoutes\],/.test(importOnly));
 });
 
 /* ---------------- copy guards ---------------- */

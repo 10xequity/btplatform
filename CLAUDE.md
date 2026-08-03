@@ -51,6 +51,32 @@ a migration mismatch stops the session.
 
 Never report a "projected" suite count. Measure it. (The v0.33.1 lesson.)
 
+### 1.1. Verification cadence — owner decision 2026-08-03
+
+**Written records are evidence of intent, never evidence of completion — and that includes this
+project's own.** An assistant wrote in the v0.74.0 CHANGELOG that a stale comment "was corrected"; it
+had not been. A comment had been added *near* the problem and mistaken for the fix, and the wrong line
+shipped for a release (INDEX C9). The owner's ruling: *"do not believe release history as AI can make
+mistakes."*
+
+**But do NOT re-audit everything every session.** Also the owner, same breath: *"do not audit every
+time, but catch it during testing or do periodic code reviews and audit the documentation."* A full
+review pass costs a release's worth of a session; spending that on every session is how four sessions
+went into specifying an already-built module.
+
+So the cadence is:
+
+| When | What |
+|---|---|
+| **Every session** | `preflight.mjs --session`. Nothing else. Build the thing that was asked for. |
+| **Before building on a claim** | If a handoff, CHANGELOG, spec or comment says something is done, and you are about to depend on it, **`grep` that one thing.** One check, not a sweep. |
+| **Continuously, for free** | Tests. A guard with a correctly aimed negative control catches this class without anybody deciding to look. Prefer a new guard over a note in a document — every time. |
+| **Periodically** (owner asks, or ~every 8–10 releases) | A full fresh-eyes review pass over the releases since the last one, **plus a documentation audit**: every doc's claims checked against the tree, dead cross-references found, superseded files deleted. v0.75.0 was one; it found six defects, four untested. |
+
+The trap this replaces: treating "I read it in the handoff" as verification. The trap it must not create:
+re-deriving settled facts. `preflight` covers the state; §8's owner answers are settled; a claim you are
+about to build on is the only thing worth a spot check.
+
 **`node --check <file>` is not a syntax check on this codebase.** It exits 0 for any `.js` file
 containing `export` or `import` even when the file is unparseable — reproduced 2026-08-02 on both
 Node 22.23.2 (CI's pin) and 24.18.1. All 37 worker modules are ESM, so the file-path form cannot
@@ -138,7 +164,15 @@ Any UI work loads these, in this order (standards §5, owner requirement #13 ver
 
 1. **`/emil-design-eng`** — the base. Animation decision framework, `:active` feedback, ease-out,
    no enter-animation on high-frequency controls.
-2. **`frontend-design`** — structure and aesthetic.
+   **INSTALLED 2026-08-03** at `~/.claude/skills/emil-design-eng/` from `github.com/emilkowalski/skill`
+   (MIT, Emil Kowalski's own repo, markdown only — no scripts or hooks). It had been missing for the
+   whole port and every session so far had silently substituted for it. The same repo also supplied
+   four companions now installed and worth reaching for: **`review-animations`** (has a STANDARDS.md
+   checklist), **`improve-animations`**, **`animation-vocabulary`**, **`find-animation-opportunities`**.
+   *A skill installed mid-session is not in that session's skill list — it becomes invokable on the
+   next start. Say so rather than pretending to have loaded it.*
+2. **`frontend-design`** — structure and aesthetic. Available here as `skill-library:frontend-design`,
+   with `skill-library:web-design-guidelines` as a pre-merge MUST/SHOULD/NEVER gate.
 3. **`ux-copy` conventions** — human copy, no jargon, sentence case (v0.5.0 precedent).
 
 **Tokens only.** Colors, fonts, spacing come from `assets/tokens.css` variables. `tokens.test.mjs`

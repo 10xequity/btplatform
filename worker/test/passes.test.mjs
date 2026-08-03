@@ -139,19 +139,19 @@ test("normalizeRateInput guards the cents/dollars mistake", () => {
 
 test("§6.5: both modules are MOUNTED and WIRED (F-15 — call sites, not imports)", () => {
   for (const call of [
-    "|| (await passesRoutes(request, env, url, ctx))",
-    "|| (await staffPayRoutes(request, env, url, ctx))",
+    /\["passes",\s+passesRoutes\],/,
+    /\["staffPay",\s+staffPayRoutes\],/,
   ]) {
-    assert.ok(INDEX_SRC.includes(call), `not dispatched: ${call} — built-but-uncalled (failure class 1)`);
+    assert.ok(call.test(INDEX_SRC), `not dispatched: ${call} — built-but-uncalled (failure class 1)`);
   }
   assert.match(INDEX_SRC, /wirePasses\(wiredHelpers\)/);
   assert.match(INDEX_SRC, /wireStaffPay\(wiredHelpers\)/);
 });
 
 test("NC-4: the mount gate can fail", () => {
-  const mutated = INDEX_SRC.replace("|| (await passesRoutes(request, env, url, ctx))", "|| false");
+  const mutated = INDEX_SRC.replace(/\["passes",\s+passesRoutes\],/, "");
   assert.notEqual(mutated, INDEX_SRC, "mutation did not land — NC is vacuous");
-  assert.ok(!mutated.includes("|| (await passesRoutes(request, env, url, ctx))"));
+  assert.ok(!/\["passes",\s+passesRoutes\],/.test(mutated));
 });
 
 /** Comments explain the rule and therefore contain the forbidden words. Scan code only —

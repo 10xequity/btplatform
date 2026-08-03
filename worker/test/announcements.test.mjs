@@ -7,7 +7,7 @@
  *   2. ORG-SCOPE guard, anchored PER env.DB.prepare CALL with a miss counter — the v0.45.0
  *      lesson (failure class 3): whole-file string reads went blind after one apostrophe;
  *      the guard must count its own misses and fail when the corpus shrinks.
- *   3. §6.5 mount guard: the delivery gate greps CALL SITES — the dispatch chain
+ *   3. §6.5 mount guard: the delivery gate greps CALL SITES — the dispatch table
  *      `|| (await announcementsRoutes(` and the `wireAnnouncements(` call — never the filename.
  *   4. Owner rule 1 in source: the mute route REFUSES kind='cta' (fail closed), and the feed
  *      never filters ctas through mutes.
@@ -115,9 +115,9 @@ test("the public org-brand SELECT carries exactly the three brand fields (standa
 
 /* ============================ 3. §6.5 mount guard (call sites, not filenames) ============================ */
 
-test("index.js mounts the module: dispatch chain + wire call + public brand route (F-15/§6.5)", () => {
-  assert.ok(INDEX.includes("|| (await announcementsRoutes(request, env, url, ctx))"),
-    "dispatch chain must call announcementsRoutes — an import line alone is built-but-uncalled (failure class 1)");
+test("index.js mounts the module: dispatch table + wire call + public brand route (F-15/§6.5)", () => {
+  assert.ok(/\["announcements",\s+announcementsRoutes\],/.test(INDEX),
+    "dispatch table must call announcementsRoutes — an import line alone is built-but-uncalled (failure class 1)");
   assert.ok(INDEX.includes("wireAnnouncements(wiredHelpers)"),
     "wireAnnouncements(helpers) must be called or every helper is undefined at first request");
   assert.ok(/url\.pathname === "\/api\/public\/org-brand"[\s\S]{0,400}?publicOrgBrand\(env, url\)/.test(INDEX),
@@ -167,10 +167,10 @@ test("NC-3: stripping the cta refusal from the mute route is caught", () => {
     "with the refusal stripped, the rule-in-force check must fail");
 });
 
-test("NC-4: a dispatch chain missing the call site fails the §6.5 check", () => {
-  const mutated = INDEX.replace("|| (await announcementsRoutes(request, env, url, ctx))", "");
+test("NC-4: a dispatch table missing the call site fails the §6.5 check", () => {
+  const mutated = INDEX.replace(/\["announcements",\s+announcementsRoutes\],/, "");
   assert.notEqual(mutated, INDEX);
-  assert.equal(mutated.includes("|| (await announcementsRoutes(request, env, url, ctx))"), false);
+  assert.equal(/\["announcements",\s+announcementsRoutes\],/.test(mutated), false);
   assert.ok(mutated.includes("announcementsRoutes, wireAnnouncements"),
     "the import line SURVIVES the mutation — which is exactly why the gate must grep call sites, not filenames");
 });

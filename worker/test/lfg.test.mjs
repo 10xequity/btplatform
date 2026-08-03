@@ -186,6 +186,6 @@ test("negative control: a prepare call built from a variable is counted as a mis
 
 test("index.js dispatches lfgRoutes and calls wireLfg — an import line alone must not pass (§6.5)", () => {
   const src = readFileSync(new URL("../src/index.js", import.meta.url), "utf8");
-  assert.match(src, /\|\|\s*\(await lfgRoutes\(request, env, url, ctx\)\)/, "dispatch chain must call lfgRoutes");
+  assert.match(src, /\["lfg",\s+lfgRoutes\],/, "dispatch table must call lfgRoutes");
   assert.match(src, /^wireLfg\(wiredHelpers\);/m, "wireLfg must be invoked");
 });

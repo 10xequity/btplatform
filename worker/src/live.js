@@ -35,6 +35,7 @@
  */
 
 import { personName, CAPTAIN_JOIN, CAPTAIN_COLS } from "./names.js"; // v0.74.0 — one name rule
+import { readParts, degradedNote } from "./resilience.js"; // v0.77.0 — show what we can
 
 let json;
 export function wireLive(h) { ({ json } = h); }
@@ -70,18 +71,27 @@ export async function liveRoutes(request, env, url, ctx) {
     // unannounced tournament is exactly the thing not worth confirming.
     if (!ev || !PUBLIC_STATUS.includes(ev.status)) return json({ error: "No such event." }, 404);
 
-    const divisions = (await env.DB.prepare(
-      `SELECT id, name, rank, court_from, court_to FROM divisions
-        WHERE org_id=?1 AND event_id=?2 AND deleted_at IS NULL ORDER BY rank`
-    ).bind(ctx.orgId, eventId).all()).results || [];
+    /* THE SIX READS BELOW ARE INDEPENDENT, AND ONE FAILING USED TO LOSE ALL SIX.
+       Owner 2026-08-03: "If modules fail, do not let it break or stop the system, simply allow it
+       process as best as possible." This is the most visible place that applies — a wall display in a
+       gym, polling, with nobody watching the logs. Standings plus "the bracket is unavailable for a
+       moment" beats a blank screen, and the alternative is a parent refreshing a dead page.
 
-    const pools = (await env.DB.prepare(
-      `SELECT id, name, division_id, sort_order FROM pools
-        WHERE org_id=?1 AND event_id=?2 AND deleted_at IS NULL ORDER BY sort_order, id`
-    ).bind(ctx.orgId, eventId).all()).results || [];
+       The EVENT read above is deliberately not in here: with no event there is nothing to show and
+       404 is the honest answer. Everything after it is a section of a board that can be missing. */
+    const read = await readParts({
+      divisions: () => env.DB.prepare(
+        `SELECT id, name, rank, court_from, court_to FROM divisions
+          WHERE org_id=?1 AND event_id=?2 AND deleted_at IS NULL ORDER BY rank`
+      ).bind(ctx.orgId, eventId).all().then((r) => r.results || []),
 
-    // Team names, standing and pool. Nothing about the people on them.
-    const teams = (await env.DB.prepare(
+      pools: () => env.DB.prepare(
+        `SELECT id, name, division_id, sort_order FROM pools
+          WHERE org_id=?1 AND event_id=?2 AND deleted_at IS NULL ORDER BY sort_order, id`
+      ).bind(ctx.orgId, eventId).all().then((r) => r.results || []),
+
+      // Team names, standing and pool. Nothing about the people on them.
+      teams: () => env.DB.prepare(
       `SELECT t.id, t.name, t.pool_id, t.division_id,
               COALESCE(s.wins,0) AS wins, COALESCE(s.losses,0) AS losses,
               COALESCE(s.point_diff,0) AS point_diff, s.rank,
@@ -91,9 +101,9 @@ export async function liveRoutes(request, env, url, ctx) {
          ${CAPTAIN_JOIN}
         WHERE t.org_id=?1 AND t.event_id=?2 AND t.deleted_at IS NULL
         ORDER BY COALESCE(s.rank, 9999), t.name`
-    ).bind(ctx.orgId, eventId).all()).results || [];
+      ).bind(ctx.orgId, eventId).all().then((r) => r.results || []),
 
-    const matches = (await env.DB.prepare(
+      matches: () => env.DB.prepare(
       `SELECT m.id, m.round, m.court, m.bracket_id, m.bracket_round, m.bracket_slot,
               m.score_a, m.score_b, m.points_to,
               ta.name AS team_a, tb.name AS team_b, tr.name AS ref_team,
@@ -109,11 +119,15 @@ export async function liveRoutes(request, env, url, ctx) {
          LEFT JOIN member_profiles cmpb ON cmpb.contact_id=capb.id AND cmpb.org_id=m.org_id AND cmpb.deleted_at IS NULL
         WHERE m.org_id=?1 AND m.event_id=?2 AND m.deleted_at IS NULL
         ORDER BY m.round, m.court`
-    ).bind(ctx.orgId, eventId).all()).results || [];
+      ).bind(ctx.orgId, eventId).all().then((r) => r.results || []),
 
-    const brs = (await env.DB.prepare(
-      `SELECT id, name FROM brackets WHERE org_id=?1 AND event_id=?2 AND deleted_at IS NULL ORDER BY id`
-    ).bind(ctx.orgId, eventId).all()).results || [];
+      brackets: () => env.DB.prepare(
+        `SELECT id, name FROM brackets WHERE org_id=?1 AND event_id=?2 AND deleted_at IS NULL ORDER BY id`
+      ).bind(ctx.orgId, eventId).all().then((r) => r.results || []),
+    }, { divisions: [], pools: [], teams: [], matches: [], brackets: [] });
+
+    const { divisions, pools, teams, matches } = read.values;
+    const brs = read.values.brackets;
 
     const done = (mt) => mt.score_a !== null && mt.score_b !== null && mt.score_a !== mt.score_b;
     const roundLabel = (r) => (r === 1 ? "Final" : r === 2 ? "Semi-final" : r === 3 ? "Quarter-final" : `Round of ${2 ** r}`);
@@ -179,6 +193,12 @@ export async function liveRoutes(request, env, url, ctx) {
       brackets,
       results: poolPlay.filter(done).length,
       total_games: matches.filter((mt) => mt.team_a && mt.team_b).length,
+      // Named, not hidden. A board that quietly shows an empty bracket is asserting there is no
+      // bracket — a wrong answer presented as a fact. `degraded` lets the page say "showing what we
+      // can" instead, and `unavailable` tells a developer which read to go and look at.
+      degraded: read.missing.length > 0,
+      unavailable: read.missing,
+      degraded_note: degradedNote(read.missing),
       // Short cache: a scoreboard 20 seconds stale is fine, and it stops a wall display from
       // hammering the database all day.
     }, 200, { "Cache-Control": "public, max-age=20" });

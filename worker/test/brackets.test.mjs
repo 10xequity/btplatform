@@ -447,5 +447,7 @@ test("the module is actually mounted (failure class 1)", () => {
   // from source, not from a document that claims it was done.
   assert.match(IDX, /import \{ bracketRoutes, wireBrackets \} from "\.\/brackets\.js"/);
   assert.match(IDX, /wireBrackets\(wiredHelpers\)/);
-  assert.match(IDX, /await bracketRoutes\(request, env, url, ctx\)/);
+  // v0.77.0: the `||` chain became an isolated dispatch TABLE, so the mount is a table entry.
+  assert.match(IDX, /\["bracket",\s+bracketRoutes\],/,
+    "bracketRoutes must appear in the dispatch table, not merely on an import line (§6.5)");
 });

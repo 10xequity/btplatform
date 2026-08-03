@@ -1,7 +1,7 @@
 /* Boomtown Platform — SMS tests (req #17 phase 3)
    File: worker/test/sms.test.mjs · Version: v1.0 · Date: 2026-07-31 · Ships in: v0.42.0
    Pure helpers · Twilio signature validated against an INDEPENDENT node:crypto oracle ·
-   §6.5 delivery gates (dispatch chain + wireSms call sites, never the import line) ·
+   §6.5 delivery gates (dispatch table + wireSms call sites, never the import line) ·
    source-level org-scope guard confined outside the marked COMPLIANCE-CROSS-ORG block ·
    signature-before-DB order guard for the public webhook. Every guard ships a negative
    control that PROVES it can fail (standards §6, tokens.test.mjs precedent). */
@@ -103,8 +103,8 @@ test("validateTwilioSignature rejects tampered body, wrong token, and missing si
 
 /* ---------------- §6.5 delivery gates — call sites, never the import line ---------------- */
 
-test("index.js mounts smsRoutes in the dispatch chain (§6.5)", () => {
-  assert.ok(indexSrc.includes("|| (await smsRoutes(request, env, url, ctx))"),
+test("index.js mounts smsRoutes in the dispatch table (§6.5)", () => {
+  assert.ok(/\["sms",\s+smsRoutes\],/.test(indexSrc),
     "smsRoutes is imported but never dispatched — built-but-uncalled (failure class 1)");
 });
 

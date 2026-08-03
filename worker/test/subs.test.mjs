@@ -4,7 +4,7 @@
  *
  * Covers the pure matching/normalization core plus the three grep guards this feature needs:
  *  - wiring guard (recurring failure class 1, F-6): index.js must CALL subsRoutes in the
- *    dispatch chain and CALL wireSubs — an import line alone must not pass (standards §6.5).
+ *    dispatch table and CALL wireSubs — an import line alone must not pass (standards §6.5).
  *  - org-scope guard (class 3, F-11): every SQL statement in subs.js touching sub_ tables
  *    carries org_id.
  *  - member-copy guard (F-40 class): no literal email address in member-facing strings.
@@ -92,14 +92,14 @@ test("flood + fan-out ceilings are sane and exported (reviewable, not buried)", 
 });
 
 /* ---------------- wiring guard — recurring failure class 1 (F-6) ---------------- */
-test("index.js CALLS subsRoutes in the dispatch chain (an import alone must not pass, standards §6.5)", () => {
-  assert.match(indexSrc, /\|\|\s*\(await subsRoutes\(request, env, url, ctx\)\)/,
+test("index.js CALLS subsRoutes in the dispatch table (an import alone must not pass, standards §6.5)", () => {
+  assert.match(indexSrc, /\["subs",\s+subsRoutes\],/,
     "subs.js is built but never dispatched — failure class 1");
   assert.match(indexSrc, /wireSubs\(\{/, "wireSubs never called — helpers (incl. sendEmail) unwired");
 });
 test("negative control: the wiring guard CAN fail on an import-only source", () => {
   const importOnly = 'import { subsRoutes, wireSubs } from "./subs.js";';
-  assert.doesNotMatch(importOnly, /\|\|\s*\(await subsRoutes\(request, env, url, ctx\)\)/);
+  assert.doesNotMatch(importOnly, /\["subs",\s+subsRoutes\],/);
 });
 
 /* ---------------- org-scope guard — recurring failure class 3 (F-11) ---------------- */

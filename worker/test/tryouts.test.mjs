@@ -100,15 +100,15 @@ test("NC-3: rollUp copes with a player nobody evaluated", () => {
 /* ============================ 2. source guards ============================ */
 
 test("§6.5: the module is MOUNTED and WIRED (F-15)", () => {
-  assert.ok(INDEX_SRC.includes("|| (await tryoutsRoutes(request, env, url, ctx))"),
+  assert.ok(/\["tryouts",\s+tryoutsRoutes\],/.test(INDEX_SRC),
     "tryoutsRoutes is imported but never dispatched — built-but-uncalled (failure class 1)");
   assert.match(INDEX_SRC, /wireTryouts\(wiredHelpers\)/);
 });
 
 test("NC-4: the mount gate can fail", () => {
-  const mutated = INDEX_SRC.replace("|| (await tryoutsRoutes(request, env, url, ctx))", "|| false");
+  const mutated = INDEX_SRC.replace(/\["tryouts",\s+tryoutsRoutes\],/, "");
   assert.notEqual(mutated, INDEX_SRC, "mutation did not land — NC is vacuous");
-  assert.ok(!mutated.includes("|| (await tryoutsRoutes(request, env, url, ctx))"));
+  assert.ok(!/\["tryouts",\s+tryoutsRoutes\],/.test(mutated));
 });
 
 test("every SQL statement is org-scoped (F-11)", () => {

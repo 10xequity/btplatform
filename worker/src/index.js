@@ -185,6 +185,8 @@
  *   New optional secrets: SQUARE_ACCESS_TOKEN, SQUARE_WEBHOOK_SIGNATURE_KEY, SQUARE_WEBHOOK_URL,
  *   SQUARE_LOCATION_ID, SQUARE_ENV ('production' | anything else = sandbox).
  */
+// v0.77.0 — one failing module must not take the whole request down. Imports nothing, so no cycle.
+import { dispatch } from "./resilience.js";
 import { tournamentRoutes, wire } from "./tournaments.js";
 import { registrationRoutes, wireRegistrations } from "./registrations.js";
 import { adminRoutes, wireAdmin } from "./admin.js";
@@ -359,7 +361,7 @@ export default {
       } else if (url.pathname === "/api/orgs" && request.method === "GET") {
         res = await listOrgs(env);
       } else if (url.pathname === "/api/health") {
-        res = json({ ok: true, version: "v0.76.0" });
+        res = json({ ok: true, version: "v0.77.0" });
       } else if (url.pathname === "/api/webhooks/square" && request.method === "POST") {
         res = await membershipWebhook(request, env); // verifies signature; forwards payment.* to squareWebhook
       } else if (url.pathname === "/api/public/org-brand" && request.method === "GET") {
@@ -372,50 +374,90 @@ export default {
         res = await icsFeed(env, url, request);
       } else if (url.pathname.startsWith("/api/")) {
         const ctx = await buildCtx(request, env);
-        res = (!ctx.orgOk && json({ error: "That organization isn't available." }, 404)) // F-11 (v0.30.0) — fail closed before any route sees ctx
-           || (await uploadRoutes(request, env, url, ctx)) // v0.30.0 — generic org-scoped file uploads
-           || (await documentRoutes(request, env, url, ctx)) // v0.28.0 — documents, versions, requirements, compliance
-           || (await waiverRoutes(request, env, url, ctx)) // v0.22.0 — /api/waiver/* + /api/admin/waivers/*
-           || (await calendarRoutes(request, env, url, ctx)) // v0.23.0 — feed token mint/revoke
-           || (await consentRoutes(request, env, url, ctx)) // v0.25.0 — /api/sign/* + waiver links + media consent
-           || (await orgRoutes(request, env, url, ctx)) // v0.31.0 — org profile, entity verification, reactivation
-           || (await tiersRoutes(request, env, url, ctx)) // v0.26.0 — tiers, grants, bulk members
-           || (await familyRoutes(request, env, url, ctx)) // v0.27.0 — age gate, families, age-out
-           || (await marketingRoutes(request, env, url, ctx))
-           || (await messagesRoutes(request, env, url, ctx))
-           || (await posRoutes(request, env, url, ctx))
-           || (await pushRoutes(request, env, url, ctx))
-           || (await waitlistRoutes(request, env, url, ctx))
-           || (await webauthnRoutes(request, env, url, ctx))
-           || (await securityRoutes(request, env, url, ctx))
-           || (await memberPortalRoutes(request, env, url, ctx))
-           || (await subsRoutes(request, env, url, ctx)) // v0.38.0 — league sub finder
-           || (await kioskRoutes(request, env, url, ctx)) // v0.39.0 — kiosk check-in (req #20)
-           || (await faqRoutes(request, env, url, ctx)) // v0.40.0 — Help & FAQ (req #21 phase 1)
-           || (await smsRoutes(request, env, url, ctx)) // v0.42.0 — SMS phase 3 (req #17)
-           || (await lfgRoutes(request, env, url, ctx)) // v0.45.0 — LFG & community play
-           || (await announcementsRoutes(request, env, url, ctx)) // v0.50.0 — R3 member home feed + announcements
-           || (await memberFieldsRoutes(request, env, url, ctx)) // v0.57.0 — M22 membership custom-field registry
-           || (await passesRoutes(request, env, url, ctx)) // v0.58.0 — pass/credit ledger
-           || (await staffPayRoutes(request, env, url, ctx)) // v0.58.0 — staff rates + shift pay
-           || (await tryoutsRoutes(request, env, url, ctx)) // v0.60.0 — tryout cards, evaluations, team builder
-           || (await formatsRoutes(request, env, url, ctx)) // v0.62.0 — pool schedule generator
-           || (await bracketRoutes(request, env, url, ctx)) // v0.66.0 — playable brackets (seed, byes, advance)
-           || (await divisionRoutes(request, env, url, ctx)) // v0.69.0 — divisions, court ranges, balance proposals
-           || (await liveRoutes(request, env, url, ctx)) // v0.73.0 — public scoreboard, no login
-           || (await leagueRoutes(request, env, url, ctx))
-           || (await reportRoutes(request, env, url, ctx))
-           || (await checkinRoutes(request, env, url, ctx))
-           || (await membershipRoutes(request, env, url, ctx))
-           || (await sandboxRoutes(request, env, url, ctx))
-           || (await facilityRoutes(request, env, url, ctx))
-           || (await profileRoutes(request, env, url, ctx))
-           || (await scheduleRoutes(request, env, url, ctx))
-           || (await eventsAdminRoutes(request, env, url, ctx))
-           || (await adminRoutes(request, env, url, ctx))
-           || (await tournamentRoutes(request, env, url, ctx))
-           || (await registrationRoutes(request, env, url, ctx))
-           || json({ error: "Not found" }, 404);
+        const ctxFail = !ctx.orgOk && json({ error: "That organization isn't available." }, 404); // F-11 (v0.30.0) — fail closed before any route sees ctx
+        if (ctxFail) {
+          res = ctxFail;
+        } else {
+          /* ROUTE DISPATCH — ONE TABLE, EACH MODULE ISOLATED (v0.77.0).
+             Owner 2026-08-03: "If modules fail, do not let it break or stop the system, simply allow
+             it process as best as possible."
+
+             Until v0.76.0 this was a 42-long `||` chain in one try/catch. A chain asks every module
+             "is this path yours?" in order, so a module that THREW WHILE DECLINING a path it does not
+             own took down every module listed after it — a fault in `uploadRoutes` (first in the list)
+             meant no brackets, no live board, no check-in, and a bare `500 Server error` that named
+             nothing. `dispatch` records the throw, treats it as a decline, and carries on: a module
+             that cannot decide whether a path is its own does not get a veto over the other 41.
+
+             THE ORDER IS LOAD-BEARING and is preserved exactly as the chain had it. Two modules can
+             match overlapping paths; the earlier one wins, as before.
+
+             WHAT IS NOT ISOLATED, deliberately: `buildCtx` and the F-11 org check above, which run
+             before any route sees `ctx`, and `requireStaff`, which returns a 403 Response rather than
+             throwing — so it is a value on the success path and cannot be swallowed by an error path.
+             A failure may cost information. It may never cost permission. See `resilience.js`. */
+          const table = [
+    ["upload",        uploadRoutes],                        // v0.30.0 — generic org-scoped file uploads
+    ["document",      documentRoutes],                      // v0.28.0 — documents, versions, requirements, compliance
+    ["waiver",        waiverRoutes],                        // v0.22.0 — /api/waiver/* + /api/admin/waivers/*
+    ["calendar",      calendarRoutes],                      // v0.23.0 — feed token mint/revoke
+    ["consent",       consentRoutes],                       // v0.25.0 — /api/sign/* + waiver links + media consent
+    ["org",           orgRoutes],                           // v0.31.0 — org profile, entity verification, reactivation
+    ["tiers",         tiersRoutes],                         // v0.26.0 — tiers, grants, bulk members
+    ["family",        familyRoutes],                        // v0.27.0 — age gate, families, age-out
+    ["marketing",     marketingRoutes],
+    ["messages",      messagesRoutes],
+    ["pos",           posRoutes],
+    ["push",          pushRoutes],
+    ["waitlist",      waitlistRoutes],
+    ["webauthn",      webauthnRoutes],
+    ["security",      securityRoutes],
+    ["memberPortal",  memberPortalRoutes],
+    ["subs",          subsRoutes],                          // v0.38.0 — league sub finder
+    ["kiosk",         kioskRoutes],                         // v0.39.0 — kiosk check-in (req #20)
+    ["faq",           faqRoutes],                           // v0.40.0 — Help & FAQ (req #21 phase 1)
+    ["sms",           smsRoutes],                           // v0.42.0 — SMS phase 3 (req #17)
+    ["lfg",           lfgRoutes],                           // v0.45.0 — LFG & community play
+    ["announcements", announcementsRoutes],                 // v0.50.0 — R3 member home feed + announcements
+    ["memberFields",  memberFieldsRoutes],                  // v0.57.0 — M22 membership custom-field registry
+    ["passes",        passesRoutes],                        // v0.58.0 — pass/credit ledger
+    ["staffPay",      staffPayRoutes],                      // v0.58.0 — staff rates + shift pay
+    ["tryouts",       tryoutsRoutes],                       // v0.60.0 — tryout cards, evaluations, team builder
+    ["formats",       formatsRoutes],                       // v0.62.0 — pool schedule generator
+    ["bracket",       bracketRoutes],                       // v0.66.0 — playable brackets (seed, byes, advance)
+    ["division",      divisionRoutes],                      // v0.69.0 — divisions, court ranges, balance proposals
+    ["live",          liveRoutes],                          // v0.73.0 — public scoreboard, no login
+    ["league",        leagueRoutes],
+    ["report",        reportRoutes],
+    ["checkin",       checkinRoutes],
+    ["membership",    membershipRoutes],
+    ["sandbox",       sandboxRoutes],
+    ["facility",      facilityRoutes],
+    ["profile",       profileRoutes],
+    ["schedule",      scheduleRoutes],
+    ["eventsAdmin",   eventsAdminRoutes],
+    ["admin",         adminRoutes],
+    ["tournament",    tournamentRoutes],
+    ["registration",  registrationRoutes],
+          ];
+          const { response, failures } = await dispatch(table, [request, env, url, ctx],
+            (name, err) => console.error("route module failed: " + name, err));
+
+          if (response) {
+            res = response;
+          } else if (failures.length) {
+            // Nothing handled it AND something broke. That is not a 404 — a 404 would tell the caller
+            // the route does not exist, when in fact the module that owns it is down. Name it.
+            res = json({
+              error: failures.length === 1
+                ? "Something went wrong handling that request. It has been logged."
+                : "Something went wrong handling that request. It has been logged.",
+              failed_modules: failures.map((f) => f.module),
+            }, 500);
+          } else {
+            res = json({ error: "Not found" }, 404);
+          }
+        }
       } else {
         res = json({ error: "Not found" }, 404);
       }

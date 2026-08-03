@@ -374,7 +374,9 @@ test("a member cannot reach any division route", async () => {
 test("the module is actually mounted (failure class 1)", () => {
   assert.match(IDX, /import \{ divisionRoutes, wireDivisions \} from "\.\/divisions\.js"/);
   assert.match(IDX, /wireDivisions\(wiredHelpers\)/);
-  assert.match(IDX, /await divisionRoutes\(request, env, url, ctx\)/);
+  // v0.77.0: the `||` chain became an isolated dispatch TABLE, so the mount is a table entry.
+  assert.match(IDX, /\["division",\s+divisionRoutes\],/,
+    "divisionRoutes must appear in the dispatch table, not merely on an import line (§6.5)");
 });
 
 /* ================================ v0.75.0 — guards that were narrower than their subject ================================ */

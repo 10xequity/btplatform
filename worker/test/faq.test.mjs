@@ -1,6 +1,6 @@
 /* Boomtown Platform — FAQ tests (req #21 phase 1)
    File: worker/test/faq.test.mjs · Version: v1.0 · Date: 2026-07-30 · Ships in: v0.40.0
-   Pure helpers + the §6.5 delivery gate (dispatch chain + wireFaq call sites in index.js,
+   Pure helpers + the §6.5 delivery gate (dispatch table + wireFaq call sites in index.js,
    never just the import line) + a source-level org-scope guard with a negative control
    that PROVES the guard can fail (tokens.test.mjs precedent). */
 import { test } from "node:test";
@@ -79,7 +79,7 @@ test("published coerces strictly to 0/1; sort_order to an integer", () => {
 /* ---------------- §6.5 delivery gate: call sites, not module names ---------------- */
 
 test("index.js DISPATCHES faqRoutes in the route chain (not just the import line)", () => {
-  assert.match(indexSrc, /\|\| \(await faqRoutes\(request, env, url, ctx\)\)/);
+  assert.match(indexSrc, /\["faq",\s+faqRoutes\],/);
 });
 
 test("index.js CALLS wireFaq with the shared helpers", () => {

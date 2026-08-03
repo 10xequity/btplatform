@@ -258,3 +258,65 @@ test("compared numbers are tabular, and the page is theme-aware", () => {
   assert.match(HTML, /prefers-reduced-motion/);
   assert.match(HTML, /data-theme/);
 });
+
+/* ================================ v0.77.0 — the board degrades, it does not collapse ================================
+   Owner 2026-08-03: "If modules fail, do not let it break or stop the system, simply allow it process
+   as best as possible." A wall display in a gym is the least forgiving place for a 500: nobody is
+   watching the logs, and the page just goes blank mid-tournament. */
+
+test("one broken read loses one section, not the whole board", async () => {
+  const env = boot();
+  // Break exactly one of the six reads by removing the table it needs. `brackets` is chosen because it
+  // is the section a spectator can most afford to lose — the standings still mean something without it.
+  env.DB.exec("DROP TABLE brackets");
+
+  const r = await pub(env, "/api/live/events/1");
+  assert.equal(r.status, 200, "a broken section must NOT turn into a 500");
+  assert.equal(r.data.degraded, true, "and the board must admit it is incomplete");
+  assert.deepEqual(r.data.unavailable, ["brackets"]);
+  assert.match(r.data.degraded_note, /Showing what we can/);
+  assert.match(r.data.degraded_note, /bracket could not be loaded/);
+
+  // The parts that still worked must still be there — that is the entire point.
+  assert.ok(r.data.event, "the event survived");
+  assert.ok(Array.isArray(r.data.overall), "the flat standings survived");
+  assert.ok(r.data.overall.length > 0, "and they are populated, not merely present");
+  assert.deepEqual(r.data.brackets, [], "the lost section falls back to its own shape");
+  env.DB.close();
+});
+
+test("a healthy board reports itself as healthy — the flag is not stuck on", async () => {
+  // Negative control for the test above. A `degraded` that is always true, or an `unavailable` that
+  // always lists something, would satisfy every assertion up there while telling spectators the board
+  // is broken all afternoon.
+  const env = boot();
+  const r = await pub(env, "/api/live/events/1");
+  assert.equal(r.status, 200);
+  assert.equal(r.data.degraded, false, "nothing was broken, so nothing may be reported as missing");
+  assert.deepEqual(r.data.unavailable, []);
+  assert.equal(r.data.degraded_note, null, "and no note at all, rather than an empty sentence");
+  env.DB.close();
+});
+
+test("a missing EVENT is still a 404 — degrading must not invent a tournament", async () => {
+  // The line the isolation must not cross. With no event there is nothing to show, and answering 200
+  // with an empty board would tell a parent the tournament exists and has no games in it.
+  const env = boot();
+  const r = await pub(env, "/api/live/events/9999");
+  assert.equal(r.status, 404);
+  assert.match(r.data.error, /No such event/);
+  env.DB.close();
+});
+
+test("even with every section broken the board answers, and says everything is missing", async () => {
+  const env = boot();
+  for (const t of ["brackets", "divisions", "pools", "standings"]) env.DB.exec(`DROP TABLE ${t}`);
+  const r = await pub(env, "/api/live/events/1");
+  assert.equal(r.status, 200, "the request must survive even a wholesale failure");
+  assert.equal(r.data.degraded, true);
+  // `teams` joins standings, so dropping standings takes the teams read with it.
+  assert.ok(r.data.unavailable.length >= 3, `expected several missing, got ${JSON.stringify(r.data.unavailable)}`);
+  assert.ok(r.data.event, "the event is read separately and must survive");
+  assert.match(r.data.degraded_note, /Showing what we can/);
+  env.DB.close();
+});
