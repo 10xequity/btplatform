@@ -2,7 +2,93 @@
 
 ## v0.80.0 — 2026-08-03
 
-- Auto-recorded by CI on deploy. `/api/health` reported `v0.80.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
+**King / Queen of the Court is reachable.** Migration **0042**.
+
+Owner 2026-08-03, answering the last open question on the format:
+
+> *"lets do both - but ideally 1 person fill it out for everyone would be nice. then back up each person
+> can get a link and if submitted first, the link resolves to confirm - yes or no - then edit."*
+
+### That answer is a better shape than what v0.79.0 built
+
+v0.79.0 built a **symmetric** model: everyone reports, `reconcile` merges, disagreements come back as two
+versions and no answer. Defensible, and not what the owner described. His flow always has **one current
+answer on the table** — whoever gets there first enters it, anyone else is shown it and asked yes or no,
+and "no" leads to an edit that becomes the new current answer.
+
+So the second person through the door is **checking** the first, not competing with them, and the software
+never holds two scorelines it cannot choose between. Disagreement becomes a person saying so, on the
+record, rather than a collision the code has to arbitrate. `reconcile` is not wasted — it is now what the
+admin board uses to show a director where the checking has and has not happened.
+
+The three modes are computed server-side and named — **enter / confirm / done** — because two screens
+deciding that independently is two chances to show the wrong one.
+
+### An edit resets everyone else to pending
+
+A confirmation is about **specific numbers**, so it is stale the moment they change. Carrying them forward
+would show three ticks against a scoreline only its editor has ever seen — false assurance, and the exact
+shape of the "recorded but not in force" defect this project keeps finding. It has its own test, and that
+test is the one that matters most in the file.
+
+### Migration 0042 closes a gap nothing was reporting: the entry list was missing
+
+Migration 0040 gave the format sessions, rounds, seatings and games — but **no record of who entered**. The
+roster was implied by whoever happened to be seated in round 1, which means a session could not be set up
+before it started, a player who arrived and was not seated did not exist, and a player who went home after
+round 2 was indistinguishable from one who never came. *Individuals* entering rather than teams is the
+whole premise of this format, so that was the one table it could least afford to be missing.
+
+- **The score token lives on the PLAYER for the whole session**, not on `kotc_slots`. Slots are already one
+  row per player per round — the obvious place, and it would have minted a **new link every round**: four
+  rounds, four links, three of them dead, and the one they kept is the wrong one.
+- **Every player gets a link at entry, not on request.** A link minted later only helps people somebody
+  remembered to prepare, which is the opposite of a backup.
+- A player who goes home is **withdrawn, not deleted** — their games were played and their points are real,
+  and `deleted_at` would remove them from a leaderboard they earned a place in.
+
+### Failure class 1, closed — and the ratchet worked exactly as designed
+
+v0.76.0 shipped this engine unreachable and held the gap open with a test asserting `index.js` did **not**
+mention `kotcRoutes`/`wireKotc`, whose failure message said: *delete this and put the dispatch-chain
+assertion in its place.* Wiring it turned that test red, and this release replaces it with the real mount
+assertion plus a check that `kotc.js` is still pure — no `env.DB`, no `request`. **The gap could not be
+forgotten, because forgetting it was impossible while the suite was green.** Compare with the alternative,
+which was a paragraph in a handoff.
+
+### Three bugs, all caught by tests
+
+1. **`ON CONFLICT(...)` could not match its own unique index**, because that index is **partial**
+   (`WHERE deleted_at IS NULL`) as every uniqueness rule here is — so a withdrawn row never blocks a
+   re-entry. SQLite needs the predicate restated in the conflict target. Incidentally a clean demonstration
+   of the v0.77.0 isolation working: the module threw and the response named
+   `failed_modules: ["kotc"]` rather than a bare 500.
+2. **`playerView` returned a field called `note`, and every response spread the view *after* setting its
+   own note** — so the view silently overwrote it, and every action reported the screen's prompt instead of
+   what had just happened. Two tests caught it at once. Now `prompt` (what the screen asks) and `note`
+   (what just happened) are separate fields, which makes the collision **impossible** rather than merely
+   unlikely.
+3. **A submission carrying only totals and no game scores was rejected by an input guard** — which is
+   precisely the case the v0.79.0 solver exists for. Somebody who only remembers their own points is still
+   useful, and the guard was throwing that away.
+
+### Privacy, and one property worth stating
+
+Names on the link screen are **abbreviated** (standards §8): it is reachable by anyone holding a link, so
+it is a login-free surface exactly like the public board. The admin board shows full names, because a
+director chasing somebody needs the real one. Both directions are asserted in a single test.
+
+And a net-2 player cannot write net 1 — **nothing in the request names a net**, it is derived from the
+token, so that is a property of the design rather than a check that could be forgotten. Asserted anyway.
+
+### Gates
+
+Suite **1107 → 1127**, measured before and after. 66 test files, 50 modules. Ledger **0042**, read back
+live. No `web/**` change, so the buster stays `0.75.0`.
+
+**Still unbuilt:** the admin board screen, the player-facing `kotc.html`, and the public individual
+leaderboard. The API is complete and tested; what remains is screens — and those wait on the design roster
+(`/emil-design-eng`, installed in v0.77.0 and available from the next session start).
 
 ## v0.79.0 — 2026-08-03
 
