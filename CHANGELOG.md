@@ -2,7 +2,50 @@
 
 ## v0.57.0 — 2026-08-03
 
-- Auto-recorded by CI on deploy. `/api/health` reported `v0.57.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
+- **End-to-end operating-loop harness** (roadmap §3.2 — "before more feature surface, not after").
+  The other 683 tests are unit- and guard-shaped; not one drove the business through the real
+  router in order. Every expensive defect this platform has shipped lived in a **seam**: a module
+  never mounted (the v0.49.1 outage), a predicate written twice and drifted (F-26), a claim link
+  expiring six hours late (v0.54.0), a function defined and never called (v0.56.0). Unit tests
+  cannot see seams.
+  - `worker/testkit/d1-memory.mjs` implements the D1 binding over `node:sqlite` (built in, no flag,
+    verified on Node 22.23.2 *and* 24.18.1). The surface was measured by grep rather than guessed.
+  - `worker/testkit/journey-schema.sql` is production DDL read **verbatim** from live
+    `sqlite_master`. Replaying `db/migrations/` cannot rebuild the schema — 0004–0007 and 0011 were
+    pruned after being applied, so the folder holds 20 files against a ledger of 34.
+  - `e2e_journey.test.mjs` walks sign up → register → pay → check in → play → notify through the
+    real `index.js`. Nothing under test is mocked; only the DB binding is swapped, and for a real
+    SQL engine. Brevo, Square and Twilio are absent so they fail closed — the sandbox behaviour
+    testers actually see.
+- **What the harness found on its first run**, none of it visible to any existing test: the loop
+  touches **37 tables, not the 14** a code reading suggested (registering for one tournament
+  reaches waivers, documents, document requirements, guardianships, media consent, membership
+  grants and the waitlist); signing in silently creates a `member` role row; registration refuses
+  with 503 until the org publishes a waiver; and check-in admits a **roster slot**, not a person.
+  Proven to fail: unmounting registrations, restoring the v0.36.0 org fallback, and dropping the
+  staff role check each redden it.
+- **M22 — membership custom-field registry** (requirements §2). `member_profiles` holds what the
+  *product* defines; this is what an *org* invents. **Migration 0034 was applied to live D1 via
+  Cloudflare MCP before this push** (ledger now 34; the F-41 `sqlite_master` check ran first and
+  confirmed no such table existed, and that `form_fields` is per-**event** — so this generalises
+  that proven pattern rather than inventing a second vocabulary).
+  - **Hide ≠ delete** is the rule that shapes the module: `active = 0` removes a field from every
+    form and profile while every answer stays on disk, so switching it back on restores the data.
+    Re-creating a hidden field returns 409 and points at the existing one instead of losing it.
+  - **Two visibility switches, not one**: `member_visible` (may the member see and edit it) and
+    `show_on_forms` (public signup). "Coach notes" is neither — and the member routes filter
+    `member_visible` **in SQL**, not in the response mapper, so a staff-only field is never loaded,
+    let alone serialised. A test asserts exactly that.
+  - Proven to fail: leaking staff-only fields, dropping the `active` filter, accepting an off-list
+    dropdown value, and removing the staff gate each redden the suite.
+- **Deliberately not shipped, stated rather than quietly dropped.** The M22 **admin screen**: every
+  admin page carries the rail as static markup (v2.16), so adding one nav item edits ~30 pages —
+  its own change, and precisely the cost the SPA shell exists to remove. **SPA shell**: a UI
+  proposal was requested in the same breath, and building it before proposing would be backwards.
+  **M12C public rental booking**: two owner gates — Square sandbox→production is the owner's call,
+  and org 10 (External/Rental) has an open confirm (decisions §F, C-1/C-2); a public page that
+  cannot take money is half a feature.
+- Suite **683 → 709**, all passing.
 
 ## v0.56.0 — 2026-08-02
 
