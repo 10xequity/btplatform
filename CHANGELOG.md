@@ -2,7 +2,48 @@
 
 ## v0.59.0 — 2026-08-03
 
-- Auto-recorded by CI on deploy. `/api/health` reported `v0.59.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
+- **The 27-page rail tax is gone — and it never needed the SPA shell.** Measured before building:
+  the static rail was **byte-identical across all 27 admin pages**, one variant, zero drift. So the
+  cost blocking every new admin screen was mechanical, not editorial, and a generator removes it.
+  `worker/scripts/sync-rail.mjs` + `web/assets/rail.partial.html`: `--check` reports drift,
+  `--write` sweeps. Proven before first use — clean on the untouched tree, catches a one-character
+  drift, repairs it back to byte-equality.
+  - It is deliberately **not its own only check**. `rail_static.test.mjs` already asserts the rails
+    match each other and agree with the `NAV` array; `sync_rail.test.mjs` adds the third leg
+    (partial == pages). Any two of the three agreeing is not enough — a generator that
+    self-certifies can write the same mistake to 28 files and call it consistency.
+  - First real use, in the same release: adding "Passes & Credits" to the menu was one `NAV` edit,
+    one partial edit, one sweep, 28 pages updated.
+- **Passes & credits admin screen** — the first of three shipped-but-unreachable APIs. v0.58.0
+  delivered the ledger with no UI, so the owner could not use the feature they had asked for. Issue
+  a pass, see what is left, spend one, void one. Guest passes prompt for the guest's name, because
+  the server refuses without it and it is better to ask than to hand someone an error they cannot
+  act on. The page **never computes a balance** — it renders the one the server derived, so the
+  number on screen cannot disagree with the history beneath it (F-26). The page shell was
+  *generated* from an existing page rather than transcribed, so header, pre-paint snippet, rail and
+  script order are correct by construction.
+- **Match-level history, deliberately without a rating** (owner 2026-08-03). `profiles.js` now
+  returns game-by-game detail under the existing `show_history` toggle: opponent, score, result.
+  Event-level résumé already existed; this is the detail underneath it. **No rating, rank or
+  derived skill number** — volleyball results belong to a *team*, so a per-player figure silently
+  credits someone for their partner's night, and once a number exists people treat it as fact
+  whatever caveat sits next to it. Showing the matches and letting the reader judge is both more
+  honest and more useful.
+- **The three UI fixes recommended in the v0.58.0 review:**
+  - `theme-color` was pinned to `#0B0B0D` on every page and never followed the theme, so light mode
+    put a near-black status bar above a white page — and in an installed PWA that bar *is* the app's
+    title bar. Now read from the `--bg` token and re-synced on toggle, in both shells.
+  - **Money columns had no `tabular-nums` anywhere.** Scores and standings did; currency did not, so
+    every column of figures in reports, POS and registrations visibly jittered. Scoped to
+    figure-bearing cells, never to prose.
+  - `score`, `kiosk` and `checkin` carried **zero media queries** and the smallest breakpoint in the
+    codebase was 480px — nothing was designed for the 360–390px width people actually hold. Added a
+    430px courtside block (52px thumb targets, tables to cards, larger score) plus `safe-area-inset`
+    handling for notch devices.
+- Cache-buster swept to `0.59.0` (307 refs). README refreshed: version, a **Working on it** section
+  covering the two commands that now run the whole loop, and the stale "644 passing" / "ledger 0033"
+  figures corrected.
+- Suite **737 → 743**, all passing.
 
 ## v0.58.0 — 2026-08-03
 
