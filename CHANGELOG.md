@@ -1,5 +1,9 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.59.0 — 2026-08-03
+
+- Auto-recorded by CI on deploy. `/api/health` reported `v0.59.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
+
 ## v0.58.0 — 2026-08-03
 
 - **Pass / credit ledger** (`passes.js`, owner: "assign like class pass or mindbody").
