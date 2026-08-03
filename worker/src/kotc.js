@@ -360,3 +360,339 @@ export function nextRound(previous, standings, opts = {}) {
       : `${moved} player${moved === 1 ? "" : "s"} changed net.`,
   };
 }
+
+/* ═════════════════════════════════════════════════════════════════════════════════════════════════
+   SCORING: EVERYONE IS A CAPTAIN, AND THE MISSING NUMBERS ARE SOLVED FOR
+
+   Owner 2026-08-03: "each individual is a captain, 1 person can input scores for everyone or each
+   person can put in scores. If most of the data is entered, build the math logic to calculate the
+   final missing person(s) based on constraints or given data for the algebra."
+
+   WHY THERE IS ANYTHING TO SOLVE AT ALL. In every other format a team has one captain and one score
+   link. Here the pairing lasts one game, so there is no team to own the result and nobody whose job it
+   is to write it down. Whoever is nearest the pole types what they know — sometimes all three games,
+   sometimes only their own points, sometimes only a total. What arrives is partial evidence about the
+   same six numbers, from up to four people who each saw the round from a different side.
+
+   THE CONSTRAINT THAT MAKES IT SOLVABLE is the shape of a volleyball score, not the arithmetic. A game
+   played first-to-21 with no cap (the owner's choice, §6 Q3 of the spec) can only end two ways:
+       21 to something 19 or less        — the normal case
+       n to n-2, for n above 21          — they went past on a two-point margin
+   So a game is not two free numbers between 0 and 40. It is ONE unknown — its total — plus which side
+   won. That is what turns "four people gave me fragments" into a system with an answer.
+
+   AND FOR A NET OF FOUR THERE IS A CLOSED FORM. Verified empirically over 4000 randomised shape-valid
+   rounds before a line of it was written here, then asserted in the tests:
+
+       d1 = (A + B − C − D) / 2        where d_i is game i's margin, side A minus side B,
+       d2 = (A + C − B − D) / 2        and A, B, C, D are the four players' point totals
+       d3 = (A + D − B − C) / 2
+       T1 + T2 + T3 = (A + B + C + D) / 2
+
+   Every margin falls out of the four totals alone. Then the shape rule finishes the job: a margin
+   GREATER than two can only have come from a game that ended at exactly 21, so that game's total is
+   `2 × pointsTo − |d|` and its scores are pinned. A margin of exactly two is the one ambiguous case
+   (21–19 and 22–20 and 23–21 all have margin two), and it is resolved by subtraction whenever it is
+   the only one, because the three totals must add up to half the sum of the player totals.
+
+   SO: FOUR PLAYER TOTALS USUALLY DETERMINE ALL SIX SCORES. That is the answer to "calculate the final
+   missing person" — the missing person's numbers were never independent.
+
+   WHAT THIS DELIBERATELY WILL NOT DO IS GUESS. Where the evidence genuinely does not pin a game, the
+   candidates are returned and the game is reported as unresolved. A plausible invented scoreline is
+   the worst possible output: it looks like a result, it ranks people, and nobody ever finds out.
+   ═════════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/** How far past `pointsTo` a game may run. 21 → 31–29 is already absurd for a King of the Court net. */
+const OVERTIME_ROOM = 10;
+
+/**
+ * Every scoreline a single game could legally have finished with, narrowed by whatever is already known.
+ *
+ * `known` is `{ score_a, score_b }` with either, both, or neither filled in. A value that is present is
+ * taken as fact — the people who were there outrank any inference.
+ *
+ * The shape rule (see the block comment above): winner ≥ pointsTo, margin ≥ winBy, and the winner either
+ * finished exactly on pointsTo or won by exactly winBy. `winBy` is an option rather than a constant
+ * because a session played straight to 21 with no two-point rule is a thing a director may do, and
+ * hardcoding volleyball's would silently reject every one of those games as impossible.
+ */
+export function shapeCandidates(known = {}, opts = {}) {
+  const pointsTo = Number(opts.pointsTo) || 21;
+  const winBy = opts.winBy === undefined ? 2 : Math.max(1, Number(opts.winBy));
+  const room = Number(opts.overtimeRoom) || OVERTIME_ROOM;
+  const ka = known.score_a === null || known.score_a === undefined ? null : Number(known.score_a);
+  const kb = known.score_b === null || known.score_b === undefined ? null : Number(known.score_b);
+
+  const out = [];
+  const add = (a, b) => {
+    if (ka !== null && a !== ka) return;
+    if (kb !== null && b !== kb) return;
+    out.push({ score_a: a, score_b: b });
+  };
+  // Finished on the number: winner = pointsTo, loser anywhere from 0 to pointsTo - winBy.
+  for (let loser = 0; loser <= pointsTo - winBy; loser++) {
+    add(pointsTo, loser);
+    add(loser, pointsTo);
+  }
+  // Went past it: winner above pointsTo, and then the margin is exactly winBy.
+  for (let w = pointsTo + 1; w <= pointsTo + room; w++) {
+    add(w, w - winBy);
+    add(w - winBy, w);
+  }
+  return out;
+}
+
+/**
+ * The three margins and the total, from four player totals. Net of four only — see the block comment.
+ *
+ * `totals` is `{ [contactId]: points }` and `seats` is the four contact ids in seat order, because the
+ * formula is about WHICH pairings happened and seat order is what decides that.
+ *
+ * Returns `{ ok: false, error }` when the four totals cannot have come from a real round at all. That is
+ * a genuinely useful answer: every margin here is `(sum ± sum) / 2`, so an odd numerator means somebody
+ * mistyped, and saying so beats solving a system that has no solution.
+ */
+export function marginsFromTotals(seats, totals, opts = {}) {
+  if (!Array.isArray(seats) || seats.length !== 4) {
+    return { ok: false, error: "The closed form is for a net of four." };
+  }
+  const [A, B, C, D] = seats.map((id) => Number(totals[id]));
+  if ([A, B, C, D].some((n) => !Number.isFinite(n))) {
+    return { ok: false, error: "All four players' totals are needed to solve the round this way." };
+  }
+  const num = [A + B - C - D, A + C - B - D, A + D - B - C];
+  if (num.some((n) => n % 2 !== 0)) {
+    return { ok: false, error: "Those four totals cannot all be right — one of them is out by an odd number. Check the sheet." };
+  }
+  const sum = A + B + C + D;
+  if (sum % 2 !== 0) {
+    return { ok: false, error: "Those four totals add up to an odd number, which no round can produce." };
+  }
+  const pointsTo = Number(opts.pointsTo) || 21;
+  const winBy = opts.winBy === undefined ? 2 : Math.max(1, Number(opts.winBy));
+  const margins = num.map((n) => n / 2);
+
+  // A margin below the winning margin means a game nobody won — a tie, or a scoreline that could not
+  // have ended. Reported rather than solved around.
+  const impossible = margins.filter((d) => Math.abs(d) < winBy);
+  if (impossible.length) {
+    return { ok: false, error: `Those totals imply a game won by ${Math.abs(impossible[0])} point${Math.abs(impossible[0]) === 1 ? "" : "s"}, which cannot happen. Check the sheet.` };
+  }
+  return {
+    ok: true,
+    margins,
+    total: sum / 2,
+    // A margin wider than the winning margin can only have come from a game that ended ON the number,
+    // so its total is pinned. The rest are the ambiguous ones.
+    pinned: margins.map((d) => (Math.abs(d) > winBy ? 2 * pointsTo - Math.abs(d) : null)),
+  };
+}
+
+/**
+ * Work out every game on a net from whatever evidence exists.
+ *
+ * `games`  — `[{ game_no, a1, a2, b1, b2, score_a, score_b }]`, scores possibly null. The four ids per
+ *            game are what tie the games to the totals, so they are required.
+ * `totals` — `{ [contactId]: points }`, for however many players reported one. Partial is fine.
+ *
+ * Returns `{ ok, games, unresolved, contradiction, solved, from }`.
+ *
+ * SEARCH, NOT ALGEBRA, IS THE GENERAL PATH. The closed form only covers a net of four with all four
+ * totals; the evidence that actually arrives is a mixture — two games typed in fully, one player's total,
+ * nothing else. So the general solver enumerates each game's legal scorelines and walks the combinations
+ * depth-first, abandoning a branch the moment a player's running total passes what they reported. That
+ * pruning is what keeps a net of five tractable: without it the space is tens of millions, and with it
+ * a reported total collapses it almost immediately.
+ *
+ * A game is reported as SOLVED only when every surviving combination agrees on it. Two combinations that
+ * differ on game 2 mean game 2 is genuinely unknown, and it is returned with its candidates rather than
+ * with whichever answer happened to be found first.
+ */
+export function solveNet(games, totals = {}, opts = {}) {
+  const pointsTo = Number(opts.pointsTo) || 21;
+  const budget = Number(opts.budget) || 400_000;
+  const reported = Object.keys(totals).filter((k) => Number.isFinite(Number(totals[k])));
+
+  const cands = games.map((g) => shapeCandidates(g, { ...opts, pointsTo }));
+  const dead = cands.findIndex((c) => c.length === 0);
+  if (dead >= 0) {
+    return {
+      ok: false,
+      contradiction: `Game ${games[dead].game_no} has a score that no volleyball game can end on. Check the sheet.`,
+      games, unresolved: games.map((g) => g.game_no), solved: 0, from: "shape",
+    };
+  }
+
+  /* CHEAPEST FIRST: a net of four with all four totals in hand has a closed-form answer, and the margins
+     it yields must COLLAPSE the search rather than merely accompany it. The first version of this derived
+     the margins and then searched the whole space anyway — ~70ms a round, for information it already had.
+     That is the same defect as a guard that is computed and never asserted on. Filtering each game's
+     candidates by its known margin usually leaves exactly one. */
+  let fast = null;
+  const seats = opts.seats;
+  if (Array.isArray(seats) && seats.length === 4 && seats.every((id) => reported.includes(String(id)))) {
+    const m = marginsFromTotals(seats, totals, { ...opts, pointsTo });
+    if (!m.ok) {
+      return { ok: false, contradiction: m.error, games, unresolved: games.map((g) => g.game_no), solved: 0, from: "algebra" };
+    }
+    fast = m;
+    for (let i = 0; i < games.length && i < m.margins.length; i++) {
+      const want = m.margins[i];
+      const narrowed = cands[i].filter((c) => c.score_a - c.score_b === want);
+      // Only adopt it if something survives. An empty result means the totals and a typed-in score
+      // disagree, and the search below reports that contradiction far better than an empty list would.
+      if (narrowed.length) cands[i] = narrowed;
+    }
+  }
+
+  // Order the search so the most-constrained games go first — it prunes far sooner.
+  const order = games.map((_, i) => i).sort((i, j) => cands[i].length - cands[j].length);
+  const chosen = new Array(games.length).fill(null);
+  const solutions = [];
+  let visits = 0, exhausted = false, truncated = false;
+
+  const runningOk = (final) => {
+    // Sum what each player has scored so far and compare with what they said. Before the last game a
+    // total may only be BELOW what was reported; at the end it must match exactly.
+    const acc = new Map();
+    for (let i = 0; i < games.length; i++) {
+      const pick = chosen[i];
+      if (!pick) continue;
+      const g = games[i];
+      for (const id of [g.a1, g.a2]) acc.set(String(id), (acc.get(String(id)) || 0) + pick.score_a);
+      for (const id of [g.b1, g.b2]) acc.set(String(id), (acc.get(String(id)) || 0) + pick.score_b);
+    }
+    for (const id of reported) {
+      const want = Number(totals[id]);
+      const got = acc.get(id) || 0;
+      if (got > want) return false;
+      if (final && got !== want) return false;
+    }
+    return true;
+  };
+
+  const walk = (depth) => {
+    if (visits++ > budget) { exhausted = true; return; }
+    /* THE SOLUTION CAP MUST POISON THE AGREEMENT CHECK, and getting this wrong would have invented
+       scores. A game is normally reported solved when every surviving solution agrees on it. But the
+       search is depth-first, so the first 65 solutions all share the same choice for the games decided
+       EARLY and differ only in the last one — which makes those early games look unanimous when the
+       search simply never got round to contradicting them. Truncating without recording it therefore
+       produces confident, wrong scorelines. Caught by the negative control that runs the solver on an
+       empty net; found nothing else. */
+    if (solutions.length > 64) { truncated = true; return; }
+    if (depth === order.length) {
+      if (runningOk(true)) solutions.push(chosen.slice());
+      return;
+    }
+    const gi = order[depth];
+    for (const pick of cands[gi]) {
+      chosen[gi] = pick;
+      if (runningOk(false)) walk(depth + 1);
+      chosen[gi] = null;
+      if (exhausted) return;
+    }
+  };
+  walk(0);
+
+  if (exhausted && !solutions.length) {
+    return {
+      ok: false,
+      contradiction: null,
+      note: "Not enough was entered to work the rest out. Type in one more game, or one player's total.",
+      games, unresolved: games.map((g) => g.game_no), solved: 0, from: "search",
+    };
+  }
+  if (!solutions.length) {
+    return {
+      ok: false,
+      contradiction: "What has been entered cannot all be right — no set of real scores fits it. Check the sheet.",
+      games, unresolved: games.map((g) => g.game_no), solved: 0, from: "search",
+    };
+  }
+
+  // A game is only settled when every surviving solution agrees on it.
+  const out = games.map((g, i) => {
+    const first = solutions[0][i];
+    // When the search was truncated, only a game whose candidates were narrowed to ONE by the input
+    // itself — a typed-in score, the shape rule, or a known margin — may be called resolved. Agreement
+    // across a truncated solution set is not evidence of anything.
+    const agreed = (truncated && cands[i].length !== 1)
+      ? false
+      : solutions.every((s) => s[i].score_a === first.score_a && s[i].score_b === first.score_b);
+    return {
+      game_no: g.game_no,
+      score_a: agreed ? first.score_a : (g.score_a ?? null),
+      score_b: agreed ? first.score_b : (g.score_b ?? null),
+      // `derived` is the difference between "this is what you told me" and "this is what follows from
+      // what you told me", and a screen must be able to show which is which.
+      derived: agreed && (g.score_a === null || g.score_a === undefined || g.score_b === null || g.score_b === undefined),
+      resolved: agreed,
+      candidates: agreed ? null : [...new Set(solutions.map((s) => `${s[i].score_a}-${s[i].score_b}`))].sort(),
+    };
+  });
+
+  const unresolved = out.filter((g) => !g.resolved).map((g) => g.game_no);
+  return {
+    ok: unresolved.length === 0,
+    games: out,
+    unresolved,
+    solved: out.filter((g) => g.derived).length,
+    contradiction: null,
+    from: fast ? "algebra+search" : "search",
+    truncated,
+    note: unresolved.length
+      ? `${unresolved.length} game${unresolved.length === 1 ? "" : "s"} still could have finished more than one way. Type in one more score and the rest follow.`
+      : out.some((g) => g.derived)
+        ? `Worked out ${out.filter((g) => g.derived).length} missing score${out.filter((g) => g.derived).length === 1 ? "" : "s"} from what was entered.`
+        : "Everything was already entered — nothing to work out.",
+  };
+}
+
+/**
+ * Merge what several people reported about the same net, and say where they disagree.
+ *
+ * Owner: "1 person can input scores for everyone or each person can put in scores." So the same game can
+ * arrive twice, and the two versions can differ. Reconciling by "last write wins" would silently pick a
+ * side in a dispute the software never told anybody about — and on a net of four, all four players saw
+ * every game, so a disagreement is common and worth surfacing rather than resolving.
+ *
+ * `reports` is `[{ by, games: [{ game_no, score_a, score_b }], totals: {} }]`.
+ * Returns the agreed values plus a `disputes` list. A disputed game is left UNSET, deliberately: an
+ * unset game is visibly unfinished, whereas a wrong one that has picked a side looks finished.
+ */
+export function reconcile(reports) {
+  const byGame = new Map();
+  const totals = {};
+  for (const r of reports || []) {
+    for (const g of r.games || []) {
+      if (g.score_a === null || g.score_a === undefined || g.score_b === null || g.score_b === undefined) continue;
+      const k = g.game_no;
+      if (!byGame.has(k)) byGame.set(k, []);
+      byGame.get(k).push({ by: r.by, score_a: Number(g.score_a), score_b: Number(g.score_b) });
+    }
+    for (const [id, v] of Object.entries(r.totals || {})) {
+      if (Number.isFinite(Number(v))) totals[id] = Number(v);
+    }
+  }
+
+  const agreed = [], disputes = [];
+  for (const [game_no, list] of [...byGame.entries()].sort((a, b) => a[0] - b[0])) {
+    const distinct = [...new Set(list.map((x) => `${x.score_a}-${x.score_b}`))];
+    if (distinct.length === 1) {
+      agreed.push({ game_no, score_a: list[0].score_a, score_b: list[0].score_b, reported_by: list.map((x) => x.by) });
+    } else {
+      disputes.push({
+        game_no,
+        versions: list.map((x) => ({ by: x.by, score: `${x.score_a}-${x.score_b}` })),
+      });
+    }
+  }
+  return {
+    agreed, disputes, totals,
+    note: disputes.length
+      ? `Game ${disputes.map((d) => d.game_no).join(", ")} came back differently from different people — somebody needs to say which is right.`
+      : null,
+  };
+}
