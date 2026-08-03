@@ -2,7 +2,38 @@
 
 ## v0.65.0 — 2026-08-03
 
-- Auto-recorded by CI on deploy. `/api/health` reported `v0.65.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
+- **Drag-and-drop schedule editor** (`admin-schedule-editor.html`). A generated pool is a starting
+  point, not an answer. A director always knows something the solver does not — a broken net on
+  court 3, a team that asked to finish by four, two teams who should not meet in round one. Until
+  they could move one match without regenerating the whole pool, the real schedule went back into a
+  spreadsheet, which is the thing the generator was built to end.
+  - **It never refuses a move.** Every drop is allowed and the panel reports what it cost — "1 more
+    repeat match-up", "2 teams now sit out twice in a row", or "No change to fairness." A tool that
+    blocks the director is a tool the director routes around.
+  - **Dropping on an occupied slot swaps.** Overwriting would lose a match, and a lost match is
+    discovered on the day by the team that turns up with nowhere to play. D1 offers no transaction
+    on this path, so the mover is parked at `court=-1` between the two writes; without that, a
+    concurrent read briefly sees two matches on one court. Proven by mutating the swap into a naive
+    overwrite and confirming the test fails — then restoring it.
+  - **Keyboard parity, not a keyboard afterthought.** HTML5 drag-and-drop cannot be driven from a
+    keyboard and is awkward on touch, so: focus a match, Enter to pick up, arrows to move, Enter to
+    drop, Escape to cancel. Both paths call the same mover. The fairness delta lands in an
+    `aria-live` region, so the result of a move is heard, not just seen.
+  - **Moving a match that already has a score asks first.** It is nearly always a mis-drag — but it
+    is confirmed, never forbidden.
+- **One definition of "fair" (F-26).** `loadSchedule()` rebuilds the planner's shape from the live
+  `matches` rows and scores it with the *same* `poolReport` the generator uses. Computing the
+  numbers client-side would feel faster and would eventually disagree with the generator — and the
+  moment those two disagree, the director believes neither. `schedule_editor.test.mjs` asserts the
+  client does not carry its own copy of the rules.
+- New routes, all staff-gated and org-scoped: `GET /api/admin/events/:id/schedule`,
+  `POST …/schedule/move`, `POST …/schedule/teams`. Changing *who* plays is deliberately a separate
+  endpoint from changing *when* — conflating them makes both confusing.
+- **Roster sheet spec** (`docs/2026-08-03_spec_roster-sheet_v1_0.md`): one flat table, one row per
+  player, a blank name meaning an unfilled slot. Written because the owner's live sheet is the
+  format the import must accept, not one this project invents.
+- Tests **803** (+11, measured before and after). Preflight CLEAR. Rail swept across 32 pages, cache
+  buster to `0.65.0`, `/api/health` bumped as a verified one-line diff (F-34). **No migration.**
 
 ## v0.64.0 — 2026-08-03
 
