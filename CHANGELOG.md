@@ -1,5 +1,9 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.80.0 — 2026-08-03
+
+- Auto-recorded by CI on deploy. `/api/health` reported `v0.80.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
+
 ## v0.79.0 — 2026-08-03
 
 Owner 2026-08-03: *"each individual is a captain, 1 person can input scores for everyone or each person
