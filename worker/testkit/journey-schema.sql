@@ -190,7 +190,13 @@ CREATE TABLE matches (
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),
   deleted_at TEXT
-);
+, bracket_id INTEGER REFERENCES brackets(id), bracket_round INTEGER, bracket_slot INTEGER);
+
+-- 0037. Trailing-comma form because that is how ALTER TABLE ADD COLUMN leaves it in sqlite_master,
+-- and this file is a verbatim capture of live — prettifying it would hide a real difference.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_matches_bracket_slot
+  ON matches (org_id, bracket_id, bracket_round, bracket_slot)
+  WHERE bracket_id IS NOT NULL AND deleted_at IS NULL;
 
 CREATE TABLE notifications (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -388,6 +394,20 @@ CREATE TABLE pools (
   org_id INTEGER NOT NULL REFERENCES orgs(id),
   event_id INTEGER NOT NULL REFERENCES events(id),
   name TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  deleted_at TEXT
+);
+
+-- Verbatim from live sqlite_master 2026-08-03. It was missing from this capture, which is exactly
+-- the gap that lets a test pass against a table the real database does not have.
+CREATE TABLE brackets (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  org_id INTEGER NOT NULL REFERENCES orgs(id),
+  event_id INTEGER NOT NULL REFERENCES events(id),
+  name TEXT NOT NULL DEFAULT 'A',
+  split_rule TEXT,
+  config_json TEXT DEFAULT '{}',
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),
   deleted_at TEXT

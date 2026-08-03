@@ -64,6 +64,7 @@
     "tournament.html":          { s: "live" },
     "admin-league.html":        { s: "live" },
     "admin-schedule-editor.html": { s: "beta", n: "Drag matches between rounds and courts; drop on an occupied slot to swap. It never blocks a move — the panel just tells you what it did to fairness. Moving a match that already has a score asks first." },
+    "admin-brackets.html":      { s: "beta", n: "Single elimination seeded from pool finish. Byes go to the top seeds — no play-in games. Winners move forward by recomputing the tree from the scores, so fixing a result that was typed in backwards also fixes the round above it." },
 
     /* --- Money --- */
     "admin-reports.html":       { s: "live" },

@@ -262,5 +262,6 @@ export {
   validateSchedule,
   computeStandings,
   buildBracket,
+  bracketOrder,
   avgGameMinutes,
 };

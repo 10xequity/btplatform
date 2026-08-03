@@ -1,71 +1,55 @@
 <!DOCTYPE html>
-<!-- Boomtown Platform — Announcements (admin) · Version: v1.0 · Date: 2026-08-02 · Ships in: v0.51.0
-     Staff authoring for the member-home announcement box (announcements.js v1.0, migration 0033).
-     News posts members can hide; the Priority CTA is pinned — hide controls don't apply to it,
-     a member's hide attempt is silently ignored and the CTA simply stays (owner rule 2026-08-02).
-     Click budget (req #19): the form is always open — 0 clicks to start, 1 to post; edit = 1
-     click; remove = 2 (two-step confirm). Live preview renders the member's exact markup
-     (.ann-cta / .feed-item from home.js) with home.html's own CSS scoped under .prev. -->
+<!-- Boomtown Platform — Brackets (admin) · Version: v1.0 · Date: 2026-08-03 · Ships in: v0.66.0
+     Single elimination, seeded from pool finish. Byes go to the TOP seeds and there are no play-in
+     games — owner 2026-08-03: "we try to avoid pigtails as often as possible with too many people
+     waiting." Every empty slot names the game it is waiting on, because an empty box answers
+     nothing when a director is trying to say who is on court 3 next.
+     Winners are moved forward by recomputing the tree from the scores, so correcting a result that
+     was typed in backwards fixes the round above it instead of stranding the wrong team there. -->
 <html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Announcements — Boomtown Athletics</title>
+  <title>Brackets — Boomtown Athletics</title>
   <script>/* Pre-paint state — collapse + theme (uiux-review §4/§6.4, v0.52.0): read the bt_nav cookie and the saved theme BEFORE the first stylesheet so the rail state AND the theme are right on frame one — no post-paint snap of either. admin-nav.js writes the cookie on rail toggle and bt_theme on theme toggle; the localStorage bt_nav fallback migrates pre-v0.51 sessions. */(function(){try{var m=document.cookie.match(/(?:^|; )bt_nav=([^;]*)/);var v=m?m[1]:((window.localStorage&&localStorage.getItem("bt_nav_collapsed")==="1")?"min":"");if(v==="min")document.documentElement.dataset.nav="min";var t=(window.localStorage&&localStorage.getItem("bt_theme"))||(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.dataset.theme=t;}catch(e){}})();</script>
   <link rel="stylesheet" href="assets/tokens.css?v=0.66.0" />
   <link rel="stylesheet" href="assets/app.css?v=0.66.0" />
   <link rel="stylesheet" href="assets/admin.css?v=0.66.0" />
   <style>
-    .ann-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 380px); gap: 16px; align-items: start; margin-bottom: 16px; }
-    @media (max-width: 900px) { .ann-grid { grid-template-columns: 1fr; } }
-    .ann-form { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card, 10px);
-      padding: 16px; display: grid; gap: 10px; }
-    .ann-form label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 700; }
-    .ann-form input, .ann-form textarea { font: inherit; padding: 10px; min-height: 44px;
+    .mf-head { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; margin-bottom: 12px; }
+    .mf-head p { max-width: 68ch; }
+    .mf-sub { font-size: 14px; margin: 16px 0 8px; }
+    .mf-row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+    .mf-inline { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 700; }
+    .mf-inline select, .mf-inline input { font: inherit; font-size: 16px; padding: 10px; min-height: 44px; width: 100%;
       background: var(--surface-2); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-control, 8px); }
-    .ann-form textarea { min-height: 96px; resize: vertical; }
-    .ann-form .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-    .ann-form .row > label { flex: 1; min-width: 160px; }
-    .kind-pick { display: grid; gap: 8px; }
-    .kind-pick label { display: flex; flex-direction: row; gap: 10px; align-items: flex-start; font-weight: 400;
-      border: 1px solid var(--border); border-radius: var(--radius-control, 8px); padding: 10px 12px; cursor: pointer; min-height: 44px; }
-    .kind-pick input { min-height: 0; margin-top: 3px; }
-    .kind-pick b { display: block; font-size: 14px; }
-    .kind-pick small { color: var(--text-muted); font-size: 12.5px; }
-    .help-line { color: var(--text-muted); font-size: 12.5px; margin: 0; }
-    .form-msg { color: var(--danger); font-size: 13px; min-height: 1.2em; margin: 0; }
-    .prev-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card, 10px); padding: 16px; position: sticky; top: 12px; }
-    .prev-card h2 { font-size: 13px; letter-spacing: .05em; text-transform: uppercase; color: var(--text-muted); margin: 0 0 10px; }
-    .prev-note { color: var(--text-muted); font-size: 12.5px; margin: 10px 0 0; }
-    /* preview parity — home.html's own rules, scoped so the admin page can't drift them */
-    .prev .ann-cta { display: flex; gap: 10px; align-items: flex-start; padding: 12px; margin: 0 0 10px;
-      border-radius: var(--radius-control, 8px); background: var(--accent); color: var(--gold-ink); }
-    .prev .ann-cta b { font-size: 15px; } .prev .ann-cta .b { font-size: 13.5px; }
-    .prev .ann-cta a { color: var(--gold-ink); font-weight: 700; }
-    .prev .feed-group { padding: 8px 0; }
-    .prev .feed-group h3 { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
-      color: var(--text-muted); margin: 0 0 4px; display: flex; align-items: center; }
-    .prev .feed-item { display: flex; gap: 8px; align-items: flex-start; padding: 6px 0; font-size: 14px; }
-    .prev .feed-item .fx { flex: 1; min-width: 0; }
-    .prev .feed-item .fx b { font-size: 14.5px; }
-    .prev .feed-item .fx span { display: block; font-size: 12.5px; color: var(--text-muted); }
-    .ann-table { width: 100%; border-collapse: collapse; }
-    .ann-table th, .ann-table td { text-align: left; padding: 10px 8px; border-top: 1px solid var(--border); vertical-align: top; }
-    .ann-table th { border-top: 0; color: var(--text-muted); font-size: 13px; }
-    .ann-title { font-weight: 700; }
-    .ann-snip { color: var(--text-muted); font-size: 13px; max-width: 46ch; overflow: hidden;
-      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-    .ann-kind { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; border: 1px solid var(--border); color: var(--text-muted); }
-    .ann-kind.cta { background: var(--accent); color: var(--gold-ink); border-color: transparent; }
-    .ann-st { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; border: 1px solid var(--border); }
-    .ann-st.live { color: var(--positive); border-color: currentColor; }
-    .ann-st.scheduled { color: var(--emphasis); border-color: currentColor; }
-    .ann-st.expired { color: var(--text-muted); }
-    .ann-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-    @media (max-width: 760px) {
-      .ann-table thead { display: none; }
-      .ann-table td { display: block; border-top: 0; }
-      .ann-table tr { display: block; border-top: 1px solid var(--border); padding: 8px 0; }
+    .mf-inline input[type="number"] { max-width: 110px; }
+    .mf-check { display: flex; align-items: center; gap: 8px; font-size: 13px; min-height: 44px; }
+    .mf-note { font-size: 12px; color: var(--text-muted); margin-top: 8px; min-height: 1.4em; }
+
+    .br-setup { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card, 10px); padding: 12px; margin-bottom: 16px; }
+
+    .br-tree { margin-bottom: 24px; }
+    .br-champ { font-size: 15px; font-weight: 700; color: var(--emphasis); margin: 4px 0 10px; }
+    /* A bracket is wider than a phone and always will be. Scroll it rather than crush it. */
+    .br-scroll { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 8px; align-items: flex-start; }
+    .br-round { flex: 0 0 auto; min-width: 190px; }
+    .br-round-h { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); margin: 0 0 6px; }
+    .br-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+
+    .br-match { position: relative; background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-control, 8px); padding: 6px 8px; display: grid; gap: 2px; }
+    .br-match[data-done="1"] { border-left: 3px solid var(--positive); }
+    .br-court { position: absolute; top: 4px; right: 6px; font-size: 10px; color: var(--text-muted); }
+    .br-side { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; }
+    .br-side.won .br-name, .br-side.won .br-score { font-weight: 700; color: var(--emphasis); }
+    .br-side.tbd .br-name { color: var(--text-muted); font-style: italic; font-size: 12px; }
+    .br-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .br-score { font-variant-numeric: tabular-nums; min-width: 2ch; text-align: right; }
+
+    @media (max-width: 430px) {
+      .mf-inline input[type="number"] { max-width: 90px; }
+      .br-round { min-width: 165px; }
     }
   </style>
 </head>
@@ -145,65 +129,45 @@
       </nav>
       <button class="bt-edge" type="button" aria-label="Collapse or expand navigation"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
     </aside>
-    <main class="admin-main">
-      <div class="admin-content">
-        <h1>Announcements</h1>
-        <p class="help-line" style="margin-bottom:14px">Post to every member's home page. News can be hidden by members; the Priority CTA stays for everyone.</p>
-
-        <div class="ann-grid">
-          <form id="annForm" class="ann-form" onsubmit="return false">
-            <div class="kind-pick" role="radiogroup" aria-label="Post type">
-              <label><input type="radio" name="kind" value="news" checked />
-                <span><b>News post</b><small>Shows under News in the home box. Members can hide a single post or the whole section.</small></span></label>
-              <label><input type="radio" name="kind" value="cta" />
-                <span><b>Priority CTA</b><small>Pinned at the top of every member's home box. Hide controls don't apply — it simply stays, with no error shown.</small></span></label>
-            </div>
-            <label>Title
-              <input id="fTitle" maxlength="200" placeholder="Spring league signups are open" />
-            </label>
-            <label>Details (optional)
-              <textarea id="fBody" placeholder="A sentence or two. Line breaks survive; links go in the field below."></textarea>
-            </label>
-            <div class="row">
-              <label>Link URL (optional)
-                <input id="fUrl" type="url" placeholder="https://…" />
-              </label>
-              <label>Link label (optional)
-                <input id="fLabel" maxlength="60" placeholder="Sign up" />
-              </label>
-            </div>
-            <div class="row">
-              <label>Show from (optional)
-                <input id="fStart" type="datetime-local" />
-              </label>
-              <label>Until (optional)
-                <input id="fEnd" type="datetime-local" />
-              </label>
-            </div>
-            <p class="help-line">Times are in your timezone. Leave both empty to show it right away, indefinitely.</p>
-            <p id="formMsg" class="form-msg" role="alert"></p>
-            <div class="row">
-              <button id="saveBtn" class="btn" type="button">Post it</button>
-              <button id="cancelBtn" class="btn ghost" type="button" hidden>Cancel edit</button>
-            </div>
-          </form>
-
-          <aside class="prev-card" aria-label="Member preview">
-            <h2>Preview — as members see it</h2>
-            <div id="prevBox" class="prev"></div>
-            <p id="prevNote" class="prev-note"></p>
-          </aside>
+    <main class="admin-main" id="main">
+      <div class="mf-head">
+        <div>
+          <h1>Brackets</h1>
+          <p class="muted">Seeded from how teams finished pool play. Byes go to the top seeds — there are no play-in games, so nobody stands around watching two teams decide who joins the draw.</p>
         </div>
-
-        <table class="ann-table">
-          <thead><tr><th>Type</th><th>Post</th><th>Status</th><th>Actions</th></tr></thead>
-          <tbody id="annBody"></tbody>
-        </table>
+        <div class="mf-row" style="margin:0">
+          <label class="mf-inline">Event
+            <select id="bEvent" aria-label="Choose an event"></select>
+          </label>
+          <button class="btn ghost" id="bReload" type="button">Reload</button>
+        </div>
       </div>
+
+      <section class="br-setup" aria-labelledby="brSetupH">
+        <h2 class="mf-sub" id="brSetupH">Draw it up</h2>
+        <div class="mf-row">
+          <label class="mf-inline">Top teams into A
+            <input id="bASize" type="number" inputmode="numeric" min="2" max="64" value="8" />
+          </label>
+          <label class="mf-inline">Play to
+            <input id="bPoints" type="number" inputmode="numeric" min="11" max="31" value="25" />
+          </label>
+          <label class="mf-inline">Courts
+            <input id="bCourts" type="number" inputmode="numeric" min="1" max="20" value="4" />
+          </label>
+          <label class="mf-check"><input id="bRest" type="checkbox" checked /> Everyone else plays a BB bracket</label>
+          <button class="btn" id="bGen" type="button">Generate bracket</button>
+          <button class="btn ghost" id="bAdvance" type="button">Move winners forward</button>
+        </div>
+        <p class="mf-note" id="bNote" role="status" aria-live="polite"></p>
+      </section>
+
+      <div id="bTrees"></div>
+      <p class="empty" id="bEmpty" hidden>No bracket yet. Set the size above and generate one — you can regenerate any time before the first game is played.</p>
     </main>
   </div>
   <script src="assets/config.js?v=0.66.0"></script>
   <script src="assets/admin-nav.js?v=0.66.0"></script>
-  <script src="assets/admin-announcements.js?v=0.66.0"></script>
+  <script src="assets/admin-brackets.js?v=0.66.0"></script>
 </body>
 </html>
