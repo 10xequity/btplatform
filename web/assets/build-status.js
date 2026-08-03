@@ -68,6 +68,7 @@
     "admin-reports.html":       { s: "live" },
     "admin-pos.html":           { s: "beta", n: "Square is in SANDBOX. Sales, line items and reporting are all real; the payment is not. No card is ever charged." },
     "admin-plans.html":         { s: "beta", n: "Square subscriptions are in SANDBOX. Do not sell a real membership from this screen — nothing will bill." },
+    "admin-staff-pay.html":     { s: "beta", n: "Set what each coach is paid and see what a date range comes to. It works out the money and keeps a record; it does NOT run payroll, file tax or clock anyone in — pay people however you normally do." },
     "admin-passes.html":        { s: "beta", n: "Issue and spend passes, punch cards and the guest passes a membership includes. Fully working — but it does NOT take a payment: record the price for your own records and collect it however you normally do, until Square is live." },
 
     /* --- Marketing --- */
@@ -84,6 +85,7 @@
     "admin-documents.html":     { s: "live" },
     "admin-uploads.html":       { s: "live" },
     "admin-tiers.html":         { s: "live" },
+    "admin-member-fields.html": { s: "live" },
     "admin-org-settings.html":  { s: "live" },
     "admin-faq.html":           { s: "live" },
     "settings.html":            { s: "live" },

@@ -1,3 +1,67 @@
+<!DOCTYPE html>
+<!-- Boomtown Platform — Membership fields (admin) · Version: v1.0 · Date: 2026-08-03 · Ships in: v0.61.0
+     The UI for the M22 registry that shipped in v0.57.0. Add questions to member profiles, choose
+     who can see each one, and hide a field without losing a single answer already given.
+     Click budget (req #19): add a field = 1 click to open, 1 to save. Hide = 1 click. -->
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Membership fields — Boomtown Athletics</title>
+  <script>/* Pre-paint state — collapse + theme (uiux-review §4/§6.4, v0.52.0): read the bt_nav cookie and the saved theme BEFORE the first stylesheet so the rail state AND the theme are right on frame one — no post-paint snap of either. admin-nav.js writes the cookie on rail toggle and bt_theme on theme toggle; the localStorage bt_nav fallback migrates pre-v0.51 sessions. */(function(){try{var m=document.cookie.match(/(?:^|; )bt_nav=([^;]*)/);var v=m?m[1]:((window.localStorage&&localStorage.getItem("bt_nav_collapsed")==="1")?"min":"");if(v==="min")document.documentElement.dataset.nav="min";var t=(window.localStorage&&localStorage.getItem("bt_theme"))||(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.dataset.theme=t;}catch(e){}})();</script>
+  <link rel="stylesheet" href="assets/tokens.css?v=0.61.0" />
+  <link rel="stylesheet" href="assets/app.css?v=0.61.0" />
+  <link rel="stylesheet" href="assets/admin.css?v=0.61.0" />
+  <style>
+    .mf-head { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; margin-bottom: 14px; }
+    .mf-head p { max-width: 68ch; }
+    .mf-sub { font-size: 15px; margin: 22px 0 10px; }
+    .mf-form { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card, 10px); padding: 16px; margin-bottom: 16px; }
+    .mf-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+    .mf-form label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 700; min-width: 0; }
+    .mf-form input, .mf-form select, .mf-form textarea {
+      font: inherit; font-size: 16px; padding: 10px; min-height: 44px; background: var(--surface-2); color: var(--text);
+      border: 1px solid var(--border); border-radius: var(--radius-control, 8px); min-width: 0; }
+    .mf-check { flex-direction: row !important; align-items: center; gap: 8px; }
+    .mf-check input { min-height: 22px; width: 22px; }
+    .mf-help { font-size: 12px; font-weight: 400; color: var(--text-muted); }
+    .mf-err { color: var(--danger); font-size: 13px; font-weight: 700; }
+    .mf-row { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+    .mf-row .btn, .mf-actions .btn { min-height: 44px; }
+    .mf-filter { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 12px; }
+    .mf-inline { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 700; }
+    .mf-inline input { font: inherit; font-size: 16px; padding: 10px; min-height: 44px; background: var(--surface-2);
+      color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-control, 8px); }
+    .mf-results button { display: block; width: 100%; text-align: left; font: inherit; min-height: 44px; padding: 8px 10px;
+      background: var(--surface-2); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-control, 8px); margin-top: 4px; cursor: pointer; }
+    .mf-table { width: 100%; border-collapse: collapse; }
+    .mf-table th, .mf-table td { text-align: left; padding: 10px 8px; border-top: 1px solid var(--border); vertical-align: top; }
+    .mf-table th { border-top: 0; color: var(--text-muted); font-size: 13px; }
+    .mf-table td.num { font-variant-numeric: tabular-nums; }
+    .mf-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .mf-note { font-size: 12px; color: var(--text-muted); }
+    .pill { display: inline-block; padding: 1px 9px; border-radius: 999px; font-size: 11px; font-weight: 800; border: 1px solid currentColor; }
+    .pill.on { color: var(--positive); } .pill.off { color: var(--text-muted); }
+    @media (max-width: 640px) {
+      .mf-table thead { display: none; }
+      .mf-table td { display: block; border-top: 0; padding: 4px 0; }
+      .mf-table tr { display: block; border-top: 1px solid var(--border); padding: 10px 0; }
+      .mf-table td::before { content: attr(data-label) ": "; color: var(--text-muted); font-size: 12px; }
+      .mf-table td.mf-actions-cell::before { content: ""; }
+    }
+  </style>
+</head>
+<body>
+    <header class="header chrome-glass no-print">
+    <a class="wordmark" href="admin.html" style="text-decoration:none;color:inherit"><img class="brand-logo" src="assets/logo-boom-icon-512.png?v=0.61.0" alt="" width="22" height="22" />Boomtown <span>Athletics</span></a>
+    <div class="spacer"></div>
+    <select id="orgSwitcher" class="org-switcher" aria-label="Switch organization"></select>
+    <a id="btHdrMail" class="btn ghost hdr-mail" href="admin-messages.html" aria-label="Messages">✉</a>
+    <button id="themeToggle" class="btn ghost theme-toggle" aria-label="Toggle dark or light theme">◐</button>
+    <a class="btn ghost" href="index.html">Member site</a>
+  </header>
+
+  <div id="app" class="admin-layout">
     <aside class="sidebar" data-static="rail" aria-label="Admin sections">
       <nav class="nav-group" data-key="run">
         <div class="nav-label" role="button" tabindex="0" aria-expanded="true">Run events<span class="grp-chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></span></div>
@@ -61,3 +125,66 @@
       </nav>
       <button class="bt-edge" type="button" aria-label="Collapse or expand navigation"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
     </aside>
+    <main class="admin-main" id="main">
+      <div class="mf-head">
+        <div>
+          <h1>Membership fields</h1>
+          <p class="muted">Extra questions on member profiles — dietary needs, jersey size, school, anything your club asks. <strong>Hiding a field never deletes the answers</strong>: switch it back on and everything people told you is still there.</p>
+        </div>
+        <button class="btn" id="fNew">Add a field</button>
+      </div>
+
+      <form class="mf-form" id="fForm" hidden>
+        <div class="mf-grid">
+          <label>Question
+            <input id="fLabel" maxlength="120" placeholder="Dietary requirements" required />
+          </label>
+          <label>Answer type
+            <select id="fType">
+              <option value="text">Short text</option>
+              <option value="textarea">Long text</option>
+              <option value="select">Pick from a list</option>
+              <option value="checkbox">Yes / no</option>
+              <option value="number">Number</option>
+              <option value="date">Date</option>
+              <option value="email">Email</option>
+              <option value="phone">Phone</option>
+            </select>
+          </label>
+          <label id="fOptWrap" hidden>Choices, one per line
+            <textarea id="fOpts" rows="4" placeholder="Small&#10;Medium&#10;Large"></textarea>
+          </label>
+          <label>Helper text
+            <input id="fHelp" maxlength="300" placeholder="Shown under the question" />
+          </label>
+        </div>
+        <div class="mf-row">
+          <label class="mf-check"><input type="checkbox" id="fReq" /> Required</label>
+          <label class="mf-check"><input type="checkbox" id="fVis" checked /> Members can see and edit this</label>
+          <label class="mf-check"><input type="checkbox" id="fForms" /> Ask on public signup</label>
+        </div>
+        <div class="mf-row">
+          <button class="btn" type="submit" id="fSave">Save field</button>
+          <button class="btn ghost" type="button" id="fCancel">Cancel</button>
+          <span class="mf-err" id="fErr" role="alert"></span>
+        </div>
+      </form>
+
+      <div class="pos-card">
+        <table class="mf-table">
+          <caption class="sr-only">Every membership field, in the order members see them</caption>
+          <thead><tr><th scope="col">Question</th><th scope="col">Type</th><th scope="col">Who sees it</th><th scope="col">Status</th><th scope="col">Actions</th></tr></thead>
+          <tbody id="fBody"></tbody>
+        </table>
+        <p class="empty" id="fEmpty" hidden>No extra fields yet. Add one and it appears on every member profile.</p>
+      </div>
+    </main>
+    </main>
+    </main>
+    </main>
+  </div>
+  <script src="assets/config.js?v=0.61.0"></script>
+  <script src="assets/admin-nav.js?v=0.61.0"></script>
+  <script src="assets/admin-member-fields.js?v=0.61.0"></script>
+</body>
+</html>

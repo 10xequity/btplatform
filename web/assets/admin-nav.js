@@ -167,7 +167,9 @@
       { href: "admin-pos.html",           ico: "sales",  text: "Point of Sale" },
       { href: "admin-plans.html",         ico: "sales",  text: "Membership Plans" },
       { href: "admin-tiers.html",          ico: "roles",  text: "Membership Levels" },
+      { href: "admin-member-fields.html",    ico: "roles",  text: "Membership Fields" },
       { href: "admin-passes.html",        ico: "sales",  text: "Passes & Credits" },
+      { href: "admin-staff-pay.html",        ico: "sales",  text: "Staff Pay" },
     ]},
     { label: "Marketing", key: "mkt", items: [
       { href: "admin-announcements.html", ico: "mega",   text: "Announcements" },
@@ -560,7 +562,7 @@
       if (window.BT_STATUS || document.getElementById("bt-status-js")) return;
       var s = document.createElement("script");
       s.id = "bt-status-js";
-      s.src = "assets/build-status.js?v=0.60.0";
+      s.src = "assets/build-status.js?v=0.61.0";
       s.async = false;
       document.head.appendChild(s);
     } catch (e) { /* indicators are never load-blocking */ }

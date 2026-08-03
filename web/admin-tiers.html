@@ -10,9 +10,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Membership levels — Boomtown Athletics</title>
   <script>/* Pre-paint state — collapse + theme (uiux-review §4/§6.4, v0.52.0): read the bt_nav cookie and the saved theme BEFORE the first stylesheet so the rail state AND the theme are right on frame one — no post-paint snap of either. admin-nav.js writes the cookie on rail toggle and bt_theme on theme toggle; the localStorage bt_nav fallback migrates pre-v0.51 sessions. */(function(){try{var m=document.cookie.match(/(?:^|; )bt_nav=([^;]*)/);var v=m?m[1]:((window.localStorage&&localStorage.getItem("bt_nav_collapsed")==="1")?"min":"");if(v==="min")document.documentElement.dataset.nav="min";var t=(window.localStorage&&localStorage.getItem("bt_theme"))||(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.dataset.theme=t;}catch(e){}})();</script>
-  <link rel="stylesheet" href="assets/tokens.css?v=0.60.0" />
-  <link rel="stylesheet" href="assets/app.css?v=0.60.0" />
-  <link rel="stylesheet" href="assets/admin.css?v=0.60.0" />
+  <link rel="stylesheet" href="assets/tokens.css?v=0.61.0" />
+  <link rel="stylesheet" href="assets/app.css?v=0.61.0" />
+  <link rel="stylesheet" href="assets/admin.css?v=0.61.0" />
   <style>
     .tg { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,360px); gap: 20px; align-items: start; }
     @media (max-width: 980px) { .tg { grid-template-columns: 1fr; } }
@@ -46,7 +46,7 @@
 </head>
 <body>
   <header class="header chrome-glass no-print">
-    <a class="wordmark" href="admin.html" style="text-decoration:none;color:inherit"><img class="brand-logo" src="assets/logo-boom-icon-512.png?v=0.60.0" alt="" width="22" height="22" />Boomtown <span>Athletics</span></a>
+    <a class="wordmark" href="admin.html" style="text-decoration:none;color:inherit"><img class="brand-logo" src="assets/logo-boom-icon-512.png?v=0.61.0" alt="" width="22" height="22" />Boomtown <span>Athletics</span></a>
     <div class="spacer"></div>
     <select id="orgSwitcher" class="org-switcher" aria-label="Switch organization"></select>
     <a id="btHdrMail" class="btn ghost hdr-mail" href="admin-messages.html" aria-label="Messages">✉</a>
@@ -76,7 +76,9 @@
           <a class="nav-item" href="admin-pos.html" title="Point of Sale"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-8M21 20H3"/></svg><span class="txt">Point of Sale</span></a>
           <a class="nav-item" href="admin-plans.html" title="Membership Plans"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-8M21 20H3"/></svg><span class="txt">Membership Plans</span></a>
           <a class="nav-item" href="admin-tiers.html" title="Membership Levels"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/><circle cx="12" cy="15" r="1.6"/></svg><span class="txt">Membership Levels</span></a>
+          <a class="nav-item" href="admin-member-fields.html" title="Membership Fields"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/><circle cx="12" cy="15" r="1.6"/></svg><span class="txt">Membership Fields</span></a>
           <a class="nav-item" href="admin-passes.html" title="Passes &amp; Credits"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-8M21 20H3"/></svg><span class="txt">Passes &amp; Credits</span></a>
+          <a class="nav-item" href="admin-staff-pay.html" title="Staff Pay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-8M21 20H3"/></svg><span class="txt">Staff Pay</span></a>
       </nav>
       <nav class="nav-group" data-key="mkt">
         <div class="nav-label" role="button" tabindex="0" aria-expanded="true">Marketing<span class="grp-chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></span></div>
@@ -222,9 +224,9 @@
   </main>
   </div>
 
-  <script src="assets/config.js?v=0.60.0"></script>
-  <script src="assets/admin-nav.js?v=0.60.0" defer></script>
-  <script src="assets/build-status.js?v=0.60.0" defer></script>
+  <script src="assets/config.js?v=0.61.0"></script>
+  <script src="assets/admin-nav.js?v=0.61.0" defer></script>
+  <script src="assets/build-status.js?v=0.61.0" defer></script>
   <script>
   document.addEventListener("DOMContentLoaded", function () {
     "use strict";

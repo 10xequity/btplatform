@@ -1,3 +1,67 @@
+<!DOCTYPE html>
+<!-- Boomtown Platform — Staff pay (admin) · Version: v1.0 · Date: 2026-08-03 · Ships in: v0.61.0
+     The UI for the rate cards and shift pay that shipped in v0.58.0. A rate is what someone is paid
+     GOING FORWARD; an APPROVED shift keeps the numbers it was approved at, so a later raise never
+     rewrites what was already owed. Approved and pending are reported apart, never summed. -->
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Staff pay — Boomtown Athletics</title>
+  <script>/* Pre-paint state — collapse + theme (uiux-review §4/§6.4, v0.52.0): read the bt_nav cookie and the saved theme BEFORE the first stylesheet so the rail state AND the theme are right on frame one — no post-paint snap of either. admin-nav.js writes the cookie on rail toggle and bt_theme on theme toggle; the localStorage bt_nav fallback migrates pre-v0.51 sessions. */(function(){try{var m=document.cookie.match(/(?:^|; )bt_nav=([^;]*)/);var v=m?m[1]:((window.localStorage&&localStorage.getItem("bt_nav_collapsed")==="1")?"min":"");if(v==="min")document.documentElement.dataset.nav="min";var t=(window.localStorage&&localStorage.getItem("bt_theme"))||(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.dataset.theme=t;}catch(e){}})();</script>
+  <link rel="stylesheet" href="assets/tokens.css?v=0.61.0" />
+  <link rel="stylesheet" href="assets/app.css?v=0.61.0" />
+  <link rel="stylesheet" href="assets/admin.css?v=0.61.0" />
+  <style>
+    .mf-head { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; margin-bottom: 14px; }
+    .mf-head p { max-width: 68ch; }
+    .mf-sub { font-size: 15px; margin: 22px 0 10px; }
+    .mf-form { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card, 10px); padding: 16px; margin-bottom: 16px; }
+    .mf-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+    .mf-form label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 700; min-width: 0; }
+    .mf-form input, .mf-form select, .mf-form textarea {
+      font: inherit; font-size: 16px; padding: 10px; min-height: 44px; background: var(--surface-2); color: var(--text);
+      border: 1px solid var(--border); border-radius: var(--radius-control, 8px); min-width: 0; }
+    .mf-check { flex-direction: row !important; align-items: center; gap: 8px; }
+    .mf-check input { min-height: 22px; width: 22px; }
+    .mf-help { font-size: 12px; font-weight: 400; color: var(--text-muted); }
+    .mf-err { color: var(--danger); font-size: 13px; font-weight: 700; }
+    .mf-row { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+    .mf-row .btn, .mf-actions .btn { min-height: 44px; }
+    .mf-filter { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 12px; }
+    .mf-inline { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 700; }
+    .mf-inline input { font: inherit; font-size: 16px; padding: 10px; min-height: 44px; background: var(--surface-2);
+      color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-control, 8px); }
+    .mf-results button { display: block; width: 100%; text-align: left; font: inherit; min-height: 44px; padding: 8px 10px;
+      background: var(--surface-2); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-control, 8px); margin-top: 4px; cursor: pointer; }
+    .mf-table { width: 100%; border-collapse: collapse; }
+    .mf-table th, .mf-table td { text-align: left; padding: 10px 8px; border-top: 1px solid var(--border); vertical-align: top; }
+    .mf-table th { border-top: 0; color: var(--text-muted); font-size: 13px; }
+    .mf-table td.num { font-variant-numeric: tabular-nums; }
+    .mf-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .mf-note { font-size: 12px; color: var(--text-muted); }
+    .pill { display: inline-block; padding: 1px 9px; border-radius: 999px; font-size: 11px; font-weight: 800; border: 1px solid currentColor; }
+    .pill.on { color: var(--positive); } .pill.off { color: var(--text-muted); }
+    @media (max-width: 640px) {
+      .mf-table thead { display: none; }
+      .mf-table td { display: block; border-top: 0; padding: 4px 0; }
+      .mf-table tr { display: block; border-top: 1px solid var(--border); padding: 10px 0; }
+      .mf-table td::before { content: attr(data-label) ": "; color: var(--text-muted); font-size: 12px; }
+      .mf-table td.mf-actions-cell::before { content: ""; }
+    }
+  </style>
+</head>
+<body>
+    <header class="header chrome-glass no-print">
+    <a class="wordmark" href="admin.html" style="text-decoration:none;color:inherit"><img class="brand-logo" src="assets/logo-boom-icon-512.png?v=0.61.0" alt="" width="22" height="22" />Boomtown <span>Athletics</span></a>
+    <div class="spacer"></div>
+    <select id="orgSwitcher" class="org-switcher" aria-label="Switch organization"></select>
+    <a id="btHdrMail" class="btn ghost hdr-mail" href="admin-messages.html" aria-label="Messages">✉</a>
+    <button id="themeToggle" class="btn ghost theme-toggle" aria-label="Toggle dark or light theme">◐</button>
+    <a class="btn ghost" href="index.html">Member site</a>
+  </header>
+
+  <div id="app" class="admin-layout">
     <aside class="sidebar" data-static="rail" aria-label="Admin sections">
       <nav class="nav-group" data-key="run">
         <div class="nav-label" role="button" tabindex="0" aria-expanded="true">Run events<span class="grp-chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></span></div>
@@ -61,3 +125,76 @@
       </nav>
       <button class="bt-edge" type="button" aria-label="Collapse or expand navigation"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
     </aside>
+    <main class="admin-main" id="main">
+      <div class="mf-head">
+        <div>
+          <h1>Staff pay</h1>
+          <p class="muted">What each coach is paid, and what each shift came to. <strong>Approving a shift freezes its numbers</strong> — changing someone's rate later never rewrites what they were already owed.</p>
+        </div>
+        <button class="btn" id="rNew">Set a rate</button>
+      </div>
+
+      <form class="mf-form" id="rForm" hidden>
+        <div class="mf-grid">
+          <label>Person
+            <input id="rSearch" placeholder="Start typing a name" autocomplete="off" />
+            <div id="rResults" class="mf-results" role="listbox" aria-label="Matching people"></div>
+          </label>
+          <label>Paid for
+            <input id="rRole" maxlength="60" placeholder="Coaching (leave blank for any role)" />
+            <span class="mf-help">One person can have different rates for coaching and reffing.</span>
+          </label>
+          <label>How they're paid
+            <select id="rBasis">
+              <option value="hourly">Per hour</option>
+              <option value="flat">Flat rate per shift</option>
+              <option value="per_session">Per session</option>
+            </select>
+          </label>
+          <label>Rate
+            <input id="rAmount" type="text" inputmode="decimal" placeholder="25.00" />
+            <span class="mf-help">In dollars. Type 25.00, not 2500.</span>
+          </label>
+        </div>
+        <div class="mf-row">
+          <button class="btn" type="submit" id="rSave">Save rate</button>
+          <button class="btn ghost" type="button" id="rCancel">Cancel</button>
+          <span class="mf-err" id="rErr" role="alert"></span>
+        </div>
+      </form>
+
+      <h2 class="mf-sub">Rate card</h2>
+      <div class="pos-card">
+        <table class="mf-table">
+          <caption class="sr-only">Standing pay rates</caption>
+          <thead><tr><th scope="col">Person</th><th scope="col">Paid for</th><th scope="col">Basis</th><th scope="col">Rate</th><th scope="col">Actions</th></tr></thead>
+          <tbody id="rBody"></tbody>
+        </table>
+        <p class="empty" id="rEmpty" hidden>No rates set yet. Add one, then shifts pick it up automatically.</p>
+      </div>
+
+      <h2 class="mf-sub">What's owed</h2>
+      <div class="mf-filter">
+        <label class="mf-inline">From <input id="pFrom" type="date" /></label>
+        <label class="mf-inline">To <input id="pTo" type="date" /></label>
+        <button class="btn ghost" id="pRun" type="button">Show</button>
+      </div>
+      <div class="pos-card">
+        <table class="mf-table">
+          <caption class="sr-only">Pay owed per person over the chosen dates</caption>
+          <thead><tr><th scope="col">Person</th><th scope="col">Shifts</th><th scope="col">Approved</th><th scope="col">Awaiting approval</th></tr></thead>
+          <tbody id="payBody"></tbody>
+        </table>
+        <p class="empty" id="payEmpty" hidden>No shifts with a person assigned in that window.</p>
+        <p class="mf-note">Approved and awaiting are kept apart on purpose. "Owed" and "might be owed" are different questions, and adding them together is how someone gets overpaid.</p>
+      </div>
+    </main>
+    </main>
+    </main>
+    </main>
+  </div>
+  <script src="assets/config.js?v=0.61.0"></script>
+  <script src="assets/admin-nav.js?v=0.61.0"></script>
+  <script src="assets/admin-staff-pay.js?v=0.61.0"></script>
+</body>
+</html>
