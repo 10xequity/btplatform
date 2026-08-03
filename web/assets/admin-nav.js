@@ -166,6 +166,7 @@
       { href: "admin-pos.html",           ico: "sales",  text: "Point of Sale" },
       { href: "admin-plans.html",         ico: "sales",  text: "Membership Plans" },
       { href: "admin-tiers.html",          ico: "roles",  text: "Membership Levels" },
+      { href: "admin-passes.html",        ico: "sales",  text: "Passes & Credits" },
     ]},
     { label: "Marketing", key: "mkt", items: [
       { href: "admin-announcements.html", ico: "mega",   text: "Announcements" },
@@ -508,6 +509,7 @@
       const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
       document.documentElement.dataset.theme = next;
       try { localStorage.setItem("bt_theme", next); } catch (e) {}
+      syncThemeColor();
     });
   })();
 
@@ -520,6 +522,20 @@
 
   window.BT_ADMIN = { api, guard, esc, money, fmtDT, openModal, closeModal, downloadText, fail };
 
+  /* v0.59.0: keep <meta name="theme-color"> in step with the ACTIVE theme.
+     It was pinned to #0B0B0D on every page, so a member in light mode saw a near-black status
+     bar above a white page — and in an installed PWA that bar is the app's own title bar. The
+     value is read from the --bg token rather than hardcoded a second time, so it cannot drift
+     from the stylesheet. */
+  function syncThemeColor() {
+    try {
+      const el = document.querySelector('meta[name="theme-color"]');
+      if (!el) return;
+      const bg = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim();
+      if (bg) el.setAttribute("content", bg);
+    } catch (e) { /* chrome colour is never load-blocking */ }
+  }
+
   /* ---------- v2.9: PWA bootstrap (manifest + apple meta + service worker) ---------- */
   (function pwaBootstrap() {
     try {
@@ -530,6 +546,7 @@
       if (!document.querySelector('meta[name="theme-color"]')) {
         const t = document.createElement("meta"); t.name = "theme-color"; t.content = "#0B0B0D"; head.appendChild(t);
       }
+      syncThemeColor();
       if (!document.querySelector('link[rel="apple-touch-icon"]')) {
         const a = document.createElement("link"); a.rel = "apple-touch-icon"; a.href = "assets/logo-boom-icon-512.png"; head.appendChild(a);
       }
@@ -542,7 +559,7 @@
       if (window.BT_STATUS || document.getElementById("bt-status-js")) return;
       var s = document.createElement("script");
       s.id = "bt-status-js";
-      s.src = "assets/build-status.js?v=0.56.0";
+      s.src = "assets/build-status.js?v=0.59.0";
       s.async = false;
       document.head.appendChild(s);
     } catch (e) { /* indicators are never load-blocking */ }

@@ -190,3 +190,57 @@ input, select, textarea, button { font: inherit; color: inherit; }
 .settings-row .grow { flex: 1; min-width: 0; }
 .settings-row .k { font-weight: 600; font-size: 15px; }
 .settings-row .v { color: var(--text-muted); font-size: 14px; overflow-wrap: anywhere; }
+
+/* v0.59.0 — compared figures must line up digit-for-digit.
+   tabular-nums shipped for scores and standings (tournament.css) but never for money, so every
+   currency column in reports, the point of sale and registrations was proportionally spaced and
+   visibly jittered. This is the same rule applied to the other half of the product.
+   Scoped to the classes and cells that actually carry figures, not to everything: forcing tabular
+   numerals into prose makes body text look like a spreadsheet. */
+.money, .amount, .cents, .total, td.num, th.num,
+.pos-card .price, .pos-card .total, .report-table td:not(.text) {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+/* v0.59.0 — COURTSIDE / DESK, small screens (roadmap UX-04).
+   score.html, kiosk.html and checkin.html had no responsive rules at all and the smallest
+   breakpoint in the codebase was 480px, so nothing was ever designed for the width people
+   actually hold: 360–390px. These are the three surfaces used one-handed, at speed, in a
+   badly lit gym, often by a volunteer.
+   Targets grow rather than shrink — this is the one place where 44px is not generous enough,
+   so thumb-critical controls go to 52px (standards §5). */
+@media (max-width: 430px) {
+  .court-actions .btn,
+  .score-actions .btn,
+  .checkin-actions .btn,
+  .kiosk-actions .btn { min-height: 52px; font-size: 17px; width: 100%; }
+
+  .court-actions,
+  .score-actions,
+  .checkin-actions,
+  .kiosk-actions { display: grid; gap: 10px; }
+
+  /* Wide tables become stacked cards instead of a horizontal scroll nobody discovers. */
+  .roster-table thead,
+  .score-table thead { display: none; }
+  .roster-table td,
+  .score-table td { display: block; border-top: 0; padding: 4px 0; }
+  .roster-table tr,
+  .score-table tr { display: block; border-top: 1px solid var(--border); padding: 10px 0; }
+
+  /* The figure being read across a court is the score. Give it room. */
+  .score-big, .match-cell .score { font-size: 30px; }
+
+  /* Never let a phone-width layout force a sideways scroll. */
+  body { overflow-x: hidden; }
+}
+
+/* Respect the notch and the home indicator — the desk device is usually a phone in a stand. */
+@supports (padding: max(0px)) {
+  .admin-main, .wrap, main {
+    padding-left: max(var(--gutter, 16px), env(safe-area-inset-left));
+    padding-right: max(var(--gutter, 16px), env(safe-area-inset-right));
+  }
+  .header { padding-top: max(0px, env(safe-area-inset-top)); }
+}

@@ -177,13 +177,14 @@ export function guestPassName(tierName, month) {
 const PASS_SELECT =
   `SELECT p.id, p.contact_id, p.name, p.kind, p.source, p.total_sessions, p.starts_at,
           p.expires_at, p.price_cents, p.tier_id, p.note, p.deleted_at,
+          c.full_name AS member_name,
           ${PASS_USED_SQL} AS used
-   FROM passes p`;
+   FROM passes p LEFT JOIN contacts c ON c.id = p.contact_id AND c.org_id = p.org_id`;
 
 function passOut(r, nowIso) {
   const st = passStatus(r, r.used, nowIso);
   return {
-    id: r.id, contact_id: r.contact_id, name: r.name, kind: r.kind, source: r.source,
+    id: r.id, contact_id: r.contact_id, member_name: r.member_name, name: r.name, kind: r.kind, source: r.source,
     total_sessions: r.total_sessions, used: r.used,
     remaining: st.remaining, usable: st.usable, reason: st.reason,
     starts_at: r.starts_at, expires_at: r.expires_at, price_cents: r.price_cents,

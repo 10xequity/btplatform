@@ -67,6 +67,7 @@
     "admin-reports.html":       { s: "live" },
     "admin-pos.html":           { s: "beta", n: "Square is in SANDBOX. Sales, line items and reporting are all real; the payment is not. No card is ever charged." },
     "admin-plans.html":         { s: "beta", n: "Square subscriptions are in SANDBOX. Do not sell a real membership from this screen — nothing will bill." },
+    "admin-passes.html":        { s: "beta", n: "Issue and spend passes, punch cards and the guest passes a membership includes. Fully working — but it does NOT take a payment: record the price for your own records and collect it however you normally do, until Square is live." },
 
     /* --- Marketing --- */
     "admin-marketing.html":     { s: "wip",  n: "Sending is deliberately blocked in code until two things are done: the physical mailing address is saved in Settings, and the Brevo API key plus SPF/DKIM/DMARC are verified. You can build contacts, segments and campaigns; you cannot send. This is expected — not a bug." },

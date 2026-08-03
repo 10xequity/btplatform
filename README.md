@@ -1,5 +1,5 @@
 # Boomtown Athletics Platform
-**Version:** v0.53.1 · **Date:** 2026-08-02 · **Supersedes:** README @ v0.24.0 (2026-07-26)
+**Version:** v0.59.0 · **Date:** 2026-08-03 · **Supersedes:** README @ v0.53.1 (2026-08-02)
 
 Multi-org sports operations platform for **Boomtown Volleyball · Match Point Social · Queens Club**, plus 7 facility-operator orgs (Colorado Boom, Oda Up, RMR, Real Futsal, Special Olympics CO, Zara Gymnastics, External/Rental). Facility is in **Aurora, Colorado**.
 
@@ -31,14 +31,39 @@ Two things are sandboxed platform-wide and are **deliberate, not defects**:
 
 ---
 
+## Working on it
+
+Two commands cover the whole loop.
+
+```bash
+node worker/scripts/preflight.mjs --session   # must print CLEAR before you commit
+node worker/scripts/sync-rail.mjs --write     # after changing the admin menu
+```
+
+**preflight** is the session ritual and the pre-commit gate in one: origin sync, module syntax,
+test-file parity, the *measured* suite count, schema vs live D1, and deployed-version parity. A
+`WARN` is never a `PASS` — a check that could not run says so, and is named in the summary.
+
+**sync-rail** exists because the admin sidebar ships as static markup on all 28 admin pages, so it
+paints with the page instead of popping in afterwards. That used to mean 28 hand edits to add one
+menu item, which was blocking real work. Now: edit `web/assets/rail.partial.html` and the `NAV`
+array in `web/assets/admin-nav.js`, run the sweep, and two guards prove partial, pages and NAV all
+agree — any two of the three agreeing is not enough.
+
+Delivery is **direct commit** (`CLAUDE.md` §2): push to `main`, CI gates and deploys, then fill the
+CHANGELOG entry CI stubs out. Database migrations go through Cloudflare MCP **before** the push, or
+the schema gate fails the build closed.
+
+---
+
 ## Architecture
 
 | Path | What | Deploy |
 |---|---|---|
 | `web/` | Static frontend, GitHub Pages. No build step; every page carries a `?v=` cache-bust. | Push to `main` |
 | `worker/src/` | Cloudflare Worker API. `index.js` mounts every module route. | Auto-deploys via Actions **Deploy Worker** on any `worker/**` push |
-| `worker/test/` | `node --test` suites. **644 passing at v0.53.1.** | — |
-| `db/migrations/` | Schema of record. **0001–0033 all applied live** to D1 `boomtown-prod` (82 tables). | Applied by Claude via Cloudflare MCP, **additive-only**. The SQL files here are records — never re-run them. |
+| `worker/test/` | `node --test` suites. **743 passing at v0.59.0**, including an end-to-end harness that drives the real router against a real SQLite copy of the production schema. | — |
+| `db/migrations/` | Schema of record. **Ledger at 0035**, all applied live to D1 `boomtown-prod` (85 tables). | Applied by Claude via Cloudflare MCP, **additive-only**. The SQL files here are records — never re-run them. |
 | `docs/` | Install guides, handoffs, roadmaps. Naming: `YYYY-MM-DD_name_vX_Y.md`. | — |
 
 Worker route pattern: `xxxRoutes(request, env, url, ctx)` + `wireXxx(h)`; helpers destructure
@@ -99,9 +124,11 @@ It reconciles five separate backlog sources against the live tree, and it is the
 current. This section is a pointer by design: the queue that used to live here went stale, and
 its items 1 and 2 had already shipped as v0.51.0 and v0.52.0 while still being listed as upcoming.
 
-Headline order after v0.54.0: `build-status.js` registry accuracy → **SPA shell** (the last open
-uiux-review item) → end-to-end test harness → M22 membership field registry → M12C public rental
-booking → **M-TF** tournament format engine ⚠ *FABLE-GATED*, then M17 behind it.
+Headline order after v0.59.0: **admin screens** for the APIs that already ship without one
+(custom fields, staff rates and shift pay) → **M12C** public rental booking → **R-04** payment
+plans → **M18′** roster RSVP → **M-TF** tournament format engine ⚠ *FABLE-GATED*, then **M17**
+behind it. The SPA shell is no longer a blocker — `sync-rail.mjs` removed the reason it was
+urgent — and stays queued for its own benefit: content-only navigation.
 
 **Go-live blockers** — owner-gated config, not build work: Brevo key + SPF/DKIM/DMARC
 (owner-paused) · Square SANDBOX → production (owner's call) · VAPID push secrets, never set ·

@@ -316,6 +316,60 @@ async function resumeRows(env, orgId, contactId) {
   return rows.map((r) => ({ ...r, points: eventPoints(r.wins, r.rank) }));
 }
 
+/**
+ * MATCH-LEVEL history (v0.59.0, owner 2026-08-03).
+ *
+ * `resumeRows` above is EVENT-level — one line per tournament with the team's final record. This
+ * is the game-by-game detail underneath it: who they played with, who they played against, and
+ * what the score was.
+ *
+ * DELIBERATELY NO RATING, NO RANK, NO DERIVED SKILL NUMBER. The owner's call, and it is the right
+ * one for this sport: volleyball results belong to a TEAM, so a number attached to one player
+ * silently credits them for their partner's night — and once a number exists people treat it as
+ * fact regardless of the caveat printed beside it. Showing the matches and letting a reader draw
+ * their own conclusion is both more honest and more useful, because the reader knows things the
+ * data does not (who was injured, who was subbing, whether it was a fun league or a final).
+ *
+ * If a single figure is ever wanted, the honest version is a TEAM-strength estimate over a lineup
+ * that actually played together — not a per-player rating. That stays a proposal until it is
+ * demoed; nothing here computes one.
+ *
+ * Capped at 100. A public profile is a page, not an export.
+ */
+async function matchRows(env, orgId, contactId) {
+  const rows = (await env.DB.prepare(
+    `SELECT m.id, m.round, m.court, m.stage, m.score_a, m.score_b, m.game_number,
+            e.id AS event_id, e.name AS event_name, e.starts_at,
+            ta.name AS team_a, tb.name AS team_b,
+            CASE WHEN mine.team_id = m.team_a_id THEN 'a' ELSE 'b' END AS my_side
+       FROM team_members mine
+       JOIN teams t   ON t.id = mine.team_id AND t.deleted_at IS NULL
+       JOIN matches m ON m.event_id = t.event_id AND m.org_id = ?2 AND m.deleted_at IS NULL
+                     AND (m.team_a_id = mine.team_id OR m.team_b_id = mine.team_id)
+       JOIN events e  ON e.id = m.event_id AND e.deleted_at IS NULL
+       LEFT JOIN teams ta ON ta.id = m.team_a_id AND ta.org_id = m.org_id
+       LEFT JOIN teams tb ON tb.id = m.team_b_id AND tb.org_id = m.org_id
+      WHERE mine.contact_id = ?1 AND mine.deleted_at IS NULL AND mine.org_id = ?2
+        AND m.score_a IS NOT NULL AND m.score_b IS NOT NULL
+      ORDER BY e.starts_at DESC, m.round, m.game_number
+      LIMIT 100`
+  ).bind(contactId, orgId).all()).results || [];
+
+  return rows.map((r) => {
+    const mine = r.my_side === "a" ? r.score_a : r.score_b;
+    const theirs = r.my_side === "a" ? r.score_b : r.score_a;
+    return {
+      match_id: r.id, event_id: r.event_id, event: r.event_name, played_at: r.starts_at,
+      stage: r.stage, round: r.round, court: r.court, game: r.game_number,
+      team: r.my_side === "a" ? r.team_a : r.team_b,
+      opponent: r.my_side === "a" ? r.team_b : r.team_a,
+      score_for: mine, score_against: theirs,
+      // A plain fact, not a judgement: this game was won or lost. No points, no rating.
+      result: mine > theirs ? "win" : (mine < theirs ? "loss" : "tie"),
+    };
+  });
+}
+
 async function resume(env, url, ctx) {
   if (!ctx.session) return H.json({ error: "Sign in first." }, 401);
   const { self, ids } = await managedContactIds(env, ctx);
@@ -415,6 +469,7 @@ async function publicProfile(env, url, ctx) {
   if (prof.show_history) {
     const rows = await resumeRows(env, ctx.orgId, contactId);
     out.results = rows; out.totals = totals(rows);
+    out.matches = await matchRows(env, ctx.orgId, contactId);
   }
   return H.json(out);
 }
