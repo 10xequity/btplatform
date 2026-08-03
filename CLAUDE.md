@@ -13,7 +13,7 @@ Claude Desktop project-knowledge doc set (9 markdown files + 1 HTML demo, dated 
 
 | Step | File | When |
 |---|---|---|
-| 1 | `docs/2026-08-03_handoff_v0_74_0.md` | **Every session.** State of record. §0 delivery + two order-of-operations rules, §1 measured build state, §3 the pattern behind sixteen defects and the negative-control lesson, §4 owner answers, §6 next build. |
+| 1 | `docs/2026-08-03_handoff_v0_76_0.md` | **Every session.** State of record. §0 delivery + the order-of-operations rules, §1 measured build state, §3 the review pass and the finding that a CHANGELOG claimed a fix it had not applied, §4 owner answers (incl. all five KOTC answers), §6 next build, §7 the next-session prompt. |
 | 2 | `docs/2026-07-30_standards_v2_0.md` | **Every session.** Build/design law. |
 | 3 | `docs/2026-08-02_roadmap_v1_0.md` | **Every session.** What is unbuilt and in what order. |
 | 4 | `docs/INDEX.md` | **Every session.** Read-order, doc status, and the open contradiction register. |
@@ -21,6 +21,7 @@ Claude Desktop project-knowledge doc set (9 markdown files + 1 HTML demo, dated 
 | 6 | `docs/2026-08-01_requirements_lfg-membership_v1_0.md` | When touching LFG, membership fields, or the opportunities feed. |
 | 7 | `docs/2026-08-01_uiux-review_admin-shell_v1_0.md` | When touching any shell, rail, header, or contrast. |
 | 8 | `docs/2026-08-01_demo_admin-shell_v4_0.html` | Open in a browser when working the SPA shell. It is the target model. |
+| 9 | `docs/2026-08-03_spec_kotc_v1_1.md` | When touching King/Queen of the Court — the current next build. §6 holds all five owner answers (notably: `move_up` is a director setting and **no formula is encoded**), §7 two findings against v1.0, §8 what is left. |
 | — | `docs/archive/*` | **On demand only. Never as part of a normal build.** See §7. |
 
 Steps 1–4 are ~7,400 tokens combined. That is the intended per-session doc budget.

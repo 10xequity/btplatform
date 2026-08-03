@@ -1,7 +1,7 @@
 -- Boomtown Platform — Migration 0040: King / Queen of the Court
 -- File: 2026-08-03_0040_kotc_v1_0.sql · Version: v1.0 · Date: 2026-08-03
 --
--- Source of decision: owner 2026-08-03, verbatim (full text in docs/2026-08-03_spec_kotc_v1_0.md §1):
+-- Source of decision: owner 2026-08-03, verbatim (full text in docs/2026-08-03_spec_kotc_v1_1.md §1):
 --   "that singleplayer is usually a league format for a single entry - queens or kings style
 --    tournament, where they are paired with another person - draft format. This is just a format to
 --    play. they will play with everyone then change the next round where the top players on that net

@@ -2,7 +2,7 @@
  * Boomtown Platform — King / Queen of the Court, the engine
  * File: worker/src/kotc.js · Version: v1.0 · Date: 2026-08-03 · Ships in: v0.76.0
  *
- * Owner 2026-08-03, verbatim (full text in `docs/2026-08-03_spec_kotc_v1_0.md` §1):
+ * Owner 2026-08-03, verbatim (full text in `docs/2026-08-03_spec_kotc_v1_1.md` §1):
  *   "they will play with everyone then change the next round where the top players on that net move
  *    to the next completing 4 to a net. They will enter scores, which tally and then ranked and
  *    seeded. They then fill the next net based on number of nets - determine number of players going

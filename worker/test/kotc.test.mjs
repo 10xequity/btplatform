@@ -458,7 +458,7 @@ test("partner history accumulates across rounds and reports the worst repeats fi
 });
 
 test("the source records that partner repeats cannot be steered, because that is not obvious", () => {
-  /* THE SPEC ASKED FOR SOMETHING THAT CANNOT EXIST. `docs/2026-08-03_spec_kotc_v1_0.md` §4 item 5
+  /* THE SPEC ASKED FOR SOMETHING THAT CANNOT EXIST. `docs/2026-08-03_spec_kotc_v1_1.md` §7 finding 1 (v1.0 §4 item 5)
      wants partnerHistory "so nextRound can prefer a fresh pairing when it has a free choice". There is
      no free choice: a net plays ALL its pairings. Whoever next reads this file will otherwise go
      looking for the optimiser the spec promised, so the finding is written down in the module and
@@ -519,7 +519,7 @@ test("a whole night runs: seed, play, tally, move, and nobody is lost or duplica
 test("the engine is not yet reachable, and this test is the reminder", () => {
   /* FAILURE CLASS 1 IS "BUILT, TESTED, AND UNCALLED", and that is precisely what this release ships:
      a proved engine with no route and no screen. The spec ordered it this way
-     (`docs/2026-08-03_spec_kotc_v1_0.md` §4: build the pure functions first, each testable without
+     (`docs/2026-08-03_spec_kotc_v1_1.md` §4/§8: build the pure functions first, each testable without
      the ones after it) and the owner's five open questions were answered before a line of it was
      written — so this is a staged build, not drift. But the project's own history is four sessions
      spent specifying a module that was already 70% built, and a rail that went dark on the page where
