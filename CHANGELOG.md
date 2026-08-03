@@ -2,7 +2,37 @@
 
 ## v0.72.0 — 2026-08-03
 
-- Auto-recorded by CI on deploy. `/api/health` reported `v0.72.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
+Owner 2026-08-03: *"brackets should auto populate but can be overrided with drag and drop or type
+entry. Please list the pool they were from in their tile. The reason this is needed is teams might
+forfeit so we can replace them in the bracket."* And: *"The assignment of bracket will be dependent on
+the admin running it, and reviewing the scores of the game. many people quit at this point too, so we
+want to have flexibility to modify."* So the seeding is now explicitly a starting point.
+
+- **Any slot takes any team in the event** — a different pool, a different division, a losing record.
+  That openness *is* the feature: a slot editor that only accepted teams the algorithm had already
+  approved of would be useless on the one day it is needed. Proven by restricting it to teams already
+  in the bracket and watching three tests fail.
+- **Two ways in**, because either alone leaves somebody stuck: drag a team off the bench, or click a
+  slot and pick from a filterable list. Drag cannot be driven from a keyboard; a list is slow when the
+  bracket is on a big screen. Escape closes the chooser — a modal with no keyboard exit is a trap.
+- **Every tile names the pool the team came out of, and where they finished.** When three teams have
+  gone home, *"Pool B · 2nd · 5-2"* is the difference between a defensible substitution and a guess.
+  A name on its own answers nothing.
+- **The bench lists every team, not just the unplaced ones**, and marks who is already in the draw.
+  Filtering it down would hide exactly the move the owner described — pulling somebody across from
+  another pool.
+- **A forfeit is a result, not an empty slot.** Recorded as the full game to nil, and the bracket
+  advances on its own. Emptying the slot instead would leave the opponent waiting for a game nobody
+  is ever going to play. Confirmed before it writes, since it both scores a game and moves the tree.
+
+**The warning that matters.** Advancement is recomputed from scores, so a team placed by hand into a
+slot whose feeding game has not been played **will** be replaced by that game’s winner. That is
+correct behaviour, and it is also precisely what looks like the software discarding an edit — so the
+server reports it and the page repeats it. Three tests: the warning appears where it should, it does
+*not* appear on a first-round slot, and it is actually **true** — the third plays the feeder and
+watches the hand-placed team get overwritten.
+
+- Tests **953** (+18). Preflight CLEAR. No migration.
 
 ## v0.71.0 — 2026-08-03
 
