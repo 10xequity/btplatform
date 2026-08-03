@@ -2,7 +2,38 @@
 
 ## v0.62.0 — 2026-08-03
 
-- Auto-recorded by CI on deploy. `/api/health` reported `v0.62.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
+- **Pool schedule generator — the six hardcoded templates are no longer the limit.** Any team and
+  court count. This is the one thing that actually blocked events: twelve teams on four courts had
+  no template, so it could not be run.
+- **The owner's question, answered with code: 12 teams on 4 courts works.** 12 rounds → **8 games
+  each, 4 byes each**, one repeat match-up, nobody sitting twice in a row, about 4.4 hours. That is
+  the *same eight games* as the current 10-on-4 — 20% more teams for 20% more time. The honest cost:
+  four byes instead of two, so a team waits a third of the rounds rather than a fifth.
+- **The fairness target was measured, not invented.** The owner's hand-built 10-on-4 sheet was found
+  in Drive, transcribed and analysed: 8 games each, 2 byes each, **zero repeat opponents**, 40 of 45
+  pairings, no back-to-back byes. That is close to optimal, so it became the acceptance standard —
+  `formats.test.mjs` asserts the generator *matches* it, because a generator that cannot reproduce a
+  schedule a director built by hand is not ready. **It now does, exactly.**
+- **Three fixes found by measuring rather than assuming.** The first greedy paired sequentially and,
+  with everyone on equal games, fell through to the id tiebreak — producing 1v2, 3v4, 5v6 round after
+  round. Greedy *matching* over all candidate pairs helped; it was not enough, because summing ranks
+  still made neighbours cheapest. Switching the tiebreak to **circular distance** (the circle
+  method's core idea) took 12-on-5 from `11v12` **eight times** to zero. A final **2-opt repair
+  pass** swaps partners *within* a round — safe by construction, since games, byes and who is on
+  court are untouched, so the hard equal-games rule cannot be broken by the repair.
+- **The check row ships, because the owner uses it.** Their sheet carries "Check = 55": every round,
+  teams on court plus teams on bye sum to 1+2+…+N, proving nobody is double-booked or forgotten. The
+  generator emits it and the report validates it — a schedule you cannot eyeball is one you will not
+  trust, and a director who does not trust the generator keeps using the spreadsheet.
+- **The report is the other half.** Equal games, equal byes, repeats, bye spacing, estimated hours
+  and points per team, plus warnings when the games / points / hours targets cannot all be met. The
+  owner's own remedy is supported: raising points-to 25 lifts 8 games from 168 to 200 points without
+  changing the schedule shape. Refusals carry the arithmetic — *"7 games each is not possible with 10
+  teams on 4 courts; only 4, 8, 12, 16 are. Closest is 8."*
+- **Deterministic** (no `Math.random`, so regenerating gives the same answer) and **stateless** — it
+  plans, it does not write matches, so a director can try twelve shapes without creating twelve
+  tournaments. `GET /api/admin/formats/options` and `POST /api/admin/formats/plan`, staff-only.
+- Suite **765 → 780**. No migration.
 
 ## v0.61.0 — 2026-08-03
 
