@@ -2,7 +2,28 @@
 
 ## v0.63.0 — 2026-08-03
 
-- Auto-recorded by CI on deploy. `/api/health` reported `v0.63.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
+- **The generator is no longer a calculator.** `POST /api/admin/events/:id/generate-schedule` writes
+  a plan into `matches` for a real event, mapping the planner's 1..N onto the event's actual team ids
+  in seed order. It **refuses to overwrite silently** — an event with existing matches returns 409
+  with the count and what to do about it, and even with `replace: true` the old rows are soft-deleted
+  rather than destroyed, so a director who regenerates after scores are in can still see what they
+  replaced. Byes come back as **names**; the planner's numbering never reaches a screen.
+- **Waiting becomes working.** Owner: *"no 4 byes does not work … there is a world where 12 on 4 does
+  work with each team working."* Referees are drawn **only from the waiting set**, so a team can never
+  officiate a match it is playing in, and the duty is spread evenly — everyone waits the same amount,
+  so everyone works the same amount. Both properties asserted.
+- **`refCoverage()` reports the arithmetic that decides whether a shape works.** 12-on-4 has four
+  waiting teams for four courts, so **every bye can be a working bye**; 12-on-5 leaves three courts
+  unrefereed. A director promising officials needs that before the day, not during it.
+- **12-on-5 measured, and it is the shape to prefer:** 10 games each, 2 byes each, zero repeats, 210
+  points, two refereeing turns each. Strictly better than the current 10-on-4 on every axis, and it
+  hits the points target exactly.
+- **6-on-2** is clean to 6 rounds (4 games each, no repeats) and *must* repeat beyond 7 — only 15
+  pairings exist among six teams. The report says so rather than quietly producing rematches.
+- **Known limitation, stated rather than hidden:** 5-on-2 over 5 rounds is a perfect 10-match
+  round-robin on paper, but the greedy settles for one with two repeats. Correct and fair on games
+  and byes; not optimal on pairings at that size.
+- Suite **780 → 785**. No migration.
 
 ## v0.62.0 — 2026-08-03
 
