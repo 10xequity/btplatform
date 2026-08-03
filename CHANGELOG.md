@@ -2,7 +2,40 @@
 
 ## v0.60.0 — 2026-08-03
 
-- Auto-recorded by CI on deploy. `/api/health` reported `v0.60.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
+- **Tryout evaluations** — the owner's spec, built as written: *"name · position · age · prev club
+  (asked during registration), then a blank area for coaches to write, then a quick check to offer
+  / not offer."* One card per registered player, filterable by position and by what you have not
+  judged yet, with a running "judged 12 of 40".
+  - **Notes save on blur, not on a Save button.** A coach evaluating forty players in a gym will
+    not press save forty times, and losing a note because they walked away is the failure that
+    makes people abandon the tool.
+  - **A coach sees only their own notes — enforced in SQL, not in the client.** Showing coach B
+    what coach A wrote before B has written anything turns three independent judgements into one
+    anchored one, which is the entire value gone. A client-side filter would be one careless edit
+    from leaking. Tested: coach B sees `null` where coach A recorded 5 / offer.
+  - **The director roll-up reports the split and the range, never an average.** "2/3 offer, rated
+    2–5" is actionable; a mean of 3.67 hides that one coach thought this player was a 2 — which is
+    the single most useful thing on the page.
+- **Team builder — backend complete.** `tryout_squads` + `tryout_squad_members`. Each squad carries
+  a target size, colour, age group and a needs map (position → wanted). The board returns every
+  squad with its members, its shortfall and whether it is full, plus a club-wide aggregate a
+  director can pivot: squads, full, placed, and the summed shortfall by position.
+  - **Full means headcount *and* positions.** A squad of ten with no setter is not full, and
+    reporting it as full is how a director finds out in week one. Asserted in both directions.
+  - **Dropping a player into a squad moves them.** The board is a placement, not a wishlist — a
+    setter sitting in two squads is two coaches each believing they have them. Deleting a squad
+    releases its players, or the one-squad-per-player index would silently refuse to re-place them.
+- **Migration 0036** applied to live D1 via Cloudflare MCP before the push (ledger 36). The F-41
+  check ran first and found nothing matching tryout / evaluation / placement. Four new tables, and
+  they are deliberately *not* `member_profiles` (a tryout is a point in time, not a standing
+  profile) nor `member_fields` (the evaluator page must sort and filter on position, age group and
+  rating, which needs real columns rather than a key/value bag).
+- Proven to fail: leaking another coach's notes, allowing a player into two squads, calling a squad
+  full on headcount alone, and dropping the staff gate each redden the suite.
+- **The v0.59.0 rail generator did its job.** Adding "Tryouts" to the menu was one `NAV` edit, one
+  partial edit and one command — 29 pages updated. Under the old regime this release would have
+  begun with 29 hand edits.
+- Suite **743 → 765**, all passing. Cache-buster swept to `0.60.0`.
 
 ## v0.59.0 — 2026-08-03
 
