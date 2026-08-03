@@ -461,6 +461,78 @@ export function repairRepeats(plan, teams, maxPasses = 6) {
   return plan;
 }
 
+/**
+ * Read an event's live schedule and score it with the SAME report the generator uses.
+ *
+ * One definition (F-26). The editor could compute its own numbers client-side and feel snappier,
+ * but then a hand-edited schedule and a generated one would be judged by two different rules — and
+ * the moment those disagree the director stops believing either. Converting the DB rows back into
+ * the planner's shape and calling poolReport keeps exactly one answer to "is this fair".
+ */
+async function loadSchedule(env, ctx, eventId) {
+  const ev = await env.DB.prepare(
+    "SELECT id, name FROM events WHERE id=?1 AND org_id=?2 AND deleted_at IS NULL"
+  ).bind(eventId, ctx.orgId).first();
+  if (!ev) return { error: "That event doesn't exist.", status: 404 };
+
+  const teams = (await env.DB.prepare(
+    `SELECT id, name FROM teams WHERE org_id=?1 AND event_id=?2 AND deleted_at IS NULL
+      ORDER BY COALESCE(seed, 9999), id`
+  ).bind(ctx.orgId, eventId).all()).results || [];
+
+  const rows = (await env.DB.prepare(
+    `SELECT id, round, court, team_a_id, team_b_id, ref_team_id, score_a, score_b, points_to, cap
+       FROM matches WHERE org_id=?1 AND event_id=?2 AND deleted_at IS NULL
+      ORDER BY round, court`
+  ).bind(ctx.orgId, eventId).all()).results || [];
+
+  const nameOf = new Map(teams.map((t) => [t.id, t.name]));
+  const idxOf = new Map(teams.map((t, i) => [t.id, i + 1]));   // real id → planner 1..N
+
+  const maxRound = rows.reduce((n, r) => Math.max(n, r.round), 0);
+  const courts = rows.reduce((n, r) => Math.max(n, r.court), 0);
+
+  // Rebuild the planner shape so poolReport can score it unchanged.
+  const planRounds = [], planByes = [];
+  for (let r = 1; r <= maxRound; r++) {
+    const inRound = rows.filter((x) => x.round === r);
+    planRounds.push(inRound
+      .filter((x) => x.team_a_id && x.team_b_id)
+      .map((x) => ({ court: x.court, a: idxOf.get(x.team_a_id), b: idxOf.get(x.team_b_id) }))
+      .filter((x) => x.a && x.b));
+    const playing = new Set(inRound.flatMap((x) => [x.team_a_id, x.team_b_id]).filter(Boolean));
+    planByes.push(teams.filter((t) => !playing.has(t.id)).map((t) => idxOf.get(t.id)));
+  }
+
+  const report = teams.length
+    ? poolReport({ rounds: planRounds, byes: planByes }, {
+        teams: teams.length,
+        pointsTo: rows[0] ? rows[0].points_to || 21 : 21,
+      })
+    : null;
+
+  return {
+    event: { id: ev.id, name: ev.name },
+    teams,
+    courts,
+    rounds: maxRound,
+    matches: rows.map((x) => ({
+      id: x.id, round: x.round, court: x.court,
+      team_a_id: x.team_a_id, team_b_id: x.team_b_id,
+      team_a: nameOf.get(x.team_a_id) || null,
+      team_b: nameOf.get(x.team_b_id) || null,
+      ref_team: nameOf.get(x.ref_team_id) || null,
+      // A match with a score is one that has been PLAYED. The editor must warn before moving it —
+      // shuffling a finished match is almost always a mis-drag.
+      played: x.score_a !== null && x.score_b !== null,
+      score_a: x.score_a, score_b: x.score_b,
+    })),
+    byes: planByes.map((round) => round.map((i) => teams[i - 1] && teams[i - 1].name).filter(Boolean)),
+    report,
+    summary: report ? reportLines(report, { teams: teams.length }) : [],
+  };
+}
+
 /* ============================ routes ============================ */
 
 let json, requireStaff, audit;
@@ -613,6 +685,106 @@ export async function formatsRoutes(request, env, url, ctx) {
       // internal detail that should never reach a screen.
       byes: plan.byes.map((round) => round.map((n) => teamRows[n - 1].name)),
     });
+  }
+
+  /* ---- the schedule editor ----
+     A generated schedule is a starting point, not an answer. A director always knows something the
+     solver does not: this team asked to finish early, that court has a broken net, these two should
+     not meet in round one. Until they can move a match without regenerating, they keep the real
+     schedule in a spreadsheet — which is the whole reason this exists.
+
+     The editor's rule: it NEVER refuses a move. It re-scores and tells you what the move cost. A
+     tool that blocks the director is a tool the director routes around. */
+
+  if ((x = p.match(/^\/api\/admin\/events\/(\d+)\/schedule$/)) && m === "GET") {
+    const denied = await requireStaff(env, ctx);
+    if (denied) return denied;
+    const eventId = +x[1];
+    const loaded = await loadSchedule(env, ctx, eventId);
+    if (loaded.error) return json({ error: loaded.error }, loaded.status || 404);
+    return json(loaded);
+  }
+
+  /* Move a match to another round/court. If something is already there the two SWAP — dragging
+     onto an occupied slot means "these two should trade places", which is what a director means
+     every time. Silently overwriting the other match would lose it. */
+  if ((x = p.match(/^\/api\/admin\/events\/(\d+)\/schedule\/move$/)) && m === "POST") {
+    const denied = await requireStaff(env, ctx);
+    if (denied) return denied;
+    const eventId = +x[1];
+    const b = await request.json().catch(() => ({}));
+    const matchId = Number(b.match_id);
+    const toRound = Number(b.round);
+    const toCourt = Number(b.court);
+    if (!matchId || !Number.isInteger(toRound) || !Number.isInteger(toCourt) || toRound < 1 || toCourt < 1) {
+      return json({ error: "Say which match, and which round and court to move it to." }, 400);
+    }
+
+    const mv = await env.DB.prepare(
+      "SELECT id, round, court FROM matches WHERE id=?1 AND org_id=?2 AND event_id=?3 AND deleted_at IS NULL"
+    ).bind(matchId, ctx.orgId, eventId).first();
+    if (!mv) return json({ error: "That match isn't part of this event." }, 404);
+
+    const occupant = await env.DB.prepare(
+      `SELECT id FROM matches WHERE org_id=?1 AND event_id=?2 AND round=?3 AND court=?4
+         AND deleted_at IS NULL AND id != ?5`
+    ).bind(ctx.orgId, eventId, toRound, toCourt, matchId).first();
+
+    if (occupant) {
+      // Two writes, no transaction available on D1 here — so park the mover on a court number that
+      // cannot collide first. Without this the unique-ish (round, court) pairing briefly doubles up
+      // and a concurrent read sees two matches on one court.
+      await env.DB.prepare("UPDATE matches SET court=-1, updated_at=datetime('now') WHERE id=?1 AND org_id=?2")
+        .bind(matchId, ctx.orgId).run();
+      await env.DB.prepare("UPDATE matches SET round=?1, court=?2, updated_at=datetime('now') WHERE id=?3 AND org_id=?4")
+        .bind(mv.round, mv.court, occupant.id, ctx.orgId).run();
+      await env.DB.prepare("UPDATE matches SET round=?1, court=?2, updated_at=datetime('now') WHERE id=?3 AND org_id=?4")
+        .bind(toRound, toCourt, matchId, ctx.orgId).run();
+    } else {
+      await env.DB.prepare("UPDATE matches SET round=?1, court=?2, updated_at=datetime('now') WHERE id=?3 AND org_id=?4")
+        .bind(toRound, toCourt, matchId, ctx.orgId).run();
+    }
+
+    await audit(env, ctx, "schedule.move", "matches", matchId,
+      { from: `${mv.round}/${mv.court}`, to: `${toRound}/${toCourt}`, swapped: occupant ? occupant.id : null });
+
+    const loaded = await loadSchedule(env, ctx, eventId);
+    return json({ ok: true, swapped_with: occupant ? occupant.id : null, ...loaded });
+  }
+
+  /* Swap the two TEAMS in a match, or replace one side. Changing who plays whom is a different
+     operation from moving when they play, and conflating them in one endpoint makes both confusing. */
+  if ((x = p.match(/^\/api\/admin\/events\/(\d+)\/schedule\/teams$/)) && m === "POST") {
+    const denied = await requireStaff(env, ctx);
+    if (denied) return denied;
+    const eventId = +x[1];
+    const b = await request.json().catch(() => ({}));
+    const matchId = Number(b.match_id);
+    if (!matchId) return json({ error: "Say which match." }, 400);
+
+    const mt = await env.DB.prepare(
+      "SELECT id, team_a_id, team_b_id FROM matches WHERE id=?1 AND org_id=?2 AND event_id=?3 AND deleted_at IS NULL"
+    ).bind(matchId, ctx.orgId, eventId).first();
+    if (!mt) return json({ error: "That match isn't part of this event." }, 404);
+
+    const a = b.team_a_id === undefined ? mt.team_a_id : (b.team_a_id === null ? null : Number(b.team_a_id));
+    const bb = b.team_b_id === undefined ? mt.team_b_id : (b.team_b_id === null ? null : Number(b.team_b_id));
+    if (a && bb && a === bb) return json({ error: "A team can't play itself." }, 400);
+
+    for (const t of [a, bb].filter(Boolean)) {
+      const ok = await env.DB.prepare(
+        "SELECT id FROM teams WHERE id=?1 AND org_id=?2 AND event_id=?3 AND deleted_at IS NULL"
+      ).bind(t, ctx.orgId, eventId).first();
+      if (!ok) return json({ error: "One of those teams isn't in this event." }, 400);
+    }
+
+    await env.DB.prepare(
+      "UPDATE matches SET team_a_id=?1, team_b_id=?2, updated_at=datetime('now') WHERE id=?3 AND org_id=?4"
+    ).bind(a, bb, matchId, ctx.orgId).run();
+    await audit(env, ctx, "schedule.teams", "matches", matchId, { team_a_id: a, team_b_id: bb });
+
+    const loaded = await loadSchedule(env, ctx, eventId);
+    return json({ ok: true, ...loaded });
   }
 
   return null;

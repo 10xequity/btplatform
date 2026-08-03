@@ -161,6 +161,7 @@
       { href: "admin-facility.html",      ico: "sched",  text: "Facility Calendar" },
       { href: "tournament.html",          ico: "ops",    text: "Tournament Ops" },
       { href: "admin-league.html",        ico: "league", text: "League Manager" },
+      { href: "admin-schedule-editor.html", ico: "sched",  text: "Schedule Editor" },
     ]},
     { label: "Money", key: "money", items: [
       { href: "admin-reports.html",       ico: "sales",  text: "Sales & Reports" },
@@ -562,7 +563,7 @@
       if (window.BT_STATUS || document.getElementById("bt-status-js")) return;
       var s = document.createElement("script");
       s.id = "bt-status-js";
-      s.src = "assets/build-status.js?v=0.64.0";
+      s.src = "assets/build-status.js?v=0.65.0";
       s.async = false;
       document.head.appendChild(s);
     } catch (e) { /* indicators are never load-blocking */ }

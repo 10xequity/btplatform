@@ -63,6 +63,7 @@
     "admin-event.html":         { s: "live" },
     "tournament.html":          { s: "live" },
     "admin-league.html":        { s: "live" },
+    "admin-schedule-editor.html": { s: "beta", n: "Drag matches between rounds and courts; drop on an occupied slot to swap. It never blocks a move — the panel just tells you what it did to fairness. Moving a match that already has a score asks first." },
 
     /* --- Money --- */
     "admin-reports.html":       { s: "live" },

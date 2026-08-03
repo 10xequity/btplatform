@@ -1,73 +1,63 @@
 <!DOCTYPE html>
-<!-- Boomtown Platform — Waivers (admin) · Version: v1.0 · Date: 2026-07-26 · Ships in: v0.22.0
-     Publish a new waiver version; see every past version and how many signatures are pinned
-     to it. A published version is IMMUTABLE — a correction is a new version marked
-     "minor" so it does not force everyone to re-sign. -->
+<!-- Boomtown Platform — Schedule editor (admin) · Version: v1.0 · Date: 2026-08-03 · Ships in: v0.65.0
+     Drag a match to another round or court; drop on an occupied slot and the two swap.
+     It NEVER refuses a move. A director knows things the solver does not — a broken net, a team
+     that asked to finish early — and a tool that blocks them is a tool they route around, back to
+     the spreadsheet. Every move is allowed; the panel reports what it cost.
+     Keyboard parity is not optional: Enter picks up, arrows move, Enter drops, Escape cancels. -->
 <html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Waivers — Boomtown Athletics</title>
+  <title>Schedule editor — Boomtown Athletics</title>
   <script>/* Pre-paint state — collapse + theme (uiux-review §4/§6.4, v0.52.0): read the bt_nav cookie and the saved theme BEFORE the first stylesheet so the rail state AND the theme are right on frame one — no post-paint snap of either. admin-nav.js writes the cookie on rail toggle and bt_theme on theme toggle; the localStorage bt_nav fallback migrates pre-v0.51 sessions. */(function(){try{var m=document.cookie.match(/(?:^|; )bt_nav=([^;]*)/);var v=m?m[1]:((window.localStorage&&localStorage.getItem("bt_nav_collapsed")==="1")?"min":"");if(v==="min")document.documentElement.dataset.nav="min";var t=(window.localStorage&&localStorage.getItem("bt_theme"))||(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.dataset.theme=t;}catch(e){}})();</script>
   <link rel="stylesheet" href="assets/tokens.css?v=0.65.0" />
   <link rel="stylesheet" href="assets/app.css?v=0.65.0" />
   <link rel="stylesheet" href="assets/admin.css?v=0.65.0" />
   <style>
-    .wv-grid { display: grid; gap: 24px; grid-template-columns: minmax(0, 1fr); }
-    @media (min-width: 1100px) { .wv-grid { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); } }
+    .mf-head { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; margin-bottom: 12px; }
+    .mf-head p { max-width: 68ch; }
+    .mf-sub { font-size: 14px; margin: 16px 0 8px; }
+    .mf-row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+    .mf-inline { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 700; }
+    .mf-inline select { font: inherit; font-size: 16px; padding: 10px; min-height: 44px; background: var(--surface-2);
+      color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-control, 8px); }
+    .mf-note { font-size: 12px; color: var(--text-muted); }
 
-    .wv-current { border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
-    .wv-current h2 { margin: 0 0 4px; font-size: 1rem; }
-    .wv-current .wv-meta { color: var(--text-muted); font-size: 13px; }
-    .wv-body-preview {
-      margin-top: 12px; max-height: 200px; overflow-y: auto; white-space: pre-wrap;
-      border: 1px solid var(--border); border-radius: 8px; padding: 12px;
-      font-size: 0.85rem; line-height: 1.5; background: var(--surface-2, transparent);
+    .ed-layout { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 16px; align-items: start; }
+    .ed-grid-scroll { overflow-x: auto; }
+    .ed-grid { border-collapse: separate; border-spacing: 4px; width: 100%; }
+    .ed-grid th { font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; padding: 2px 4px; }
+    .ed-grid th[scope="row"] { font-variant-numeric: tabular-nums; }
+    .ed-slot { background: var(--surface-2); border: 1px dashed var(--border); border-radius: var(--radius-control, 8px);
+      min-width: 150px; height: 62px; padding: 2px; vertical-align: top; }
+    .ed-slot.over { border-style: solid; border-color: var(--accent); background: var(--surface); }
+    .ed-match { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 4px;
+      width: 100%; height: 100%; min-height: 44px; font: inherit; font-size: 12px; text-align: center; cursor: grab;
+      background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-control, 8px); padding: 4px; }
+    .ed-match:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+    .ed-match.dragging { opacity: .5; }
+    .ed-match.carrying { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+    .ed-match[data-played="1"] { border-left: 3px solid var(--positive); }
+    .ed-side { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
+    .ed-vs { color: var(--text-muted); font-size: 10px; }
+    .ed-ref, .ed-score { grid-column: 1 / -1; font-size: 10px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+    .ed-side, .ed-score { font-variant-numeric: tabular-nums; }
+
+    .ed-side-panel, .ed-side { background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-card, 10px); padding: 12px; position: sticky; top: 12px; }
+    .ed-report, .ed-byes { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.5; }
+    .ed-byes { color: var(--text-muted); font-size: 12px; max-height: 220px; overflow-y: auto; }
+    .ed-delta { margin-top: 10px; font-size: 12px; font-weight: 700; color: var(--emphasis); min-height: 1.4em; }
+
+    /* A two-column editor does not fit a phone. The panel moves above the grid, which scrolls. */
+    @media (max-width: 900px) {
+      .ed-layout { grid-template-columns: 1fr; }
+      .ed-side { position: static; order: -1; }
     }
-
-    .wv-table { width: 100%; border-collapse: collapse; }
-    .wv-table th, .wv-table td { text-align: left; padding: 10px 8px; border-top: 1px solid var(--border); vertical-align: middle; }
-    .wv-table th { border-top: 0; color: var(--text-muted); font-size: 13px; }
-    .wv-pill { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; border: 1px solid var(--border); }
-    .wv-pill.active  { color: var(--positive, #4cc38a); border-color: currentColor; }
-    .wv-pill.retired { color: var(--text-muted); }
-    .wv-pill.legacy  { color: var(--warning, #e6a23c); border-color: currentColor; }
-    .wv-pill.minor   { color: var(--text-muted); }
-
-    .wv-form textarea {
-      width: 100%; min-height: 320px; resize: vertical; font: inherit; font-size: 0.9rem; line-height: 1.5;
-      padding: 12px; border-radius: 8px; border: 1px solid var(--border);
-      background: var(--surface, transparent); color: var(--text);
-    }
-    .wv-form .field { margin-bottom: 16px; }
-    .wv-count { color: var(--text-muted); font-size: 13px; margin-top: 6px; }
-    .wv-count.warn { color: var(--warning, #e6a23c); }
-    .wv-form .btn, .wv-table .btn { min-height: 44px; }
-    .wv-hint { color: var(--text-muted); font-size: 13px; margin: 4px 0 0; }
-
-    .wv-impact {
-      border: 1px solid var(--warning, #e6a23c); border-radius: 8px; padding: 12px;
-      font-size: 0.9rem; margin-bottom: 16px;
-    }
-    .wv-impact[hidden] { display: none; }
-
-    dialog.wv-dialog {
-      border: 1px solid var(--border); border-radius: 10px; background: var(--bg); color: var(--text);
-      max-width: 780px; width: calc(100vw - 32px); padding: 20px;
-    }
-    dialog.wv-dialog::backdrop { background: rgba(0,0,0,.55); }
-    dialog.wv-dialog .wv-body-preview { max-height: 55vh; }
-    .wv-dialog-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
-
-    @media (prefers-reduced-motion: no-preference) {
-      dialog.wv-dialog[open] { animation: wvIn 200ms cubic-bezier(0.23, 1, 0.32, 1); }
-      .wv-row-in { animation: wvIn 200ms cubic-bezier(0.23, 1, 0.32, 1); }
-      @keyframes wvIn { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: none; } }
-    }
-    @media (max-width: 760px) {
-      .wv-table thead { display: none; }
-      .wv-table td { display: block; border-top: 0; padding: 4px 8px; }
-      .wv-table tr { display: block; border-top: 1px solid var(--border); padding: 8px 0; }
+    @media (max-width: 430px) {
+      .ed-slot { min-width: 128px; height: 70px; }
+      .ed-match { font-size: 11px; }
     }
   </style>
 </head>
@@ -147,85 +137,42 @@
       <button class="bt-edge" type="button" aria-label="Collapse or expand navigation"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
     </aside>
     <main class="admin-main" id="main">
-      <h1>Waivers</h1>
-      <p class="muted">
-        The waiver members sign lives here, not in the website code. Every signature is pinned to the
-        exact version shown at the time, so publishing new text never changes what somebody already agreed to.
-      </p>
+      <div class="mf-head">
+        <div>
+          <h1>Schedule editor</h1>
+          <p class="muted">Drag a match to another round or court. Drop it on an occupied slot and the two swap. Nothing is blocked — the fairness panel just tells you what the move cost.</p>
+        </div>
+        <div class="mf-row" style="margin:0">
+          <label class="mf-inline">Event
+            <select id="sEvent" aria-label="Choose an event"></select>
+          </label>
+          <button class="btn ghost" id="sReload" type="button">Reload</button>
+        </div>
+      </div>
 
-      <div class="wv-grid">
-        <section aria-labelledby="wvPublishH">
-          <h2 id="wvPublishH" style="font-size:1.05rem">Publish a new version</h2>
-
-          <div class="wv-impact" id="wvImpact" hidden aria-live="polite"></div>
-
-          <div class="wv-form">
-            <div class="field">
-              <label for="wvLabel">Version label *</label>
-              <input id="wvLabel" maxlength="40" autocomplete="off" placeholder="v2" />
-              <p class="wv-hint">Members see this as “you signed v2 on 3 Aug 2026”. Must be new.</p>
-            </div>
-
-            <div class="field">
-              <label for="wvBody">Waiver text *</label>
-              <textarea id="wvBody" spellcheck="true"
-                aria-describedby="wvCount"
-                placeholder="Paste the complete waiver document here, exactly as it should appear to members."></textarea>
-              <div class="wv-count" id="wvCount" aria-live="polite">0 characters</div>
-            </div>
-
-            <div class="field check">
-              <input type="checkbox" id="wvMinor" />
-              <label for="wvMinor">Minor edit — typo or formatting only, do <strong>not</strong> ask members to re-sign</label>
-              <p class="wv-hint">Leave unticked for any change to meaning, obligations, or rights. When in doubt, leave it unticked.</p>
-            </div>
-
-            <div class="field">
-              <label for="wvNotes">Internal note <span style="opacity:.7">(optional, staff only)</span></label>
-              <input id="wvNotes" maxlength="500" autocomplete="off" placeholder="Added arbitration clause per counsel, 26 Jul" />
-            </div>
-
-            <button class="btn" id="wvPublish" style="width:100%">Review &amp; publish</button>
-            <div id="wvMsg" class="msg" role="status" aria-live="polite"></div>
-          </div>
+      <div class="ed-layout">
+        <section class="ed-gridwrap" aria-label="Schedule grid">
+          <p class="mf-note" id="sHint">Tip: click a match, then press an arrow key to move it. Enter picks it up and drops it — no mouse needed.</p>
+          <div id="sGrid" class="ed-grid-scroll"></div>
+          <p class="empty" id="sEmpty" hidden>This event has no schedule yet. Generate one from the tournament page first.</p>
         </section>
 
-        <section aria-labelledby="wvHistoryH">
-          <h2 id="wvHistoryH" style="font-size:1.05rem">Current &amp; history</h2>
-          <div id="wvCurrent" class="wv-current" aria-live="polite">Loading…</div>
-
-          <table class="wv-table">
-            <thead>
-              <tr><th>Version</th><th>Published</th><th>Change</th><th>Signatures</th><th>Text</th></tr>
-            </thead>
-            <tbody id="wvBodyRows"></tbody>
-          </table>
-        </section>
+        <aside class="ed-side" aria-label="Fairness">
+          <h2 class="mf-sub">How fair is it?</h2>
+          <ul id="sReport" class="ed-report"></ul>
+          <div id="sDelta" class="ed-delta" role="status" aria-live="polite"></div>
+          <h2 class="mf-sub">Sitting out</h2>
+          <ol id="sByes" class="ed-byes"></ol>
+        </aside>
       </div>
     </main>
+    </main>
+    </main>
+    </main>
+    </main>
   </div>
-
-  <dialog class="wv-dialog" id="wvViewDlg" aria-labelledby="wvViewTitle">
-    <div class="wv-dialog-head">
-      <h2 id="wvViewTitle" style="margin:0;font-size:1rem">Waiver text</h2>
-      <span class="wv-meta" id="wvViewMeta" style="color:var(--text-muted);font-size:13px"></span>
-    </div>
-    <div class="wv-body-preview" id="wvViewBody" tabindex="0"></div>
-    <div style="margin-top:16px;text-align:right"><button class="btn ghost" id="wvViewClose" style="min-height:44px">Close</button></div>
-  </dialog>
-
-  <dialog class="wv-dialog" id="wvConfirmDlg" aria-labelledby="wvConfirmTitle">
-    <h2 id="wvConfirmTitle" style="margin:0 0 8px;font-size:1rem">Publish this waiver version?</h2>
-    <div id="wvConfirmText" style="font-size:0.95rem;line-height:1.5"></div>
-    <div class="wv-body-preview" id="wvConfirmBody" tabindex="0" style="margin-top:12px"></div>
-    <div style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
-      <button class="btn ghost" id="wvConfirmCancel" style="min-height:44px">Cancel</button>
-      <button class="btn" id="wvConfirmGo" style="min-height:44px">Publish</button>
-    </div>
-  </dialog>
-
   <script src="assets/config.js?v=0.65.0"></script>
   <script src="assets/admin-nav.js?v=0.65.0"></script>
-  <script src="assets/admin-waivers.js?v=0.65.0"></script>
+  <script src="assets/admin-schedule-editor.js?v=0.65.0"></script>
 </body>
 </html>

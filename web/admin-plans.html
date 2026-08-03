@@ -8,9 +8,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Memberships — Boomtown Athletics</title>
   <script>/* Pre-paint state — collapse + theme (uiux-review §4/§6.4, v0.52.0): read the bt_nav cookie and the saved theme BEFORE the first stylesheet so the rail state AND the theme are right on frame one — no post-paint snap of either. admin-nav.js writes the cookie on rail toggle and bt_theme on theme toggle; the localStorage bt_nav fallback migrates pre-v0.51 sessions. */(function(){try{var m=document.cookie.match(/(?:^|; )bt_nav=([^;]*)/);var v=m?m[1]:((window.localStorage&&localStorage.getItem("bt_nav_collapsed")==="1")?"min":"");if(v==="min")document.documentElement.dataset.nav="min";var t=(window.localStorage&&localStorage.getItem("bt_theme"))||(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.dataset.theme=t;}catch(e){}})();</script>
-  <link rel="stylesheet" href="assets/tokens.css?v=0.64.0" />
-  <link rel="stylesheet" href="assets/app.css?v=0.64.0" />
-  <link rel="stylesheet" href="assets/admin.css?v=0.64.0" />
+  <link rel="stylesheet" href="assets/tokens.css?v=0.65.0" />
+  <link rel="stylesheet" href="assets/app.css?v=0.65.0" />
+  <link rel="stylesheet" href="assets/admin.css?v=0.65.0" />
   <style>
     .mp-total { font-size: 26px; font-weight: 800; }
     .mp-total small { display: block; font-size: 12.5px; font-weight: 600; color: var(--text-muted); letter-spacing: .05em; text-transform: uppercase; }
@@ -28,7 +28,7 @@
 </head>
 <body>
   <header class="header chrome-glass no-print">
-    <a class="wordmark" href="admin.html" style="text-decoration:none;color:inherit"><img class="brand-logo" src="assets/logo-boom-icon-512.png?v=0.64.0" alt="" width="22" height="22" />Boomtown <span>Athletics</span></a>
+    <a class="wordmark" href="admin.html" style="text-decoration:none;color:inherit"><img class="brand-logo" src="assets/logo-boom-icon-512.png?v=0.65.0" alt="" width="22" height="22" />Boomtown <span>Athletics</span></a>
     <div class="spacer"></div>
     <select id="orgSwitcher" class="org-switcher" aria-label="Switch organization"></select>
     <a id="btHdrMail" class="btn ghost hdr-mail" href="admin-messages.html" aria-label="Messages">✉</a>
@@ -50,6 +50,7 @@
           <a class="nav-item" href="admin-facility.html" title="Facility Calendar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/><circle cx="19" cy="18" r="2"/></svg><span class="txt">Facility Calendar</span></a>
           <a class="nav-item" href="tournament.html" title="Tournament Ops"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 3v3M16 3v3M8 11h8M8 15h5"/></svg><span class="txt">Tournament Ops</span></a>
           <a class="nav-item" href="admin-league.html" title="League Manager"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 21h8M12 17v4M7 4h10v4a5 5 0 0 1-10 0z"/><path d="M7 6H4a3 3 0 0 0 3 4M17 6h3a3 3 0 0 1-3 4"/></svg><span class="txt">League Manager</span></a>
+          <a class="nav-item" href="admin-schedule-editor.html" title="Schedule Editor"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/><circle cx="19" cy="18" r="2"/></svg><span class="txt">Schedule Editor</span></a>
       </nav>
       <nav class="nav-group" data-key="money">
         <div class="nav-label" role="button" tabindex="0" aria-expanded="true">Money<span class="grp-chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></span></div>
@@ -144,8 +145,8 @@
   </main>
   </div><!-- /admin-layout -->
 
-  <script src="assets/config.js?v=0.64.0"></script>
-  <script src="assets/admin-nav.js?v=0.64.0"></script>
-  <script src="assets/admin-plans.js?v=0.64.0"></script>
+  <script src="assets/config.js?v=0.65.0"></script>
+  <script src="assets/admin-nav.js?v=0.65.0"></script>
+  <script src="assets/admin-plans.js?v=0.65.0"></script>
 </body>
 </html>
