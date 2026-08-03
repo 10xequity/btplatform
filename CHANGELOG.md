@@ -1,5 +1,9 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.57.0 — 2026-08-03
+
+- Auto-recorded by CI on deploy. `/api/health` reported `v0.57.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
+
 ## v0.56.0 — 2026-08-02
 
 - **The admin ✉ badge, unparked since v0.48.0.** `admin-nav.js` v2.17 shipped the header envelope
