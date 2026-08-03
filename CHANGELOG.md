@@ -1,5 +1,9 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.74.0 — 2026-08-03
+
+- Auto-recorded by CI on deploy. `/api/health` reported `v0.74.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
+
 ## v0.73.0 — 2026-08-03
 
 Owner 2026-08-03: *"there needs to be 2 views, an admin view where they are created, then a display
