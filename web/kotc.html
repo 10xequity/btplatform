@@ -20,53 +20,59 @@
   <link rel="stylesheet" href="assets/tokens.css?v=0.85.0" />
   <link rel="stylesheet" href="assets/app.css?v=0.85.0" />
   <style>
-    .kotc-wrap { max-width: 520px; margin: 0 auto; }
+    /* TYPE SCALE — exactly three steps, and the WRAPPER sets the middle one.
+         1.5rem   display : the net number, the one thing you read from arm's length
+         1.2rem   primary : set on .kotc-wrap, so names, the question, the figures and the taps all
+                            share it by inheritance rather than each declaring a near-miss value
+         0.95rem  meta    : round line, game label, checked count
+       Ratios 1.25 and 1.26.
 
-    /* TYPE SCALE — three steps and no more, each roughly a 1.3 ratio from the next:
-         level 1  where you are standing   (the net number)
-         level 2  anything you act on      (the question, the score fields, the yes/no taps)
-         level 3  context only             (round line, game label, checked count)
-       An earlier draft declared six sizes whose small end stepped by only 1.06 — three of them close
-       enough to be indistinguishable, which reads as drift rather than hierarchy. The rejected values
-       are in the v0.85.0 CHANGELOG entry rather than here, deliberately: written out as a list they
-       are a six-value run that a text scanner cannot tell apart from a live scale, and the design hook
-       flagged this comment as the very defect it was describing. `.kotc-game-no` earns its separation
-       from caps and letter-spacing rather than from a fourth size. */
+       The base lives on the wrapper for a specific reason. Two earlier drafts declared only the
+       outliers and let the most-read text on the page — every player name in `.kotc-pair` — inherit
+       the document's 1rem. The RENDERED scale was therefore 0.9 / 1.0 / 1.15 / 1.5, stepping by 1.11
+       and 1.15, while counting the DECLARED values said three clean steps and looked fine. Checking
+       the set I had written instead of the set that ships is the C14 mistake expressed in CSS.
+       Setting the base here means an element that declares nothing lands on `primary` on purpose
+       instead of on a fourth step by accident.
+
+       Buttons and inputs do not inherit font-size, so `.kotc-score` and `.kotc-tap` restate 1.2rem —
+       same value, not a new step. `.kotc-game-no` earns its separation from caps and letter-spacing. */
+    .kotc-wrap { max-width: 520px; margin: 0 auto; font-size: 1.2rem; }
 
     /* The one line that says where you are standing. */
     .kotc-where { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
     .kotc-net { font-size: 1.5rem; font-weight: 700; color: var(--emphasis); }
-    .kotc-round { color: var(--text-muted); font-size: .9rem; }
+    .kotc-round { color: var(--text-muted); font-size: .95rem; }
 
-    /* The question the server is asking. It sits at the same level as the things you act on,
-       because answering it is the only reason anybody opened this link. */
-    .kotc-prompt { font-size: 1.15rem; margin: 0 0 12px; }
+    /* The question the server is asking. It sits at `primary` by inheritance — answering it is the
+       only reason anybody opened this link, so it belongs with the things you act on. */
+    .kotc-prompt { margin: 0 0 12px; }
 
     /* THE SIGNATURE ELEMENT — one net, its games stacked, your own pair marked with a gold dot.
        Gold is a dot here, never text on a light surface (uiux-review §1, measured 1.87:1). */
     .kotc-game { border: 1px solid var(--border); border-radius: var(--radius-card); padding: 12px; margin-bottom: 10px; }
-    .kotc-game-no { font-size: .9rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 8px; }
+    .kotc-game-no { font-size: .95rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 8px; }
     .kotc-side { display: grid; grid-template-columns: 1fr 72px; gap: 10px; align-items: center; margin-top: 6px; }
     .kotc-pair { display: flex; align-items: center; gap: 7px; line-height: 1.3; }
     .kotc-you { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex: none; }
     .kotc-mine { font-weight: 600; }
-    .kotc-score { width: 100%; min-height: 44px; text-align: center; font-size: 1.15rem; font-variant-numeric: tabular-nums;
+    .kotc-score { width: 100%; min-height: 44px; text-align: center; font-size: 1.2rem; font-variant-numeric: tabular-nums;
                   border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface-raised); color: var(--text); }
     .kotc-score:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
     /* Read-only in confirm mode: the numbers are the evidence, not a field to fight with. */
     .kotc-shown { min-height: 44px; display: flex; align-items: center; justify-content: center;
-                  font-size: 1.15rem; font-variant-numeric: tabular-nums; font-weight: 600; }
+                  font-variant-numeric: tabular-nums; font-weight: 600; }
     .kotc-blank { color: var(--text-muted); font-weight: 400; }
 
     /* Thumb-critical: this is the yes/no a player answers standing on grass. 52px (standards §5). */
     .kotc-verdict { display: flex; gap: 10px; margin-top: 4px; }
-    .kotc-verdict .kotc-tap { flex: 1; min-height: 52px; font-size: 1.15rem; }
+    .kotc-verdict .kotc-tap { flex: 1; min-height: 52px; font-size: 1.2rem; }
 
     .kotc-total { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
-    .kotc-total label { display: block; margin-bottom: 6px; font-size: .9rem; }
+    .kotc-total label { display: block; margin-bottom: 6px; font-size: .95rem; }
     .kotc-total-row { display: grid; grid-template-columns: 96px 1fr; gap: 10px; align-items: center; }
 
-    .kotc-checked { color: var(--text-muted); font-size: .9rem; margin-top: 10px; }
+    .kotc-checked { color: var(--text-muted); font-size: .95rem; margin-top: 10px; }
     .kotc-note { margin-top: 10px; }
     .kotc-bad { color: var(--danger); }
 
