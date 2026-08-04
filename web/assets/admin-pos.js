@@ -1,9 +1,15 @@
 /* Boomtown Platform — Point of Sale (admin)
-   File: web/assets/admin-pos.js · Version: v1.0 · Date: 2026-07-25 · Ships in: v0.18.0
+   File: web/assets/admin-pos.js · Version: v1.1 · Date: 2026-08-03 · Ships in: v0.82.0
    Sell (cart with server-side pricing — the client only sends product ids/qty; totals shown
    here are estimates and the server's math wins), Products, Promo Codes (discounts table,
    D-M15-1), Sponsors, Shifts, Insights (R-02 heatmap, POS sales, R-05 coverage).
-   Uses BT_ADMIN helpers; errors always render through fail() (Back + Dashboard, rule 2). */
+   Uses BT_ADMIN helpers; errors always render through fail() (Back + Dashboard, rule 2).
+
+   v1.1 — every row-action button here shipped as `class="ghost"` with no `btn`. `.ghost` is not a
+   standalone class: app.css declares it as `.btn.ghost`, so these rendered as user-agent default
+   controls — grey face, black text — in both themes, which is the owner's "many of the buttons
+   text is not colored properly". They are `btn ghost sm` now: the shared compact variant, which is
+   what a row action is. `button_vocabulary.test.mjs` fails if a modifier ever ships without `btn`. */
 (async function () {
   const { api, guard, esc } = window.BT_ADMIN;
   const me = await guard();
@@ -54,8 +60,8 @@
   function renderCart() {
     $("cart").innerHTML = CART.map((i, n) =>
       `<div class="pos-row"><span class="grow"><span class="k">${esc(i.label)}</span> <span class="v">× ${i.qty} · ${money(i.unit_price_cents)}${i.tax_rate_bp ? " +tax" : ""}</span></span>
-       <button class="ghost" data-less="${n}" aria-label="Remove one ${esc(i.label)}">−</button>
-       <button class="ghost" data-more="${n}" aria-label="Add one ${esc(i.label)}">+</button></div>`).join("")
+       <button class="btn ghost sm" data-less="${n}" aria-label="Remove one ${esc(i.label)}">−</button>
+       <button class="btn ghost sm" data-more="${n}" aria-label="Add one ${esc(i.label)}">+</button></div>`).join("")
       || `<div class="pos-hint">Nothing yet — add a product or a custom line.</div>`;
     $("cartTotal").textContent = money(cartEstimate());
     $("cart").querySelectorAll("[data-more]").forEach((b) => b.onclick = () => { CART[+b.dataset.more].qty++; renderCart(); });
@@ -112,7 +118,7 @@
       `<div class="pos-row"><span class="grow"><span class="k">${money(s.total_cents)}</span>
         <span class="v">${esc(s.contact_name || "Walk-in")} · ${s.item_count} item${s.item_count === 1 ? "" : "s"} · ${s.payment_method} · ${fmt(s.created_at)}</span></span>
        <span class="pill ${s.status}">${s.status}</span>
-       ${s.status === "recorded" ? `<button class="ghost" data-void="${s.id}">Void</button>` : ""}</div>`).join("")
+       ${s.status === "recorded" ? `<button class="btn ghost sm" data-void="${s.id}">Void</button>` : ""}</div>`).join("")
       || `<div class="pos-hint">No sales yet today.</div>`;
     $("salesList").querySelectorAll("[data-void]").forEach((b) => b.onclick = async () => {
       const reason = prompt("Why void this sale? (kept in the record)") || "";
@@ -128,8 +134,8 @@
     $("prodList").innerHTML = PRODUCTS.map((p) =>
       `<div class="pos-row"><span class="grow"><span class="k">${esc(p.name)}</span>
         <span class="v">${money(p.price_cents)}${p.tax_rate_bp ? " · " + (p.tax_rate_bp / 100).toFixed(2) + "% tax" : ""}${p.stock !== null && p.stock !== undefined ? " · stock " + p.stock : ""}${p.active ? "" : " · inactive"}</span></span>
-       <button class="ghost" data-edit="${p.id}">Edit</button>
-       <button class="ghost" data-toggle="${p.id}">${p.active ? "Deactivate" : "Activate"}</button></div>`).join("")
+       <button class="btn ghost sm" data-edit="${p.id}">Edit</button>
+       <button class="btn ghost sm" data-toggle="${p.id}">${p.active ? "Deactivate" : "Activate"}</button></div>`).join("")
       || `<div class="pos-hint">No products yet.</div>`;
     $("prodList").querySelectorAll("[data-edit]").forEach((b) => b.onclick = () => {
       const p = PRODUCTS.find((x) => x.id === +b.dataset.edit); editProd = p.id;
@@ -163,8 +169,8 @@
     $("promoList").innerHTML = r.data.promos.map((p) =>
       `<div class="pos-row"><span class="grow"><span class="k">${esc(p.code)}</span>
         <span class="v">${p.kind === "percent" ? p.amount + "% off" : money(p.amount) + " off"} · used ${p.used_count}${p.usage_cap != null ? "/" + p.usage_cap : ""}${p.expires_at ? " · until " + fmt(p.expires_at) : ""}${p.active ? "" : " · inactive"}</span></span>
-       <button class="ghost" data-pedit="${p.id}">Edit</button>
-       <button class="ghost" data-pdel="${p.id}">Delete</button></div>`).join("")
+       <button class="btn ghost sm" data-pedit="${p.id}">Edit</button>
+       <button class="btn ghost sm" data-pdel="${p.id}">Delete</button></div>`).join("")
       || `<div class="pos-hint">No codes yet.</div>`;
     $("promoList").querySelectorAll("[data-pedit]").forEach((b) => b.onclick = () => {
       const p = r.data.promos.find((x) => x.id === +b.dataset.pedit); editPromo = p.id;
@@ -203,8 +209,8 @@
     $("spList").innerHTML = r.data.sponsors.map((s) =>
       `<div class="pos-row"><span class="grow"><span class="k">${esc(s.name)}</span>
         <span class="v">${esc(s.placement)}${s.starts_at ? " · from " + fmt(s.starts_at) : ""}${s.ends_at ? " · until " + fmt(s.ends_at) : ""}${s.active ? "" : " · inactive"}</span></span>
-       <button class="ghost" data-sedit="${s.id}">Edit</button>
-       <button class="ghost" data-sdel="${s.id}">Delete</button></div>`).join("")
+       <button class="btn ghost sm" data-sedit="${s.id}">Edit</button>
+       <button class="btn ghost sm" data-sdel="${s.id}">Delete</button></div>`).join("")
       || `<div class="pos-hint">No sponsors yet.</div>`;
     $("spList").querySelectorAll("[data-sedit]").forEach((b) => b.onclick = () => {
       const s = r.data.sponsors.find((x) => x.id === +b.dataset.sedit); editSp = s.id;
@@ -240,8 +246,8 @@
     $("shList").innerHTML = r.data.shifts.map((s) =>
       `<div class="pos-row"><span class="grow"><span class="k">${esc(s.who || "—")}</span>
         <span class="v">${s.role_label ? esc(s.role_label) + " · " : ""}${fmt(s.starts_at)} → ${fmt(s.ends_at)}${s.note ? " · " + esc(s.note) : ""}</span></span>
-       <button class="ghost" data-hedit="${s.id}">Edit</button>
-       <button class="ghost" data-hdel="${s.id}">Delete</button></div>`).join("")
+       <button class="btn ghost sm" data-hedit="${s.id}">Edit</button>
+       <button class="btn ghost sm" data-hdel="${s.id}">Delete</button></div>`).join("")
       || `<div class="pos-hint">No shifts in the next two weeks.</div>`;
     $("shList").querySelectorAll("[data-hedit]").forEach((b) => b.onclick = () => {
       const s = r.data.shifts.find((x) => x.id === +b.dataset.hedit); editSh = s.id;

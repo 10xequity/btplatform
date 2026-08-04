@@ -1,17 +1,19 @@
 <!DOCTYPE html>
-<!-- Boomtown Platform — Point of Sale (M15) · Version: v1.0 · Date: 2026-07-25 · Ships in: v0.18.0
+<!-- Boomtown Platform — Point of Sale (M15) · Version: v1.1 · Date: 2026-08-03 · Ships in: v0.82.0
      Sell (create sale with server-side pricing + promo code), Products, Promo Codes,
      Sponsors, Shifts, Insights (R-02 attendance heatmap + POS sales + R-05 shift coverage).
-     Square payments record as SANDBOX until the owner flips standing rule 1. -->
+     Square payments record as SANDBOX until the owner flips standing rule 1.
+     v1.1 — the thirteen buttons on this page carried `primary`/`secondary`/`ghost` with no `btn`,
+     so they rendered as user-agent default controls in both themes. See the note in <style>. -->
 <html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Point of Sale — Boomtown Athletics</title>
   <script>/* Pre-paint state — collapse + theme (uiux-review §4/§6.4, v0.52.0): read the bt_nav cookie and the saved theme BEFORE the first stylesheet so the rail state AND the theme are right on frame one — no post-paint snap of either. admin-nav.js writes the cookie on rail toggle and bt_theme on theme toggle; the localStorage bt_nav fallback migrates pre-v0.51 sessions. */(function(){try{var m=document.cookie.match(/(?:^|; )bt_nav=([^;]*)/);var v=m?m[1]:((window.localStorage&&localStorage.getItem("bt_nav_collapsed")==="1")?"min":"");if(v==="min")document.documentElement.dataset.nav="min";var t=(window.localStorage&&localStorage.getItem("bt_theme"))||(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.dataset.theme=t;}catch(e){}})();</script>
-  <link rel="stylesheet" href="assets/tokens.css?v=0.75.0" />
-  <link rel="stylesheet" href="assets/app.css?v=0.75.0" />
-  <link rel="stylesheet" href="assets/admin.css?v=0.75.0" />
+  <link rel="stylesheet" href="assets/tokens.css?v=0.82.0" />
+  <link rel="stylesheet" href="assets/app.css?v=0.82.0" />
+  <link rel="stylesheet" href="assets/admin.css?v=0.82.0" />
   <style>
     .pos-tabs { display: flex; gap: 4px; flex-wrap: wrap; margin: 0 0 16px; border-bottom: 1px solid var(--border); }
     .pos-tab { min-height: 44px; padding: 10px 16px; font: inherit; font-weight: 700; color: var(--text-muted);
@@ -48,13 +50,23 @@
     .hm .cell { aspect-ratio: 1; border-radius: 3px; background: var(--surface-raised); }
     .hm .lab { font-size: 11px; color: var(--text-muted); display: flex; align-items: center; }
     .hm .hlab { font-size: 10px; color: var(--text-muted); text-align: center; }
-    button.primary, button.secondary, button.ghost { min-height: 44px; }
+    /* v0.82.0 — `button.primary, button.secondary, button.ghost { min-height: 44px }` stood here,
+       and min-height was the ONLY styling those buttons ever had (present in this page's first
+       commit, 083cb32 — never a regression). `.primary`, `.secondary` and `.ghost` are not
+       standalone classes anywhere in the CSS: app.css declares them as `.btn.primary`, `.btn.ghost`
+       and so on, so a button carrying the modifier WITHOUT `btn` inherited nothing and rendered as
+       a user-agent default control — grey face, black text — in both themes. That is the owner's
+       "many of the buttons text is not colored properly". The buttons now carry `btn`, so the
+       shared set supplies colour, padding, radius, focus ring and press feedback, and the rule is
+       redundant: `.btn` already sets min-height 44px. Recorded as a comment rather than an empty
+       selector, because an empty selector is an invitation to put the mistake back.
+       `button_vocabulary.test.mjs` now fails if a modifier ships without `btn`. */
     button:active { transform: scale(0.97); transition: transform 120ms cubic-bezier(0.23,1,0.32,1); }
   </style>
 </head>
 <body>
     <header class="header chrome-glass no-print">
-    <a class="wordmark" href="admin.html" style="text-decoration:none;color:inherit"><img class="brand-logo" src="assets/logo-boom-icon-512.png?v=0.75.0" alt="" width="22" height="22" />Boomtown <span>Athletics</span></a>
+    <a class="wordmark" href="admin.html" style="text-decoration:none;color:inherit"><img class="brand-logo" src="assets/logo-boom-icon-512.png?v=0.82.0" alt="" width="22" height="22" />Boomtown <span>Athletics</span></a>
     <div class="spacer"></div>
     <select id="orgSwitcher" class="org-switcher" aria-label="Switch organization"></select>
     <a id="btHdrMail" class="btn ghost hdr-mail" href="admin-messages.html" aria-label="Messages">✉</a>
@@ -151,18 +163,18 @@
             <label for="sellProduct">Add a product</label>
             <div style="display:flex; gap:8px;">
               <select id="sellProduct" class="grow"></select>
-              <button class="secondary" id="sellAdd" type="button">Add</button>
+              <button class="btn ghost sm" id="sellAdd" type="button">Add</button>
             </div>
             <label for="sellCustomLabel">Or a custom line</label>
             <div style="display:flex; gap:8px; flex-wrap:wrap;">
               <input id="sellCustomLabel" class="grow" placeholder="" aria-label="Custom item label" />
               <input id="sellCustomPrice" type="number" min="0" step="0.01" style="max-width:120px" aria-label="Custom item price in dollars" />
-              <button class="secondary" id="sellAddCustom" type="button">Add</button>
+              <button class="btn ghost sm" id="sellAddCustom" type="button">Add</button>
             </div>
             <label for="sellPromo">Promo code (optional)</label>
             <div style="display:flex; gap:8px;">
               <input id="sellPromo" class="grow" autocapitalize="characters" />
-              <button class="secondary" id="sellPromoCheck" type="button">Check</button>
+              <button class="btn ghost sm" id="sellPromoCheck" type="button">Check</button>
             </div>
             <div id="promoState" class="pos-hint" aria-live="polite"></div>
             <label for="sellMethod">Payment</label>
@@ -179,8 +191,8 @@
               <span class="k">Total</span><span class="pos-total" id="cartTotal">$0.00</span>
             </div>
             <div class="pos-actions">
-              <button class="primary" id="sellGo" type="button">Record sale</button>
-              <button class="ghost" id="sellClear" type="button">Clear</button>
+              <button class="btn" id="sellGo" type="button">Record sale</button>
+              <button class="btn ghost" id="sellClear" type="button">Clear</button>
             </div>
             <div id="sellMsg" class="pos-hint" aria-live="polite"></div>
             <h2 style="margin-top:20px;">Recent sales</h2>
@@ -198,8 +210,8 @@
             <label for="prodTax">Tax rate (%) — leave 0 for none</label><input id="prodTax" type="number" min="0" step="0.01" value="0" />
             <label for="prodStock">Stock count — leave blank to skip tracking</label><input id="prodStock" type="number" step="1" />
             <div class="pos-actions">
-              <button class="primary" id="prodSave" type="button">Save product</button>
-              <button class="ghost" id="prodCancel" type="button" hidden>Cancel edit</button>
+              <button class="btn" id="prodSave" type="button">Save product</button>
+              <button class="btn ghost" id="prodCancel" type="button" hidden>Cancel edit</button>
             </div>
             <div id="prodMsg" class="pos-hint" aria-live="polite"></div>
           </div>
@@ -219,8 +231,8 @@
             <label for="pcStart">Starts (optional)</label><input id="pcStart" type="datetime-local" />
             <label for="pcEnd">Expires (optional)</label><input id="pcEnd" type="datetime-local" />
             <div class="pos-actions">
-              <button class="primary" id="pcSave" type="button">Save code</button>
-              <button class="ghost" id="pcCancel" type="button" hidden>Cancel edit</button>
+              <button class="btn" id="pcSave" type="button">Save code</button>
+              <button class="btn ghost" id="pcCancel" type="button" hidden>Cancel edit</button>
             </div>
             <div id="pcMsg" class="pos-hint" aria-live="polite"></div>
             <p class="pos-hint">Codes work at the register today; registration checkout picks them up in a later release.</p>
@@ -241,8 +253,8 @@
             <label for="spStart">Runs from (optional)</label><input id="spStart" type="datetime-local" />
             <label for="spEnd">Runs until (optional)</label><input id="spEnd" type="datetime-local" />
             <div class="pos-actions">
-              <button class="primary" id="spSave" type="button">Save sponsor</button>
-              <button class="ghost" id="spCancel" type="button" hidden>Cancel edit</button>
+              <button class="btn" id="spSave" type="button">Save sponsor</button>
+              <button class="btn ghost" id="spCancel" type="button" hidden>Cancel edit</button>
             </div>
             <div id="spMsg" class="pos-hint" aria-live="polite"></div>
             <p class="pos-hint">Active sponsors are served at <code>/api/sponsors?placement=…</code> — the site slots render whatever is live in its window.</p>
@@ -261,8 +273,8 @@
             <label for="shEnd">Ends</label><input id="shEnd" type="datetime-local" />
             <label for="shNote">Note (optional)</label><input id="shNote" />
             <div class="pos-actions">
-              <button class="primary" id="shSave" type="button">Save shift</button>
-              <button class="ghost" id="shCancel" type="button" hidden>Cancel edit</button>
+              <button class="btn" id="shSave" type="button">Save shift</button>
+              <button class="btn ghost" id="shCancel" type="button" hidden>Cancel edit</button>
             </div>
             <div id="shMsg" class="pos-hint" aria-live="polite"></div>
           </div>
@@ -282,9 +294,9 @@
       </section>
     </main>
   </div>
-  <script src="assets/config.js?v=0.75.0"></script>
-  <script src="assets/admin.js?v=0.75.0"></script>
-  <script src="assets/admin-nav.js?v=0.75.0"></script>
-  <script src="assets/admin-pos.js?v=0.75.0" defer></script>
+  <script src="assets/config.js?v=0.82.0"></script>
+  <script src="assets/admin.js?v=0.82.0"></script>
+  <script src="assets/admin-nav.js?v=0.82.0"></script>
+  <script src="assets/admin-pos.js?v=0.82.0" defer></script>
 </body>
 </html>
