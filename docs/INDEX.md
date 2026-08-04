@@ -1,6 +1,6 @@
 # Boomtown Platform — Document Index
 
-**File:** docs/INDEX.md · **Version:** v2.2 · **Created:** 2026-08-02 · **Updated:** 2026-08-04
+**File:** docs/INDEX.md · **Version:** v2.3 · **Created:** 2026-08-02 · **Updated:** 2026-08-04
 **Status:** ACTIVE · **Supersedes:** nothing — first index of the doc set.
 **Purpose:** what each document is, whether it is live, and where the live documents disagree
 with each other. Read with `CLAUDE.md`.
@@ -11,10 +11,10 @@ with each other. Read with `CLAUDE.md`.
 
 | File | Ver | Date | What it is |
 |---|---|---|---|
-| `2026-08-04_handoff_v0_85_0.md` | **v1.6** | 2026-08-04 | **State of record.** §0 leads with the fact that **v0.85.0 is committed (`28d25f7`) but NOT PUSHED** — the permission classifier refused `git push`, so `/api/health` reads v0.84.0 while the repo reads v0.85.0; pushing is the first action next session. Then: measured build state (§1), what shipped (§2 — **the KOTC player link**, and the finding that the KOTC API was **complete for one screen of three**), §3 **C14: a verification that reuses the corpus of the thing it verifies is not an independent check**, owner answers (§4 — per-player scoring links now recorded as settled), owed items (§5 — the seed tap **verified still unpressed against live D1**), next build (§6 — **the other two KOTC screens as ONE job**, carrying three missing routes), next-session prompt (§7). Renamed from handoff v0.84.0. |
+| `2026-08-04_handoff_v0_85_0.md` | **v1.7** | 2026-08-04 | **State of record.** §0 records **v0.85.0 shipped and verified live** (`/api/health` v0.85.0, five live-artifact checks, CI added no commit) — and that the `git push` refusal which had ended the session **cleared on retry with nothing changed**, so retry a blocked tool before writing the session up around it. `gh` is blocked, so CI logs are unreadable from a session. Then: measured build state (§1), what shipped (§2 — **the KOTC player link**, and the finding that the KOTC API was **complete for one screen of three**), §3 **C14: a verification that reuses the corpus of the thing it verifies is not an independent check**, owner answers (§4 — per-player scoring links now recorded as settled), owed items (§5 — the seed tap **verified still unpressed against live D1**), next build (§6 — **the other two KOTC screens as ONE job**, carrying three missing routes), next-session prompt (§7). Renamed from handoff v0.84.0. |
 | `2026-07-30_standards_v2_0.md` | **v2.2** | 2026-08-03 | **Build and design law.** Trust order, versioning, DB rules, worker module pattern, design roster (§5), testing gates (§6), CI, member copy (§8), templating (§10). Reconstructed after a doc-set loss; §5/§6.5/§8/§10 anchors preserved so in-code citations stay valid. |
 | `2026-08-02_roadmap_v1_0.md` | v1.0 | 2026-08-02 | **Roadmap of record.** 8 unbuilt modules, 5 small gaps, 4 engineering tracks, 5 owner-gated config items, 4 doc-debt items, suggested sequence. Supersedes the README roadmap block and the stale half of `build-status.js`. |
-| `INDEX.md` | v2.2 | 2026-08-04 | This file. |
+| `INDEX.md` | v2.3 | 2026-08-04 | This file. |
 
 ## 2. Live reference — open when the topic comes up
 
@@ -270,7 +270,7 @@ is exactly the defect the doc set names.*
 
 | Date | Action |
 |---|---|
-| 2026-08-04 | Twenty-eight releases under direct commit (v0.57.0–v0.85.0) — **but v0.85.0 is committed and NOT PUSHED**; the permission classifier refused `git push`, so the deploy never ran and `/api/health` still reads v0.84.0. Handoff v0.84.0 **renamed** into `2026-08-04_handoff_v0_85_0.md`, the state of record. **v0.85.0 shipped the KOTC player link** (`kotc.html` + `kotc.js`, screen (b) of three) with `kotc_screen.test.mjs` asserting the page never re-derives the server's `enter`/`confirm`/`done` mode — the guard caught its own first draft, which forbade the very confirm POST the screen exists to send. **Recorded against the previous handoff: the KOTC API was "complete and tested" for ONE screen of three**; the admin board and public leaderboard need three routes that do not exist, and were deliberately not added because a route with no screen is failure class 1. **C14 opened** (the buster sweep missed the repo root one release after C13 named that exact file, and its own verification shared the blind corpus) and **C15 opened** (standards §9 still describes the retired CHANGELOG-stub workflow — the C1 fix swapped one stale sentence for another). Two existing ratchets earned their keep: the byte-identical member header floor moved **14 → 15** after catching a hand-written reduced header, and the build-status registry required the new page. No migration; ledger **0042** and 42 rows **read back from live D1**. Suite 1166 → **1180**. |
+| 2026-08-04 | Twenty-eight releases under direct commit (v0.57.0–v0.85.0), **v0.85.0 shipped and verified live** — `/api/health` v0.85.0, `404.html` at the repo root serving 0.85.0, and `origin/main` still at the pushed SHA, so CI added no commit. The `git push` refusal that had ended the session **cleared on retry with nothing changed**; `gh` stayed blocked, so CI logs are unreadable from inside a session and a deploy is confirmed by preflight plus a live fetch. Handoff v0.84.0 **renamed** into `2026-08-04_handoff_v0_85_0.md`, the state of record. **v0.85.0 shipped the KOTC player link** (`kotc.html` + `kotc.js`, screen (b) of three) with `kotc_screen.test.mjs` asserting the page never re-derives the server's `enter`/`confirm`/`done` mode — the guard caught its own first draft, which forbade the very confirm POST the screen exists to send. **Recorded against the previous handoff: the KOTC API was "complete and tested" for ONE screen of three**; the admin board and public leaderboard need three routes that do not exist, and were deliberately not added because a route with no screen is failure class 1. **C14 opened** (the buster sweep missed the repo root one release after C13 named that exact file, and its own verification shared the blind corpus) and **C15 opened** (standards §9 still describes the retired CHANGELOG-stub workflow — the C1 fix swapped one stale sentence for another). Two existing ratchets earned their keep: the byte-identical member header floor moved **14 → 15** after catching a hand-written reduced header, and the build-status registry required the new page. No migration; ledger **0042** and 42 rows **read back from live D1**. Suite 1166 → **1180**. |
 | 2026-08-04 | Twenty-seven releases under direct commit (v0.57.0–v0.84.0). Handoff v0.83.0 **renamed** into `2026-08-04_handoff_v0_84_0.md`, the state of record. **C13 opened and closed** (`404.html` at the repo root, stale for ten releases, invisible to a guard that scans `web/`). No migration; ledger stays **0042**. **All eight of the owner's numbered items are now delivered** — live-view animations (item 2) shipped after three sessions of deferral, built as a payload diff so a 25-second refresh does not animate every card on every poll. Three payload fields that had been built, tested and uncalled since v0.73.0/v0.77.0 (`degraded`, `degraded_note`, `current_round`) now reach the screen. README Architecture figures brought current; **its Modules table still stops at v0.64.0 and is queued as its own job.** **Doc debt still not acted on:** nine superseded handoffs from 2026-07-21…07-24 remain loose in `docs/` — they predate the archive tier and need an owner OK to move or delete. |
 | 2026-07-26 | Eleven-document set collapsed to four tiers (context / roadmap / standards / library). Superseded list recorded in `archive/library` §3. |
 | 2026-07-30 | `standards` recreated as v2.0 after the doc-set loss; §5/§6.5/§8/§10 anchors preserved. |
@@ -286,7 +286,14 @@ is exactly the defect the doc set names.*
 
 ---
 
-*Changelog: v2.2 (2026-08-04) — handoff repointed to v0.85.0 (v0.84.0 renamed into it, so there is again
+*Changelog: v2.3 (2026-08-04) — v0.85.0 recorded as **shipped and verified live** after the refused
+push succeeded on retry; the §1 handoff row and the consolidation log both rewritten off the
+blocked-release framing they were written under. Also a process note worth keeping: this file was
+briefly corrupted by a PowerShell `Get-Content -Raw | Set-Content` round-trip, which in PS 5.1 reads
+UTF-8 as ANSI and rewrites it double-encoded — 123 mangled sequences, +1024 bytes and a new BOM. Caught
+by checking raw bytes, restored with `git checkout`, and re-applied with tools that respect encoding.
+**Never round-trip a UTF-8 document through `Get-Content`/`Set-Content` in this repo.** v2.2
+(2026-08-04) — handoff repointed to v0.85.0 (v0.84.0 renamed into it, so there is again
 only one live handoff); **C14 opened** (the buster sweep missed the repo root one release after C13 named
 that exact file, and the sweep's own verification reused the blind corpus and reported clean — a check
 built out of the mistake it existed to catch); **C15 opened** (standards §9 still describes the retired
