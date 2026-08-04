@@ -32,6 +32,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync, readdirSync } from "node:fs";
 import { migrationNumber, isNonMigration, gateDecision, scanMigrations, pad, DEFAULT_DIR }
   from "../scripts/schema-gate.mjs";
 
@@ -157,4 +158,60 @@ test("the real db/migrations directory parses cleanly and reports 0042", () => {
   assert.deepEqual(unparseable, [], `unparseable migration filenames: ${unparseable.join(", ")}`);
   assert.equal(highest, 42);
   assert.ok(files >= 20, `expected at least 20 .sql files, saw ${files}`);
+});
+
+/* ══════════ THE HARNESS SCHEMA MUST COVER EVERY TABLE THE MIGRATIONS CREATE ══════════
+   Added v0.81.0, after `journey-schema.sql` was found carrying 46 of live D1's 97 tables while its own
+   header claimed to be "the real production schema, read verbatim from live".
+
+   HOW THAT SURVIVED 1127 PASSING TESTS is the part that matters. Every test needing one of the missing
+   tables built its own fixture by hand, so it passed. Every test not needing one never asked. NOTHING
+   compared the file against the thing it claims to mirror — so the gap was not a failing test, it was
+   the ABSENCE of a test, and absences never go red.
+
+   The cost: 29 endpoints across 16 admin pages returned 500 in a harness that reported itself healthy.
+   A page whose first fetch 500s stops rendering, which is exactly what "the screens all terminate"
+   describes. With the schema complete, all 29 return 2xx and nothing else changed.
+
+   This guard reads the MIGRATIONS rather than live D1, deliberately: it must run offline and in CI
+   without a D1 token, and the migrations are the definition of what live is supposed to contain. */
+
+test("journey-schema.sql contains every table the migrations create", () => {
+  const migDir = new URL("../../db/migrations/", import.meta.url);
+  const created = new Map();          // table -> migration that created it
+  /* COMMENTS ARE STRIPPED FIRST, and the first draft of this guard did not do that — it read the line
+     "-- Full CREATE TABLE statements are documented below." in the foundation migration and reported a
+     table called `statements` that has never existed. A guard that scans prose as if it were code
+     reports defects nobody can fix, and the cure for that is people stopping trusting the guard. */
+  const stripComments = (sql) => sql.replace(/--[^\n]*/g, "").replace(/\/\*[\s\S]*?\*\//g, "");
+  for (const f of readdirSync(migDir).filter((x) => x.endsWith(".sql")).sort()) {
+    const sql = stripComments(readFileSync(new URL(f, migDir), "utf8"));
+    for (const m of sql.matchAll(/CREATE TABLE (?:IF NOT EXISTS )?[`"']?([A-Za-z_][A-Za-z0-9_]*)[`"']?/gi)) {
+      if (!created.has(m[1])) created.set(m[1], f);
+    }
+  }
+  const schema = readFileSync(new URL("../testkit/journey-schema.sql", import.meta.url), "utf8");
+  const inHarness = new Set(
+    [...schema.matchAll(/CREATE TABLE (?:IF NOT EXISTS )?[`"']?([A-Za-z_][A-Za-z0-9_]*)[`"']?/gi)].map((m) => m[1]));
+
+  assert.ok(created.size >= 40, `expected the migrations to create 40+ tables, found ${created.size}`);
+  const missing = [...created.keys()].filter((t) => !inHarness.has(t)).sort();
+  assert.deepEqual(missing, [],
+    "these tables exist in db/migrations but NOT in the test harness schema, so every endpoint that " +
+    "touches them returns 500 in tests while looking healthy:\n  " +
+    missing.map((t) => `${t} (${created.get(t)})`).join("\n  "));
+});
+
+test("NC: that coverage check can fail — a table removed from the harness is caught", () => {
+  // The assertion above is `deepEqual(missing, [])`, which is also what a check reading the wrong
+  // directory returns. So a real table is removed from a copy of the schema and must be reported.
+  const schema = readFileSync(new URL("../testkit/journey-schema.sql", import.meta.url), "utf8");
+  assert.match(schema, /CREATE TABLE (?:IF NOT EXISTS )?announcements\b/i, "precondition: the table is there");
+
+  const mutated = schema.replace(/CREATE TABLE (?:IF NOT EXISTS )?announcements\b/i, "CREATE TABLE zzz_gone");
+  assert.notEqual(mutated, schema, "the mutation must land, or this control proves nothing");
+  const inMutated = new Set(
+    [...mutated.matchAll(/CREATE TABLE (?:IF NOT EXISTS )?[`"']?([A-Za-z_][A-Za-z0-9_]*)[`"']?/gi)].map((m) => m[1]));
+  assert.ok(!inMutated.has("announcements"), "a removed table must be detectable as missing");
+  assert.ok(inMutated.has("campaigns"), "and its neighbours must be unaffected");
 });

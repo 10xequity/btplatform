@@ -223,26 +223,11 @@ test("NC-5: the call-site scope guard can fail", () => {
 
 /* ============================ 4. live routes ============================ */
 
-const SCHEMA = readFileSync(new URL("../testkit/journey-schema.sql", import.meta.url), "utf8") + `
-CREATE TABLE passes (id INTEGER PRIMARY KEY AUTOINCREMENT, org_id INTEGER NOT NULL, contact_id INTEGER NOT NULL,
-  name TEXT NOT NULL, kind TEXT NOT NULL DEFAULT 'session', source TEXT NOT NULL DEFAULT 'purchase',
-  total_sessions INTEGER, starts_at TEXT NOT NULL DEFAULT (datetime('now')), expires_at TEXT, price_cents INTEGER,
-  tier_id INTEGER, sale_id INTEGER, note TEXT, created_by INTEGER,
-  created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')), deleted_at TEXT);
-CREATE TABLE pass_redemptions (id INTEGER PRIMARY KEY AUTOINCREMENT, org_id INTEGER NOT NULL, pass_id INTEGER NOT NULL,
-  contact_id INTEGER NOT NULL, event_id INTEGER, attendance_id INTEGER, guest_name TEXT,
-  redeemed_at TEXT NOT NULL DEFAULT (datetime('now')), redeemed_by INTEGER, reversed_at TEXT, reversed_by INTEGER,
-  reverse_reason TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), deleted_at TEXT);
-CREATE TABLE staff_rates (id INTEGER PRIMARY KEY AUTOINCREMENT, org_id INTEGER NOT NULL, contact_id INTEGER NOT NULL,
-  role_label TEXT, pay_basis TEXT NOT NULL DEFAULT 'hourly', rate_cents INTEGER NOT NULL,
-  effective_from TEXT NOT NULL DEFAULT (datetime('now')), effective_to TEXT, note TEXT, created_by INTEGER,
-  created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')), deleted_at TEXT);
-CREATE TABLE staff_shifts (id INTEGER PRIMARY KEY AUTOINCREMENT, org_id INTEGER NOT NULL, user_id INTEGER,
-  name_snapshot TEXT, role_label TEXT, starts_at TEXT NOT NULL, ends_at TEXT NOT NULL, note TEXT,
-  created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')), deleted_at TEXT,
-  contact_id INTEGER, pay_basis TEXT, pay_rate_cents INTEGER, pay_units REAL, pay_amount_cents INTEGER,
-  approved_at TEXT, approved_by INTEGER, event_id INTEGER);
-`;
+/* The tables this file needs now come from `journey-schema.sql`, which since v0.81.0 carries every
+   table the migrations create. They used to be hand-rolled here, appended to the schema string —
+   which is precisely how the harness came to be missing half the database without anything going
+   red: a test that invents its own schema passes whatever the real one looks like. */
+const SCHEMA = readFileSync(new URL("../testkit/journey-schema.sql", import.meta.url), "utf8");
 const ORIGIN = "https://boomtown.test";
 
 function boot() {

@@ -144,24 +144,13 @@ test("NC-5: the caller-only guard can fail", () => {
 
 /* ============================ 3. live routes ============================ */
 
+/* The tables this file needs now come from `journey-schema.sql`, which since v0.81.0 carries every
+   table the migrations create. They used to be hand-rolled here, appended to the schema string —
+   which is precisely how the harness came to be missing half the database without anything going
+   red: a test that invents its own schema passes whatever the real one looks like. */
 const SCHEMA = readFileSync(new URL("../testkit/journey-schema.sql", import.meta.url), "utf8") + `
-CREATE TABLE tryout_profiles (id INTEGER PRIMARY KEY AUTOINCREMENT, org_id INTEGER NOT NULL, event_id INTEGER NOT NULL,
-  contact_id INTEGER NOT NULL, positions TEXT NOT NULL DEFAULT '[]', age_groups TEXT NOT NULL DEFAULT '[]',
-  height_cm INTEGER, prev_club TEXT, jersey_size TEXT, player_note TEXT,
-  created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')), deleted_at TEXT);
 CREATE UNIQUE INDEX ux_tryout_profiles_live ON tryout_profiles (org_id, event_id, contact_id) WHERE deleted_at IS NULL;
-CREATE TABLE tryout_evaluations (id INTEGER PRIMARY KEY AUTOINCREMENT, org_id INTEGER NOT NULL, event_id INTEGER NOT NULL,
-  contact_id INTEGER NOT NULL, evaluator_contact_id INTEGER NOT NULL,
-  rating INTEGER CHECK (rating IS NULL OR (rating >= 1 AND rating <= 5)), notes TEXT,
-  verdict TEXT NOT NULL DEFAULT 'undecided' CHECK (verdict IN ('offer','no_offer','undecided')),
-  created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')), deleted_at TEXT);
 CREATE UNIQUE INDEX ux_tryout_eval_live ON tryout_evaluations (org_id, event_id, contact_id, evaluator_contact_id) WHERE deleted_at IS NULL;
-CREATE TABLE tryout_squads (id INTEGER PRIMARY KEY AUTOINCREMENT, org_id INTEGER NOT NULL, event_id INTEGER NOT NULL,
-  name TEXT NOT NULL, age_group TEXT, colour TEXT, target_size INTEGER NOT NULL DEFAULT 10,
-  needs_json TEXT NOT NULL DEFAULT '{}', sort_order INTEGER NOT NULL DEFAULT 0,
-  created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')), deleted_at TEXT);
-CREATE TABLE tryout_squad_members (id INTEGER PRIMARY KEY AUTOINCREMENT, org_id INTEGER NOT NULL, squad_id INTEGER NOT NULL,
-  contact_id INTEGER NOT NULL, position TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), deleted_at TEXT);
 CREATE UNIQUE INDEX ux_tryout_squad_member_live ON tryout_squad_members (org_id, contact_id, squad_id) WHERE deleted_at IS NULL;
 `;
 const ORIGIN = "https://boomtown.test";

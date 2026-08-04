@@ -159,20 +159,12 @@ test("NC-5: the member_visible guard can fail", () => {
 
 /* ============================ 3. live routes ============================ */
 
+/* The tables this file needs now come from `journey-schema.sql`, which since v0.81.0 carries every
+   table the migrations create. They used to be hand-rolled here, appended to the schema string —
+   which is precisely how the harness came to be missing half the database without anything going
+   red: a test that invents its own schema passes whatever the real one looks like. */
 const SCHEMA = readFileSync(new URL("../testkit/journey-schema.sql", import.meta.url), "utf8") + `
-CREATE TABLE member_fields (
-  id INTEGER PRIMARY KEY AUTOINCREMENT, org_id INTEGER NOT NULL, field_key TEXT NOT NULL, label TEXT NOT NULL,
-  field_type TEXT NOT NULL DEFAULT 'text'
-    CHECK (field_type IN ('text','textarea','email','phone','number','date','select','checkbox')),
-  options_json TEXT NOT NULL DEFAULT '[]', help_text TEXT, required INTEGER NOT NULL DEFAULT 0,
-  member_visible INTEGER NOT NULL DEFAULT 1, show_on_forms INTEGER NOT NULL DEFAULT 0,
-  active INTEGER NOT NULL DEFAULT 1, sort_order INTEGER NOT NULL DEFAULT 0,
-  created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')), deleted_at TEXT);
 CREATE UNIQUE INDEX ux_member_fields_live_key ON member_fields (org_id, field_key) WHERE deleted_at IS NULL;
-CREATE TABLE member_field_values (
-  id INTEGER PRIMARY KEY AUTOINCREMENT, org_id INTEGER NOT NULL, contact_id INTEGER NOT NULL,
-  field_id INTEGER NOT NULL, value TEXT, updated_by INTEGER,
-  created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')), deleted_at TEXT);
 CREATE UNIQUE INDEX ux_member_field_values_live ON member_field_values (org_id, contact_id, field_id) WHERE deleted_at IS NULL;
 `;
 const ORIGIN = "https://boomtown.test";

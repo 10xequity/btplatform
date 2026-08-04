@@ -633,3 +633,477 @@ ALTER TABLE kotc_games ADD COLUMN entered_by_contact_id INTEGER REFERENCES conta
 ALTER TABLE kotc_games ADD COLUMN entered_at TEXT;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_kotc_players_once ON kotc_players (org_id, session_id, contact_id) WHERE deleted_at IS NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_kotc_players_token ON kotc_players (score_token) WHERE score_token IS NOT NULL AND deleted_at IS NULL;
+
+/* ═══════════════════════════════════════════════════════════════════════════════════════════════════
+   THE OTHER HALF OF THE SCHEMA — added 2026-08-03, read verbatim out of live D1 via `sqlite_master`.
+
+   THIS FILE'S HEADER CLAIMED TO BE "the real production schema, read verbatim from live" AND IT WAS
+   NOT. It carried 46 of live's 97 tables. The 51 that were missing are below.
+
+   HOW THAT SURVIVED 1127 PASSING TESTS, which is the part worth understanding: every test that needed
+   one of these tables created its own fixture by hand, so it passed. Every test that did NOT need one
+   never asked. Nothing anywhere compared this file against the database it claims to mirror — so the
+   gap was not a test failure, it was the absence of a test, and absences do not go red.
+
+   The cost was 29 endpoints across 16 admin pages returning 500 in a harness that reported itself
+   healthy: announcements, marketing, POS, plans, passes, member fields, staff pay, messages, uploads,
+   FAQs, facility spaces, schedule views, event templates, tryouts and passkeys. A page whose first
+   fetch 500s stops rendering, which is exactly "the screens all terminate".
+
+   `schema_gate.test.mjs` now compares this file's table list against the live migration set, so the
+   next divergence is a failing test rather than a discovery.
+   ═══════════════════════════════════════════════════════════════════════════════════════════════════ */
+
+CREATE TABLE access_tokens (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  org_id INTEGER NOT NULL DEFAULT 1,
+  kind TEXT NOT NULL CHECK (kind IN ('calendar_member','calendar_public','waiver_sign','guardian_invite')),
+  token_sha TEXT NOT NULL,
+  contact_id INTEGER,
+  team_member_id INTEGER,
+  label TEXT,
+  expires_at TEXT,
+  last_used_at TEXT,
+  use_count INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  created_by_user_id INTEGER,
+  revoked_at TEXT,
+  deleted_at TEXT
+);
+CREATE TABLE announcements (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  org_id INTEGER NOT NULL REFERENCES orgs(id),
+  kind TEXT NOT NULL DEFAULT 'news' CHECK (kind IN ('cta','news')),
+  title TEXT NOT NULL,
+  body TEXT,
+  link_url TEXT,
+  link_label TEXT,
+  starts_at TEXT,
+  ends_at TEXT,
+  created_by_user_id INTEGER REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  deleted_at TEXT
+);
+CREATE TABLE announcement_mutes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  org_id INTEGER NOT NULL REFERENCES orgs(id),
+  contact_id INTEGER NOT NULL REFERENCES contacts(id),
+  scope TEXT NOT NULL CHECK (scope IN ('item','category')),
+  category TEXT,
+  announcement_id INTEGER REFERENCES announcements(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  deleted_at TEXT,
+  UNIQUE (org_id, contact_id, scope, category, announcement_id)
+);
+CREATE TABLE spaces (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK (kind IN ('court','room')),
+  sort INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  deleted_at TEXT
+);
+CREATE TABLE space_presets (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  sort INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  deleted_at TEXT
+);
+CREATE TABLE preset_spaces (
+  preset_id INTEGER NOT NULL REFERENCES space_presets(id),
+  space_id INTEGER NOT NULL REFERENCES spaces(id),
+  PRIMARY KEY (preset_id, space_id)
+);
+CREATE TABLE space_bookings (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  org_id INTEGER NOT NULL REFERENCES orgs(id),
+  event_id INTEGER REFERENCES events(id),
+  title TEXT NOT NULL,
+  date TEXT NOT NULL,
+  start_min INTEGER NOT NULL,
+  end_min INTEGER NOT NULL,
+  preset_id INTEGER REFERENCES space_presets(id),
+  share_ok INTEGER NOT NULL DEFAULT 0,
+  is_closure INTEGER NOT NULL DEFAULT 0,
+  staffing_json TEXT DEFAULT '{}',
+  catering TEXT,
+  door_charge_cents INTEGER,
+  poc_name TEXT,
+  poc_email TEXT,
+  poc_phone TEXT,
+  est_attendees INTEGER,
+  series_id TEXT,
+  notes TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  deleted_at TEXT,
+  source TEXT NOT NULL DEFAULT 'manual'
+);
+CREATE TABLE booking_spaces (
+  booking_id INTEGER NOT NULL REFERENCES space_bookings(id),
+  space_id INTEGER NOT NULL REFERENCES spaces(id),
+  PRIMARY KEY (booking_id, space_id)
+);
+CREATE TABLE rental_requests (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  org_id INTEGER NOT NULL DEFAULT 10 REFERENCES orgs(id),
+  requester_name TEXT NOT NULL,
+  requester_email TEXT NOT NULL,
+  requester_phone TEXT,
+  date TEXT NOT NULL,
+  start_min INTEGER NOT NULL,
+  end_min INTEGER NOT NULL,
+  spaces_text TEXT,
+  est_attendees INTEGER,
+  notes TEXT,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','declined')),
+  booking_id INTEGER REFERENCES space_bookings(id),
+  decided_by INTEGER REFERENCES users(id),
+  decided_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  deleted_at TEXT
+);
+CREATE TABLE segments (id INTEGER PRIMARY KEY AUTOINCREMENT, org_id INTEGER NOT NULL REFERENCES orgs(id), name TEXT NOT NULL, filter_json TEXT NOT NULL DEFAULT '{}', created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')), deleted_at TEXT);
+CREATE TABLE campaigns (id INTEGER PRIMARY KEY AUTOINCREMENT, org_id INTEGER NOT NULL REFERENCES orgs(id), segment_id INTEGER REFERENCES segments(id), name TEXT NOT NULL, subject TEXT NOT NULL DEFAULT '', html_body TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','sending','sent','failed')), sandbox INTEGER NOT NULL DEFAULT 0, recipient_count INTEGER NOT NULL DEFAULT 0, sent_at TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')), deleted_at TEXT, channel TEXT NOT NULL DEFAULT 'email', sms_body TEXT);
+CREATE TABLE campaign_sends (id INTEGER PRIMARY KEY AUTOINCREMENT, org_id INTEGER NOT NULL REFERENCES orgs(id), campaign_id INTEGER NOT NULL REFERENCES campaigns(id), contact_id INTEGER REFERENCES contacts(id), email TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'queued' CHECK (status IN ('queued','sent','failed','skipped')), sent_at TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')), deleted_at TEXT);
+CREATE TABLE community_moderators (org_id INTEGER NOT NULL, user_id INTEGER NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')), deleted_at TEXT, PRIMARY KEY (org_id, user_id));
+CREATE TABLE content_flags (id INTEGER PRIMARY KEY AUTOINCREMENT, org_id INTEGER NOT NULL, target_type TEXT NOT NULL CHECK (target_type IN ('message','forum_post','forum_thread')), target_id INTEGER NOT NULL, reporter_contact_id INTEGER NOT NULL, reason TEXT, status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','resolved','dismissed')), resolved_by_user_id INTEGER, resolved_at TEXT, resolution_note TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')));
+CREATE TABLE event_templates (id INTEGER PRIMARY KEY AUTOINCREMENT, org_id INTEGER NOT NULL REFERENCES orgs(id), name TEXT NOT NULL, payload_json TEXT NOT NULL DEFAULT '{}', created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')), deleted_at TEXT);
+CREATE TABLE faqs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  org_id INTEGER NOT NULL,
+  question TEXT NOT NULL,
+  answer TEXT NOT NULL,
+  tags TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  published INTEGER NOT NULL DEFAULT 0 CHECK (published IN (0,1)),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  deleted_at TEXT
+);
+CREATE TABLE forum_categories (id INTEGER PRIMARY KEY AUTOINCREMENT, org_id INTEGER NOT NULL, name TEXT NOT NULL, description TEXT, sort_order INTEGER NOT NULL DEFAULT 0, locked INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')), deleted_at TEXT);
+CREATE TABLE forum_threads (id INTEGER PRIMARY KEY AUTOINCREMENT, org_id INTEGER NOT NULL, category_id INTEGER NOT NULL, title TEXT NOT NULL, created_by_contact_id INTEGER NOT NULL, pinned INTEGER NOT NULL DEFAULT 0, locked INTEGER NOT NULL DEFAULT 0, post_count INTEGER NOT NULL DEFAULT 0, last_post_at TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')), deleted_at TEXT, deleted_by_user_id INTEGER);
+CREATE TABLE forum_posts (id INTEGER PRIMARY KEY AUTOINCREMENT, org_id INTEGER NOT NULL, thread_id INTEGER NOT NULL, author_contact_id INTEGER NOT NULL, body TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')), edited_at TEXT, deleted_at TEXT, deleted_by_user_id INTEGER, delete_reason TEXT);
+CREATE TABLE lfg_listings (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  org_id INTEGER NOT NULL REFERENCES orgs(id),
+  kind TEXT NOT NULL CHECK (kind IN ('team_need','player_avail','casual')),
+  forming INTEGER NOT NULL DEFAULT 0,
+  created_by_contact_id INTEGER NOT NULL REFERENCES contacts(id),
+  team_name TEXT,
+  skill_level TEXT NOT NULL DEFAULT 'any',
+  gender_requirement TEXT NOT NULL DEFAULT 'any',
+  game_type TEXT NOT NULL DEFAULT 'any',
+  positions TEXT,
+  spots INTEGER,
+  play_at TEXT,
+  location_note TEXT,
+  note TEXT,
+  status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','filled','closed')),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  deleted_at TEXT
+);
+CREATE TABLE lfg_members (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  org_id INTEGER NOT NULL REFERENCES orgs(id),
+  listing_id INTEGER NOT NULL REFERENCES lfg_listings(id),
+  contact_id INTEGER NOT NULL REFERENCES contacts(id),
+  status TEXT NOT NULL DEFAULT 'committed' CHECK (status IN ('committed','withdrawn')),
+  is_bail INTEGER NOT NULL DEFAULT 0,
+  joined_at TEXT NOT NULL DEFAULT (datetime('now')),
+  withdrawn_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  deleted_at TEXT
+);
+CREATE TABLE lfg_strikes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  org_id INTEGER NOT NULL REFERENCES orgs(id),
+  contact_id INTEGER NOT NULL REFERENCES contacts(id),
+  listing_id INTEGER REFERENCES lfg_listings(id),
+  kind TEXT NOT NULL CHECK (kind IN ('no_show','bail')),
+  reported_by_contact_id INTEGER REFERENCES contacts(id),
+  cleared_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  deleted_at TEXT
+);
+CREATE TABLE lfg_bans (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  org_id INTEGER NOT NULL REFERENCES orgs(id),
+  contact_id INTEGER NOT NULL REFERENCES contacts(id),
+  reason TEXT,
+  starts_at TEXT NOT NULL DEFAULT (datetime('now')),
+  ends_at TEXT NOT NULL,
+  lifted_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  deleted_at TEXT
+);
+CREATE TABLE member_blocks (id INTEGER PRIMARY KEY AUTOINCREMENT, org_id INTEGER NOT NULL, blocker_contact_id INTEGER NOT NULL, blocked_contact_id INTEGER NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')), deleted_at TEXT, UNIQUE(org_id, blocker_contact_id, blocked_contact_id));
+CREATE TABLE member_mutes (id INTEGER PRIMARY KEY AUTOINCREMENT, org_id INTEGER NOT NULL, contact_id INTEGER NOT NULL, reason TEXT, muted_until TEXT, muted_by_user_id INTEGER NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')), deleted_at TEXT);
+CREATE TABLE member_fields (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  org_id INTEGER NOT NULL REFERENCES orgs(id),
+  field_key TEXT NOT NULL,
+  label TEXT NOT NULL,
+  field_type TEXT NOT NULL DEFAULT 'text'
+             CHECK (field_type IN ('text','textarea','email','phone','number','date','select','checkbox')),
+  options_json TEXT NOT NULL DEFAULT '[]',
+  help_text TEXT,
+  required INTEGER NOT NULL DEFAULT 0,
+  member_visible INTEGER NOT NULL DEFAULT 1,
+  show_on_forms INTEGER NOT NULL DEFAULT 0,
+  active INTEGER NOT NULL DEFAULT 1,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  deleted_at TEXT
+);
+CREATE TABLE member_field_values (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  org_id INTEGER NOT NULL REFERENCES orgs(id),
+  contact_id INTEGER NOT NULL REFERENCES contacts(id),
+  field_id INTEGER NOT NULL REFERENCES member_fields(id),
+  value TEXT,
+  updated_by INTEGER REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  deleted_at TEXT
+);
+CREATE TABLE message_threads (id INTEGER PRIMARY KEY AUTOINCREMENT, org_id INTEGER NOT NULL, kind TEXT NOT NULL DEFAULT 'dm' CHECK (kind IN ('dm','sub_inquiry','join_inquiry')), subject TEXT, created_by_contact_id INTEGER NOT NULL, sub_request_id INTEGER, last_message_at TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')), deleted_at TEXT);
+CREATE TABLE messages (id INTEGER PRIMARY KEY AUTOINCREMENT, org_id INTEGER NOT NULL, thread_id INTEGER NOT NULL, sender_contact_id INTEGER NOT NULL, body TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')), deleted_at TEXT, deleted_by_user_id INTEGER, delete_reason TEXT);
+CREATE TABLE plans (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  org_id INTEGER NOT NULL REFERENCES orgs(id),
+  name TEXT NOT NULL,
+  description TEXT,
+  price_cents INTEGER NOT NULL,
+  currency TEXT DEFAULT 'USD',
+  billing_interval TEXT NOT NULL CHECK (billing_interval IN ('MONTHLY','ANNUAL')),
+  perks TEXT,
+  square_plan_id TEXT,
+  square_variation_id TEXT,
+  active INTEGER NOT NULL DEFAULT 1,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  deleted_at TEXT,
+  tier_id INTEGER REFERENCES membership_tiers(id),
+  pricing_type TEXT NOT NULL DEFAULT 'recurring',
+  sessions_included INTEGER,
+  pass_valid_days INTEGER,
+  signup_fee_cents INTEGER
+);
+CREATE TABLE subscriptions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  org_id INTEGER NOT NULL REFERENCES orgs(id),
+  user_id INTEGER REFERENCES users(id),
+  contact_id INTEGER REFERENCES contacts(id),
+  plan_id INTEGER NOT NULL REFERENCES plans(id),
+  square_subscription_id TEXT UNIQUE,
+  square_customer_id TEXT,
+  card_brand TEXT,
+  card_last4 TEXT,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','active','past_due','canceled','deactivated')),
+  started_at TEXT,
+  canceled_at TEXT,
+  current_period_end TEXT,
+  raw_json TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  deleted_at TEXT
+);
+CREATE TABLE products (id INTEGER PRIMARY KEY AUTOINCREMENT, org_id INTEGER NOT NULL REFERENCES orgs(id), name TEXT NOT NULL, price_cents INTEGER NOT NULL, tax_rate_bp INTEGER NOT NULL DEFAULT 0, stock INTEGER, active INTEGER NOT NULL DEFAULT 1, sort INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')), deleted_at TEXT);
+CREATE TABLE sales (id INTEGER PRIMARY KEY AUTOINCREMENT, org_id INTEGER NOT NULL REFERENCES orgs(id), contact_id INTEGER REFERENCES contacts(id), subtotal_cents INTEGER NOT NULL, discount_cents INTEGER NOT NULL DEFAULT 0, discount_id INTEGER REFERENCES discounts(id), tax_cents INTEGER NOT NULL DEFAULT 0, total_cents INTEGER NOT NULL, payment_method TEXT NOT NULL CHECK (payment_method IN ('cash','square','comp')), square_payment_id TEXT, status TEXT NOT NULL DEFAULT 'recorded' CHECK (status IN ('recorded','voided')), note TEXT, created_by INTEGER REFERENCES users(id), created_at TEXT NOT NULL DEFAULT (datetime('now')), voided_at TEXT, void_reason TEXT);
+CREATE TABLE sale_items (id INTEGER PRIMARY KEY AUTOINCREMENT, sale_id INTEGER NOT NULL REFERENCES sales(id), product_id INTEGER REFERENCES products(id), label TEXT NOT NULL, qty INTEGER NOT NULL, unit_price_cents INTEGER NOT NULL, tax_rate_bp INTEGER NOT NULL DEFAULT 0, line_total_cents INTEGER NOT NULL);
+CREATE TABLE sponsors (id INTEGER PRIMARY KEY AUTOINCREMENT, org_id INTEGER NOT NULL REFERENCES orgs(id), name TEXT NOT NULL, logo_url TEXT, link_url TEXT, placement TEXT NOT NULL DEFAULT 'home', active INTEGER NOT NULL DEFAULT 1, sort INTEGER NOT NULL DEFAULT 0, starts_at TEXT, ends_at TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')), deleted_at TEXT);
+CREATE TABLE staff_shifts (id INTEGER PRIMARY KEY AUTOINCREMENT, org_id INTEGER NOT NULL REFERENCES orgs(id), user_id INTEGER REFERENCES users(id), name_snapshot TEXT, role_label TEXT, starts_at TEXT NOT NULL, ends_at TEXT NOT NULL, note TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')), deleted_at TEXT, contact_id INTEGER REFERENCES contacts(id), pay_basis TEXT, pay_rate_cents INTEGER, pay_units REAL, pay_amount_cents INTEGER, approved_at TEXT, approved_by INTEGER REFERENCES users(id), event_id INTEGER REFERENCES events(id));
+CREATE TABLE staff_rates (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  org_id INTEGER NOT NULL REFERENCES orgs(id),
+  contact_id INTEGER NOT NULL REFERENCES contacts(id),
+  role_label TEXT,
+  pay_basis TEXT NOT NULL DEFAULT 'hourly' CHECK (pay_basis IN ('hourly','flat','per_session')),
+  rate_cents INTEGER NOT NULL,
+  effective_from TEXT NOT NULL DEFAULT (datetime('now')),
+  effective_to TEXT,
+  note TEXT,
+  created_by INTEGER REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  deleted_at TEXT
+);
+CREATE TABLE passes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  org_id INTEGER NOT NULL REFERENCES orgs(id),
+  contact_id INTEGER NOT NULL REFERENCES contacts(id),
+  name TEXT NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'session' CHECK (kind IN ('session','guest','trial','open_gym')),
+  source TEXT NOT NULL DEFAULT 'purchase' CHECK (source IN ('purchase','tier_grant','comp','manual')),
+  total_sessions INTEGER,
+  starts_at TEXT NOT NULL DEFAULT (datetime('now')),
+  expires_at TEXT,
+  price_cents INTEGER,
+  tier_id INTEGER REFERENCES membership_tiers(id),
+  sale_id INTEGER REFERENCES sales(id),
+  note TEXT,
+  created_by INTEGER REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  deleted_at TEXT
+);
+CREATE TABLE pass_redemptions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  org_id INTEGER NOT NULL REFERENCES orgs(id),
+  pass_id INTEGER NOT NULL REFERENCES passes(id),
+  contact_id INTEGER NOT NULL REFERENCES contacts(id),
+  event_id INTEGER REFERENCES events(id),
+  attendance_id INTEGER REFERENCES attendance(id),
+  guest_name TEXT,
+  redeemed_at TEXT NOT NULL DEFAULT (datetime('now')),
+  redeemed_by INTEGER REFERENCES users(id),
+  reversed_at TEXT,
+  reversed_by INTEGER REFERENCES users(id),
+  reverse_reason TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  deleted_at TEXT
+);
+CREATE TABLE profiles (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  org_id INTEGER NOT NULL REFERENCES orgs(id),
+  contact_id INTEGER NOT NULL REFERENCES contacts(id),
+  photo_url TEXT,
+  positions TEXT,
+  skill_level TEXT,
+  gender_division TEXT,
+  height_reach TEXT,
+  bio TEXT,
+  privacy_tier TEXT NOT NULL DEFAULT 'hidden' CHECK (privacy_tier IN ('public','members-only','hidden')),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  deleted_at TEXT
+);
+CREATE TABLE schedule_views (id INTEGER PRIMARY KEY AUTOINCREMENT, slug TEXT NOT NULL UNIQUE, name TEXT NOT NULL, kind TEXT NOT NULL DEFAULT 'custom' CHECK (kind IN ('public','internal','custom')), show_names INTEGER NOT NULL DEFAULT 0, show_counts INTEGER NOT NULL DEFAULT 0, org_id INTEGER REFERENCES orgs(id), type_filter TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')), deleted_at TEXT, owner_org_id INTEGER REFERENCES orgs(id), visibility TEXT NOT NULL DEFAULT 'public', min_tier_id INTEGER REFERENCES membership_tiers(id), require_membership INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE schema_migrations (id INTEGER PRIMARY KEY AUTOINCREMENT, version TEXT NOT NULL, filename TEXT NOT NULL, applied_at TEXT, note TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')));
+CREATE TABLE sms_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  org_id INTEGER NOT NULL REFERENCES orgs(id),
+  contact_id INTEGER REFERENCES contacts(id),
+  direction TEXT NOT NULL CHECK (direction IN ('out','in')),
+  to_number TEXT,
+  from_number TEXT,
+  body TEXT,
+  status TEXT NOT NULL DEFAULT 'queued',
+  twilio_sid TEXT,
+  error TEXT,
+  target TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  deleted_at TEXT
+);
+CREATE TABLE sub_signups (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  org_id INTEGER NOT NULL REFERENCES orgs(id),
+  contact_id INTEGER NOT NULL REFERENCES contacts(id),
+  skill_levels TEXT NOT NULL DEFAULT 'any',
+  genders TEXT NOT NULL DEFAULT 'any',
+  game_types TEXT NOT NULL DEFAULT 'any',
+  note TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  deleted_at TEXT
+);
+CREATE TABLE sub_requests (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  org_id INTEGER NOT NULL REFERENCES orgs(id),
+  event_id INTEGER REFERENCES events(id),
+  requested_by_contact_id INTEGER NOT NULL REFERENCES contacts(id),
+  needed_at TEXT,
+  skill_level TEXT NOT NULL DEFAULT 'any',
+  gender_requirement TEXT NOT NULL DEFAULT 'any',
+  game_type TEXT NOT NULL DEFAULT 'any',
+  note TEXT,
+  status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','filled','cancelled')),
+  filled_by_contact_id INTEGER REFERENCES contacts(id),
+  filled_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  deleted_at TEXT
+);
+CREATE TABLE thread_participants (id INTEGER PRIMARY KEY AUTOINCREMENT, org_id INTEGER NOT NULL, thread_id INTEGER NOT NULL, contact_id INTEGER NOT NULL, last_read_at TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), deleted_at TEXT, UNIQUE(thread_id, contact_id));
+CREATE TABLE tryout_profiles (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  org_id INTEGER NOT NULL REFERENCES orgs(id),
+  event_id INTEGER NOT NULL REFERENCES events(id),
+  contact_id INTEGER NOT NULL REFERENCES contacts(id),
+  positions TEXT NOT NULL DEFAULT '[]',
+  age_groups TEXT NOT NULL DEFAULT '[]',
+  height_cm INTEGER,
+  prev_club TEXT,
+  jersey_size TEXT,
+  player_note TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  deleted_at TEXT
+);
+CREATE TABLE tryout_evaluations (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  org_id INTEGER NOT NULL REFERENCES orgs(id),
+  event_id INTEGER NOT NULL REFERENCES events(id),
+  contact_id INTEGER NOT NULL REFERENCES contacts(id),
+  evaluator_contact_id INTEGER NOT NULL REFERENCES contacts(id),
+  rating INTEGER CHECK (rating IS NULL OR (rating >= 1 AND rating <= 5)),
+  notes TEXT,
+  verdict TEXT NOT NULL DEFAULT 'undecided' CHECK (verdict IN ('offer','no_offer','undecided')),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  deleted_at TEXT
+);
+CREATE TABLE tryout_squads (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  org_id INTEGER NOT NULL REFERENCES orgs(id),
+  event_id INTEGER NOT NULL REFERENCES events(id),
+  name TEXT NOT NULL,
+  age_group TEXT,
+  colour TEXT,
+  target_size INTEGER NOT NULL DEFAULT 10,
+  needs_json TEXT NOT NULL DEFAULT '{}',
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  deleted_at TEXT
+);
+CREATE TABLE tryout_squad_members (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  org_id INTEGER NOT NULL REFERENCES orgs(id),
+  squad_id INTEGER NOT NULL REFERENCES tryout_squads(id),
+  contact_id INTEGER NOT NULL REFERENCES contacts(id),
+  position TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  deleted_at TEXT
+);
+CREATE TABLE uploads (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  org_id INTEGER NOT NULL REFERENCES orgs(id),
+  r2_key TEXT NOT NULL UNIQUE,
+  filename TEXT NOT NULL,
+  content_type TEXT NOT NULL,
+  bytes INTEGER NOT NULL,
+  sha256 TEXT,
+  kind TEXT NOT NULL DEFAULT 'other',
+  entity TEXT,
+  entity_id INTEGER,
+  visibility TEXT NOT NULL DEFAULT 'private'
+             CHECK (visibility IN ('private','members','public')),
+  uploaded_by_user_id INTEGER REFERENCES users(id),
+  uploaded_by_contact_id INTEGER REFERENCES contacts(id),
+  notes TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  deleted_at TEXT
+);
+CREATE TABLE webauthn_challenges (id INTEGER PRIMARY KEY AUTOINCREMENT, challenge TEXT NOT NULL UNIQUE, user_id INTEGER, kind TEXT NOT NULL, expires_at TEXT NOT NULL, used_at TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')));
