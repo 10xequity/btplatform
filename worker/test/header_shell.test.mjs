@@ -254,7 +254,7 @@ const memberPageCopyVerdict = (src) => {
   return bad;
 };
 
-test("the 15 canonical member pages carry the complete member header, byte-identical", () => {
+test("the 16 canonical member pages carry the complete member header, byte-identical", () => {
   // The count is a deliberate ratchet: it reddens whenever a member page is added, so whoever added
   // one has to confirm it ships the real header rather than a lookalike. 13 → 14 in v0.73.0 for
   // live.html, the public scoreboard, which passed the byte-identical check on its first run because
@@ -263,8 +263,13 @@ test("the 15 canonical member pages carry the complete member header, byte-ident
   // hand-written with a reduced header (brand + theme only), and this ratchet is what caught it. The
   // header was then taken from score.html, the closest precedent: also a no-login token page, where
   // the Admin and mail links ship hidden and site-nav reveals them only if a local token exists.
+  // 15 → 16 in v0.86.0 for kotc-live.html, the public KOTC standings. It passed on its first run
+  // because the lesson above was applied at the start: the page was GENERATED from kotc.html's bytes
+  // — the closest precedent again, and already inside this ratchet — rather than written by hand.
+  // That is the intended way to add a member page, and the reason this ratchet exists is that it is
+  // cheaper to be forced into it than to be caught by it.
   const canon = htmlPages().filter((f) => isMemberCanonPage(f, read(f)));
-  assert.equal(canon.length, 15, `expected exactly 15 canonical member pages, saw ${canon.length}: ${canon.join(", ")}`);
+  assert.equal(canon.length, 16, `expected exactly 16 canonical member pages, saw ${canon.length}: ${canon.join(", ")}`);
   const headers = new Map();
   for (const f of canon) {
     const v = memberHeaderVerdict(read(f));

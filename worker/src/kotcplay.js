@@ -1,6 +1,19 @@
 /**
  * Boomtown Platform — King / Queen of the Court, the playable surface
- * File: worker/src/kotcplay.js · Version: v1.0 · Date: 2026-08-03 · Ships in: v0.80.0
+ * File: worker/src/kotcplay.js · Version: v1.1 · Date: 2026-08-04 · Ships in: v0.86.0
+ *
+ * v1.1 (2026-08-04, v0.86.0): the three routes the other two screens needed, and the two screens.
+ *   Recorded because the previous handoff said this module's API was "complete and tested": it was
+ *   complete for ONE screen of three. Five routes and then `return null`. Added —
+ *     · GET  /api/admin/kotc            — the session list. The staff read below takes an id and
+ *       nothing could discover one, so the board was unreachable: failure class 1 with the pieces
+ *       the other way round, a working route no caller could name.
+ *     · POST /api/admin/kotc/:id/move   — the drag. Never refuses; swaps on an occupied seat; and
+ *       never rewrites a finished game, which is the invariant with its own test.
+ *     · GET  /api/live/kotc/:id         — the public individual leaderboard. Abbreviated names, no
+ *       roster, NO score links. Owner chose a separate page over a third shape on the live board.
+ *   Also: the staff GET's payload became `boardPayload`, shared with every move response, so a drag
+ *   and a refresh cannot render two different evenings.
  *
  * The engine is `kotc.js` — pure, no database, and it stays that way. This module is the plumbing: a
  * session, an entry list, a seating per round, and the scoring links people actually use.
@@ -37,7 +50,7 @@
  * ══════════════════════════════════════════════════════════════════════════════════════════════════
  */
 import {
-  seedRound, gamesForRound, nextRound, tally, rankPlayers, solveNet, netPlan,
+  seedRound, gamesForRound, nextRound, tally, rankPlayers, solveNet, netPlan, NET_SIZES,
 } from "./kotc.js";
 import { personName } from "./names.js";
 
@@ -52,7 +65,10 @@ const mintToken = () =>
 
 async function loadRound(env, orgId, roundId) {
   const slots = (await env.DB.prepare(
-    `SELECT s.net_no, s.seat, s.contact_id, s.confirmed, s.confirmed_at, c.full_name
+    /* `slot_id`, not `id` (v0.86.0): the move route addresses a seat by its own row, and a bare `id`
+       beside `contact_id` in the same object is the kind of ambiguity that eventually binds the wrong
+       one. Nothing else reads it; the view builders name their fields explicitly. */
+    `SELECT s.id AS slot_id, s.net_no, s.seat, s.contact_id, s.confirmed, s.confirmed_at, c.full_name
        FROM kotc_slots s LEFT JOIN contacts c ON c.id = s.contact_id AND c.deleted_at IS NULL
       WHERE s.org_id=?1 AND s.round_id=?2 AND s.deleted_at IS NULL
       ORDER BY s.net_no, s.seat`
@@ -354,14 +370,258 @@ export async function kotcRoutes(request, env, url, ctx) {
     return json({ ok: true, round_no: roundNo, nets: nets.map((n) => ({ net_no: n.net_no, players: n.seats.length })) });
   }
 
-  if ((x = p.match(/^\/api\/admin\/kotc\/(\d+)$/)) && m === "GET") {
+  /* THE SESSION LIST — without it the board cannot be reached at all (v0.86.0).
+     The staff read below takes an id, and until this route existed there was no way to discover one:
+     a director had to already know the number. That is failure class 1 wearing a different hat — the
+     route worked perfectly and nothing could call it. Newest first, because the session a director
+     wants is almost always the one they just made. */
+  if (p === "/api/admin/kotc" && m === "GET") {
+    const denied = await requireStaff(env, ctx); if (denied) return denied;
+    const rows = (await env.DB.prepare(
+      `SELECT se.id, se.name, se.status, se.move_up, se.points_to, se.created_at,
+              se.event_id, ev.name AS event_name,
+              (SELECT COUNT(*) FROM kotc_players pl
+                WHERE pl.org_id = se.org_id AND pl.session_id = se.id
+                  AND pl.deleted_at IS NULL AND pl.withdrawn_at IS NULL) AS players,
+              (SELECT MAX(r.round_no) FROM kotc_rounds r
+                WHERE r.org_id = se.org_id AND r.session_id = se.id AND r.deleted_at IS NULL) AS rounds
+         FROM kotc_sessions se
+         LEFT JOIN events ev ON ev.id = se.event_id AND ev.deleted_at IS NULL
+        WHERE se.org_id = ?1 AND se.deleted_at IS NULL
+        ORDER BY se.id DESC
+        LIMIT 50`
+    ).bind(ctx.orgId).all()).results || [];
+    return json({
+      sessions: rows.map((r) => ({
+        id: r.id, name: r.name, status: r.status, move_up: r.move_up, points_to: r.points_to,
+        event_id: r.event_id,
+        // A deleted event leaves the session readable rather than nameless — modules degrade, they
+        // do not collapse (owner). The board still opens; the heading just says less.
+        event: r.event_name || "Event no longer listed",
+        players: r.players || 0,
+        rounds: r.rounds || 0,
+      })),
+    });
+  }
+
+  /* ══════════ THE DRAG: move a person to a net and a seat ══════════
+     Schedule-editor precedent (formats.js, admin-schedule-editor.js): IT NEVER REFUSES A MOVE. A
+     director always knows something the seeding does not — she came with her sister, he is leaving at
+     eight, those two have played each other all night. A tool that blocks them is a tool they route
+     around, and then the real board is a whiteboard again.
+
+     Dropping on an occupied seat SWAPS the two, exactly as dragging a match onto a taken court does.
+     Overwriting would silently un-seat somebody the director never mentioned.
+
+     ══ AND IT MUST NOT REWRITE HISTORY. ══
+     `kotc_games` stores the four players ON the game row (a1/a2/b1/b2), not a reference to the seating.
+     That is deliberate — it is what lets the leaderboard be derived from games alone. It also means a
+     re-seat could retroactively change who played a game that is already scored, and the leaderboard,
+     being derived, would silently restate the evening. So: a game with BOTH scores in is FINISHED and
+     is never touched. Only unplayed rows are re-paired to the new line-up. That invariant has its own
+     test, because nothing about it is visible from the screen. */
+  if ((x = p.match(/^\/api\/admin\/kotc\/(\d+)\/move$/)) && m === "POST") {
     const denied = await requireStaff(env, ctx); if (denied) return denied;
     const sessionId = +x[1];
     const se = await env.DB.prepare(
-      `SELECT id, name, move_up, points_to, status FROM kotc_sessions
-        WHERE id=?1 AND org_id=?2 AND deleted_at IS NULL`
+      "SELECT id, points_to FROM kotc_sessions WHERE id=?1 AND org_id=?2 AND deleted_at IS NULL"
     ).bind(sessionId, ctx.orgId).first();
     if (!se) return json({ error: "That session doesn't exist." }, 404);
+
+    const b = await request.json().catch(() => ({}));
+    const contactId = Number(b.contact_id);
+    const netNo = Number(b.net_no);
+    const seat = Number(b.seat);
+    /* A malformed request is not a refused move. The rule is that the board never tells a director
+       "no, you may not put her there" — it says nothing about a body with no net in it. */
+    if (!contactId || !Number.isInteger(netNo) || netNo < 1 || !Number.isInteger(seat) || seat < 0) {
+      return json({ error: "Say who is moving, and which net and seat they are moving to." }, 400);
+    }
+
+    const round = await env.DB.prepare(
+      `SELECT id, round_no FROM kotc_rounds
+        WHERE org_id=?1 AND session_id=?2 AND deleted_at IS NULL ORDER BY round_no DESC LIMIT 1`
+    ).bind(ctx.orgId, sessionId).first();
+    // Not a refusal either: there is no seating yet to move anybody within.
+    if (!round) return json({ error: "There's no round on the board yet. Start one first." }, 409);
+
+    const { slots } = await loadRound(env, ctx.orgId, round.id);
+    const mover = slots.find((s) => s.contact_id === contactId);
+    const occupant = slots.find((s) => s.net_no === netNo && s.seat === seat);
+
+    if (mover && mover.net_no === netNo && mover.seat === seat) {
+      return json({
+        ok: true, moved: false, note: "They were already there.",
+        ...(await boardPayload(env, ctx.orgId, sessionId)),
+      });
+    }
+
+    /* Somebody not seated this round can still be dragged on — a late arrival is a real Tuesday, and
+       the player screen already has an `on_a_net: false` state for exactly this person. They do have
+       to be on the entry list: seating a contact who never entered is not a move, it is an entry, and
+       it belongs to the players route which mints their link. */
+    if (!mover) {
+      const entered = await env.DB.prepare(
+        `SELECT contact_id FROM kotc_players
+          WHERE org_id=?1 AND session_id=?2 AND contact_id=?3 AND deleted_at IS NULL`
+      ).bind(ctx.orgId, sessionId, contactId).first();
+      if (!entered) {
+        return json({ error: "They're not on the entry list for this session. Add them to it first — that's what mints their link." }, 400);
+      }
+    }
+
+    /* ── the writes ──
+       `idx_kotc_slots_seat` is UNIQUE on (org_id, round_id, net_no, seat) WHERE deleted_at IS NULL, so
+       a swap written as two plain UPDATEs collides at the halfway point — SQLite has no deferred
+       constraint to hide behind. The mover is parked on an impossible seat first. The park uses the
+       mover's own row id, so two directors dragging at the same moment cannot pick the same parking
+       space (net -1, seat -1 would have been a race with one slot in it). */
+    const stmts = [];
+    let swappedWith = null, benched = null;
+
+    if (mover && occupant) {
+      swappedWith = occupant;
+      stmts.push(
+        env.DB.prepare("UPDATE kotc_slots SET net_no=-1, seat=?1, updated_at=datetime('now') WHERE id=?2 AND org_id=?3")
+          .bind(-mover.slot_id - 1, mover.slot_id, ctx.orgId),
+        env.DB.prepare("UPDATE kotc_slots SET net_no=?1, seat=?2, updated_at=datetime('now') WHERE id=?3 AND org_id=?4")
+          .bind(mover.net_no, mover.seat, occupant.slot_id, ctx.orgId),
+        env.DB.prepare("UPDATE kotc_slots SET net_no=?1, seat=?2, updated_at=datetime('now') WHERE id=?3 AND org_id=?4")
+          .bind(netNo, seat, mover.slot_id, ctx.orgId),
+      );
+    } else if (mover) {
+      stmts.push(
+        env.DB.prepare("UPDATE kotc_slots SET net_no=?1, seat=?2, updated_at=datetime('now') WHERE id=?3 AND org_id=?4")
+          .bind(netNo, seat, mover.slot_id, ctx.orgId),
+      );
+    } else {
+      /* An unseated player dropped onto a taken seat means the occupant comes off — subbing somebody
+         out is the other half of a late arrival, and refusing it would be refusing a move. Their slot
+         is SOFT-deleted, so every partial unique index here (all `WHERE deleted_at IS NULL`) lets the
+         seat be re-filled, and the row survives for the audit. */
+      if (occupant) {
+        benched = occupant;
+        stmts.push(
+          env.DB.prepare("UPDATE kotc_slots SET deleted_at=datetime('now'), updated_at=datetime('now') WHERE id=?1 AND org_id=?2")
+            .bind(occupant.slot_id, ctx.orgId),
+        );
+      }
+      stmts.push(
+        env.DB.prepare("INSERT INTO kotc_slots (org_id, round_id, net_no, seat, contact_id) VALUES (?1,?2,?3,?4,?5)")
+          .bind(ctx.orgId, round.id, netNo, seat, contactId),
+      );
+    }
+    await env.DB.batch(stmts);
+
+    /* ── re-pair the UNPLAYED games on every net this touched ── */
+    const touched = [...new Set([netNo, ...(mover ? [mover.net_no] : []), ...(benched ? [benched.net_no] : [])])];
+    const after = await loadRound(env, ctx.orgId, round.id);
+    const short = [];
+    let repaired = 0, kept = 0;
+
+    for (const net of netsFrom(after.slots).filter((n) => touched.includes(n.net_no))) {
+      /* `rotation()` THROWS for any size that is not 4 or 5, and `dispatch` treats a throw as a
+         DECLINE — an unguarded call here would turn this route into a silent 404, which is the worst
+         possible way for a drag to fail. A short net warns and is left alone (brackets.js precedent:
+         warns, never refuses). Its unplayed games still name the previous line-up, and the response
+         says so in a sentence rather than leaving a director to notice. */
+      if (!NET_SIZES.includes(net.seats.length)) {
+        short.push({ net_no: net.net_no, players: net.seats.length });
+        continue;
+      }
+      for (const g of gamesForRound([net])) {
+        const row = after.games.find((y) => y.net_no === g.net_no && y.game_no === g.game_no);
+        if (!row) continue;
+        // FINISHED IS FINISHED. This is the invariant the whole route is written around.
+        if (row.score_a !== null && row.score_b !== null) { kept++; continue; }
+        if (row.a1_contact_id === g.a1_contact_id && row.a2_contact_id === g.a2_contact_id &&
+            row.b1_contact_id === g.b1_contact_id && row.b2_contact_id === g.b2_contact_id) continue;
+        await env.DB.prepare(
+          `UPDATE kotc_games SET a1_contact_id=?1, a2_contact_id=?2, b1_contact_id=?3, b2_contact_id=?4,
+                                 updated_at=datetime('now')
+            WHERE id=?5 AND org_id=?6`
+        ).bind(g.a1_contact_id, g.a2_contact_id, g.b1_contact_id, g.b2_contact_id, row.id, ctx.orgId).run();
+        repaired++;
+      }
+    }
+
+    /* A re-seat changes who is being asked what, so a confirmation given against the old line-up is
+       stale for the same reason an edit makes one stale (see the POST above). Only nets whose unplayed
+       games actually moved are reset — a director nudging seats on a net that is already finished
+       should not un-tick four people for nothing. */
+    if (repaired) {
+      await env.DB.prepare(
+        `UPDATE kotc_slots SET confirmed='pending', confirmed_at=NULL, updated_at=datetime('now')
+          WHERE org_id=?1 AND round_id=?2 AND net_no IN (${touched.map(() => "?").join(",")})
+            AND deleted_at IS NULL`
+      ).bind(ctx.orgId, round.id, ...touched).run();
+    }
+
+    await audit(env, ctx, "kotc.move", "kotc_rounds", round.id, {
+      contact_id: contactId, to_net: netNo, to_seat: seat,
+      swapped_with: swappedWith ? swappedWith.contact_id : null,
+      benched: benched ? benched.contact_id : null,
+      games_repaired: repaired, games_kept: kept,
+    });
+
+    const who = (s) => personName(s.full_name, { full: true });
+    return json({
+      ok: true,
+      moved: true,
+      swapped_with: swappedWith ? { contact_id: swappedWith.contact_id, name: who(swappedWith) } : null,
+      benched: benched ? { contact_id: benched.contact_id, name: who(benched) } : null,
+      games_repaired: repaired,
+      games_kept: kept,
+      short_nets: short,
+      note: [
+        swappedWith ? `Swapped with ${who(swappedWith)}.`
+          : benched ? `${who(benched)} came off net ${netNo}.`
+          : `Moved to net ${netNo}.`,
+        kept ? `${kept} game${kept === 1 ? "" : "s"} already scored — left exactly as played.` : "",
+        repaired ? "The remaining games were re-paired, so everyone on those nets has been asked to check again." : "",
+        short.length ? `Net ${short.map((s) => s.net_no).join(", ")} now has an odd number of players — its games still show the old pairings until it is back to four or five.` : "",
+      ].filter(Boolean).join(" "),
+      ...(await boardPayload(env, ctx.orgId, sessionId)),
+    });
+  }
+
+  if ((x = p.match(/^\/api\/admin\/kotc\/(\d+)$/)) && m === "GET") {
+    const denied = await requireStaff(env, ctx); if (denied) return denied;
+    const sessionId = +x[1];
+    const exists = await env.DB.prepare(
+      "SELECT id FROM kotc_sessions WHERE id=?1 AND org_id=?2 AND deleted_at IS NULL"
+    ).bind(sessionId, ctx.orgId).first();
+    if (!exists) return json({ error: "That session doesn't exist." }, 404);
+    return json({
+      ...(await boardPayload(env, ctx.orgId, sessionId)),
+      ...(await roster(env, ctx.orgId, sessionId)),
+    });
+  }
+
+  /* ══════════ the public individual leaderboard ══════════
+     Owner 2026-08-04, asked whether this belonged on the existing live board as a third shape or on
+     its own page: A SEPARATE PAGE. `live.js` carries the v0.84.0 diff-animation engine and its own
+     guard states it cannot see whether the motion looks good; nobody has eyeballed it yet, and a new
+     section in there is a change to code that is one human review short of trusted. So this route is
+     the only public surface KOTC adds, it lives in this module with the rest of KOTC, and `live.js`
+     is not touched.
+
+     It sits under `/api/live/` because that is already the public read namespace — one convention,
+     not two. No `requireStaff`: same contract as the live board, org from the same X-Org-Id header
+     every route uses, so a white-labelled site shows only its own sessions.
+
+     WHAT IS DELIBERATELY NOT HERE, and it is the whole difference from the staff read: no roster, no
+     score links, and names ABBREVIATED to "Ava S." (standards §8, `names.js` owns the rule). The
+     staff payload's `roster` carries a `link` per player — a token that is the credential. Reusing
+     the staff shape and trimming it in the page would publish every player's scoring link to anyone
+     who opened devtools. The trim happens HERE, server-side, or it does not happen. */
+  if ((x = p.match(/^\/api\/live\/kotc\/(\d+)$/)) && m === "GET") {
+    const sessionId = +x[1];
+    const se = await env.DB.prepare(
+      `SELECT id, name, status, points_to FROM kotc_sessions
+        WHERE id=?1 AND org_id=?2 AND deleted_at IS NULL`
+    ).bind(sessionId, ctx.orgId).first();
+    if (!se) return json({ error: "That session isn't running." }, 404);
 
     const rounds = (await env.DB.prepare(
       `SELECT id, round_no FROM kotc_rounds WHERE org_id=?1 AND session_id=?2 AND deleted_at IS NULL
@@ -369,25 +629,9 @@ export async function kotcRoutes(request, env, url, ctx) {
     ).bind(ctx.orgId, sessionId).all()).results || [];
 
     const allGames = [];
-    const board = [];
     for (const rd of rounds) {
-      const { slots, games } = await loadRound(env, ctx.orgId, rd.id);
+      const { games } = await loadRound(env, ctx.orgId, rd.id);
       allGames.push(...games);
-      board.push({
-        round_no: rd.round_no,
-        nets: netsFrom(slots).map((n) => ({
-          net_no: n.net_no,
-          // Staff surface, so full names: this is who a director goes looking for.
-          players: slots.filter((s) => s.net_no === n.net_no).sort((a2, b2) => a2.seat - b2.seat)
-            .map((s) => ({ contact_id: s.contact_id, name: personName(s.full_name, { full: true }), confirmed: s.confirmed })),
-          games: games.filter((g) => g.net_no === n.net_no)
-            .map((g) => ({ game_no: g.game_no, score_a: g.score_a, score_b: g.score_b, entered_by: g.entered_by_contact_id })),
-          // The question a director actually has: has anybody else looked at this net?
-          checked: slots.filter((s) => s.net_no === n.net_no && s.confirmed === "confirmed").length,
-          disputed: slots.filter((s) => s.net_no === n.net_no && s.confirmed === "disputed").length,
-          complete: games.filter((g) => g.net_no === n.net_no).every((g) => g.score_a !== null && g.score_b !== null),
-        })),
-      });
     }
 
     const names = new Map(((await env.DB.prepare(
@@ -397,17 +641,103 @@ export async function kotcRoutes(request, env, url, ctx) {
     ).bind(ctx.orgId, sessionId).all()).results || []).map((q) => [q.contact_id, q.full_name]));
 
     return json({
-      session: { id: se.id, name: se.name, move_up: se.move_up, points_to: se.points_to, status: se.status },
-      rounds: board,
-      // Derived from the games, every time. There is no stored per-player counter anywhere (migration 0040).
+      session: se.name,
+      status: se.status,
+      points_to: se.points_to,
+      rounds: rounds.length,
+      // The same derivation the staff board uses — rankPlayers(tally(games)) — so the public board and
+      // the director's board can never disagree about who is winning. Only the NAMES differ.
       leaderboard: rankPlayers(tally(allGames)).map((row, i) => ({
-        place: i + 1, ...row, name: personName(names.get(row.contact_id), { full: true }),
+        place: i + 1, ...row, name: personName(names.get(row.contact_id), {}),
       })),
-      ...(await roster(env, ctx.orgId, sessionId)),
-    });
+    }, 200, { "Cache-Control": "no-store" });
   }
 
   return null;
+}
+
+/**
+ * The board, exactly once.
+ *
+ * The staff GET and every `move` response return this same object. They were going to be two builders
+ * — the GET's inline one and a smaller "just the nets" shape for a drag — and that is the mistake this
+ * module already documents about write paths: two producers of the same six numbers diverge, and the
+ * day they do, the screen after a drag and the screen after a refresh disagree about the evening. One
+ * builder means a move response IS the next board, so the page re-renders from the server rather than
+ * patching its own copy. Same discipline as `playerView` deciding `mode`.
+ */
+async function boardPayload(env, orgId, sessionId) {
+  const se = await env.DB.prepare(
+    `SELECT id, name, move_up, points_to, status FROM kotc_sessions
+      WHERE id=?1 AND org_id=?2 AND deleted_at IS NULL`
+  ).bind(sessionId, orgId).first();
+
+  const rounds = (await env.DB.prepare(
+    `SELECT id, round_no FROM kotc_rounds WHERE org_id=?1 AND session_id=?2 AND deleted_at IS NULL
+      ORDER BY round_no`
+  ).bind(orgId, sessionId).all()).results || [];
+
+  const allGames = [];
+  const board = [];
+  for (const rd of rounds) {
+    const { slots, games } = await loadRound(env, orgId, rd.id);
+    allGames.push(...games);
+    board.push({
+      round_no: rd.round_no,
+      nets: netsFrom(slots).map((n) => ({
+        net_no: n.net_no,
+        // Staff surface, so full names: this is who a director goes looking for.
+        players: slots.filter((s) => s.net_no === n.net_no).sort((a2, b2) => a2.seat - b2.seat)
+          .map((s) => ({
+            contact_id: s.contact_id, seat: s.seat,
+            name: personName(s.full_name, { full: true }), confirmed: s.confirmed,
+          })),
+        games: games.filter((g) => g.net_no === n.net_no)
+          .map((g) => ({ game_no: g.game_no, score_a: g.score_a, score_b: g.score_b, entered_by: g.entered_by_contact_id })),
+        // The question a director actually has: has anybody else looked at this net?
+        checked: slots.filter((s) => s.net_no === n.net_no && s.confirmed === "confirmed").length,
+        disputed: slots.filter((s) => s.net_no === n.net_no && s.confirmed === "disputed").length,
+        complete: games.filter((g) => g.net_no === n.net_no).every((g) => g.score_a !== null && g.score_b !== null),
+      })),
+    });
+  }
+
+  const names = new Map(((await env.DB.prepare(
+    `SELECT pl.contact_id, c.full_name FROM kotc_players pl
+       LEFT JOIN contacts c ON c.id = pl.contact_id AND c.deleted_at IS NULL
+      WHERE pl.org_id=?1 AND pl.session_id=?2 AND pl.deleted_at IS NULL`
+  ).bind(orgId, sessionId).all()).results || []).map((q) => [q.contact_id, q.full_name]));
+
+  /* Who is entered but not seated in the latest round — the bench. A late arrival and anybody a
+     director has just subbed out both land here, and without it they would be invisible on the board
+     and undraggable, which is the only state the drag cannot recover from. */
+  const latest = rounds.length ? rounds[rounds.length - 1] : null;
+  let benched = [];
+  if (latest) {
+    benched = ((await env.DB.prepare(
+      `SELECT pl.contact_id, c.full_name FROM kotc_players pl
+         LEFT JOIN contacts c ON c.id = pl.contact_id AND c.deleted_at IS NULL
+        WHERE pl.org_id=?1 AND pl.session_id=?2 AND pl.deleted_at IS NULL AND pl.withdrawn_at IS NULL
+          AND pl.contact_id NOT IN (
+            SELECT s.contact_id FROM kotc_slots s
+             WHERE s.org_id=?1 AND s.round_id=?3 AND s.deleted_at IS NULL)
+        ORDER BY COALESCE(pl.seed, 9999), pl.contact_id`
+    ).bind(orgId, sessionId, latest.id).all()).results || [])
+      .map((r) => ({ contact_id: r.contact_id, name: personName(r.full_name, { full: true }) }));
+  }
+
+  return {
+    session: se
+      ? { id: se.id, name: se.name, move_up: se.move_up, points_to: se.points_to, status: se.status }
+      : null,
+    rounds: board,
+    current_round: latest ? latest.round_no : null,
+    bench: benched,
+    // Derived from the games, every time. There is no stored per-player counter anywhere (migration 0040).
+    leaderboard: rankPlayers(tally(allGames)).map((row, i) => ({
+      place: i + 1, ...row, name: personName(names.get(row.contact_id), { full: true }),
+    })),
+  };
 }
 
 /** The entry list with each person's link, for a director handing them out. */

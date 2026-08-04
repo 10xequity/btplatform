@@ -12,7 +12,9 @@
  *
  * v1.4 (2026-07-30, v0.40.0): GET /api/admin/reports/revenue.csv (staff) — owner req #12/#18.
  *   One flat, stable-header CSV (per-event revenue rows) built for the Looker Studio template
- *   (docs/2026-07-30_looker-template_v1_0.md). The build/buy call of record stands: export to
+ *   (docs/2026-07-31_looker-template_v1_1.md — v1_0, the version cited when this shipped, was
+ *   deleted 2026-08-04; v1_1 leaves the single-org content unchanged). The build/buy call of
+ *   record stands: export to
  *   a free Looker template, do NOT build a report builder. Headers are a CONTRACT — the
  *   Looker template maps them by name; renaming one breaks every saved report. Escaping is
  *   RFC 4180 (csvCell, unit-tested). Pure helpers exported: csvCell · buildRevenueCsv.

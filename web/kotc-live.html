@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<!-- Boomtown Platform — King / Queen of the Court, the public standings · Version: v1.0 · Date: 2026-08-04
+     Ships in: v0.86.0 · Link: kotc-live.html?s=SESSION_ID · Reads GET /api/live/kotc/:id — no login.
+
+     Screen (c) of the format's three. Owner 2026-08-04, asked whether this belonged on the existing
+     live board as a third shape (spec §8.4) or on its own page: A SEPARATE PAGE. web/assets/live.js
+     carries the v0.84.0 diff-animation engine, whose own guard states it cannot see whether the motion
+     looks good, and nobody has eyeballed it yet — so a new section in there is a change to code that is
+     one human review short of trusted. This page touches none of it.
+
+     WHAT IS DELIBERATELY NOT HERE, and the server is what guarantees it: no roster, no score links, and
+     names abbreviated to "Ava S." (standards §8). The staff board carries a scoring link per player and
+     that token IS the credential, so the trim happens SERVER-SIDE in kotcplay.js — a public shape built
+     by this page rendering less of a staff payload would publish every player's link to anyone who
+     opened devtools. kotc_board.test.mjs asserts it against the raw response bytes. -->
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Standings — Boomtown Athletics</title>
+  <script>/* Pre-paint theme (v0.53.0): saved bt_theme, else system preference, applied before the first stylesheet. site-nav.js owns the toggle listener. */(function(){try{var t=(window.localStorage&&localStorage.getItem("bt_theme"))||(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.dataset.theme=t;}catch(e){}})();</script>
+  <link rel="stylesheet" href="assets/tokens.css?v=0.86.0" />
+  <link rel="stylesheet" href="assets/app.css?v=0.86.0" />
+  <style>
+    /* A wall display and a phone at the side of a court, showing one thing: who is winning.
+       Tokens only (standards §5).
+
+       A REAL TYPE SCALE, CHECKED AS RENDERED. kotc.html shipped with its scale "verified" three steps
+       by counting DECLARED font sizes while one class declared none and inherited 1rem — so the
+       rendered scale was flat. Every step below is declared on the element that ships it, and the
+       guard checks the set that ships rather than the set that was written.
+
+       MOTION: a board that polls must not animate on every poll. The v0.84.0 live board learned this
+       the expensive way and diffs its payload first; this page has one list, so it re-renders only when
+       the standings actually differ and animates only the rows that moved. Nothing animates on load. */
+
+    .kl-wrap { max-width:720px; margin:0 auto; padding:0 4px; }
+
+    .kl-head { margin:6px 0 14px; }
+    .kl-title { margin:0; font-size:1.5rem; line-height:1.2; }
+    .kl-sub { margin:4px 0 0; font-size:.95rem; color:var(--text-dim); }
+    .kl-meta { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+    .kl-chip {
+      display:inline-flex; align-items:center; padding:3px 10px;
+      border:1px solid var(--border); border-radius:999px;
+      font-size:.8rem; color:var(--text-dim); background:var(--surface-2);
+    }
+    /* Gold as a FILL with dark ink — never gold text on a light surface (1.87:1, an AA failure). */
+    .kl-chip.live { background:var(--primary); color:var(--gold-ink); border-color:transparent; font-weight:600; }
+
+    .kl-list { list-style:none; margin:0; padding:0; display:grid; gap:6px; }
+
+    .kl-row {
+      display:grid; grid-template-columns:2.4rem 1fr auto; align-items:center; gap:10px;
+      min-height:52px; padding:8px 12px;
+      border:1px solid var(--border); border-radius:var(--radius-control);
+      background:var(--surface);
+    }
+    .kl-place { font-size:1.05rem; font-weight:700; color:var(--text-muted); font-variant-numeric:tabular-nums; text-align:right; }
+    .kl-row.top .kl-place { color:var(--emphasis); }
+    /* Step 2 of the scale, declared here rather than inherited. */
+    .kl-name { font-size:1.05rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .kl-nums { display:flex; gap:12px; align-items:baseline; }
+    /* Step 3: the figure is the biggest thing on the row, because it is what people came to read. */
+    .kl-pts { font-size:1.25rem; font-weight:700; color:var(--emphasis); font-variant-numeric:tabular-nums; }
+    /* Step 1: the smallest, and it never carries meaning on its own. */
+    .kl-sec { font-size:.78rem; color:var(--text-muted); font-variant-numeric:tabular-nums; }
+
+    .kl-row.top { border-color:var(--primary); }
+
+    .kl-empty { padding:20px 12px; text-align:center; color:var(--text-dim); font-size:.95rem; }
+    .kl-foot { margin-top:16px; font-size:.78rem; color:var(--text-muted); text-align:center; }
+
+    /* Only rows whose position actually changed. 200ms, ease-out, and from 0.98 rather than 0 —
+       nothing in the world appears from nothing. */
+    .kl-moved { animation: kl-rise var(--dur-pop) var(--ease-out) both; }
+    @keyframes kl-rise {
+      from { transform:scale(0.98); background-color:var(--surface-2); }
+      to   { transform:none;        background-color:var(--surface); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      /* Covers ANIMATION, not only transition — the half of the rule that actually moves things. */
+      .kl-moved { animation: kl-soft var(--dur-pop) linear both; }
+      @keyframes kl-soft { from { opacity:.7; } to { opacity:1; } }
+    }
+
+    /* A wall display is read from across a court. */
+    @media (min-width: 900px) {
+      .kl-title { font-size:1.9rem; }
+      .kl-name { font-size:1.25rem; }
+      .kl-pts { font-size:1.6rem; }
+      .kl-row { min-height:60px; }
+    }
+  </style>
+</head>
+<body>
+    <header class="header chrome-glass no-print">
+    <a class="wordmark" href="index.html" style="text-decoration:none;color:inherit"><img class="brand-logo" src="assets/logo-boom-icon-512.png?v=0.86.0" alt="" width="22" height="22" />Boomtown <span>Athletics</span></a>
+    <div class="spacer"></div>
+    <a id="btHdrAdmin" class="btn ghost hdr-admin" href="admin.html" aria-label="Switch to admin view" hidden>Admin</a>
+    <a id="btHdrMail" class="btn ghost hdr-mail" href="member-inbox.html" aria-label="Messages">✉</a>
+    <button id="themeToggle" class="btn ghost theme-toggle" aria-label="Toggle dark or light theme">◐</button>
+    <button id="logoutBtn" class="btn ghost" hidden>Sign out</button>
+  </header>
+
+  <main class="main" aria-live="polite">
+    <div class="kl-wrap" id="klWrap"></div>
+  </main>
+
+  <script src="assets/site-nav.js?v=0.86.0" defer></script>
+  <script src="assets/config.js?v=0.86.0"></script>
+  <script src="assets/kotc-live.js?v=0.86.0"></script>
+</body>
+</html>

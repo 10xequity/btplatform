@@ -1,6 +1,8 @@
 # Boomtown Platform — Looker Studio Revenue Template
 **File:** docs/2026-07-31_looker-template_v1_1.md · **Version:** v1.1 · **Date:** 2026-07-31 · **Ships in:** v0.43.0
 **Supersedes:** docs/2026-07-30_looker-template_v1_0.md (single-org content unchanged; v1.1 adds the cross-company feed).
+**v1_0 was DELETED 2026-08-04** with the owner's OK — two versions of one document side by side is what
+`CLAUDE.md` file hygiene forbids in as many words. Its history is in git; this file is the only live copy.
 
 Owner requirements #12 and #18 ask for custom, graphically editable reporting "similar to
 Power BI." The build/buy call of record (library §1) stands: **do not build a report

@@ -1,5 +1,128 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.86.0 — 2026-08-04
+
+### The other two KOTC screens, and the three routes they needed
+
+King/Queen of the Court is now complete as a format: the player link shipped in v0.85.0, and this
+release adds **screen (a), the director's board** (`admin-kotc.html`) and **screen (c), the public
+standings** (`kotc-live.html`) — together with the three routes neither of them could exist without.
+
+**The previous handoff said this module's API was "complete and tested". It was complete for one screen
+of three.** `kotcplay.js` had five routes and then `return null`. One `grep` settled in a second what a
+sentence written in good faith had got wrong by two thirds. Routes and screens ship together here
+because a route with no screen is failure class 1, and the KOTC engine already paid for that once in
+v0.76.0.
+
+**`GET /api/admin/kotc`** — the session list. The staff read took an id and nothing could discover one,
+so the board was unreachable: a working route no caller could name. Newest first, with the event name
+and a player count, because the session a director wants is almost always the one they just made.
+
+**`POST /api/admin/kotc/:id/move`** — the drag. Schedule-editor precedent: **it never refuses a move.**
+A director always knows something the seeding does not — she came with her sister, he is leaving at
+eight — and a tool that blocks them is a tool they route around, after which the real board is a
+whiteboard again. Dropping on an occupied seat **swaps** the two, so the board can never lose a person.
+A player on the entry list but not seated can be dragged on, and whoever they replace lands on the
+bench where they can be dragged back; a bench nobody can see is a one-way door.
+
+**And it must not rewrite history.** `kotc_games` stores the four players *on* the game row, which is
+what lets the leaderboard be derived from games alone with no stored counter to disagree with. The cost
+of that design is that a re-seat *could* retroactively change who played a game that is already scored —
+and because the leaderboard is derived, it would silently restate the evening. Nothing on the screen
+would look wrong. So a game with both scores in is **finished and never touched**; only unplayed rows
+are re-paired to the new line-up.
+
+That invariant carries a **negative control that mutates the real input**: same session, same move,
+same game row, with the scores cleared — and it proves the same move *does* re-pair it. Without that,
+"the finished game is unchanged" could pass for the boring reason that the route never re-pairs
+anything, and a guard that cannot fail is not a guard. "Never refuses" is tested by exhausting the
+board rather than sampling it — one player dragged to every seat that exists, in turn — because
+*never* is a claim about the cases nobody thought of.
+
+One more trap worth recording: `rotation()` **throws** for any net size that is not four or five, and
+the v0.77.0 dispatch table treats a throw as a *decline*. An unguarded call would have turned a drag
+into a silent 404 — the route looking absent rather than broken. A short net now **warns and is left
+alone** (brackets.js precedent) and the response says so in a sentence.
+
+**`GET /api/live/kotc/:id`** — the public individual leaderboard. Asked whether this belonged on the
+existing live board as a third shape (spec §8.4) or on its own page, the owner chose **a separate
+page**: `web/assets/live.js` carries the v0.84.0 diff-animation engine whose own guard states it cannot
+see whether the motion looks good, and nobody has eyeballed it yet, so a new section in there is a
+change to code that is one human review short of trusted. `live.js` is untouched.
+
+Names on it are **abbreviated server-side**, and that is not a detail. The staff payload carries a
+scoring link per player and that token *is* the credential; a public shape built by the page rendering
+less of a staff payload would publish every player's link to anyone who opened devtools. So the trim
+happens in `kotcplay.js`, and the test asserts it **against the raw response bytes** — a token that
+never appears in the bytes cannot be recovered from them.
+
+**One payload builder, not two.** The staff GET's inline payload became `boardPayload`, shared with
+every move response, so a move response *is* the next board. The page never patches its own copy —
+same discipline as `kotc.html` not re-deriving `mode`, and the screen guard refuses the shape rather
+than trusting it, with a negative control that adds a local seat assignment back and proves it fires.
+
+**Keyboard parity is one mover, not two.** HTML5 drag-and-drop cannot be driven from a keyboard, so the
+board ships Enter-to-pick-up, arrows, Enter-to-drop. The failure mode is not missing keyboard support,
+which is visible; it is two implementations that drift, after which the keyboard quietly does something
+slightly different from the mouse. The guard asserts exactly one function issues the move, with a
+negative control that gives the keyboard its own copy.
+
+**Motion, decided rather than sprinkled.** A drag is a high-frequency action and the whole board
+re-renders after each one, so tiles do **not** animate in — animating every tile on every move would
+make the fastest part of the job feel the slowest. What animates is the one tile that just moved, which
+is state indication rather than decoration. The public board **diffs before it redraws**: a poll that
+changes nothing touches no DOM, and only rows whose place actually changed are marked — the v0.84.0
+lesson applied in the small. Nothing animates on first paint, nothing starts from `scale(0)`, no
+`ease-in` anywhere, and both `prefers-reduced-motion` blocks cover `animation` and not only
+`transition`.
+
+**Clicks, counted (owner #19):** seeing tonight's board is **zero taps** — the newest session loads
+itself and the picker is for the other nights. Moving a player is one drag. Starting the next round is
+one tap.
+
+**Two ratchets fired by design and were bumped with the reason recorded at the assertion:** the
+byte-identical member header floor **15 → 16** for `kotc-live.html`, and the same count in
+`header_actions`. Both pages were **generated from a page already inside those ratchets** —
+`admin-pool-board.html` and `kotc.html` — rather than hand-written, which is what C7 asks for and the
+reason `kotc.html` was caught last release. `build-status.js` gained both entries, and `kotc.html`'s
+entry no longer tells testers "Not built yet: the director's board that seats the nets" — that copy
+outliving the thing arriving is exactly C9's shape.
+
+**A guard's own comments tripped it twice.** The check for "nothing animates from `scale(0)`" matched
+the comment saying nothing animates from `scale(0)`, and the check for "no roster on a public surface"
+matched the comment saying there is no roster. v0.85.0 hit the identical thing on `kotc.html`, which
+makes it a shape rather than an accident: **check the set that ships behaviour.** A comment ships bytes,
+not behaviour, and a guard that cannot tell the difference punishes the explanation and rewards
+silence. The fix is a comment-stripping corpus that carries its own negative control, so it cannot be a
+quiet way of switching the check off.
+
+Suite **1180 → 1223** (+43, measured before and after). Test files 70 → 72. No migration; ledger stays
+**0042**. Cache buster swept **0.85.0 → 0.86.0**, verified at **390 occurrences, one value, 62 files**
+with ripgrep — a corpus derivation sharing no code with the sweep, against a count written down before
+it ran (C14).
+
+### Doc consolidation — the trigger that had been firing unattended
+
+The four-document working set measured **93,066 bytes ≈ 23,300 tokens** against `CLAUDE.md` §0's
+claimed "~7,400 — the intended per-session doc budget". That is **3.1× over**, and §7's own
+consolidation trigger (">~10,000 → stop and consolidate") had been firing and being ignored for several
+sessions. Reading the working set cost roughly a quarter of a session before any work started, which is
+the mechanical reason the last two sessions each shipped one screen rather than two.
+
+`docs/INDEX.md` was the largest document in the repo at 37KB, most of it the **closed** half of the
+contradiction register. Twelve closed entries moved verbatim to
+`docs/archive/contradictions-closed_v1_0.md`; C2, C3, C6 and C15 stay live in full; and a new
+**standing-rules table** keeps the one-line habit rule from every closed entry in the working set, which
+is the only part of them that was actually being re-read. INDEX **37,416 → 26,343 bytes**.
+
+With the owner's OK, `docs/` root also went **40 → 18** `.md` files: `looker-template_v1_0` deleted
+(v1_1 sat beside it — the duplicate `CLAUDE.md` file hygiene forbids in as many words), nine superseded
+handoffs and twelve one-time module-install guides moved to `docs/archive/`. Dangling references were
+swept with grep rather than assumed: `worker/src/reports.js` cited the deleted looker doc in its v1.4
+header entry and now cites v1_1 while preserving what was true when it shipped. `CHANGELOG.md`'s one
+citation of a moved handoff is **deliberately left alone** — it is append-only history, and rewriting it
+to match the present is the C9 error inverted.
+
 ## v0.85.0 — 2026-08-04
 
 ### The KOTC player link — the first of the three screens

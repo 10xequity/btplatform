@@ -1,33 +1,144 @@
 <!DOCTYPE html>
-<!-- Boomtown Platform — Memberships (admin) · Version: v1.0 · Date: 2026-07-24 · Ships in: v0.10.0
-     Plans CRUD (creates the Square Catalog plan + variation behind the scenes), subscriber
-     list with status, MRR / active / payment-issue chips. Uses the shared admin rail. -->
+<!-- Boomtown Platform — Court board (admin) · Version: v1.0 · Date: 2026-08-04 · Ships in: v0.86.0
+     The director's board for King/Queen of the Court: nets down the page, a person on each seat, drag
+     to re-seat. Screen (a) of the format's three; the player link is kotc.html, the public standings
+     are kotc-live.html.
+     IT NEVER REFUSES A MOVE (schedule-editor precedent) and dropping on somebody SWAPS the two, so a
+     board can never lose a person. A game that already has a score is never re-paired — that invariant
+     lives on the server and has its own test, because nothing on this screen would show it failing.
+     Generated from admin-pool-board.html, which passes page_structure.test.mjs (C7: shell-slicing
+     copies AND increments stray closing tags, and browsers discard them in silence).
+     Keyboard parity throughout — Enter picks up, arrows choose, Enter drops, Escape cancels. -->
 <html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Memberships — Boomtown Athletics</title>
+  <title>Court board — Boomtown Athletics</title>
   <script>/* Pre-paint state — collapse + theme (uiux-review §4/§6.4, v0.52.0): read the bt_nav cookie and the saved theme BEFORE the first stylesheet so the rail state AND the theme are right on frame one — no post-paint snap of either. admin-nav.js writes the cookie on rail toggle and bt_theme on theme toggle; the localStorage bt_nav fallback migrates pre-v0.51 sessions. */(function(){try{var m=document.cookie.match(/(?:^|; )bt_nav=([^;]*)/);var v=m?m[1]:((window.localStorage&&localStorage.getItem("bt_nav_collapsed")==="1")?"min":"");if(v==="min")document.documentElement.dataset.nav="min";var t=(window.localStorage&&localStorage.getItem("bt_theme"))||(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.dataset.theme=t;}catch(e){}})();</script>
   <link rel="stylesheet" href="assets/tokens.css?v=0.86.0" />
   <link rel="stylesheet" href="assets/app.css?v=0.86.0" />
   <link rel="stylesheet" href="assets/admin.css?v=0.86.0" />
   <style>
-    .mp-total { font-size: 26px; font-weight: 800; }
-    .mp-total small { display: block; font-size: 12.5px; font-weight: 600; color: var(--text-muted); letter-spacing: .05em; text-transform: uppercase; }
-    .mp-form { display: grid; gap: 10px; grid-template-columns: 2fr 1fr 1fr; align-items: end; }
-    .mp-form .full { grid-column: 1 / -1; }
-    .mp-form label { display: block; font-size: 12.5px; font-weight: 600; color: var(--text-muted); margin-bottom: 4px; }
-    .mp-form input, .mp-form select, .mp-form textarea { width: 100%; min-height: 44px; }
-    .mp-form textarea { min-height: 64px; }
-    .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; border: 1px solid var(--border); }
-    .pill.active { color: var(--positive); border-color: var(--positive); }
-    .pill.past_due { color: var(--warning, #e6a23c); border-color: var(--warning, #e6a23c); }
-    .pill.off { color: var(--text-muted); }
-    @media (max-width: 720px) { .mp-form { grid-template-columns: 1fr; } }
+    /* Nets down the page, a person on each seat. Tokens only (standards §5) — every colour, radius and
+       duration below resolves from assets/tokens.css, so a theme change moves this page with it.
+
+       MOTION, decided rather than sprinkled (/emil-design-eng):
+         · A DRAG IS A HIGH-FREQUENCY ACTION. A director re-seats a dozen people in a minute, and the
+           whole board re-renders from the server after each one. Animating every tile on every move
+           would make the fastest part of the job feel the slowest, so tiles do NOT animate in.
+         · What DOES animate is the one tile that just moved — that is state indication, not decoration,
+           and it answers "did that land where I meant?" without a sentence.
+         · :active feedback on everything pressable, because a tile that does not respond to a press
+           feels broken on a tablet before it feels slow.
+         · ease-out and under 300ms throughout. Nothing here uses ease-in.
+         · No enter animation from scale(0) anywhere — nothing in the world appears from nothing. */
+
+    .kb-head { display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end; justify-content:space-between; }
+    .kb-tools { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:0; }
+    .kb-inline { display:flex; gap:6px; align-items:center; font-size:.92rem; color:var(--text-dim); }
+
+    /* The round strip: which round the board is showing, and how far the night has got. */
+    .kb-round { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:14px 0 6px; }
+    .kb-chip {
+      display:inline-flex; align-items:center; gap:6px; padding:4px 10px;
+      border:1px solid var(--border); border-radius:999px;
+      font-size:.82rem; color:var(--text-dim); background:var(--surface-2);
+    }
+    /* Gold is a BACKGROUND with dark ink, never text on a light surface (the gold rule, uiux-review §1). */
+    .kb-chip.now { background:var(--primary); color:var(--gold-ink); border-color:transparent; font-weight:600; }
+    .kb-chip.done { color:var(--ok); }
+    .kb-chip.warn { color:var(--warn); }
+
+    .kb-nets { display:grid; gap:14px; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); }
+
+    .kb-net {
+      border:1px solid var(--border); border-radius:var(--radius-card);
+      background:var(--surface); padding:12px;
+      transition: border-color var(--dur-pop) var(--ease-out), background-color var(--dur-pop) var(--ease-out);
+    }
+    .kb-net.target { border-color:var(--accent); }
+    .kb-net-head { display:flex; align-items:baseline; justify-content:space-between; gap:8px; margin-bottom:8px; }
+    .kb-net-h { margin:0; font-size:1.02rem; }
+    .kb-net-h .kb-top { color:var(--text-muted); font-weight:400; font-size:.8rem; margin-left:6px; }
+
+    .kb-seats { list-style:none; margin:0; padding:0; display:grid; gap:6px; }
+
+    .kb-seat {
+      display:flex; align-items:center; gap:8px;
+      /* 52px: this is thumb-critical. A director is dragging people about on a tablet at the side of a
+         court, one-handed, and standards §5 puts the floor at 52 for exactly that. */
+      min-height:52px; padding:8px 10px;
+      border:1px solid var(--border); border-radius:var(--radius-control);
+      background:var(--surface-raised); cursor:grab;
+      transition: transform var(--dur-press) var(--ease-out),
+                  border-color var(--dur-pop) var(--ease-out),
+                  background-color var(--dur-pop) var(--ease-out);
+    }
+    .kb-seat:active { transform:scale(0.97); cursor:grabbing; }
+    .kb-seat:focus-visible { outline:var(--focus-ring); outline-offset:2px; }
+    .kb-seat.dragging { opacity:.5; }
+    .kb-seat.carrying { border-color:var(--accent); box-shadow:inset 0 0 0 1px var(--accent); }
+    .kb-seat.over { border-color:var(--accent); background:var(--surface-2); }
+
+    .kb-no { min-width:1.6em; color:var(--text-muted); font-variant-numeric:tabular-nums; font-size:.82rem; }
+    .kb-who { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    /* Full names here: this is the staff surface, and it is who a director goes looking for. The public
+       page abbreviates, and that trim happens on the server, not in either page. */
+    .kb-tick { font-size:.9rem; }
+    .kb-tick.yes { color:var(--ok); }
+    .kb-tick.no  { color:var(--warn); }
+
+    .kb-empty {
+      display:flex; align-items:center; justify-content:center; min-height:52px;
+      border:1px dashed var(--border); border-radius:var(--radius-control);
+      color:var(--text-muted); font-size:.85rem; background:transparent;
+      transition: border-color var(--dur-pop) var(--ease-out), background-color var(--dur-pop) var(--ease-out);
+    }
+    .kb-empty.over { border-color:var(--accent); background:var(--surface-2); border-style:solid; }
+    .kb-empty:focus-visible { outline:var(--focus-ring); outline-offset:2px; }
+
+    .kb-games { margin:8px 0 0; padding:8px 0 0; border-top:1px solid var(--border); display:grid; gap:3px; }
+    .kb-game { display:flex; justify-content:space-between; gap:8px; font-size:.82rem; color:var(--text-dim); }
+    .kb-game .kb-sc { font-variant-numeric:tabular-nums; color:var(--text); }
+    .kb-game .kb-sc.none { color:var(--text-muted); }
+
+    .kb-bench { margin-top:18px; }
+    .kb-benchlist { list-style:none; margin:0; padding:0; display:flex; flex-wrap:wrap; gap:6px; }
+    .kb-benchlist .kb-seat { min-width:180px; }
+
+    .kb-lb { margin-top:22px; }
+    .kb-lb table { width:100%; border-collapse:collapse; font-size:.9rem; }
+    .kb-lb th, .kb-lb td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--border); }
+    .kb-lb th { color:var(--text-muted); font-weight:600; font-size:.8rem; }
+    .kb-lb td.num { text-align:right; font-variant-numeric:tabular-nums; }
+    /* --emphasis, not gold, for a figure on a light surface: 14.22:1 against 1.87:1 (C11's arithmetic). */
+    .kb-lb td.lead { color:var(--emphasis); font-weight:600; }
+
+    /* THE ONE THING THAT ANIMATES: the person who just moved. Occasional per action, and it is the
+       answer to "did that land?" — 180ms, ease-out, and it starts from 0.96 rather than 0. */
+    .kb-landed { animation: kb-land var(--dur-pop) var(--ease-out) both; }
+    @keyframes kb-land {
+      from { transform:scale(0.96); background-color:var(--surface-2); }
+      to   { transform:none;        background-color:var(--surface-raised); }
+    }
+
+    @media (hover: hover) and (pointer: fine) {
+      .kb-seat:hover { border-color:var(--text-muted); }
+    }
+
+    /* Reduced motion means fewer and gentler, not none — and it must cover ANIMATION as well as
+       TRANSITION. That is the v0.84.0 lesson: a block that only names `transition` leaves every
+       @keyframes running, which is the half of the rule that actually moves things. */
+    @media (prefers-reduced-motion: reduce) {
+      .kb-seat, .kb-net, .kb-empty { transition: border-color var(--dur-pop) linear, background-color var(--dur-pop) linear; }
+      .kb-seat:active { transform:none; }
+      .kb-landed { animation: kb-fade var(--dur-pop) linear both; }
+      @keyframes kb-fade { from { opacity:.65; } to { opacity:1; } }
+    }
   </style>
 </head>
 <body>
-  <header class="header chrome-glass no-print">
+    <header class="header chrome-glass no-print">
     <a class="wordmark" href="admin.html" style="text-decoration:none;color:inherit"><img class="brand-logo" src="assets/logo-boom-icon-512.png?v=0.86.0" alt="" width="22" height="22" />Boomtown <span>Athletics</span></a>
     <div class="spacer"></div>
     <select id="orgSwitcher" class="org-switcher" aria-label="Switch organization"></select>
@@ -36,7 +147,7 @@
     <a class="btn ghost" href="index.html">Member site</a>
   </header>
 
-  <div class="admin-layout">
+  <div id="app" class="admin-layout">
     <aside class="sidebar" data-static="rail" aria-label="Admin sections">
       <nav class="nav-group" data-key="run">
         <div class="nav-label" role="button" tabindex="0" aria-expanded="true">Run events<span class="grp-chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></span></div>
@@ -107,52 +218,41 @@
       </nav>
       <button class="bt-edge" type="button" aria-label="Collapse or expand navigation"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
     </aside>
-  <main class="main wide admin-main" id="app" aria-live="polite">
-    <div class="page-head"><h1>Memberships</h1></div>
-    <div id="status" role="status" aria-live="polite"></div>
-    <div id="billingNote"></div>
-
-    <div class="stat-cards">
-      <section class="card"><div class="mp-total" id="mrr">—<small>Monthly recurring revenue</small></div></section>
-      <section class="card"><div class="mp-total" id="activeN">—<small>Active memberships</small></div></section>
-      <section class="card"><div class="mp-total" id="dueN">—<small>Payment issues</small></div></section>
-    </div>
-
-    <section class="card" style="margin-top:14px">
-      <h2 style="font-size:16px;margin:0 0 10px" id="formTitle">New plan</h2>
-      <form class="mp-form" id="planForm">
-        <div><label for="pName">Name</label><input id="pName" required maxlength="120" placeholder="Open Gym Unlimited" /></div>
-        <div><label for="pPrice">Price (USD)</label><input id="pPrice" required type="number" min="1" step="0.01" placeholder="49.00" /></div>
-        <div><label for="pInterval">Billing</label>
-          <select id="pInterval"><option value="MONTHLY">Monthly</option><option value="ANNUAL">Annual</option></select></div>
-        <div class="full"><label for="pDesc">Short description (shown on the member page)</label>
-          <input id="pDesc" maxlength="200" placeholder="Unlimited open gym + member pricing on tournaments" /></div>
-        <div class="full"><label for="pPerks">Perks — one per line (shown as bullets)</label>
-          <textarea id="pPerks" placeholder="Unlimited open gym&#10;10% off league registration"></textarea></div>
-        <div class="full" style="display:flex;gap:10px;align-items:center">
-          <button class="btn" type="submit" id="saveBtn">Create plan</button>
-          <button class="btn ghost" type="button" id="cancelEdit" hidden>Cancel edit</button>
-          <span class="help-text" id="priceNote" hidden>Price changes apply to NEW signups — existing subscribers keep the price they signed up at (Square pins them to their original variation).</span>
+    <main class="admin-main" id="main">
+      <div class="kb-head">
+        <div>
+          <h1>Court board</h1>
+          <p class="muted">Drag a player onto another seat to move them. Drop them on somebody and the two swap — nobody ever comes off by accident. Games that already have a score are left exactly as they were played.</p>
         </div>
-      </form>
-    </section>
+        <div class="kb-tools">
+          <label class="kb-inline">Session
+            <select id="kbSession" aria-label="Choose a session"></select>
+          </label>
+          <button class="btn" id="kbRound" type="button">Next round</button>
+          <button class="btn ghost" id="kbReload" type="button">Reload</button>
+        </div>
+      </div>
 
-    <section class="card" style="margin-top:14px">
-      <h2 style="font-size:16px;margin:0 0 8px">Plans</h2>
-      <table class="tbl"><thead><tr><th>Plan</th><th>Price</th><th>Billing</th><th>Subscribers</th><th>Square</th><th>Status</th><th></th></tr></thead>
-        <tbody id="planRows"></tbody></table>
-    </section>
+      <p class="mf-note" id="kbHint" role="status" aria-live="polite">Tip: focus a player and press Enter to pick them up, then use the arrow keys and Enter to drop — no mouse needed.</p>
 
-    <section class="card" style="margin-top:14px">
-      <h2 style="font-size:16px;margin:0 0 8px">Subscribers</h2>
-      <table class="tbl"><thead><tr><th>Member</th><th>Plan</th><th>Status</th><th>Started</th><th>Period end</th><th>Card</th></tr></thead>
-        <tbody id="subRows"></tbody></table>
-    </section>
-  </main>
-  </div><!-- /admin-layout -->
+      <div class="kb-round" id="kbRoundStrip"></div>
 
+      <div class="kb-nets" id="kbNets"></div>
+
+      <section class="kb-bench" aria-labelledby="kbBenchH">
+        <h2 class="pb-div-h" id="kbBenchH">Not on a net <span class="pb-courts" id="kbBenchCount"></span></h2>
+        <ul class="kb-benchlist" id="kbBench"></ul>
+      </section>
+
+      <section class="kb-lb" aria-labelledby="kbLbH">
+        <h2 class="pb-div-h" id="kbLbH">Standings</h2>
+        <p class="muted" id="kbLbNote">Worked out from the games as they come in — wins first, then point difference. There is no stored total anywhere to disagree with this.</p>
+        <div id="kbLb"></div>
+      </section>
+    </main>
+  </div>
   <script src="assets/config.js?v=0.86.0"></script>
   <script src="assets/admin-nav.js?v=0.86.0"></script>
-  <script src="assets/admin-plans.js?v=0.86.0"></script>
+  <script src="assets/admin-kotc.js?v=0.86.0"></script>
 </body>
 </html>
