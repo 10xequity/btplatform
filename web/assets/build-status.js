@@ -110,6 +110,7 @@
     "register.html":            { s: "beta", n: "Registration, teammates, waiver and Square checkout all work (SANDBOX). Promo codes cannot be entered at checkout yet — they are admin-applied only." },
     "checkin.html":             { s: "live" },
     "score.html":               { s: "live" },
+    "kotc.html":                { s: "beta", n: "King and Queen of the Court, from a player's own link — no sign-in. Whoever opens it first types the net's scores; anyone opening it after that is shown what was entered and asked yes or no, and \"no\" becomes an edit that asks everyone else to look again. If you only remember your own points for the round, type that one number and we work out the rest of the net where the numbers allow it. Not built yet: the director's board that seats the nets, so a session has to be set up through the API for now." },
     "member.html":              { s: "live" },
     "lfg.html":                 { s: "beta", n: "The sub board and the free-agent pool are finished. Replying to a roster invitation (RSVP) is the one piece still to come." },
     "sign.html":                { s: "live" },

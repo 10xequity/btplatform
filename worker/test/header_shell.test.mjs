@@ -254,13 +254,17 @@ const memberPageCopyVerdict = (src) => {
   return bad;
 };
 
-test("the 14 canonical member pages carry the complete member header, byte-identical", () => {
+test("the 15 canonical member pages carry the complete member header, byte-identical", () => {
   // The count is a deliberate ratchet: it reddens whenever a member page is added, so whoever added
   // one has to confirm it ships the real header rather than a lookalike. 13 → 14 in v0.73.0 for
   // live.html, the public scoreboard, which passed the byte-identical check on its first run because
   // it was generated from an existing member page rather than hand-written.
+  // 14 → 15 in v0.85.0 for kotc.html, the KOTC player link. It did NOT pass on its first run — it was
+  // hand-written with a reduced header (brand + theme only), and this ratchet is what caught it. The
+  // header was then taken from score.html, the closest precedent: also a no-login token page, where
+  // the Admin and mail links ship hidden and site-nav reveals them only if a local token exists.
   const canon = htmlPages().filter((f) => isMemberCanonPage(f, read(f)));
-  assert.equal(canon.length, 14, `expected exactly 14 canonical member pages, saw ${canon.length}: ${canon.join(", ")}`);
+  assert.equal(canon.length, 15, `expected exactly 15 canonical member pages, saw ${canon.length}: ${canon.join(", ")}`);
   const headers = new Map();
   for (const f of canon) {
     const v = memberHeaderVerdict(read(f));

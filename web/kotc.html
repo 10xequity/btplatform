@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<!-- Boomtown Platform — King / Queen of the Court, the player's link · Version: v1.0 · Date: 2026-08-04
+     Ships in: v0.85.0 · Link: kotc.html?t=TOKEN (minted per player at entry, kotcplay.js v1.0).
+
+     THE SERVER DECIDES WHAT THIS SCREEN IS. `/api/kotc/:token` returns `mode` — enter, confirm or
+     done — and this page renders that field. It does NOT look at the scores and work the mode out for
+     itself: two screens deciding the same question independently is two chances to show the wrong one
+     (kotcplay.js playerView, owner 2026-08-03). `kotc_screen.test.mjs` asserts the page carries no
+     local derivation, with a negative control that adds one back and proves the guard fires.
+
+     Click budget: confirming somebody else's scores is ONE tap. Entering a whole net is type-then-save.
+     A player who only remembers their own points total types ONE number — the v0.79.0 solver derives
+     the rest of the net from it and never guesses. -->
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Your net — Boomtown Athletics</title>
+  <script>/* Pre-paint theme (v0.53.0): saved bt_theme, else system preference, applied before the first stylesheet. site-nav.js owns the toggle listener. */(function(){try{var t=(window.localStorage&&localStorage.getItem("bt_theme"))||(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.dataset.theme=t;}catch(e){}})();</script>
+  <link rel="stylesheet" href="assets/tokens.css?v=0.85.0" />
+  <link rel="stylesheet" href="assets/app.css?v=0.85.0" />
+  <style>
+    .kotc-wrap { max-width: 520px; margin: 0 auto; }
+
+    /* The one line that says where you are standing. */
+    .kotc-where { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+    .kotc-net { font-size: 1.5rem; font-weight: 700; color: var(--emphasis); }
+    .kotc-round { color: var(--text-muted); font-size: .9rem; }
+
+    /* The question the server is asking. It is the loudest text on the page because answering it is
+       the only reason anybody opened this link. */
+    .kotc-prompt { font-size: 1.05rem; margin: 0 0 12px; }
+
+    /* THE SIGNATURE ELEMENT — one net, its games stacked, your own pair marked with a gold dot.
+       Gold is a dot here, never text on a light surface (uiux-review §1, measured 1.87:1). */
+    .kotc-game { border: 1px solid var(--border); border-radius: var(--radius-card); padding: 12px; margin-bottom: 10px; }
+    .kotc-game-no { font-size: .8rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 8px; }
+    .kotc-side { display: grid; grid-template-columns: 1fr 72px; gap: 10px; align-items: center; margin-top: 6px; }
+    .kotc-pair { display: flex; align-items: center; gap: 7px; line-height: 1.3; }
+    .kotc-you { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex: none; }
+    .kotc-mine { font-weight: 600; }
+    .kotc-score { width: 100%; min-height: 44px; text-align: center; font-size: 1.15rem; font-variant-numeric: tabular-nums;
+                  border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface-raised); color: var(--text); }
+    .kotc-score:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+    /* Read-only in confirm mode: the numbers are the evidence, not a field to fight with. */
+    .kotc-shown { min-height: 44px; display: flex; align-items: center; justify-content: center;
+                  font-size: 1.15rem; font-variant-numeric: tabular-nums; font-weight: 600; }
+    .kotc-blank { color: var(--text-muted); font-weight: 400; }
+
+    /* Thumb-critical: this is the yes/no a player answers standing on grass. 52px (standards §5). */
+    .kotc-verdict { display: flex; gap: 10px; margin-top: 4px; }
+    .kotc-verdict .kotc-tap { flex: 1; min-height: 52px; font-size: 1.05rem; }
+
+    .kotc-total { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
+    .kotc-total label { display: block; margin-bottom: 6px; font-size: .9rem; }
+    .kotc-total-row { display: grid; grid-template-columns: 96px 1fr; gap: 10px; align-items: center; }
+
+    .kotc-checked { color: var(--text-muted); font-size: .85rem; margin-top: 10px; }
+    .kotc-note { margin-top: 10px; }
+    .kotc-bad { color: var(--danger); }
+
+    /* MOTION. This screen is opened a handful of times a night, so a state change may animate
+       (emil framework, "occasional"). Values from tokens.css; nothing invented. The card that
+       replaces the question settles in — it does not fly. */
+    .kotc-settle { animation: kotc-settle var(--dur-modal) var(--ease-out) both; }
+    @keyframes kotc-settle { from { opacity: 0; transform: scale(.97); } to { opacity: 1; transform: none; } }
+
+    /* Reduced motion kills the MOVEMENT and keeps the fade — and it covers `animation` as well as
+       `transition`, because every effect on this page is a keyframe and a transition-only block
+       would let all of them straight through (the v0.84.0 lesson). */
+    @media (prefers-reduced-motion: reduce) {
+      .kotc-settle { animation: kotc-fade var(--dur-pop) var(--ease-out) both; }
+      @keyframes kotc-fade { from { opacity: 0; } to { opacity: 1; } }
+    }
+  </style>
+</head>
+<body>
+    <header class="header chrome-glass no-print">
+    <a class="wordmark" href="index.html" style="text-decoration:none;color:inherit"><img class="brand-logo" src="assets/logo-boom-icon-512.png?v=0.85.0" alt="" width="22" height="22" />Boomtown <span>Athletics</span></a>
+    <div class="spacer"></div>
+    <a id="btHdrAdmin" class="btn ghost hdr-admin" href="admin.html" aria-label="Switch to admin view" hidden>Admin</a>
+    <a id="btHdrMail" class="btn ghost hdr-mail" href="member-inbox.html" aria-label="Messages">✉</a>
+    <button id="themeToggle" class="btn ghost theme-toggle" aria-label="Toggle dark or light theme">◐</button>
+    <button id="logoutBtn" class="btn ghost" hidden>Sign out</button>
+  </header>
+
+  <main class="main" aria-live="polite">
+    <div class="kotc-wrap" id="kotcApp"><div class="card"><p>Loading your net…</p></div></div>
+  </main>
+
+  <script src="assets/site-nav.js?v=0.85.0" defer></script>
+  <script src="assets/config.js?v=0.85.0"></script>
+  <script src="assets/kotc.js?v=0.85.0"></script>
+</body>
+</html>

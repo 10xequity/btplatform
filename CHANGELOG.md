@@ -1,5 +1,83 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.85.0 — 2026-08-04
+
+### The KOTC player link — the first of the three screens
+
+`kotc.html` + `web/assets/kotc.js`. A player opens their own link on a phone, standing on grass, with
+no sign-in: the token is the credential, the same contract `/api/score/:token` has used for captains
+since v0.3.0.
+
+**The server decides what the screen is.** `/api/kotc/:token` returns `mode` — `enter`, `confirm` or
+`done` — computed in exactly one place, `playerView` in `kotcplay.js`. The page renders that field and
+never works it out again. Every POST response also spreads a fresh view, so the screen *after* an
+action is the server's next screen rather than the page's guess at it; there is no client-side state
+machine to drift. A page that re-derived this would show a blank net to somebody the server had asked
+to *check* a scoreline, and they would overwrite it. Nothing would throw and nothing would log — the
+leaderboard would simply be wrong.
+
+So `kotc_screen.test.mjs` asserts the **absence of a second decider**, which is the hard kind of
+assertion, because an absence never goes red on its own (C10/C13). It refuses three shapes in the
+shipped source: assigning a `mode`, spelling a mode into a ternary branch or a `mode:` key, and
+failing to read the server's field at all. The negative control pastes `playerView`'s **real
+expression** into the **real file** and proves the guard catches it.
+
+That guard caught its own first draft. The refusal was originally "a mode literal as any object
+value", which reddens on `action: "confirm"` — the API's *action* vocabulary overlaps the *mode*
+vocabulary on exactly that word, and forbidding it would have forbidden the confirm POST the screen
+exists to send. Narrowed to the ternary branch, which is the shape every real derivation takes.
+
+**Click budget (owner #19, counted):** confirming what somebody else typed is **one tap**. Entering a
+whole net is type-then-save. A player who only remembers their own points total types **one number** —
+the v0.79.0 solver derives the rest of the net from it, and a game it cannot pin comes back named as
+still needing a score rather than guessed. An empty field is omitted from the POST, never sent as
+null, so a partial submission cannot wipe somebody else's work.
+
+Also asserted: all four submission shapes the API accepts are reachable from the page (call sites, not
+definitions — standards §6.5), every `animation` name resolves to a real `@keyframes`, and the
+`prefers-reduced-motion` block covers `animation` and not only `transition` — the v0.84.0 lesson,
+applied to a new page on its first release rather than ten later.
+
+### What the header ratchet caught
+
+`kotc.html` shipped hand-written with a reduced header — brand and theme toggle only — and
+`header_shell.test.mjs` / `header_actions.test.mjs` reddened immediately: the canonical member header
+is byte-identical across every member page, and the count is a deliberate ratchet so that whoever adds
+a page has to confirm it ships the real header rather than a lookalike. The header was taken from
+`score.html`, the closest precedent — also a no-login token page, where the Admin and mail links ship
+hidden and site-nav reveals them only against a local token. Floor moved **14 → 15**, with the reason
+recorded at the assertion.
+
+### C13, in the session whose headline rule is C13
+
+The buster sweep for this release **missed the repo root**, and then verified itself clean against the
+same blind corpus. `Get-ChildItem -Path . -Include *.html,*.js` without `-Recurse` matches **nothing**
+in PowerShell, so `404.html` — which ships from the repo root and was the whole subject of C13 one
+release ago — sat at `?v=0.84.0` while everything under `web/` moved to 0.85.0. Reported as a single
+clean value, because the check and the thing it was checking shared a corpus.
+
+Caught by re-verifying with ripgrep over the entire repo — a method sharing no code with the sweep.
+Final state is **377** busters at one value 0.85.0 (371 + 6 new), which reconciles exactly with the
+figure recorded last release. **A verification that reuses the corpus of the thing it verifies is not
+an independent check.**
+
+### The API was complete for one screen, not three
+
+Recorded because the handoff said "the API is complete and tested — do not rebuild it", and that is
+true only of the screen shipped here. `kotcplay.js` has five routes and then `return null`. The other
+two screens need three routes that do not exist: a write that moves a player between nets (there is no
+drag without it), a route that lists sessions (the admin GET takes a session id nobody can discover),
+and a public read (the only leaderboard is inside a `requireStaff` route). They were **not** added here
+— a route with no screen is failure class 1, and shipping three would have left three half-screens
+instead of one whole one.
+
+### Housekeeping
+
+`kotc.html` registered in the `build-status.js` tester registry, without which `build_status.test.mjs`
+fails coverage by design. No migration: the live ledger was read back at **0042** / 42 rows, matching
+the repo's 42 files. Suite **1166 → 1180**, all 14 new tests from `kotc_screen.test.mjs`, measured
+before and after.
+
 ## v0.84.0 — 2026-08-04
 
 Live-view animations — the last of the owner's eight numbered items, deferred three sessions.

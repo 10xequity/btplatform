@@ -70,7 +70,7 @@ test("site-nav.js REVEALS the static role-gated Admin link (owner call: static +
     "Admin reveal missing, un-gated, or reverted to injection");
 });
 
-test("static btHdrMail on admin-nav pages AND the 14 canonical member pages — nowhere else, widest set", () => {
+test("static btHdrMail on admin-nav pages AND the 15 canonical member pages — nowhere else, widest set", () => {
   const all = pages();
   assert.ok(all.length >= 45, `web corpus shrank: ${all.length} html files`);
   let adminPages = 0, memberPages = 0;
@@ -85,12 +85,13 @@ test("static btHdrMail on admin-nav pages AND the 14 canonical member pages — 
     if (!admin && !member && has) extras.push(f);
   }
   assert.ok(adminPages >= 27, `guard floor: expected >=27 admin-nav pages, saw ${adminPages} (failure class 4)`);
-  assert.equal(memberPages, 14, `guard floor: expected exactly 14 canonical member pages, saw ${memberPages}`);
+  // 14 → 15 in v0.85.0 (kotc.html, the KOTC player link — a no-login token page like score.html).
+  assert.equal(memberPages, 15, `guard floor: expected exactly 15 canonical member pages, saw ${memberPages}`);
   assert.deepEqual(missing, [], `pages missing the static ✉: ${missing.join(", ")}`);
   assert.deepEqual(extras, [], `static ✉ on excluded pages (index/chromeless): ${extras.join(", ")}`);
 });
 
-test("static btHdrAdmin ships hidden on exactly the 14 canonical member pages — and NO admin page", () => {
+test("static btHdrAdmin ships hidden on exactly the 15 canonical member pages — and NO admin page", () => {
   const offendersAdmin = [], missing = [];
   for (const f of pages()) {
     const html = read(f);
