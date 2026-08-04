@@ -2,7 +2,49 @@
 
 ## v0.81.0 — 2026-08-04
 
-- Auto-recorded by CI on deploy. `/api/health` reported `v0.81.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
+Owner 2026-08-03: *"the screens now all terminate, the test data module does not work... many functions are
+still not working."* Diagnosed by **driving the app**, not by reading it.
+
+### The harness carried half the database
+
+`journey-schema.sql` — whose own header says it is *"the real production schema, read verbatim from live"* —
+carried **46 of live D1's 97 tables.** Fifty-one were missing.
+
+**29 endpoints across 16 admin pages returned 500:** announcements, marketing (campaigns and segments), POS
+(products, sales, shifts, sponsors), plans, subscriptions, MRR, passes, member fields, staff pay and rates,
+messages, unread counts, uploads, FAQs, facility spaces, schedule views, event templates, tryouts and passkey
+registration. **A page whose first fetch 500s stops rendering** — which is exactly what "the screens all
+terminate" describes.
+
+**How it survived 1127 passing tests, which is the part worth keeping.** Every test that needed one of the
+missing tables *created its own copy by hand* and passed. Every test that did not need one never asked.
+Nothing anywhere compared the file against the database it claims to mirror — so the gap was not a failing
+test, it was **the absence of a test**, and absences never go red. Three test files were carrying ten
+hand-rolled tables between them; those are deleted and they now run against the real schema, which is the
+point. With the schema complete, **all 29 endpoints return 2xx** and nothing else had to change: the API was
+never broken.
+
+### What was checked and found clean
+
+Recorded so it is not re-audited: every HTML file for unbalanced or mis-ordered landmarks and for content
+after `</body>` (**0 problems across 57 pages**); every internal page link and `location.href` target
+(**0 dead**); every one of the **55 page scripts** for parseability (**all parse**). So "pages terminate in
+the wrong place" is not a markup or routing fault. It was the 500s.
+
+### New guard
+
+`schema_gate.test.mjs` now asserts every table created by `db/migrations` exists in `journey-schema.sql`,
+with a negative control that removes a real table and proves the check notices. It reads the **migrations**
+rather than live D1 so it runs offline and in CI without a token.
+
+Its first draft reported a table called `statements` that has never existed — it was reading the comment
+*"Full CREATE TABLE statements are documented below"* as code. Comments are stripped now, because **a guard
+that reports unfixable defects is a guard people stop trusting.**
+
+### Gates
+
+Suite **1127 → 1129**, measured before and after. 66 test files, 50 modules. No migration — the tables already
+existed on live; only the harness was behind. No `web/**` change.
 
 ## v0.80.0 — 2026-08-03
 
