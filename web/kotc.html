@@ -22,19 +22,26 @@
   <style>
     .kotc-wrap { max-width: 520px; margin: 0 auto; }
 
+    /* TYPE SCALE — three steps and no more: 1.5 / 1.15 / 0.9rem, each a ~1.3 ratio from the next.
+       An earlier draft of this page had six sizes (.8, .85, .9, 1.05, 1.15, 1.5) whose small end
+       stepped by 1.06 — three sizes close enough to be indistinguishable, which reads as drift
+       rather than hierarchy. Level 1 is where you are standing, level 2 is anything you act on,
+       level 3 is everything that is only context. `.kotc-game-no` separates itself with caps and
+       letter-spacing instead of a fourth size. */
+
     /* The one line that says where you are standing. */
     .kotc-where { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
     .kotc-net { font-size: 1.5rem; font-weight: 700; color: var(--emphasis); }
     .kotc-round { color: var(--text-muted); font-size: .9rem; }
 
-    /* The question the server is asking. It is the loudest text on the page because answering it is
-       the only reason anybody opened this link. */
-    .kotc-prompt { font-size: 1.05rem; margin: 0 0 12px; }
+    /* The question the server is asking. It sits at the same level as the things you act on,
+       because answering it is the only reason anybody opened this link. */
+    .kotc-prompt { font-size: 1.15rem; margin: 0 0 12px; }
 
     /* THE SIGNATURE ELEMENT — one net, its games stacked, your own pair marked with a gold dot.
        Gold is a dot here, never text on a light surface (uiux-review §1, measured 1.87:1). */
     .kotc-game { border: 1px solid var(--border); border-radius: var(--radius-card); padding: 12px; margin-bottom: 10px; }
-    .kotc-game-no { font-size: .8rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 8px; }
+    .kotc-game-no { font-size: .9rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 8px; }
     .kotc-side { display: grid; grid-template-columns: 1fr 72px; gap: 10px; align-items: center; margin-top: 6px; }
     .kotc-pair { display: flex; align-items: center; gap: 7px; line-height: 1.3; }
     .kotc-you { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex: none; }
@@ -49,13 +56,13 @@
 
     /* Thumb-critical: this is the yes/no a player answers standing on grass. 52px (standards §5). */
     .kotc-verdict { display: flex; gap: 10px; margin-top: 4px; }
-    .kotc-verdict .kotc-tap { flex: 1; min-height: 52px; font-size: 1.05rem; }
+    .kotc-verdict .kotc-tap { flex: 1; min-height: 52px; font-size: 1.15rem; }
 
     .kotc-total { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
     .kotc-total label { display: block; margin-bottom: 6px; font-size: .9rem; }
     .kotc-total-row { display: grid; grid-template-columns: 96px 1fr; gap: 10px; align-items: center; }
 
-    .kotc-checked { color: var(--text-muted); font-size: .85rem; margin-top: 10px; }
+    .kotc-checked { color: var(--text-muted); font-size: .9rem; margin-top: 10px; }
     .kotc-note { margin-top: 10px; }
     .kotc-bad { color: var(--danger); }
 
