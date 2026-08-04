@@ -159,7 +159,7 @@ a generated schedule that commits straight into an event.
 ## Start here
 
 - New to the repo: **`CLAUDE.md`** — read order, trust order, session protocol. Then `docs/INDEX.md`.
-- Latest session handoff: **`docs/2026-08-04_handoff_v0_84_0.md`** — the state of record. Superseded handoffs are deleted, so there is only ever one; if this pointer names a file that is not there, trust `docs/INDEX.md` §1 over this line.
+- Latest session handoff: **`docs/2026-08-04_handoff_v0_85_0.md`** — the state of record. Superseded handoffs are deleted, so there is only ever one; if this pointer names a file that is not there, trust `docs/INDEX.md` §1 over this line.
 - What works right now: open `web/admin-buildstatus.html`
 - Setup: `docs/2026-07-21_setup-guide_v0.1.md`
 

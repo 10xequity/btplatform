@@ -1,6 +1,6 @@
 # Boomtown Platform — Document Index
 
-**File:** docs/INDEX.md · **Version:** v2.0 · **Created:** 2026-08-02 · **Updated:** 2026-08-03
+**File:** docs/INDEX.md · **Version:** v2.2 · **Created:** 2026-08-02 · **Updated:** 2026-08-04
 **Status:** ACTIVE · **Supersedes:** nothing — first index of the doc set.
 **Purpose:** what each document is, whether it is live, and where the live documents disagree
 with each other. Read with `CLAUDE.md`.
@@ -11,10 +11,10 @@ with each other. Read with `CLAUDE.md`.
 
 | File | Ver | Date | What it is |
 |---|---|---|---|
-| `2026-08-04_handoff_v0_84_0.md` | **v1.5** | 2026-08-04 | **State of record.** Delivery (§0 — the CHANGELOG entry goes INTO the release commit; proven twice, CI adds no commit, one push per release), measured build state (§1), what shipped (§2 — **live-view animations, the last of the owner's eight numbered items; all eight now delivered**, plus three payload fields that were built, tested and uncalled since v0.73.0/v0.77.0), §3 **C13: a guard cannot see a file outside its corpus**, owner answers (§4), owed items (§5), next build (§6 — **the three KOTC screens**), next-session prompt (§7). Renamed from handoff v0.83.0. |
+| `2026-08-04_handoff_v0_85_0.md` | **v1.6** | 2026-08-04 | **State of record.** §0 leads with the fact that **v0.85.0 is committed (`28d25f7`) but NOT PUSHED** — the permission classifier refused `git push`, so `/api/health` reads v0.84.0 while the repo reads v0.85.0; pushing is the first action next session. Then: measured build state (§1), what shipped (§2 — **the KOTC player link**, and the finding that the KOTC API was **complete for one screen of three**), §3 **C14: a verification that reuses the corpus of the thing it verifies is not an independent check**, owner answers (§4 — per-player scoring links now recorded as settled), owed items (§5 — the seed tap **verified still unpressed against live D1**), next build (§6 — **the other two KOTC screens as ONE job**, carrying three missing routes), next-session prompt (§7). Renamed from handoff v0.84.0. |
 | `2026-07-30_standards_v2_0.md` | **v2.2** | 2026-08-03 | **Build and design law.** Trust order, versioning, DB rules, worker module pattern, design roster (§5), testing gates (§6), CI, member copy (§8), templating (§10). Reconstructed after a doc-set loss; §5/§6.5/§8/§10 anchors preserved so in-code citations stay valid. |
 | `2026-08-02_roadmap_v1_0.md` | v1.0 | 2026-08-02 | **Roadmap of record.** 8 unbuilt modules, 5 small gaps, 4 engineering tracks, 5 owner-gated config items, 4 doc-debt items, suggested sequence. Supersedes the README roadmap block and the stale half of `build-status.js`. |
-| `INDEX.md` | v2.1 | 2026-08-04 | This file. |
+| `INDEX.md` | v2.2 | 2026-08-04 | This file. |
 
 ## 2. Live reference — open when the topic comes up
 
@@ -228,12 +228,49 @@ because it is a habit, and no guard can hold it.*
 **current** one, so a release touching `web/**` that sweeps nothing is still green. C13 widened *what* is
 scanned; C6 is about *what is asserted*, and is untouched.
 
+**C14 — the sweep missed the repo root again, and its own verification shared the blind corpus. OPEN as a standing rule; the instance is closed (v0.85.0).**
+One release after C13 named `404.html` at the repo root as the thing a `web/`-scoped guard cannot see, the
+v0.85.0 buster sweep missed the repo root and left `404.html` at `?v=0.84.0` while all 369 busters under
+`web/` moved to 0.85.0. The mechanism was mundane: `Get-ChildItem -Path . -Include *.html,*.js` with no
+`-Recurse` matches **nothing** in PowerShell, because `-Include` is inert without `-Recurse` or a wildcard
+path. The root files were never in the corpus.
+
+What makes this its own entry rather than a second C13 data point is what happened next: **the sweep
+verified itself clean.** The follow-up count was written from the same corpus expression, so it reported a
+single consistent value across the files it could see, and the two steps agreed because they shared the
+assumption. The check that existed to catch the mistake was built out of the mistake.
+
+It surfaced only because the count came up **2 short of the 371 the previous handoff recorded**, and was
+confirmed with **ripgrep across the whole repo** — a tool sharing no code with the sweep. Final state: 377
+busters at one value.
+
+**Ruling: a verification that reuses the corpus of the thing it verifies is not an independent check.** It
+restates one assumption twice and reports the agreement as confirmation. C13 said a file's location is part
+of whether a guard can see it; C14 adds that **a guard and its own check must not derive their file list the
+same way** — and that a written-down count from the previous release is a cheap independent oracle. *The
+instance is closed. The rule stays open because it is a habit, and no guard can hold it.* **Fix queued:**
+`worker/scripts/sweep-buster.mjs`, corpus discovered the way `sync-rail.mjs` discovers rail pages, with a
+check that shares no corpus code (handoff §6.2).
+
+**C15 — standards §9 still describes the retired CHANGELOG stub workflow. OPEN.**
+Standards §9 was rewritten in v2.1 to retire the ZIP convention, and the replacement text says: *"commit to
+`main`, push, then **fill the CHANGELOG stub CI wrote**, same session. CI guarantees the entry exists; it
+does not write it."* That is the v0.36–v0.51 process. It has been superseded three times over: since
+v0.83.0 the entry goes **into the release commit before the push**, CI's `record-changelog` step finds it
+present, its commit step is **skipped**, and **CI adds no commit at all** — there is no stub to fill.
+
+So the fix for C1 replaced one stale sentence with a different stale sentence, in the same section, and the
+register did not reopen. Failure class 2 landing on the document that records failure class 2.
+**Ruling: handoff §0 governs.** *Fix: standards v2.3 striking §9's second paragraph. Cheap, and leaving it
+is exactly the defect the doc set names.*
+
 ---
 
 ## 5. Consolidation log
 
 | Date | Action |
 |---|---|
+| 2026-08-04 | Twenty-eight releases under direct commit (v0.57.0–v0.85.0) — **but v0.85.0 is committed and NOT PUSHED**; the permission classifier refused `git push`, so the deploy never ran and `/api/health` still reads v0.84.0. Handoff v0.84.0 **renamed** into `2026-08-04_handoff_v0_85_0.md`, the state of record. **v0.85.0 shipped the KOTC player link** (`kotc.html` + `kotc.js`, screen (b) of three) with `kotc_screen.test.mjs` asserting the page never re-derives the server's `enter`/`confirm`/`done` mode — the guard caught its own first draft, which forbade the very confirm POST the screen exists to send. **Recorded against the previous handoff: the KOTC API was "complete and tested" for ONE screen of three**; the admin board and public leaderboard need three routes that do not exist, and were deliberately not added because a route with no screen is failure class 1. **C14 opened** (the buster sweep missed the repo root one release after C13 named that exact file, and its own verification shared the blind corpus) and **C15 opened** (standards §9 still describes the retired CHANGELOG-stub workflow — the C1 fix swapped one stale sentence for another). Two existing ratchets earned their keep: the byte-identical member header floor moved **14 → 15** after catching a hand-written reduced header, and the build-status registry required the new page. No migration; ledger **0042** and 42 rows **read back from live D1**. Suite 1166 → **1180**. |
 | 2026-08-04 | Twenty-seven releases under direct commit (v0.57.0–v0.84.0). Handoff v0.83.0 **renamed** into `2026-08-04_handoff_v0_84_0.md`, the state of record. **C13 opened and closed** (`404.html` at the repo root, stale for ten releases, invisible to a guard that scans `web/`). No migration; ledger stays **0042**. **All eight of the owner's numbered items are now delivered** — live-view animations (item 2) shipped after three sessions of deferral, built as a payload diff so a 25-second refresh does not animate every card on every poll. Three payload fields that had been built, tested and uncalled since v0.73.0/v0.77.0 (`degraded`, `degraded_note`, `current_round`) now reach the screen. README Architecture figures brought current; **its Modules table still stops at v0.64.0 and is queued as its own job.** **Doc debt still not acted on:** nine superseded handoffs from 2026-07-21…07-24 remain loose in `docs/` — they predate the archive tier and need an owner OK to move or delete. |
 | 2026-07-26 | Eleven-document set collapsed to four tiers (context / roadmap / standards / library). Superseded list recorded in `archive/library` §3. |
 | 2026-07-30 | `standards` recreated as v2.0 after the doc-set loss; §5/§6.5/§8/§10 anchors preserved. |
@@ -249,7 +286,13 @@ scanned; C6 is about *what is asserted*, and is untouched.
 
 ---
 
-*Changelog: v2.1 (2026-08-04) — handoff repointed to v0.84.0 (v0.83.0 renamed into it, so there is again only
+*Changelog: v2.2 (2026-08-04) — handoff repointed to v0.85.0 (v0.84.0 renamed into it, so there is again
+only one live handoff); **C14 opened** (the buster sweep missed the repo root one release after C13 named
+that exact file, and the sweep's own verification reused the blind corpus and reported clean — a check
+built out of the mistake it existed to catch); **C15 opened** (standards §9 still describes the retired
+CHANGELOG-stub workflow, so the C1 fix swapped one stale sentence for another in the same section);
+consolidation log extended through v0.85.0, recording that the release is **committed but unpushed**.
+v2.1 (2026-08-04) — handoff repointed to v0.84.0 (v0.83.0 renamed into it, so there is again only
 one live handoff); **C13 opened and closed** (a guard cannot see a file outside its corpus — `404.html` at the
 repo root was stale for ten releases while the buster guard reported clean, the third instance of that shape in
 three sessions); two stale rows in §1 corrected — standards has read **v2.2** since 2026-08-03 and this index
