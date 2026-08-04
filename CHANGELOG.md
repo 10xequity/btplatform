@@ -2,7 +2,117 @@
 
 ## v0.82.0 — 2026-08-04
 
-- Auto-recorded by CI on deploy. `/api/health` reported `v0.82.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
+Two of the owner's complaints from 2026-08-03 close here. One closes as a **fix**; the other closes as a
+**diagnosis that overturns the previous session's**, and it is the more useful of the two.
+
+### The buttons that were never coloured
+
+Owner: *"many of the buttons text is not colored properly."* Not a token bug. Not a contrast bug. Not the
+gold rule, which the previous handoff named as the likeliest culprit — every `color: var(--gold-ink)` in the
+tree is correctly paired with `background: var(--accent)`, and every declared token pairing measures AA or
+better in both themes.
+
+**Twenty-four buttons shipped carrying a shared modifier and no base.** Thirteen in `admin-pos.html` as
+`class="primary"`, `class="secondary"` and `class="ghost"`; eleven in `admin-pos.js` as `class="ghost"`.
+Those words are not standalone classes anywhere in the CSS — `app.css` declares them as `.btn.primary`,
+`.btn.ghost`, `.btn.danger`, `.btn.sm`, `.btn.small`. A modifier without its base inherits nothing, so each
+of those buttons rendered as a **user-agent default control — grey face, black text — in both themes.**
+
+`admin-pos.html` did name them in its own style block, which is how the omission stayed invisible:
+`button.primary, button.secondary, button.ghost { min-height: 44px }`. Geometry, and nothing else. The page
+looked like it had a button system. It had a height.
+
+Present in the page's **first commit** (`083cb32`) — never a regression, so no release introduced it and no
+diff review would have caught it.
+
+**How it passed every gate, which is the part worth keeping.**
+
+- `tokens.test.mjs` ratchets token *drift* — whether a page invented its own hex. These buttons referenced
+  no token at all, so there was nothing to drift. **A page can fail by using NOTHING, and a drift guard is
+  structurally blind to that.**
+- `shared_buttons.test.mjs` forbids page-level selectors that *start with* `.btn`. It polices **redefining**
+  the shared set. These pages never redefined it — they failed to **use** it. The guard was aimed one inch to
+  the left of the defect and reported clean, correctly, about a different question.
+- No contrast guard existed. One still would not have caught this: there is no declared foreground/background
+  pair to measure when the only declaration is `min-height`.
+
+That is **INDEX C10's shape, not the library's failure class 3** — not a guard narrower than its subject, but
+the *absence* of a guard over it. Absences never go red.
+
+### Two guards, both with negative controls that mutate the real input
+
+**`button_vocabulary.test.mjs`** — a `<button>` or `<a>` carrying any `.btn` modifier must also carry `btn`.
+The modifier list is **parsed out of `app.css`**, not hardcoded, so declaring `.btn.warning` tomorrow extends
+the guard instead of escaping it. It scans the widest set: every `web/*.html` **and** every
+`web/assets/*.js`, because eleven of the twenty-four offenders were inside a script — an HTML-only guard
+would have called the page clean and been half right, the same narrowing `shared_buttons.test.mjs` was itself
+written to correct.
+
+The one honest exception is a page that colours the modifier through its own rule; `admin-uploads.html` does
+exactly that with `.up-row-actions .danger { color: var(--danger) }`, and its `class="danger"` button is
+correct. The exemption **requires the rule to set `color`** — its negative control proves a geometry-only
+rule does not earn the pass, which is precisely the hole the real bug fell through. A second control strips
+the colour declaration from the real `admin-uploads` stylesheet and asserts the button is then caught.
+
+Written to catch 24 offenders, it found **5 more while being written** — `class="btn-min primary"` in
+`admin-documents.js` and `admin-org-settings.js`. Those proved legitimate (`.btn-min` sets its own colour),
+which is what forced the exemption to be modelled properly as a subset test rather than asserted.
+
+**`token_contrast.test.mjs`** — computes the WCAG 2.x ratio for every pairing the design system actually
+declares, in both themes, with values **parsed from `tokens.css`** rather than restated. A guard holding its
+own copy of the palette passes while the shipped palette is wrong; that is the C10 shape again.
+
+It also makes the gold rule arithmetic instead of folklore. It asserts that gold **as text** on a light
+surface really is the AA failure standards §5 claims (measured **1.87:1**), that `--emphasis` is what rescues
+it (**14.22:1**), and that light-on-gold fails too. A rule everyone repeats and nobody measures is how
+`--emphasis` could have been reverted to raw gold at any point in the last thirty releases unnoticed.
+
+### The test-data generator: the previous diagnosis was wrong
+
+Handoff v0.81.0 §2b recorded live D1 as holding a **partial** seed — "3 of 6 events and 8 of 48 contacts" —
+left by a generator that died part way, with a stated `[INFERENCE]` that Workers CPU limits or a D1
+per-invocation statement cap killed it mid-run. **No code change ships here, because that is not what
+happened.** Five independent facts read from live D1:
+
+1. **All eight contacts carry `created_at = 2026-07-24 16:18:40`** — identical to the second. `sandbox.js`
+   v2.0 shipped 2026-08-03 in v0.67.0. The rows are ten days older than the code accused of writing them.
+2. **`city` is "Colorado Springs"** on contact 90001. The current `CITIES` array is `Aurora, Denver, Pueblo,
+   Monument, Fountain, Castle Rock`. The current code *cannot* produce that row.
+3. **`score_token` is NULL on all four teams.** Every team INSERT in the current file writes a non-null
+   `deadbeef…` token.
+4. **Two of three event names differ** from the strings the current file inserts.
+5. **`contactRows()` is ONE `INSERT` with 48 value tuples.** A multi-row INSERT in SQLite is atomic, so "8 of
+   48" is not a partial write of it — it is arithmetically impossible. Eight rows sharing one timestamp is
+   what a *complete* insert of eight rows looks like.
+
+Live holds a **complete, coherent v1-era seed** written 2026-07-24 — precisely the shape `sandbox.js` v2.0's
+own header attributes to v1 ("its one upcoming tournament had four registrations and ZERO teams": event 90002
+live has 0 teams). **Nothing half-ran. There was never a partial state.**
+
+The limit theory also fails on the documented numbers, checked rather than assumed: D1's cap is **1000
+queries per Worker invocation** on Workers Paid (50 on Free), max statement length 100 KB, max query duration
+30 s. The route issues **44** statements, none remotely near 100 KB — 4% of the cap.
+
+**What is actually broken is the refusal.** `generate` returns 409 whenever it finds any row in the
+90000–90999 range, and the rail modal greys out Generate when seeded. So a seed from an older version of the
+file is a dead end, and the way past it is a Wipe whose purpose is not obvious from a disabled button. *A
+fixture generator that can be blocked by its own previous output is not a tool, it is a puzzle.* Also
+verified: all fourteen tables the wipe touches exist on live, and no table outside the wipe set holds a
+single test-range row, so the wipe has no blocker either — it would complete cleanly today.
+
+The fix is specified and unblocked on everything except a write permission for `worker/src/sandbox.js`:
+`generate` clears the range and reseeds, both paths through one delete list, the whole sequence in a single
+`D1.batch()` — which is a SQL transaction, so a failing statement rolls back everything and a half-written
+seed becomes impossible rather than merely unlikely. Deliberately **not** `ON CONFLICT DO NOTHING`: that
+would turn a real failure into a silently incomplete fixture reporting success, and a fixture that lies about
+being complete is the exact thing the file exists to avoid. See handoff §2b.
+
+### Housekeeping
+
+Suite **1129 → 1142**, measured before and after, 0 failing. Test files **66 → 68**. Cache buster swept
+**0.75.0 → 0.82.0** across both `.html` and `.js` (369 occurrences) because this release touches `web/**`.
+`worker/src/index.js` byte-verifies as a one-line diff. `sync-rail.mjs` reported all 36 pages already
+matching. No migration; the D1 ledger stays at **0042**, read back live and confirmed equal to the repo.
 
 ## v0.81.0 — 2026-08-04
 
