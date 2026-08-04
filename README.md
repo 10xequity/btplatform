@@ -1,5 +1,10 @@
 # Boomtown Athletics Platform
-**Version:** v0.64.0 · **Date:** 2026-08-03 · **Supersedes:** README @ v0.59.0 (2026-08-03)
+**Version:** v0.83.0 · **Date:** 2026-08-04 · **Supersedes:** README @ v0.64.0 (2026-08-03)
+
+> **Two tables below still carry v0.64.0 numbers** — Architecture says "792 passing" and "Ledger at
+> 0035", and the Modules table stops short. The real figures are **1144 passing, 68 test files, ledger
+> 0042 (42 files), 97 tables**. Flagged rather than silently half-corrected; a full sweep of both
+> tables is queued. `preflight.mjs` and `/api/health` are the sources of truth, not this file.
 
 Multi-org sports operations platform for **Boomtown Volleyball · Match Point Social · Queens Club**, plus 7 facility-operator orgs (Colorado Boom, Oda Up, RMR, Real Futsal, Special Olympics CO, Zara Gymnastics, External/Rental). Facility is in **Aurora, Colorado**.
 
@@ -153,7 +158,7 @@ a generated schedule that commits straight into an event.
 ## Start here
 
 - New to the repo: **`CLAUDE.md`** — read order, trust order, session protocol. Then `docs/INDEX.md`.
-- Latest session handoff: **`docs/2026-08-03_handoff_v0_82_0.md`** — the state of record. Superseded handoffs are deleted, so there is only ever one; if this pointer names a file that is not there, trust `docs/INDEX.md` §1 over this line.
+- Latest session handoff: **`docs/2026-08-04_handoff_v0_83_0.md`** — the state of record. Superseded handoffs are deleted, so there is only ever one; if this pointer names a file that is not there, trust `docs/INDEX.md` §1 over this line.
 - What works right now: open `web/admin-buildstatus.html`
 - Setup: `docs/2026-07-21_setup-guide_v0.1.md`
 
