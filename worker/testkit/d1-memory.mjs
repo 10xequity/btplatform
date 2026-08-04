@@ -34,6 +34,13 @@
  */
 
 import { DatabaseSync } from "node:sqlite";
+import { shiftSql } from "../scripts/timetravel.mjs";
+
+/* C16 clock shift. `shiftSql` is the IDENTITY FUNCTION unless BT_TIME_TRAVEL_DAYS is set, so the
+   normal suite runs byte-identical SQL and this costs one no-op call per statement. It exists because
+   `datetime('now')` is evaluated by SQLite against the real system clock, so moving JS time alone
+   would leave the database in the present and manufacture failures in correctly-written tests.
+   See worker/scripts/timetravel.mjs for why the two halves must move together. */
 
 /** D1 hands back plain objects; node:sqlite returns null-prototype rows and may return BigInt. */
 function normalizeRow(row) {
@@ -60,7 +67,7 @@ class D1PreparedStatement {
 
   #stmt() {
     try {
-      return this.db.prepare(this.sql);
+      return this.db.prepare(shiftSql(this.sql));
     } catch (e) {
       throw new Error(`d1-memory: could not prepare SQL — ${e.message}\n  ${this.sql.slice(0, 300)}`);
     }
@@ -119,9 +126,9 @@ class D1Memory {
   }
 
   /** Test-side escape hatch — never used by worker code, only to seed and to assert. */
-  exec(sql) { this.db.exec(sql); }
-  query(sql, ...params) { return this.db.prepare(sql).all(...params).map(normalizeRow); }
-  one(sql, ...params) { return normalizeRow(this.db.prepare(sql).get(...params)); }
+  exec(sql) { this.db.exec(shiftSql(sql)); }
+  query(sql, ...params) { return this.db.prepare(shiftSql(sql)).all(...params).map(normalizeRow); }
+  one(sql, ...params) { return normalizeRow(this.db.prepare(shiftSql(sql)).get(...params)); }
   close() { this.db.close(); }
 }
 

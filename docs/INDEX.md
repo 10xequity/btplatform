@@ -276,10 +276,24 @@ before it ever after. Once the clock crossed 17:00Z the rate stopped covering th
 came out empty, and the assertion read 0 instead of 5000. Fixed by deriving both the shift times and the
 report window from `Date.now()`.
 
-**The instance is closed; the class is wide open. 165 hardcoded `2026-dd-dd` dates live across 25 test
-files.** Most are inert fixtures. The dangerous shape is specific — **a hardcoded fixture date compared
-against a `datetime('now')` default** — and it is indistinguishable from the harmless ones without
-reading each site.
+**The instance is closed, and the field was then MEASURED rather than feared.** The first version of this
+entry said 165 hardcoded `2026-dd-dd` dates across 25 test files left the suite "a time bomb of unknown
+size". That counted a *shape* and called it a risk.
+
+`worker/scripts/timecheck.mjs` shifts **JS time and SQL time by the same offset** and runs the whole
+suite. Everything written relatively keeps its relationships and moves with the clock; only a hardcoded
+absolute date stays put. **Result: 70/70 files pass at +8, +40, +200, +365 and +400 days.** The 165 dates
+are inert; `passes.test.mjs` was one armed fixture, not a field of them.
+
+Two negative controls, and the second is the one that earns the clean report: the real pre-fix
+`passes.test.mjs` (restored from `9abedaf~1`) fails both shifted and unshifted, which only proves the
+harness catches a bomb that already went off — while **a fixture dated one month out passes today and
+fails at +365d**, proving it sees one *before* detonation.
+
+*Recorded because the correction is the lesson:* the alarm was written from a grep count in the same
+session as the fix, and it was wrong about the risk while being right about the mechanism. **When a
+document describes data, verify it against the data** — C12, applied to a claim this register made about
+itself.
 
 This is a **new failure class**, not a variant of the register's existing ones. C13/C14 are guards blind
 to their corpus; C11 is a guard pointed elsewhere; C12 is a document wrong about data. This is a test
@@ -288,11 +302,16 @@ no review could have caught it because nothing changed. The standing rule "prefe
 tests" already existed — what was missing is that **nothing enforces it**, so 165 candidate violations
 accumulated under a rule everybody agreed with.
 
-**Ruling: a test whose correctness depends on when it runs is a defect even while it passes.** Audit the
-25 files for the fixture-versus-`now` shape and convert those to `Date.now()` arithmetic; then guard the
-shape, not absolute dates in general — migration filenames and CHANGELOG dates are legitimately
-absolute. The guard's negative control reinstates the `passes.test.mjs` fixture and proves it reddens.
-*Queued as handoff §6.2, ahead of feature work, because it taxes everything else.*
+**Ruling: a test whose correctness depends on when it runs is a defect even while it passes** — and the
+way to find those is to **move the clock, not to grep for dates.** A static guard would have encoded a
+heuristic ("a fixture date near a `datetime('now')` default") where a measurement was available, and it
+would have had to exempt the legitimately absolute cases — migration filenames, CHANGELOG dates — by
+hand. Running the suite in the future needs no exemptions: relative code moves, absolute code does not,
+and the difference is the finding.
+
+*Instance closed. Class now observable rather than open-ended: `node worker/scripts/timecheck.mjs`. It is
+a reporting tool by design, not a preflight gate — gating every commit on a defect usually located in a
+file nobody touched is how a useful signal gets switched off.*
 
 ---
 
