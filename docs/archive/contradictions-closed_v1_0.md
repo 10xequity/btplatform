@@ -266,9 +266,33 @@ and the difference is the finding.
 a reporting tool by design, not a preflight gate — gating every commit on a defect usually located in a
 file nobody touched is how a useful signal gets switched off.*
 
+## C15 — standards §9 still described the retired CHANGELOG stub workflow. ~~OPEN~~ RESOLVED v0.86.0 (2026-08-04), standards → v2.3.
+
+Standards §9 was rewritten in v2.1 to retire the ZIP convention, and the replacement text said: *"commit to
+`main`, push, then **fill the CHANGELOG stub CI wrote**, same session. CI guarantees the entry exists; it
+does not write it."* That is the v0.36–v0.51 process. It had been superseded three times over: since
+v0.83.0 the entry goes **into the release commit before the push**, CI's `record-changelog` step finds it
+present, its commit step is **skipped**, and **CI adds no commit at all** — there is no stub to fill.
+
+So the fix for C1 replaced one stale sentence with a different stale sentence, in the same section, and the
+register did not reopen for two more releases. Failure class 2 landing on the document that records
+failure class 2.
+
+**Ruling: handoff §0 governs.** *Closed 2026-08-04: standards v2.3 strikes the paragraph and replaces it
+with the correction plus the two-command form, keeping the hard rule in `CLAUDE.md` §2 and deliberately
+NOT restating it — a second divergent copy is what kept the section wrong three times running. Confirmed
+against four releases (v0.83.0, v0.84.0, v0.85.0, v0.86.0) where `git log main..origin/main` was empty
+after the deploy.*
+
+**The rule this leaves behind, and it is why C1's entry above carries a forward-pointer:** fixing failure
+class 2 means sweeping every restatement, and a *replacement* sentence is a restatement. Rewriting a stale
+paragraph without checking the new text against the current process is how one stale sentence becomes two.
+
 ---
 
-*Changelog: v1.0 (2026-08-04) — created by splitting `docs/INDEX.md` §4. Twelve closed entries moved
+*Changelog: v1.1 (2026-08-04) — **C15 moved in**, closed the same day the split was made: standards v2.3
+struck §9's stub paragraph. Live entries in `INDEX.md` §4 are now C2, C3 and C6. v1.0 (2026-08-04) —
+created by splitting `docs/INDEX.md` §4. Twelve closed entries moved
 verbatim: C1, C4, C5, C7, C8, C9, C10, C11, C12, C13, C14, C16. C2, C3, C6 and C15 stayed live in
 `INDEX.md`. The prompt for this session listed ten entries to move and did not name C9 or C12; both carry
 the same "instance closed, rule is a habit" status as C14 and C16, both are among the longest entries in
