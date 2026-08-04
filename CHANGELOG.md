@@ -1,5 +1,9 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.82.0 — 2026-08-04
+
+- Auto-recorded by CI on deploy. `/api/health` reported `v0.82.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
+
 ## v0.81.0 — 2026-08-04
 
 Owner 2026-08-03: *"the screens now all terminate, the test data module does not work... many functions are
