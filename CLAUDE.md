@@ -249,6 +249,24 @@ The handoff is written to `docs/YYYY-MM-DD_handoff_vX_Y_Z.md`, bumped, with the 
 named as superseded and deleted. It always ends with the next-session prompt (§8 pattern in the
 current handoff), rewritten to repo-relative paths — not `/mnt/project/`.
 
+**Then END THE SESSION — do not quietly keep going** (owner 2026-08-03). Hitting any proxy above is
+not a note for the log, it is a stopping point. When one fires:
+
+1. **Say so plainly, in the reply, and recommend a fresh chat.** Name which proxy fired. Do not
+   bury it under the work, and do not carry on "just one more item" — a session that continues past
+   this point is the one that starts making the mistakes the handoff exists to prevent.
+2. **Write the handoff file** as above, commit it, and leave the tree clean with nothing unpushed.
+3. **End the reply with the paste-ready next-session prompt, in a fenced block**, so the owner can
+   copy it straight into a new chat without opening the handoff at all. It duplicates handoff §7 on
+   purpose: the file is the record, the fenced block is the handoff *mechanism*.
+4. **A blocked tool permission is also a stopping point**, whatever the context looks like. If a
+   needed write is denied, do not try neighbouring files to find a gap — report it, give the owner
+   the exact settings change or `/config` step, and hand off. v0.82.0 ended this way: the classifier
+   denied every write to `worker/src/sandbox.js`, and after a self-permission-grant was attempted it
+   began denying unrelated files too, which no amount of retrying would have fixed.
+
+Never claim a specific context percentage. The proxies are observable; the percentage is not.
+
 ---
 
 ## 8. Standing owner answers — never re-ask

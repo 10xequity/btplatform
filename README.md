@@ -140,20 +140,22 @@ a generated schedule that commits straight into an event.
 
 1. **Square SANDBOX ONLY** until the owner says go. Same for email.
 2. Every file carries a date and version; one CHANGELOG entry per release.
-3. Owner deploys by copy-paste from delivered ZIPs, with explicit NEW/REPLACE and paste order. **GitHub MCP is read-only.**
-4. DB changes via Cloudflare MCP, **additive-only**. Test rows use IDs 90000–90999 and are always wiped. Owner's sandbox demo contacts 90001–90008 are exempt — never touch them.
-5. Migrations are applied **before** the paste list is built, never offered as an optional step (D-MIG-2).
-6. Validation gate before every delivery: `node --check` → tests → esbuild → version-in-bundle → live D1 spot check when SQL changed.
+3. **Delivery is DIRECT COMMIT** (owner 2026-08-02, `CLAUDE.md` §2). Preflight must print CLEAR → commit to `main` → push → `gh run watch` → **fill the CHANGELOG stub CI writes, in the same session.** The ZIP convention and both manifest ratchets are **retired**; GitHub is no longer read-only. `CLAUDE.md` §2 is the authority and this line is deliberately a pointer rather than a second copy — the duplicate copy is what kept this rule wrong for thirty releases.
+4. DB changes via Cloudflare MCP, **additive-only**, numbered `00NN` in `db/migrations/`. Test rows use IDs 90000–90999 and are always wiped. *(The former clause exempting "owner's sandbox demo contacts 90001–90008 — never touch them" is **struck**. It dates from the hand-run seed-SQL era, when those eight rows could only be removed by a CLEANUP block. Since `sandbox.js` v2.0 shipped in v0.67.0 the generator **recreates 90001–90008 identically** — same ids, names and emails, as the first eight of its forty-eight contacts — so the range is regenerable and the exemption protects nothing. `wipe` has deleted them since v0.67.0 and `sandbox_seed.test.mjs` asserts it, so the rule had already stopped being in force; this records that rather than leaving code and README disagreeing.)*
+5. Migrations are applied via Cloudflare MCP **before** the push that needs them, never as an optional step (D-MIG-2). Every migration ends with its own `schema_migrations` ledger INSERT, and the row is read back after. The CI schema-gate fails closed on an unapplied migration.
+6. Validation gate before every release: `node worker/scripts/preflight.mjs` must print **CLEAR**. It runs `node --check` on every module, the full suite (measured, never projected), the test-file parity gate, and version parity against `/api/health`.
 7. Where a required fact is unknown, ship a **visibly marked blank** (`[STREET ADDRESS]`), never a plausible invention (D-DOC-3).
-8. Design system of record: `2026-07-25_design-and-build-standards_v1_1.md` (project knowledge).
+8. Design and build system of record: **`docs/2026-07-30_standards_v2_0.md`** (in this repo; its header reads v2.2). The former pointer to `2026-07-25_design-and-build-standards_v1_1.md` "(project knowledge)" named a file that no longer exists in a location that no longer applies. UI work additionally loads the mandated skill roster — standards §5.
+9. **Page and asset split** (standards §11): a page gets its own `web/assets/<page>.js` when it fetches from the API or holds state; a pure-markup page keeps its script inline.
 
 ---
 
 ## Start here
 
-- New to the repo: `docs/2026-07-21_setup-guide_v0.1.md`
-- Latest session handoff: `2026-08-02_handoff_v0_52_0.md` (project knowledge)
+- New to the repo: **`CLAUDE.md`** — read order, trust order, session protocol. Then `docs/INDEX.md`.
+- Latest session handoff: **`docs/2026-08-03_handoff_v0_82_0.md`** — the state of record. Superseded handoffs are deleted, so there is only ever one; if this pointer names a file that is not there, trust `docs/INDEX.md` §1 over this line.
 - What works right now: open `web/admin-buildstatus.html`
+- Setup: `docs/2026-07-21_setup-guide_v0.1.md`
 
 ---
 *Changelog: v0.53.1 (2026-08-02) — external-review patch: idempotent DOM badge, network-independent Sign out, two guard defects closed; suite 644. · v0.53.0 (2026-08-02) — unified static member header, brand rename applied (D-ORG-5) + repo-wide sweep, single-source member theme/logout; suite 631. · v0.52.0 (2026-08-02) — unified static admin header + org switcher everywhere + pre-paint theme + demo-v4 glass; suite 616. · v0.51.0 (2026-08-02) — admin announcements authoring page, shared button set, pre-paint collapse; suite 604. · v0.50.0 (2026-08-02) — brought current: suite 588, migrations through 0033 (82 tables), module table v0.25–v0.50, roadmap replaced with the uiux-review §6 queue + live blocker list, handoff pointer updated. · v0.24.0 (2026-07-26) — full rewrite from the stale v0.12.0 README: module table brought current through v0.24.0, build-status marker legend added, architecture table rewritten with the real route pattern and test count, roadmap replaced with a v7 pointer, standing rules updated for D-MIG-2 and D-DOC-3. · 2026-07-24 — v0.2 → v0.12.0.*

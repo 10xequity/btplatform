@@ -1,5 +1,7 @@
 # Boomtown Platform — Worker config
-# Version: v0.8.0 · Date: 2026-07-23
+# Deliberately carries NO version stamp (CLAUDE.md §3): config files are not versioned, and the
+# stale "Version: v0.8.0 · Date: 2026-07-23" line that stood here was a false signal for seventy
+# releases. /api/health is the only honest version source.
 name = "boomtown-api"
 main = "worker/src/index.js"
 compatibility_date = "2026-07-01"
