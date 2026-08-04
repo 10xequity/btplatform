@@ -410,14 +410,25 @@ test("live: the pay report separates approved from pending", async () => {
   await call(env, "POST", "/api/admin/staff-rates", {
     token: staff.token, body: { contact_id: coach.contactId, pay_basis: "flat", rate_cents: 5000 },
   });
-  for (const d of ["04", "05"]) {
-    env.DB.exec(`INSERT INTO staff_shifts (org_id, starts_at, ends_at) VALUES (1, '2026-08-${d}T17:00:00Z', '2026-08-${d}T19:00:00Z')`);
+  /* DATES HERE ARE RELATIVE TO NOW, AND THEY HAVE TO BE.
+     A rate's `effective_from` defaults to `datetime('now')` (staff_pay.js), and `assign` resolves a
+     shift against ITS OWN start via `pickRate(rates, roleLabel, shift.starts_at)`. These shifts were
+     hardcoded to 17:00Z on the day the test was written, which put them AFTER `now` for the few hours
+     that morning and BEFORE it forever after — so the rate stopped covering them, `pay_amount_cents`
+     came out empty, and this assertion read 0 instead of 5000. It went red mid-session at 17:00Z on
+     2026-08-04 with no code change, and from the following day it would have failed permanently,
+     blocking every commit because preflight gates on the suite.
+     Both shifts must start AFTER the rate exists; the report window is derived the same way. */
+  const at = (days, hours = 0) =>
+    new Date(Date.now() + days * 86400000 + hours * 3600000).toISOString().replace(/\.\d{3}Z$/, "Z");
+  for (const d of [1, 2]) {
+    env.DB.exec(`INSERT INTO staff_shifts (org_id, starts_at, ends_at) VALUES (1, '${at(d)}', '${at(d, 2)}')`);
   }
   const ids = env.DB.query("SELECT id FROM staff_shifts ORDER BY id").map((r) => r.id);
   for (const id of ids) await call(env, "POST", `/api/admin/shifts/${id}/assign`, { token: staff.token, body: { contact_id: coach.contactId } });
   await call(env, "POST", `/api/admin/shifts/${ids[0]}/approve`, { token: staff.token, body: {} });
 
-  const rep = await call(env, "GET", "/api/admin/shifts/pay?from=2026-08-01&to=2026-08-31", { token: staff.token });
+  const rep = await call(env, "GET", `/api/admin/shifts/pay?from=${at(-1).slice(0, 10)}&to=${at(30).slice(0, 10)}`, { token: staff.token });
   assert.equal(rep.status, 200);
   const row = rep.data.people[0];
   assert.equal(row.approved_cents, 5000, "one approved flat shift");
