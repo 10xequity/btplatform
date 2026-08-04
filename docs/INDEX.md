@@ -1,6 +1,6 @@
 # Boomtown Platform — Document Index
 
-**File:** docs/INDEX.md · **Version:** v1.9 · **Created:** 2026-08-02 · **Updated:** 2026-08-03
+**File:** docs/INDEX.md · **Version:** v2.0 · **Created:** 2026-08-02 · **Updated:** 2026-08-03
 **Status:** ACTIVE · **Supersedes:** nothing — first index of the doc set.
 **Purpose:** what each document is, whether it is live, and where the live documents disagree
 with each other. Read with `CLAUDE.md`.
@@ -11,10 +11,10 @@ with each other. Read with `CLAUDE.md`.
 
 | File | Ver | Date | What it is |
 |---|---|---|---|
-| `2026-08-03_handoff_v0_81_0.md` | v1.0 | 2026-08-03 | **State of record.** Delivery (§0), measured build state (§1), **§2 the owner's eight numbered items and which of them shipped**, §3 the v0.75.0 review pass plus **the four defects this session's own code produced — including a solver that would have invented scorelines**, owner answers incl. all KOTC answers and the held-slot decision (§4), owed items (§5), next build (§6), next-session prompt (§7). **§2b is the open problem — read it first.** Supersedes handoff v0.80.0. |
+| `2026-08-03_handoff_v0_82_0.md` | **v1.3** | 2026-08-03 | **State of record.** Delivery (§0), measured build state (§1), what shipped (§2), **§2b THE OPEN PROBLEM — read it first, and read it as a CORRECTION: the previous handoff's partial-seed diagnosis of the test-data generator is overturned by five facts from live D1, and the `sandbox.js` v2.1 fix is fully specified but blocked on a write permission**, §3 the two-guards-aimed-one-inch-off finding, owner answers (§4), owed items (§5), next build (§6), next-session prompt (§7). Supersedes handoff v0.81.0, **deleted**. |
 | `2026-07-30_standards_v2_0.md` | **v2.1** | 2026-08-02 | **Build and design law.** Trust order, versioning, DB rules, worker module pattern, design roster (§5), testing gates (§6), CI, member copy (§8), templating (§10). Reconstructed after a doc-set loss; §5/§6.5/§8/§10 anchors preserved so in-code citations stay valid. |
 | `2026-08-02_roadmap_v1_0.md` | v1.0 | 2026-08-02 | **Roadmap of record.** 8 unbuilt modules, 5 small gaps, 4 engineering tracks, 5 owner-gated config items, 4 doc-debt items, suggested sequence. Supersedes the README roadmap block and the stale half of `build-status.js`. |
-| `INDEX.md` | v1.9 | 2026-08-03 | This file. |
+| `INDEX.md` | v2.0 | 2026-08-03 | This file. |
 
 ## 2. Live reference — open when the topic comes up
 
@@ -145,7 +145,55 @@ all* over the thing every other guard stands on.
 
 **Ruling: closed.** `schema_gate.test.mjs` now asserts every table in `db/migrations` exists in the harness
 schema, with a negative control; the ten hand-rolled tables across three test files are deleted.
-*Separately still open:* the generator leaves a partial seed on live — handoff §2b.
+~~*Separately still open:* the generator leaves a partial seed on live — handoff §2b.~~ **That line was
+wrong — see C12.** There is no partial seed and never was.
+
+**C11 — two guards covered the same buttons, both passed honestly, and both were pointed elsewhere. ~~OPEN~~ RESOLVED v0.82.0.**
+Twenty-four buttons — thirteen in `admin-pos.html`, eleven in `admin-pos.js` — shipped carrying a shared
+modifier with no base: `class="primary"`, `class="secondary"`, `class="ghost"`. Those are not standalone
+classes; `app.css` declares them as `.btn.primary`, `.btn.ghost`, `.btn.danger`, `.btn.sm`, `.btn.small`. Each
+button therefore inherited nothing and rendered as a **user-agent default control — grey face, black text — in
+both themes.** Present since the page's first commit (`083cb32`): never a regression, so no diff review could
+have caught it. This is the owner's *"many of the buttons text is not colored properly."*
+
+Two guards stood over it and neither was wrong about its own question:
+`tokens.test.mjs` ratchets token **drift**, and these buttons referenced no token, so nothing drifted —
+**a page can fail by using NOTHING, and a drift guard is structurally blind to that.**
+`shared_buttons.test.mjs` forbids page-level selectors that **start with** `.btn`, policing *redefinition*;
+these pages never redefined the shared set, they failed to **use** it. The guard was aimed one inch to the
+left of the defect. A contrast guard would not have helped either: there is no foreground/background pair to
+measure when the only declaration is `min-height`.
+
+This is **C10's shape, not failure class 3** — not a guard narrower than its subject, but the *absence* of a
+guard over it. **Ruling: closed.** `button_vocabulary.test.mjs` requires `btn` alongside any modifier, parses
+the modifier list out of `app.css` so it cannot go stale, and scans every `web/*.html` **and**
+`web/assets/*.js` — eleven offenders were in a script, and an HTML-only guard would have called the page clean
+and been half right. `token_contrast.test.mjs` separately measures every declared token pairing in both
+themes, turning the gold rule from prose into arithmetic (gold-as-text on light: **1.87:1**; `--emphasis`:
+**14.22:1**). Both ship negative controls that mutate the real input; the vocabulary guard's control proves a
+geometry-only page rule does not earn an exemption, which is the precise hole the bug fell through.
+
+**C12 — a handoff recorded a diagnosis the database contradicted. OPEN as a standing rule; the instance is closed.**
+Handoff v0.81.0 §2b stated that live D1 held a **partial** test-data seed — "3 of 6 events and 8 of 48
+contacts" — left by a generator that died part way, with a stated `[INFERENCE]` about Workers CPU time or a D1
+per-invocation statement cap. Four queries against live D1 overturned all of it. The rows are a **complete
+v1-era seed written 2026-07-24 16:18:40**, ten days before `sandbox.js` v2.0 shipped: all eight contacts share
+one timestamp (a multi-row `INSERT` is atomic in SQLite, so "8 of 48" is arithmetically impossible as a
+partial write), `city` is "Colorado Springs" which is absent from the current `CITIES` array, every
+`score_token` is NULL where the current code always writes one, and two of three event names differ from the
+strings the current file inserts. The limit theory fails on the documented numbers too: D1 allows **1000
+queries per Worker invocation** on Workers Paid and the route issues **44**.
+
+Where **C9** was a CHANGELOG wrong about a *fix*, this is a handoff wrong about the *state of the world*, and
+two sessions had built on it — one of them spending its effort on "make the seed resumable" when there was no
+interrupted seed to resume. The actual defect was never partial state: `generate` **refuses** with 409 when it
+finds its own previous output, so an older seed is a dead end.
+
+**Ruling: when a document describes DATA, verify it against the data, not against the document's own
+reasoning.** Repo > live D1 > docs is already the trust order (standards §1); the failure was reading the third
+tier and never consulting the second. Four queries were enough. *The instance is closed — handoff v0.82.0 §2b
+records the correction and the specified fix. The rule stays open because it is a habit, and no guard can hold
+it.*
 
 ---
 
@@ -160,14 +208,14 @@ schema, with a negative control; the ten hand-rolled tables across three test fi
 | 2026-08-02 | **This port.** Doc set moved to `docs/`, archive tier separated, `CLAUDE.md` and `INDEX.md` added. No source document was edited — contradictions are recorded here rather than silently patched. |
 | 2026-08-03 | Eighteen releases under direct commit (v0.57.0–v0.74.0). Handoff v0.56.0 superseded and **deleted**; `2026-08-03_handoff_v0_66_0.md` is the state of record. **C6 stays OPEN** and gains a second finding: the sweep had never covered `.js` at all. **C7 opened** (shell-slice tag duplication, fixed and guarded). New documents: `spec_roster-sheet_v1_0`, `scope_format-engine_v1_1`, `workorder_member-experience_v1_1`. |
 
-| 2026-08-03 | Twenty-five releases under direct commit (v0.57.0–v0.81.0). **C10 opened and closed**: the harness schema carried 46 of live's 97 tables, hiding 29 endpoint failures across 16 pages. |
+| 2026-08-03 | Twenty-six releases under direct commit (v0.57.0–v0.82.0). Handoff v0.81.0 superseded and **deleted**; `2026-08-03_handoff_v0_82_0.md` is the state of record. **C11 opened and closed** (24 buttons carried a shared modifier with no base; two guards covered them and both were pointed elsewhere) and **C12 opened** (a handoff recorded a data diagnosis the database contradicted — the "partial seed" never existed). No migration; ledger stays 0042. **Doc debt noted, not acted on:** nine superseded handoffs from 2026-07-21…07-24 are still loose in `docs/` — they predate the archive tier and want moving to `docs/archive/`, which needs an owner OK to delete or move. |
 | 2026-08-03 | Twenty-four releases under direct commit (v0.57.0–v0.80.0). Migration **0042** applied live (KOTC entry list, per-player links, confirmation), ledger row read back. **Failure class 1 closed on KOTC** — the v0.76.0 ratchet reddened the moment the module was mounted and was replaced by the real dispatch-table assertion, which is the mechanism working rather than a note in a handoff. |
 | 2026-08-03 | Twenty-three releases under direct commit (v0.57.0–v0.79.0). Handoff v0.76.0 superseded and **deleted**; `2026-08-03_handoff_v0_81_0.md` is the state of record. Migration **0041** applied live (held bracket slots, bracket court ranges, optional game times), ledger row read back. Owner's eight numbered items: seven delivered, live-view animations deferred with the reason recorded. `/emil-design-eng` installed after five sessions of silently substituting for it. **C9's ruling encoded as cadence in `CLAUDE.md` §1.1** at the owner's instruction — periodic review and documentation audit, not a per-session sweep. |
 | 2026-08-03 | Twenty releases under direct commit (v0.57.0–v0.76.0). Handoff v0.74.0 superseded and **deleted**; `2026-08-03_handoff_v0_76_0.md` is the state of record. KOTC spec v1.0 superseded and **deleted** by v1.1 (all five open questions answered). **C9 opened** — a CHANGELOG entry claimed a fix that was never applied. C6 stays open. Migration **0040** applied live (KOTC), ledger row read back. |
 
 ---
 
-*Changelog: v1.9 (2026-08-03) — handoff repointed to v0.81.0 (v0.80.0 deleted); **C10 opened and closed** (the harness schema was half the database). v1.8 (2026-08-03) — handoff row repointed to v0.80.0 (v0.79.0 deleted); KOTC row marked reachable; consolidation log extended. v1.7 (2026-08-03) — handoff row repointed to v0.79.0 (v0.76.0 deleted); consolidation log extended through v0.79.0; C9's ruling noted as now encoded in `CLAUDE.md` §1.1 rather than living only here. v1.6 (2026-08-03) — handoff row repointed to v0.76.0 (v0.74.0 deleted); KOTC spec row repointed to v1.1 (v1.0 deleted, its five open questions now answered); **C9 opened** with the ratchet-not-a-paragraph corollary; consolidation log extended through v0.76.0. v1.5 (2026-08-03) — handoff row repointed to v0.74.0 (v0.70.0 deleted); KOTC spec registered. v1.4 (2026-08-03) — handoff row repointed to v0.70.0 (v0.68.0 deleted); consolidation log extended through v0.70.0. v1.3 (2026-08-03) — handoff row repointed to v0.68.0 (v0.66.0 deleted); C8 opened and
+*Changelog: v2.0 (2026-08-03) — handoff repointed to v0.82.0 (v0.81.0 deleted); **C11 opened and closed** (a shared button modifier with no base, and the two guards that were each aimed one inch off it); **C12 opened** (a handoff recorded a diagnosis the live database contradicted, and two sessions built on it). v1.9 (2026-08-03) — handoff repointed to v0.81.0 (v0.80.0 deleted); **C10 opened and closed** (the harness schema was half the database). v1.8 (2026-08-03) — handoff row repointed to v0.80.0 (v0.79.0 deleted); KOTC row marked reachable; consolidation log extended. v1.7 (2026-08-03) — handoff row repointed to v0.79.0 (v0.76.0 deleted); consolidation log extended through v0.79.0; C9's ruling noted as now encoded in `CLAUDE.md` §1.1 rather than living only here. v1.6 (2026-08-03) — handoff row repointed to v0.76.0 (v0.74.0 deleted); KOTC spec row repointed to v1.1 (v1.0 deleted, its five open questions now answered); **C9 opened** with the ratchet-not-a-paragraph corollary; consolidation log extended through v0.76.0. v1.5 (2026-08-03) — handoff row repointed to v0.74.0 (v0.70.0 deleted); KOTC spec registered. v1.4 (2026-08-03) — handoff row repointed to v0.70.0 (v0.68.0 deleted); consolidation log extended through v0.70.0. v1.3 (2026-08-03) — handoff row repointed to v0.68.0 (v0.66.0 deleted); C8 opened and
 closed in the same release (the CDN QR that never rendered). v1.2 (2026-08-03) — handoff row repointed to v0.66.0 (v0.56.0 deleted); C6 closed with
 the finding that the buster sweep had never covered `.js`; consolidation log extended through
 v0.66.0. v1.1 (2026-08-02) — handoff row repointed to v0.56.0 (v0.53.0 deleted); standards→v2.1 and
