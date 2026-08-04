@@ -1,5 +1,111 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.84.0 — 2026-08-04
+
+Live-view animations — the last of the owner's eight numbered items, deferred three sessions.
+
+Owner item 2: *"add cool animations to the live view so when things are updated there is an animation
+that is engaging for viewers."*
+
+### The board re-renders every 25 seconds, which is why the obvious build would have been wrong
+
+`render()` replaces `innerHTML` wholesale on every poll, so every node is a new node every 25
+seconds. An enter-animation written the obvious way — a keyframe on `.lv-court` — would therefore
+replay on **every card on every poll, forever**, on a display somebody leaves running all afternoon.
+That is precisely the rule standards §5 states as "no enter-animation on high-frequency controls",
+and it would have shipped looking like a feature.
+
+So the page now **diffs each payload against the previous one and animates only the difference**. The
+nodes are new; the knowledge of what changed lives in a `prev` snapshot, not in the DOM. A poll where
+nothing changed animates nothing at all. That inversion is the whole release: *on this board,
+movement is information.*
+
+### What animates, and what each one had to earn
+
+| Trigger | Effect | Values | Why it earns motion |
+|---|---|---|---|
+| A final score lands | Pop on the score cell + a decaying flash on the card | `--dur-pop` 180ms, `--ease-out` | The headline. A handful of times per round |
+| A card is new to the board | Scale-in from 0.97 | `--dur-pop`, `--ease-out` | Never from `scale(0)` — nothing appears out of nothing |
+| The round advances | The on-now cards stagger in, 40ms apart, capped at 8 | `--dur-pop`, `--ease-out` | Once per round. Says "a NEW set of games", not the same ones re-rendered |
+| A team changes rank | The row travels from its old position to its new one (FLIP) | `--dur-modal` 240ms, `--ease-in-out` | Already on screen moving A→B, so ease-in-out, not ease-out |
+| A champion appears | One pop | `--dur-modal`, `--ease-out` | The rarest moment in the event |
+| First paint | One stagger | as above | A wall display loads once a day |
+
+Every value comes from `tokens.css`. Nothing new was invented. The flash is a composited overlay
+fading its `opacity`, not an animated background colour, because `transform` and `opacity` are the
+only two properties that skip layout and paint. Gold appears there as a **background at low alpha**
+and never as text — the gold rule, which measures 1.87:1 the wrong way round.
+
+**Exits deliberately do not animate.** A card leaving is destroyed by the `innerHTML` replacement,
+and keeping it alive to animate out means a keyed reconciler — a much larger rewrite of a page whose
+first duty is to never blank. An instant exit is the limit case of "exits faster than entrances", and
+on a scoreboard "that game is over" is carried by the card that replaces it.
+
+**Two durations are over 300ms on purpose.** The 900ms card flash and the colour settle are *decays*,
+not responses to a tap. The ≤300ms rule governs how fast an interface answers the user; nothing here
+is a user action. The movement inside each effect is 180ms or 240ms — only the fade-back is slow,
+because a highlight that vanishes in 180ms on a board read from thirty feet away has not been seen.
+
+### Two fields the server had been sending with nothing reading them
+
+`degraded` and `degraded_note` have been in the payload since **v0.77.0**, and `current_round` since
+**v0.73.0**. No page read any of them. `live_board.test.mjs` covered the API side thoroughly —
+including a negative control proving the flag is not stuck on — and nothing asserted the page did
+anything with it. Failure class 1: built, tested, and uncalled.
+
+The consequence was not cosmetic. A board that lost its bracket read rendered an **empty** bracket,
+which asserts *there is no bracket* — a wrong answer presented as a fact, on the one surface where
+nobody is watching the logs. It now shows the server's own sentence in a `.notice error`, and
+`current_round` renders as "Round 3" beside "On now".
+
+**A degraded board animates nothing.** A section that came back empty because its read failed looks
+exactly like a section that emptied, so "what changed" is unknowable and motion would dress a guess
+as a fact. The snapshot is dropped after a degraded poll rather than diffed against.
+
+### The guard, and what it does not claim
+
+`live_motion.test.mjs` (20 tests, 7 negative controls) does **not** check that the motion values
+drifted — that is the C11 mistake, and a page can fail by using nothing at all. It asserts four
+things that can each be false while the page still parses and screenshots fine:
+
+1. **The motion exists.** Every animation name resolves to a defined `@keyframes`. `animation: lv-popp`
+   is valid CSS that throws nothing, logs nothing and animates nothing — the button bug in CSS form.
+   Also flagged in reverse: keyframes defined and never referenced.
+2. **It is built on tokens.** No literal `cubic-bezier`, no bare `ease-in` (with `ease-in-out`
+   correctly exempt, proven both directions), every declaration carrying a `var(--ease-*)`.
+3. **It is diff-driven.** The single line `if (had === has) continue;` is pinned, because that
+   comparison is what keeps a 25-second refresh from becoming a flicker every 25 seconds.
+4. **The degraded state is shown, not animated over.**
+
+It states in its own header what it cannot see: whether the motion looks *good*. Timing and feel are
+judged by eye, in slow motion, on the real board.
+
+Also fixed: this page's `prefers-reduced-motion` block covered `transition` only. Every effect added
+here is a keyframe animation, so that block would have let all of them straight through. It now
+covers both, and the script skips the FLIP's layout reads entirely rather than measuring rows for an
+animation nobody will see.
+
+### A stale cache buster the guard could not see, for ten releases
+
+The sweep found `404.html` at the **repo root** sitting at `?v=0.74.0` while all 369 busters under
+`web/` read 0.83.0. `asset_versions.test.mjs` — the guard whose own header says it "scans the WIDEST
+set" — was scanning `web/*.html` and `web/assets/*.js`. The stale file was one directory up, and the
+guard had reported clean the entire time. Nobody narrowed it; the file was simply never inside it.
+
+That is the same defect standards §11 records for migrations 0004–0007, which sat at `db/` root while
+`schema_gate.test.mjs` scanned only `db/migrations/`. **A file's location is part of whether a guard
+can see it**, and "the widest set" has to mean the widest set that *ships*, not the widest directory
+someone remembered to name. The corpus now includes the repo root, with a control that replays the
+exact ten-release regression against the real file and proves it now fails.
+
+### Measured
+
+Suite **1166 passing, 0 failing** (1144 → 1166: +20 motion guard, +2 buster guard), **69** test
+files, **50** modules parse, ledger **0042** with no migration this release, cache buster a single
+value at **0.84.0** across 371 occurrences including the repo root for the first time. The
+`index.js` bump byte-verified as a one-line diff.
+
+
 ## v0.83.0 — 2026-08-04
 
 The test-data generator, fixed — and fixed for a different reason than the one it was assigned.

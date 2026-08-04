@@ -1,5 +1,10 @@
 /**
- * asset_versions.test.mjs · v1.1 · 2026-08-02 · Ships in: v0.49.1 (v1.0 2026-07-31, v0.41.0)
+ * asset_versions.test.mjs · v1.2 · 2026-08-04 · Ships in: v0.84.0
+ * (v1.1 2026-08-02, v0.49.1 · v1.0 2026-07-31, v0.41.0)
+ *
+ * v1.2: the corpus now includes the REPO ROOT. `404.html` ships from there, carries busters, and was
+ * stale at ?v=0.74.0 for ten releases while this guard reported clean — it was scanning `web/` and
+ * the file was one directory up. Same defect as migrations 0004–0007 at `db/` root (standards §11).
  *
  * Guards the SINGLE shared cache-buster convention adopted in v0.41.0.
  *
@@ -33,6 +38,7 @@ import { readFileSync, readdirSync } from "node:fs";
 
 const WEB_DIR = new URL("../../web/", import.meta.url);
 const ASSETS_DIR = new URL("../../web/assets/", import.meta.url);
+const ROOT_DIR = new URL("../../", import.meta.url);
 
 /* ── pure helpers — the real corpus and every negative control go through these ── */
 
@@ -95,6 +101,22 @@ function realCorpus() {
       corpus.set(`assets/${f}`, stripJsBlockComments(readFileSync(new URL(f, ASSETS_DIR), "utf8")));
     }
   }
+  /* v1.2 (v0.84.0): THE REPO ROOT, which this guard could not see for ten releases.
+     `404.html` lives at the root because GitHub Pages serves it for any missing path, and it
+     references `/btplatform/web/assets/tokens.css?v=…`. It sat at `?v=0.74.0` while every file
+     under `web/` moved to 0.83.0, and this guard reported clean the whole time — it was scanning
+     `web/` and the stale file was one directory up. Nobody had narrowed the guard; the file was
+     simply never inside it.
+
+     That is the SAME defect standards §11 records for migrations 0004–0007, which sat at `db/`
+     root while `schema_gate.test.mjs` scanned only `db/migrations/`. A file's location is part of
+     whether a guard can see it, and "we scan the widest set" has to mean the widest set that
+     SHIPS, not the widest directory somebody remembered to name. */
+  for (const f of readdirSync(ROOT_DIR)) {
+    if (f.endsWith(".html")) {
+      corpus.set(`/${f}`, stripHtmlComments(readFileSync(new URL(f, ROOT_DIR), "utf8")));
+    }
+  }
   return corpus;
 }
 
@@ -108,6 +130,33 @@ test("the widest-set guard actually covers the critical surfaces", () => {
     assert.ok(audit.withBusters.includes(must),
       `${must} must be in the scanned-with-busters set — if it vanished, the guard narrowed (failure class 3)`);
   }
+});
+
+test("v1.2: the repo-root pages are inside the guard, not one directory outside it", () => {
+  // Pinned as its own assertion rather than folded into the list above, because the failure it
+  // prevents is not "a file changed" but "a shipped file was never in the corpus at all". An
+  // absence reports clean, so it has to be asserted positively.
+  const audit = auditCorpus(realCorpus());
+  assert.ok(audit.withBusters.includes("/404.html"),
+    "404.html ships from the repo root and carries busters — it was stale from v0.74.0 to v0.83.0 " +
+    "precisely because this corpus stopped at web/");
+});
+
+test("NC — a stale buster at the repo root is now caught", () => {
+  // The exact regression that hid for ten releases, replayed against the real file. Before v1.2 this
+  // corpus returned one value and passed; the mutation had to be invisible for the bug to exist.
+  const corpus = realCorpus();
+  const before = auditCorpus(corpus);
+  assert.equal(before.values.size, 1, "the real tree should be swept before mutating it");
+
+  const root404 = corpus.get("/404.html");
+  assert.ok(root404, "the fixture for this control moved — 404.html is no longer at the repo root");
+  corpus.set("/404.html", root404.replace(/\?v=[0-9][0-9.]*/g, "?v=0.74.0"));
+  assert.notEqual(corpus.get("/404.html"), root404, "the mutation did not apply");
+
+  const after = auditCorpus(corpus);
+  assert.equal(after.values.size, 2, "a root page left behind by the sweep must now fail the guard");
+  assert.throws(() => assertConvention(after), /must share ONE value/);
 });
 
 test("v1.1: no HTML page references a local js/css asset without a buster", () => {

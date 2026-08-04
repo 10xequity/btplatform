@@ -1,5 +1,8 @@
 <!DOCTYPE html>
-<!-- Boomtown Platform — Live board (public) · Version: v1.0 · Date: 2026-08-03 · Ships in: v0.73.0
+<!-- Boomtown Platform — Live board (public) · Version: v1.1 · Date: 2026-08-04 · Ships in: v0.84.0
+     v1.1: diff-driven motion (owner item 2) and the degraded banner the server has been sending
+     since v0.77.0 with nothing rendering it. See the Motion block in <style> for why nothing
+     animates on a poll that changed nothing.
      The second of the owner's two views (2026-08-03): admin creates, this one displays.
      READ ONLY AND NO LOGIN. A parent beside court 3 will not sign in, and a TV by the door cannot.
      "On now" sits above everything else because that is the question people open this for.
@@ -14,8 +17,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Live scores — Boomtown Athletics</title>
   <script>/* Pre-paint theme (v0.53.0): saved bt_theme, else system preference, applied before the first stylesheet — the member header paints the right theme on frame one (admin pre-paint v2 precedent, theme half only; member pages carry no rail-collapse state). site-nav.js v2.12 owns the toggle listener. */(function(){try{var t=(window.localStorage&&localStorage.getItem("bt_theme"))||(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.dataset.theme=t;}catch(e){}})();</script>
-  <link rel="stylesheet" href="assets/tokens.css?v=0.83.0" />
-  <link rel="stylesheet" href="assets/app.css?v=0.83.0" />
+  <link rel="stylesheet" href="assets/tokens.css?v=0.84.0" />
+  <link rel="stylesheet" href="assets/app.css?v=0.84.0" />
   <style>
     /* A public scoreboard is read from three feet away on a phone and thirty feet away on a TV, so
        the type scales with the viewport rather than sitting at one size. */
@@ -75,7 +78,61 @@
     .lv-brm b { font-variant-numeric: tabular-nums; font-weight: 700; }
     .lv-brm .won { color: var(--emphasis); font-weight: 700; }
 
-    @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+    /* ---- Motion · v0.84.0 · owner item 2 ------------------------------------------------------
+       "add cool animations to the live view so when things are updated there is an animation that
+       is engaging for viewers."
+
+       THE WHOLE DESIGN IS ONE DECISION: the page diffs each payload against the previous one and
+       animates ONLY what changed. `render()` replaces innerHTML wholesale every 25 seconds, so an
+       enter-animation written the obvious way would replay on every card on every poll — motion
+       every 25 seconds that means nothing, which is exactly the "no enter-animation on
+       high-frequency controls" rule in standards §5. A poll where nothing changed animates nothing.
+       That is why this is engaging rather than noisy: when something moves, something happened.
+
+       Tokens only. --ease-out, --dur-pop and --dur-modal come from tokens.css and are not restated
+       here. No new motion values are invented.
+
+       ON THE TWO DURATIONS THAT ARE NOT UNDER 300ms, DELIBERATELY: the 900ms card flash and the
+       colour settle are DECAYS, not responses to a user action. The ≤300ms rule governs how fast
+       the interface answers a tap; nothing here is a tap. The movement inside each effect is
+       --dur-pop (180ms) or --dur-modal (240ms); only the fade-back is slow, because a highlight
+       that vanishes in 180ms on a board read from thirty feet away has not been seen at all. */
+
+    /* A final score landing on a court card. The one animation anybody will actually notice. */
+    @keyframes lv-pop   { from { transform: scale(0.94); } to { transform: scale(1); } }
+    /* Never from scale(0): nothing in the real world appears out of nothing. */
+    @keyframes lv-enter { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: scale(1); } }
+    @keyframes lv-decay { from { opacity: .16; } to { opacity: 0; } }
+
+    /* The flash is a composited overlay fading its opacity, not an animated background colour —
+       transform and opacity are the only two properties that skip layout and paint. Gold is used
+       here as a BACKGROUND at low alpha, never as text (the gold rule, uiux-review §1). */
+    .lv-court { position: relative; }
+    .lv-court::after { content: ""; position: absolute; inset: 0; border-radius: inherit;
+      background: var(--accent); opacity: 0; pointer-events: none; }
+    .lv-court.lv-changed::after { animation: lv-decay 900ms var(--ease-out); }
+
+    .lv-court.lv-enter { animation: lv-enter var(--dur-pop) var(--ease-out) both; }
+
+    /* --emphasis, not --accent: measured 14.22:1, and gold as text on a light surface is 1.87:1. */
+    .lv-sc { transition: color var(--dur-modal) var(--ease-out); }
+    .lv-sc.lv-changed { animation: lv-pop var(--dur-pop) var(--ease-out); color: var(--emphasis); }
+
+    /* A team changing rank is the most engaging thing on a scoreboard — "we moved to second".
+       The row travels from where it was to where it now is (a FLIP): it is already on screen and
+       moving from A to B, so ease-in-out, not ease-out. */
+    .lv-table tr.lv-move { transition: transform var(--dur-modal) var(--ease-in-out); }
+
+    /* Rarest moment of the whole event, so it earns one pop. */
+    .lv-champ { display: inline-block; }
+    .lv-champ.lv-enter { animation: lv-pop var(--dur-modal) var(--ease-out); }
+
+    /* Reduced motion kills animation as well as transition. tokens.css already does this globally;
+       it is repeated here because this page defines keyframes of its own, and the previous version
+       of this block covered `transition` only — which would have let every @keyframes above through. */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { transition: none !important; animation: none !important; }
+    }
   </style>
   <script>
     (function () {
@@ -86,7 +143,7 @@
 </head>
 <body>
     <header class="header chrome-glass no-print">
-    <a class="wordmark" href="index.html" style="text-decoration:none;color:inherit"><img class="brand-logo" src="assets/logo-boom-icon-512.png?v=0.83.0" alt="" width="22" height="22" />Boomtown <span>Athletics</span></a>
+    <a class="wordmark" href="index.html" style="text-decoration:none;color:inherit"><img class="brand-logo" src="assets/logo-boom-icon-512.png?v=0.84.0" alt="" width="22" height="22" />Boomtown <span>Athletics</span></a>
     <div class="spacer"></div>
     <a id="btHdrAdmin" class="btn ghost hdr-admin" href="admin.html" aria-label="Switch to admin view" hidden>Admin</a>
     <a id="btHdrMail" class="btn ghost hdr-mail" href="member-inbox.html" aria-label="Messages">✉</a>
@@ -109,8 +166,15 @@
       <span class="lv-stamp" id="lvStamp" role="status" aria-live="polite"></span>
     </div>
 
+    <!-- The server has sent `degraded` and `degraded_note` since v0.77.0 and no page has ever
+         rendered either. A board missing a section was silently asserting that section was empty:
+         an empty bracket reads as "there is no bracket", which is a wrong answer presented as a
+         fact. This says so in words instead, and when it is showing, the page animates NOTHING —
+         a partial read makes "what changed" unknowable, and motion would dress a guess as a fact. -->
+    <p class="notice error" id="lvDegraded" role="status" aria-live="polite" hidden></p>
+
     <div id="lvBody">
-      <h2 class="lv-h2">On now</h2>
+      <h2 class="lv-h2">On now <span class="lv-sub" id="lvRound"></span></h2>
       <ul class="lv-courts" id="lvNow"></ul>
 
       <div id="lvNextWrap" hidden>
@@ -128,8 +192,8 @@
     </div>
   </main>
 
-  <script src="assets/site-nav.js?v=0.83.0" defer></script>
-  <script src="assets/config.js?v=0.83.0"></script>
-  <script src="assets/live.js?v=0.83.0" defer></script>
+  <script src="assets/site-nav.js?v=0.84.0" defer></script>
+  <script src="assets/config.js?v=0.84.0"></script>
+  <script src="assets/live.js?v=0.84.0" defer></script>
 </body>
 </html>
