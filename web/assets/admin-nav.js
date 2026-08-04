@@ -1,5 +1,9 @@
 /* Boomtown Platform — Admin sidebar (shared)
-   Version: v2.20 · Date: 2026-08-02 · Ships in: v0.56.0
+   Version: v2.21 · Date: 2026-08-04 · Ships in: v0.83.0
+   v2.21: the Test data modal no longer greys out Generate when a seed exists. `generate` clears and
+   reseeds as of sandbox.js v2.1, so a stale seed is something to replace, not a dead end — the
+   button reads "Regenerate test data" and recovery is ONE tap instead of Wipe-then-Generate plus a
+   confirm (owner requirement #19, click minimisation).
    v2.20 (v0.56.0): the ✉ badge, unparked. v2.17 shipped the icon with "No badge yet: there is
    no admin unread-count endpoint (queued follow-up)" — GET /api/admin/messages/flags/count now
    exists (staff-only, org-scoped, counting through the SAME predicate as the queue itself so a
@@ -276,8 +280,9 @@
         <p style="font-size:14px">${seeded
           ? `Currently seeded: ${c.events || 0} events · ${c.teams || 0} teams · ${c.matches || 0} games · ${c.registrations || 0} registrations · ${c.contacts || 0} contacts`
           : "No test data at the moment."}</p>
+        ${seeded ? `<p class="help-text">Regenerating replaces what's there with a fresh set. Use it if the sample data looks wrong or out of date — you can't get two copies.</p>` : ""}
         <div style="display:flex;gap:10px;margin-top:12px">
-          <button class="btn" id="tdGen" ${seeded ? "disabled" : ""}>Generate test data</button>
+          <button class="btn" id="tdGen">${seeded ? "Regenerate test data" : "Generate test data"}</button>
           <button class="btn ghost" id="tdWipe" ${seeded ? "" : "disabled"}>Wipe test data</button>
           <button class="btn ghost" id="tdClose">Close</button>
         </div>
@@ -285,7 +290,7 @@
       const say = m => { back.querySelector("#tdStatus").textContent = m || ""; };
       back.querySelector("#tdClose").onclick = closeModal;
       back.querySelector("#tdGen").onclick = async () => {
-        say("Creating…");
+        say(seeded ? "Replacing…" : "Creating…");
         const r = await api("/api/admin/testdata/generate", { method: "POST" });
         say(r.data.message || r.data.error);
         if (r.ok) setTimeout(() => location.reload(), 1200);
@@ -587,7 +592,7 @@
       if (window.BT_STATUS || document.getElementById("bt-status-js")) return;
       var s = document.createElement("script");
       s.id = "bt-status-js";
-      s.src = "assets/build-status.js?v=0.82.0";
+      s.src = "assets/build-status.js?v=0.83.0";
       s.async = false;
       document.head.appendChild(s);
     } catch (e) { /* indicators are never load-blocking */ }

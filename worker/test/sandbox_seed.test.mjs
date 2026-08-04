@@ -236,10 +236,80 @@ test("the seeded plan still moves nobody until it is accepted", async () => {
 
 /* ---------------- housekeeping ---------------- */
 
-test("generating twice is refused rather than stacking a second copy", async () => {
+test("generating twice CONVERGES rather than refusing — it must never stack a second copy", async () => {
+  // v0.83.0 replaced the 409 this test used to assert. The refusal was the bug: it made a seed from
+  // an older version of sandbox.js a dead end whose only exit was a Wipe you had to know to look for.
+  // The property that actually matters was never "it refuses", it was "you never get two copies".
   const { env, token } = await seeded();
+  const counts = () => env.DB.one(
+    `SELECT (SELECT COUNT(*) FROM events   WHERE id BETWEEN 90000 AND 90999) e,
+            (SELECT COUNT(*) FROM contacts WHERE id BETWEEN 90000 AND 90999) c,
+            (SELECT COUNT(*) FROM teams    WHERE event_id BETWEEN 90000 AND 90999) t,
+            (SELECT COUNT(*) FROM matches  WHERE event_id BETWEEN 90000 AND 90999) m`);
+  const first = counts();
   const again = await call(env, "POST", "/api/admin/testdata/generate", { token });
-  assert.equal(again.status, 409);
+  assert.equal(again.status, 200, JSON.stringify(again.data));
+  assert.equal(again.data.replaced, true, "the second run must report that it replaced a seed");
+  assert.deepEqual(counts(), first, "a second generate must land on the same fixture, not double it");
+  env.DB.close();
+});
+
+test("generate RECOVERS a seed left by an older version of this file", async () => {
+  // The owner's actual situation on live: a complete seed written 2026-07-24 by the hand-run v1.0
+  // seed SQL — three events, eight contacts, teams with no score_token. The old generate refused
+  // outright (409), so the fixture could not be brought up to date from the UI at all.
+  const env = boot();
+  const token = await staff(env);
+  env.DB.exec(`
+    INSERT INTO contacts (id, org_id, email, full_name, city, state) VALUES
+      (90001,1,'test.ava@example.com','TEST Ava Stone','Colorado Springs','CO'),
+      (90002,1,'test.ben@example.com','TEST Ben Ortiz','Colorado Springs','CO');
+    INSERT INTO events (id, org_id, type, name, status) VALUES
+      (90001,1,'tournament','TEST Spring Slam (sample data)','completed'),
+      (90002,1,'tournament','TEST Summer Open (sample data)','published');
+    INSERT INTO teams (id, org_id, event_id, name) VALUES (90001,1,90001,'TEST Set to Kill')`);
+
+  const r = await call(env, "POST", "/api/admin/testdata/generate", { token });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  assert.equal(r.data.replaced, true);
+
+  // The stale rows are gone and the current fixture is in place, whole.
+  assert.equal(env.DB.one("SELECT COUNT(*) AS n FROM events WHERE name LIKE '%Summer Open (sample data)%'").n, 0,
+    "the old event name must not survive — that is what 'stale' means");
+  assert.equal(env.DB.one("SELECT COUNT(*) AS n FROM contacts WHERE id BETWEEN 90000 AND 90999").n, 48);
+  assert.equal(env.DB.one("SELECT COUNT(*) AS n FROM teams WHERE score_token IS NULL OR score_token=''").n, 0,
+    "every team must have a scoring token — the v1 rows had none");
+  assert.equal(env.DB.one("SELECT COUNT(*) AS n FROM teams WHERE event_id=90002").n, 12,
+    "Summer Open must end up with its twelve teams — the v1 seed gave it zero");
+  env.DB.close();
+});
+
+test("a seed that fails part way leaves the range EXACTLY as it was", async () => {
+  // The property the whole release turns on. D1 runs a batch as a transaction, so a failure must
+  // roll the entire sequence back rather than leave the unclearable half-state the previous handoff
+  // believed was already on live. Forced by making one real statement throw mid-batch.
+  const { env, token } = await seeded();
+  const beforeEvents = env.DB.one("SELECT COUNT(*) AS n FROM events WHERE id BETWEEN 90000 AND 90999").n;
+  const beforeNames = env.DB.query("SELECT name FROM teams WHERE event_id=90002 ORDER BY id").map((r) => r.name);
+  assert.ok(beforeEvents > 0 && beforeNames.length === 12, "fixture must be in place for this control");
+
+  const realPrepare = env.DB.prepare.bind(env.DB);
+  let threw = false;
+  env.DB.prepare = (sql) => {
+    const st = realPrepare(sql);
+    if (/INSERT INTO standings/.test(sql)) {
+      return { ...st, run: async () => { threw = true; throw new Error("forced mid-batch failure"); } };
+    }
+    return st;
+  };
+  await call(env, "POST", "/api/admin/testdata/generate", { token }).catch(() => null);
+  env.DB.prepare = realPrepare;
+
+  assert.equal(threw, true, "the mutation never fired — this control was testing nothing");
+  assert.equal(env.DB.one("SELECT COUNT(*) AS n FROM events WHERE id BETWEEN 90000 AND 90999").n, beforeEvents,
+    "the wipe half of the batch was committed without the seed half — that is the partial state");
+  assert.deepEqual(env.DB.query("SELECT name FROM teams WHERE event_id=90002 ORDER BY id").map((r) => r.name),
+    beforeNames, "the previous fixture must be intact, untouched, exactly as before");
   env.DB.close();
 });
 

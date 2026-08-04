@@ -1,5 +1,84 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.83.0 — 2026-08-04
+
+The test-data generator, fixed — and fixed for a different reason than the one it was assigned.
+
+### `generate` could be blocked by its own previous output
+
+Owner: *"the test data module does not work."* Handoff v0.81.0 diagnosed a generator that died part
+way through a run on live, leaving a partial seed nobody could clear, and asked for it to be made
+**resumable**. It was not that, and there was nothing to resume. Five facts read from live D1:
+
+1. **All eight contacts carried `created_at = 2026-07-24 16:18:40`** — identical to the second, and
+   ten days before `sandbox.js` v2.0 shipped in v0.67.0.
+2. **`city` was "Colorado Springs"**, which is not in the current `CITIES` array.
+3. **`score_token` was NULL on all four teams**, where every team INSERT writes a `deadbeef…` token.
+4. **Two of three event names** did not match the strings the file inserts.
+5. **`contactRows()` is ONE `INSERT` with 48 tuples.** A multi-row INSERT is atomic in SQLite, so
+   "8 of 48" is arithmetically impossible as a partial write. Eight rows sharing one timestamp is
+   what a *complete* insert of eight rows looks like.
+
+The seed file's own header closed it: `db/2026-07-26_seed-testdata_v1_1.sql` records moving the test
+cities *"Colorado Springs → Aurora"*. Live still said Colorado Springs, so live came from the **v1.0**
+seed SQL — the file v1.1 instructed be deleted — hand-run around 2026-07-24. **Never from
+`sandbox.js` at all.**
+
+The limit theory failed on the documented numbers too: D1 allows **1000 queries per Worker
+invocation** on Workers Paid (50 on Free), 100 KB per statement, 30 s per query. The route issues
+**44**. Four percent of the cap.
+
+**The real defect was the refusal.** `generate` returned 409 on finding any row in 90000–90999 and
+the rail greyed out its own Generate button, so a seed from an older version of the file was a dead
+end whose only exit was a Wipe you had to know to look for. *A fixture generator that can be blocked
+by its own previous output is not a tool, it is a puzzle.*
+
+### What changed
+
+`generate` now **clears the range and reseeds**. Both it and `wipe` run the one delete list in
+`WIPE_SQL` — two implementations of "remove the test data" would drift, and this file already carries
+a comment warning about exactly that for bracket drawing.
+
+Both paths go through a **single `D1.batch()`**, which is a SQL transaction: a failing statement rolls
+the whole sequence back. A half-written seed is now **impossible** rather than unlikely. `wipe` gets
+the same treatment — it was fourteen sequential autocommits, so a mid-way failure there really did
+leave a partial delete, sitting inside the button whose job is to prevent one.
+
+Deliberately **not** `ON CONFLICT DO NOTHING`, which the previous handoff proposed. It would convert a
+real failure — the delete list forgetting a table — into a silently incomplete fixture that reports
+success, and a fixture that lies about being complete is the exact thing this file exists to avoid.
+
+`admin-nav.js` v2.21 stops greying out Generate; it reads **"Regenerate test data"** when a seed
+exists. Recovery is **one tap** instead of Wipe → confirm → Generate (owner requirement #19).
+
+### Tests: 1142 → 1144, and one deletion worth naming
+
+**`sandbox_seed.test.mjs` asserted the 409 as correct behaviour.** The test encoded the dead end. It
+is replaced by the property that actually mattered — *you never get two copies* — plus two new ones:
+
+- **`generate` recovers a seed left by an older version of the file**: seed the range v1-shaped (old
+  event names, no score tokens, Summer Open with zero teams), generate, assert convergence on the
+  current fixture. This is the owner's live situation, now a regression test.
+- **A seed that fails part way leaves the range exactly as it was**: forces a real mid-batch failure
+  by making one `INSERT INTO standings` throw, then asserts the previous fixture is byte-identical.
+  The control checks the mutation actually fired, because a control that never fires proves nothing.
+
+### Owner decision recorded
+
+The 90000–90999 range is **disposable** — owner 2026-08-04, verbatim: *"we can delete them, no need
+to preserve… the sandbox is temporary anyway."* That strikes README standing rule #4's exemption for
+contacts 90001–90008, a rule `wipe` had already been violating since v0.67.0 with a test asserting
+it. The generator recreates those eight identically, so nothing is lost.
+
+### Housekeeping
+
+Buster swept **0.82.0 → 0.83.0** across `.html` and `.js` (369 occurrences). `index.js` byte-verifies
+as a one-line diff. `sync-rail.mjs`: all 36 pages already matching. No migration; ledger stays
+**0042**. This entry was written **into the release commit** rather than filled from a CI stub — the
+writer is prepend-only and idempotent, so the stub step should find it present and no-op, collapsing
+a release to one push and removing the unfilled-stub failure mode that `CLAUDE.md` blames for the
+v0.36–v0.51 decay.
+
 ## v0.82.0 — 2026-08-04
 
 Two of the owner's complaints from 2026-08-03 close here. One closes as a **fix**; the other closes as a

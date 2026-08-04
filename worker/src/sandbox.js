@@ -1,15 +1,53 @@
 /**
  * Boomtown Platform — Sandbox / Demo tools (Module 11.5)
- * File: worker/src/sandbox.js · Version: v2.0 · Date: 2026-08-03 · Ships in: v0.67.0
+ * File: worker/src/sandbox.js · Version: v2.1 · Date: 2026-08-03 · Ships in: v0.83.0
  *
  * Staff-gated endpoints powering the admin rail's "Sandbox" group:
  *   GET  /api/admin/testdata           → counts of test rows per table (are we seeded?)
- *   POST /api/admin/testdata/generate  → inserts the standard TEST set (IDs 90000–90999,
- *                                        names prefixed "TEST", emails @example.com, org 1)
- *                                        — refuses if test data already exists (wipe first)
+ *   POST /api/admin/testdata/generate  → CLEARS the 90000–90999 range and reseeds it, in ONE
+ *                                        transaction. Safe to press from any state, including
+ *                                        over a seed written by an older version of this file.
  *   POST /api/admin/testdata/wipe      → deletes ONLY the 90000–90999 range, plus rows that
  *                                        reference test events (attendance, checkins, pools,
  *                                        brackets). Real data is untouchable by construction.
+ *
+ * v2.1 — GENERATE COULD BE BLOCKED BY ITS OWN PREVIOUS OUTPUT. THAT WAS THE BUG.
+ *
+ * The owner reported "the test data module does not work". The previous session diagnosed a
+ * generator that died part way through a run on live and left a partial seed nobody could clear,
+ * and proposed making it resumable. That was wrong, and five facts from live D1 disprove it:
+ * all eight contacts shared one `created_at` (2026-07-24 16:18:40 — ten days before v2.0 shipped,
+ * and a multi-row INSERT is atomic in SQLite, so "8 of 48" is impossible as a partial write),
+ * `city` was "Colorado Springs" which is not in CITIES, every `score_token` was NULL where this
+ * file always writes one, and two of three event names did not match the strings below. Live held
+ * a COMPLETE seed from the hand-run v1.0 seed SQL. Nothing half-ran; there was no partial state.
+ *
+ * The real defect was the refusal. `generate` returned 409 on finding any row in the range, and the
+ * rail greys out Generate when seeded — so a seed from an older version of this file was a dead end
+ * whose only exit was a Wipe you had to know to look for. A fixture generator that can be blocked by
+ * its own previous output is not a tool, it is a puzzle.
+ *
+ * So generate now CLEARS AND RESEEDS, and both paths run the one delete list in WIPE_SQL.
+ *
+ * Both paths go through a single `D1.batch()`, which is a SQL transaction: if any statement fails
+ * the whole sequence rolls back (Cloudflare D1 docs, `D1Database::batch`). A half-written seed is now
+ * impossible rather than merely unlikely — which is the failure this was asked to eliminate. `wipe`
+ * gets the same treatment; it used to be 14 sequential autocommits, so a mid-way failure there
+ * really did leave a partial delete.
+ *
+ * NOT `ON CONFLICT DO NOTHING`, which was the other candidate. It is worse here: it would turn a
+ * real failure — this delete list forgetting a table, say — into a silently incomplete fixture that
+ * reports success. The transaction fails loudly and changes nothing instead. A fixture that lies
+ * about being complete is the exact thing this file exists to avoid.
+ *
+ * On the limit theory, for the record: D1's documented cap is 1000 queries per Worker invocation on
+ * Workers Paid (50 on Free), max statement length 100 KB, max query duration 30 s. This route issues
+ * 44 statements, none near 100 KB. On Paid that is 4% of the cap, so the theory was arithmetically
+ * dead as well as contradicted by the data. The batch also collapses the round trips into one call.
+ *
+ * The range is disposable by owner decision (2026-08-03): "we can delete them, no need to preserve
+ * … the sandbox is temporary anyway." README standing rule #4's former exemption for contacts
+ * 90001–90008 is struck on that word. This file recreates them identically anyway.
  *
  * v2.0 — THE SEED SET IS NOW PARKED AT THE WORKFLOW, NOT AT THE TABLE.
  * Owner 2026-08-03: "create test tournaments to test drag feature and populate that and
@@ -171,12 +209,64 @@ function roundRobin(eventId, startMatchId, teamIds, courts, pointsTo, opts = {})
 
 const ids = (start, n) => Array.from({ length: n }, (_, i) => start + i);
 
+/* ---------------- clearing the test range ---------------- */
+
+/**
+ * Deleting the test range. ONE definition, used by BOTH `wipe` and `generate`.
+ *
+ * Two implementations of "remove the test data" would drift, and this file already carries a comment
+ * warning about exactly that for bracket drawing ("a fixture built by a second implementation can
+ * pass while the real one is broken"). The same argument applies to the delete.
+ *
+ * Order matters only for readability — D1 runs with foreign keys OFF, as SQLite does by default, so
+ * children do not have to precede parents. They are ordered child-first anyway, because the day FKs
+ * are switched on this list should not need rewriting.
+ *
+ * Every statement is scoped to the id range or to rows whose `event_id` is in it. That scoping is the
+ * safety property, not a convention: `sandbox_seed.test.mjs` carries a negative control that puts a
+ * real event and a real team beside the fixture and asserts both survive.
+ */
+const WIPE_SQL = [
+  `DELETE FROM attendance     WHERE event_id BETWEEN ${LO} AND ${HI}`,
+  `DELETE FROM checkins       WHERE event_id BETWEEN ${LO} AND ${HI}`,
+  `DELETE FROM pools          WHERE event_id BETWEEN ${LO} AND ${HI}`,
+  // Bracket rows and their matches get real auto-increment ids, outside the 90000 range — the
+  // event_id filter is what actually catches them, and it is why every delete below has one.
+  `DELETE FROM brackets       WHERE event_id BETWEEN ${LO} AND ${HI}`,
+  `DELETE FROM division_moves WHERE event_id BETWEEN ${LO} AND ${HI}`,
+  `DELETE FROM divisions      WHERE id BETWEEN ${LO} AND ${HI} OR event_id BETWEEN ${LO} AND ${HI}`,
+  `DELETE FROM registrations  WHERE id BETWEEN ${LO} AND ${HI} OR event_id BETWEEN ${LO} AND ${HI}`,
+  `DELETE FROM standings      WHERE event_id BETWEEN ${LO} AND ${HI}`,
+  `DELETE FROM matches        WHERE id BETWEEN ${LO} AND ${HI} OR event_id BETWEEN ${LO} AND ${HI}`,
+  `DELETE FROM team_members   WHERE team_id BETWEEN ${LO} AND ${HI}`,
+  `DELETE FROM teams          WHERE id BETWEEN ${LO} AND ${HI} OR event_id BETWEEN ${LO} AND ${HI}`,
+  `DELETE FROM events         WHERE id BETWEEN ${LO} AND ${HI}`,
+  `DELETE FROM waivers        WHERE id BETWEEN ${LO} AND ${HI}`,
+  `DELETE FROM contacts       WHERE id BETWEEN ${LO} AND ${HI}`,
+];
+
+/** Counts at test ids, so both routes can report what they actually changed. */
+async function testCounts(env) {
+  return env.DB.prepare(
+    `SELECT
+      (SELECT COUNT(*) FROM events        WHERE id BETWEEN ?1 AND ?2) AS events,
+      (SELECT COUNT(*) FROM contacts      WHERE id BETWEEN ?1 AND ?2) AS contacts,
+      (SELECT COUNT(*) FROM teams         WHERE id BETWEEN ?1 AND ?2) AS teams,
+      (SELECT COUNT(*) FROM matches       WHERE id BETWEEN ?1 AND ?2 OR event_id BETWEEN ?1 AND ?2) AS matches,
+      (SELECT COUNT(*) FROM registrations WHERE id BETWEEN ?1 AND ?2) AS registrations,
+      (SELECT COUNT(*) FROM attendance    WHERE event_id BETWEEN ?1 AND ?2) AS attendance`
+  ).bind(LO, HI).first();
+}
+
 /* ---------------- generate ---------------- */
 
 async function generate(env, ctx) {
   const deny = await requireStaff(env, ctx); if (deny) return deny;
-  const exists = await env.DB.prepare("SELECT id FROM events WHERE id BETWEEN ?1 AND ?2 LIMIT 1").bind(LO, HI).first();
-  if (exists) return json({ error: "Test data already exists — wipe it first, then generate fresh." }, 409);
+  // No 409 here any more. A seed already in the range — from this version or an older one — is
+  // something to REPLACE, not a reason to refuse. The old refusal is what made a stale seed a dead
+  // end. `before` is read only so the response can say honestly whether it replaced anything.
+  const before = await testCounts(env);
+  const replaced = Object.values(before).some((n) => n > 0);
 
   const t2 = teamRows(90002, 90101, 12, 0);   // Summer Open  — no schedule yet
   const t4 = teamRows(90004, 90201, 8, 4);    // Fall Classic — pools scored
@@ -349,7 +439,12 @@ async function generate(env, ctx) {
      (90045,1,90006,90033,'paid','square'),
      (90046,1,90006,90041,'comped','comp')`,
   ];
-  for (const s of stmts) await env.DB.prepare(s).run();
+  // Clear then seed, as ONE transaction. D1 runs a batch as a SQL transaction, so if any statement
+  // fails the whole sequence rolls back and the database is left exactly as it was — no half-written
+  // fixture, which is the state nobody could clear from the UI. Deliberately not per-row
+  // ON CONFLICT DO NOTHING: that would let a forgotten table produce a quietly incomplete fixture
+  // that still reported success.
+  await env.DB.batch([...WIPE_SQL, ...stmts].map((s) => env.DB.prepare(s)));
 
   // Draw Winter Jam's bracket through the REAL generator, seeded off the standings just inserted.
   // The fixture is org 1 by construction, exactly as every statement above is.
@@ -359,12 +454,16 @@ async function generate(env, ctx) {
     ? `${drawn.written} bracket games drawn from the pool finish`
     : `bracket NOT drawn (${drawn.error})`;
 
-  await audit(env, ctx, "testdata.generate", "events", null, { range: `${LO}-${HI}`, bracket: bracketNote });
+  await audit(env, ctx, "testdata.generate", "events", null, {
+    range: `${LO}-${HI}`, bracket: bracketNote, replaced: replaced ? before : null,
+  });
   return json({
     ok: true,
     bracket_ok: !!drawn.ok,
+    replaced,
     message:
-      "Test data created. Four tournaments, each parked where you can try something: " +
+      (replaced ? "Test data replaced. " : "Test data created. ") +
+      "Four tournaments, each parked where you can try something: " +
       "Summer Open (12 teams, 5 courts, no schedule — generate pools, then drag them); " +
       "Fall Classic (8 teams, pools scored — generate a bracket); " +
       "Winter Jam (8 teams, " + bracketNote + " — enter a quarter-final score and watch it advance). " +
@@ -377,26 +476,11 @@ async function generate(env, ctx) {
 
 async function wipe(env, ctx) {
   const deny = await requireStaff(env, ctx); if (deny) return deny;
-  const stmts = [
-    `DELETE FROM attendance    WHERE event_id BETWEEN ${LO} AND ${HI}`,
-    `DELETE FROM checkins      WHERE event_id BETWEEN ${LO} AND ${HI}`,
-    `DELETE FROM pools         WHERE event_id BETWEEN ${LO} AND ${HI}`,
-    // Bracket rows and their matches get real auto-increment ids, outside the 90000 range — the
-    // event_id filter is what actually catches them, and it is why every delete below has one.
-    `DELETE FROM brackets      WHERE event_id BETWEEN ${LO} AND ${HI}`,
-    `DELETE FROM division_moves WHERE event_id BETWEEN ${LO} AND ${HI}`,
-    `DELETE FROM divisions     WHERE id BETWEEN ${LO} AND ${HI} OR event_id BETWEEN ${LO} AND ${HI}`,
-    `DELETE FROM registrations WHERE id BETWEEN ${LO} AND ${HI} OR event_id BETWEEN ${LO} AND ${HI}`,
-    `DELETE FROM standings     WHERE event_id BETWEEN ${LO} AND ${HI}`,
-    `DELETE FROM matches       WHERE id BETWEEN ${LO} AND ${HI} OR event_id BETWEEN ${LO} AND ${HI}`,
-    `DELETE FROM team_members  WHERE team_id BETWEEN ${LO} AND ${HI}`,
-    `DELETE FROM teams         WHERE id BETWEEN ${LO} AND ${HI} OR event_id BETWEEN ${LO} AND ${HI}`,
-    `DELETE FROM events        WHERE id BETWEEN ${LO} AND ${HI}`,
-    `DELETE FROM waivers       WHERE id BETWEEN ${LO} AND ${HI}`,
-    `DELETE FROM contacts      WHERE id BETWEEN ${LO} AND ${HI}`,
-  ];
-  let removed = 0;
-  for (const s of stmts) { const r = await env.DB.prepare(s).run(); removed += r.meta.changes || 0; }
+  // One transaction, same list generate uses. Previously fourteen sequential autocommits, so a
+  // failure part way through genuinely left a partial delete — the same class of unclearable state
+  // this release exists to remove, sitting in the button whose job is to clear it.
+  const results = await env.DB.batch(WIPE_SQL.map((s) => env.DB.prepare(s)));
+  const removed = results.reduce((n, r) => n + (r?.meta?.changes || 0), 0);
   await audit(env, ctx, "testdata.wipe", "events", null, { removed });
   return json({ ok: true, removed, message: `Wiped ${removed} test rows. Real data is untouched (only the 90000+ range is ever deleted).` });
 }
