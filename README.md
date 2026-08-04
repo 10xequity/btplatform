@@ -1,10 +1,11 @@
 # Boomtown Athletics Platform
-**Version:** v0.83.0 · **Date:** 2026-08-04 · **Supersedes:** README @ v0.64.0 (2026-08-03)
+**Version:** v0.84.0 · **Date:** 2026-08-04 · **Supersedes:** README @ v0.83.0 (2026-08-04)
 
-> **Two tables below still carry v0.64.0 numbers** — Architecture says "792 passing" and "Ledger at
-> 0035", and the Modules table stops short. The real figures are **1144 passing, 68 test files, ledger
-> 0042 (42 files), 97 tables**. Flagged rather than silently half-corrected; a full sweep of both
-> tables is queued. `preflight.mjs` and `/api/health` are the sources of truth, not this file.
+> **The Modules table below still stops at v0.64.0.** Bringing it current means walking the git
+> history of twenty releases, so it is queued as its own job rather than half-corrected here. The
+> Architecture table's figures were stale the same way and **are now current at v0.84.0**.
+> `preflight.mjs` and `/api/health` are the sources of truth for any number in this file — not this
+> file.
 
 Multi-org sports operations platform for **Boomtown Volleyball · Match Point Social · Queens Club**, plus 7 facility-operator orgs (Colorado Boom, Oda Up, RMR, Real Futsal, Special Olympics CO, Zara Gymnastics, External/Rental). Facility is in **Aurora, Colorado**.
 
@@ -65,10 +66,10 @@ the schema gate fails the build closed.
 
 | Path | What | Deploy |
 |---|---|---|
-| `web/` | Static frontend, GitHub Pages. No build step; every page carries a `?v=` cache-bust. | Push to `main` |
-| `worker/src/` | Cloudflare Worker API. `index.js` mounts every module route. | Auto-deploys via Actions **Deploy Worker** on any `worker/**` push |
-| `worker/test/` | `node --test` suites. **792 passing at v0.64.0**, including an end-to-end harness that drives the real router against a real SQLite copy of the production schema. | — |
-| `db/migrations/` | Schema of record. **Ledger at 0035**, all applied live to D1 `boomtown-prod` (85 tables). | Applied by Claude via Cloudflare MCP, **additive-only**. The SQL files here are records — never re-run them. |
+| `web/` | Static frontend, GitHub Pages. No build step; every page carries a `?v=` cache-bust. **`404.html` and `index.html` ship from the repo ROOT, not from here** — they carry busters too, and `asset_versions.test.mjs` did not scan them until v0.84.0. | Push to `main` |
+| `worker/src/` | Cloudflare Worker API. **50 modules**; `index.js` mounts every one through a dispatch table. | Auto-deploys via Actions **Deploy Worker** on any `worker/**` push |
+| `worker/test/` | `node --test` suites. **1166 passing across 69 files at v0.84.0** (measured, never projected), including an end-to-end harness that drives the real router against a real SQLite copy of the production schema. | — |
+| `db/migrations/` | Schema of record. **Ledger at 0042, 42 files**, all applied live to D1 `boomtown-prod` (97 tables, read live in v0.81.0). Numbered SQL lives here and **nowhere else** — four migrations sat at `db/` root until v0.82.0 where the schema gate could not see them (standards §11). | Applied by Claude via Cloudflare MCP, **additive-only**. The SQL files here are records — never re-run them. |
 | `docs/` | Install guides, handoffs, roadmaps. Naming: `YYYY-MM-DD_name_vX_Y.md`. | — |
 
 Worker route pattern: `xxxRoutes(request, env, url, ctx)` + `wireXxx(h)`; helpers destructure
@@ -158,7 +159,7 @@ a generated schedule that commits straight into an event.
 ## Start here
 
 - New to the repo: **`CLAUDE.md`** — read order, trust order, session protocol. Then `docs/INDEX.md`.
-- Latest session handoff: **`docs/2026-08-04_handoff_v0_83_0.md`** — the state of record. Superseded handoffs are deleted, so there is only ever one; if this pointer names a file that is not there, trust `docs/INDEX.md` §1 over this line.
+- Latest session handoff: **`docs/2026-08-04_handoff_v0_84_0.md`** — the state of record. Superseded handoffs are deleted, so there is only ever one; if this pointer names a file that is not there, trust `docs/INDEX.md` §1 over this line.
 - What works right now: open `web/admin-buildstatus.html`
 - Setup: `docs/2026-07-21_setup-guide_v0.1.md`
 

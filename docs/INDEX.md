@@ -11,10 +11,10 @@ with each other. Read with `CLAUDE.md`.
 
 | File | Ver | Date | What it is |
 |---|---|---|---|
-| `2026-08-04_handoff_v0_83_0.md` | **v1.4** | 2026-08-04 | **State of record.** Delivery (§0), measured build state (§1), what shipped (§2), **§2b now CLOSED — the test-data generator is fixed in v0.83.0, and it is kept as this repo's clearest case of a document being wrong about the world: the previous handoff recorded a partial seed left by a generator that died mid-run, and four D1 queries showed the rows were a complete v1-era seed ten days older than the code blamed for writing them. The defect was the REFUSAL, not a partial write. Do not re-add the 409**, §3 the two-guards-aimed-one-inch-off finding, owner answers (§4), owed items (§5 — one owner tap on "Regenerate test data" is all that remains), next build (§6 — live-view animations first), next-session prompt (§7). Renamed from handoff v0.82.0; v0.81.0 deleted. |
-| `2026-07-30_standards_v2_0.md` | **v2.1** | 2026-08-02 | **Build and design law.** Trust order, versioning, DB rules, worker module pattern, design roster (§5), testing gates (§6), CI, member copy (§8), templating (§10). Reconstructed after a doc-set loss; §5/§6.5/§8/§10 anchors preserved so in-code citations stay valid. |
+| `2026-08-04_handoff_v0_84_0.md` | **v1.5** | 2026-08-04 | **State of record.** Delivery (§0 — the CHANGELOG entry goes INTO the release commit; proven twice, CI adds no commit, one push per release), measured build state (§1), what shipped (§2 — **live-view animations, the last of the owner's eight numbered items; all eight now delivered**, plus three payload fields that were built, tested and uncalled since v0.73.0/v0.77.0), §3 **C13: a guard cannot see a file outside its corpus**, owner answers (§4), owed items (§5), next build (§6 — **the three KOTC screens**), next-session prompt (§7). Renamed from handoff v0.83.0. |
+| `2026-07-30_standards_v2_0.md` | **v2.2** | 2026-08-03 | **Build and design law.** Trust order, versioning, DB rules, worker module pattern, design roster (§5), testing gates (§6), CI, member copy (§8), templating (§10). Reconstructed after a doc-set loss; §5/§6.5/§8/§10 anchors preserved so in-code citations stay valid. |
 | `2026-08-02_roadmap_v1_0.md` | v1.0 | 2026-08-02 | **Roadmap of record.** 8 unbuilt modules, 5 small gaps, 4 engineering tracks, 5 owner-gated config items, 4 doc-debt items, suggested sequence. Supersedes the README roadmap block and the stale half of `build-status.js`. |
-| `INDEX.md` | v2.0 | 2026-08-03 | This file. |
+| `INDEX.md` | v2.1 | 2026-08-04 | This file. |
 
 ## 2. Live reference — open when the topic comes up
 
@@ -195,12 +195,46 @@ tier and never consulting the second. Four queries were enough. *The instance is
 records the correction and the specified fix. The rule stays open because it is a habit, and no guard can hold
 it.*
 
+**C13 — a guard cannot see a file that is not in its corpus, and this is the third instance in three sessions. ~~OPEN~~ RESOLVED v0.84.0 (the rule stays open as a habit).**
+`404.html` ships from the **repo root** — GitHub Pages serves it for any missing path — and references
+`/btplatform/web/assets/tokens.css?v=…`. It sat at **`?v=0.74.0`** from v0.74.0 through v0.83.0 while all
+369 busters under `web/` read 0.83.0. A browser holding a cached `tokens.css` from ten releases back would
+have styled the 404 page with it.
+
+`asset_versions.test.mjs` reported clean the entire time, and its own header says it "scans the **WIDEST**
+set". It does — `web/*.html` and `web/assets/*.js`. **The stale file was one directory up.** The guard was
+never wrong about anything it looked at; nobody had narrowed it; the file was simply never inside it.
+
+That makes three of the same shape in three sessions, worth naming as one pattern rather than three
+coincidences:
+
+| Instance | The guard | What it could not see |
+|---|---|---|
+| **C10** (v0.81.0) | none existed | `journey-schema.sql` — 46 of live's 97 tables, the thing every other guard stood on |
+| **standards §11** (v0.82.0) | `schema_gate.test.mjs` | migrations 0004–0007, loose at `db/` root |
+| **C13** (v0.84.0) | `asset_versions.test.mjs` | `404.html`, at the repo root |
+
+These are **not** failure class 3 ("a guard narrower than its subject"). A narrow guard makes a claim about a
+subject it has partly seen. These made no claim at all about the missing file, and **an absence never goes
+red** — C10's distinct class, now with three data points.
+
+**Ruling: a file's location is part of whether a guard can see it.** "The widest set" must mean the widest
+set that *ships*, not the widest directory somebody remembered to name. When widening a guard, ask what ships
+that the corpus still excludes. *The instance is closed — the buster corpus now includes the repo root, with
+a negative control that replays the exact ten-release regression against the real file. The rule stays open
+because it is a habit, and no guard can hold it.*
+
+*Related and still open:* **C6** — the buster guard asserts the busters are **one** value, not the
+**current** one, so a release touching `web/**` that sweeps nothing is still green. C13 widened *what* is
+scanned; C6 is about *what is asserted*, and is untouched.
+
 ---
 
 ## 5. Consolidation log
 
 | Date | Action |
 |---|---|
+| 2026-08-04 | Twenty-seven releases under direct commit (v0.57.0–v0.84.0). Handoff v0.83.0 **renamed** into `2026-08-04_handoff_v0_84_0.md`, the state of record. **C13 opened and closed** (`404.html` at the repo root, stale for ten releases, invisible to a guard that scans `web/`). No migration; ledger stays **0042**. **All eight of the owner's numbered items are now delivered** — live-view animations (item 2) shipped after three sessions of deferral, built as a payload diff so a 25-second refresh does not animate every card on every poll. Three payload fields that had been built, tested and uncalled since v0.73.0/v0.77.0 (`degraded`, `degraded_note`, `current_round`) now reach the screen. README Architecture figures brought current; **its Modules table still stops at v0.64.0 and is queued as its own job.** **Doc debt still not acted on:** nine superseded handoffs from 2026-07-21…07-24 remain loose in `docs/` — they predate the archive tier and need an owner OK to move or delete. |
 | 2026-07-26 | Eleven-document set collapsed to four tiers (context / roadmap / standards / library). Superseded list recorded in `archive/library` §3. |
 | 2026-07-30 | `standards` recreated as v2.0 after the doc-set loss; §5/§6.5/§8/§10 anchors preserved. |
 | 2026-08-02 | `roadmap` v1.0 created, reconciling five separate backlog sources against the live v0.52.0 tree. |
@@ -215,7 +249,11 @@ it.*
 
 ---
 
-*Changelog: v2.0 (2026-08-03) — handoff repointed to v0.82.0 (v0.81.0 deleted); **C11 opened and closed** (a shared button modifier with no base, and the two guards that were each aimed one inch off it); **C12 opened** (a handoff recorded a diagnosis the live database contradicted, and two sessions built on it). v1.9 (2026-08-03) — handoff repointed to v0.81.0 (v0.80.0 deleted); **C10 opened and closed** (the harness schema was half the database). v1.8 (2026-08-03) — handoff row repointed to v0.80.0 (v0.79.0 deleted); KOTC row marked reachable; consolidation log extended. v1.7 (2026-08-03) — handoff row repointed to v0.79.0 (v0.76.0 deleted); consolidation log extended through v0.79.0; C9's ruling noted as now encoded in `CLAUDE.md` §1.1 rather than living only here. v1.6 (2026-08-03) — handoff row repointed to v0.76.0 (v0.74.0 deleted); KOTC spec row repointed to v1.1 (v1.0 deleted, its five open questions now answered); **C9 opened** with the ratchet-not-a-paragraph corollary; consolidation log extended through v0.76.0. v1.5 (2026-08-03) — handoff row repointed to v0.74.0 (v0.70.0 deleted); KOTC spec registered. v1.4 (2026-08-03) — handoff row repointed to v0.70.0 (v0.68.0 deleted); consolidation log extended through v0.70.0. v1.3 (2026-08-03) — handoff row repointed to v0.68.0 (v0.66.0 deleted); C8 opened and
+*Changelog: v2.1 (2026-08-04) — handoff repointed to v0.84.0 (v0.83.0 renamed into it, so there is again only
+one live handoff); **C13 opened and closed** (a guard cannot see a file outside its corpus — `404.html` at the
+repo root was stale for ten releases while the buster guard reported clean, the third instance of that shape in
+three sessions); two stale rows in §1 corrected — standards has read **v2.2** since 2026-08-03 and this index
+said v2.1, which is failure class 2 landing on the register that exists to catch it. v2.0 (2026-08-03) — handoff repointed to v0.82.0 (v0.81.0 deleted); **C11 opened and closed** (a shared button modifier with no base, and the two guards that were each aimed one inch off it); **C12 opened** (a handoff recorded a diagnosis the live database contradicted, and two sessions built on it). v1.9 (2026-08-03) — handoff repointed to v0.81.0 (v0.80.0 deleted); **C10 opened and closed** (the harness schema was half the database). v1.8 (2026-08-03) — handoff row repointed to v0.80.0 (v0.79.0 deleted); KOTC row marked reachable; consolidation log extended. v1.7 (2026-08-03) — handoff row repointed to v0.79.0 (v0.76.0 deleted); consolidation log extended through v0.79.0; C9's ruling noted as now encoded in `CLAUDE.md` §1.1 rather than living only here. v1.6 (2026-08-03) — handoff row repointed to v0.76.0 (v0.74.0 deleted); KOTC spec row repointed to v1.1 (v1.0 deleted, its five open questions now answered); **C9 opened** with the ratchet-not-a-paragraph corollary; consolidation log extended through v0.76.0. v1.5 (2026-08-03) — handoff row repointed to v0.74.0 (v0.70.0 deleted); KOTC spec registered. v1.4 (2026-08-03) — handoff row repointed to v0.70.0 (v0.68.0 deleted); consolidation log extended through v0.70.0. v1.3 (2026-08-03) — handoff row repointed to v0.68.0 (v0.66.0 deleted); C8 opened and
 closed in the same release (the CDN QR that never rendered). v1.2 (2026-08-03) — handoff row repointed to v0.66.0 (v0.56.0 deleted); C6 closed with
 the finding that the buster sweep had never covered `.js`; consolidation log extended through
 v0.66.0. v1.1 (2026-08-02) — handoff row repointed to v0.56.0 (v0.53.0 deleted); standards→v2.1 and
