@@ -264,6 +264,36 @@ register did not reopen. Failure class 2 landing on the document that records fa
 **Ruling: handoff §0 governs.** *Fix: standards v2.3 striking §9's second paragraph. Cheap, and leaving it
 is exactly the defect the doc set names.*
 
+**C16 — the test suite is time-dependent, and when it fires it blocks every commit. OPEN.**
+`passes.test.mjs`'s pay-report test went red **mid-session on 2026-08-04 with no code change**, and
+because `preflight.mjs` gates commits on the suite, nothing could be committed until it was fixed. From
+the next day it would have failed permanently.
+
+`staff_pay.js` defaults a rate's `effective_from` to `datetime('now')` and resolves a shift against
+**its own start** (`pickRate(rates, roleLabel, shift.starts_at)`). The test created a rate effective
+*now*, then shifts hardcoded to `2026-08-04T17:00:00Z` — after `now` for a few hours that morning and
+before it ever after. Once the clock crossed 17:00Z the rate stopped covering them, `pay_amount_cents`
+came out empty, and the assertion read 0 instead of 5000. Fixed by deriving both the shift times and the
+report window from `Date.now()`.
+
+**The instance is closed; the class is wide open. 165 hardcoded `2026-dd-dd` dates live across 25 test
+files.** Most are inert fixtures. The dangerous shape is specific — **a hardcoded fixture date compared
+against a `datetime('now')` default** — and it is indistinguishable from the harmless ones without
+reading each site.
+
+This is a **new failure class**, not a variant of the register's existing ones. C13/C14 are guards blind
+to their corpus; C11 is a guard pointed elsewhere; C12 is a document wrong about data. This is a test
+that is **correct today and wrong tomorrow**, where the trigger is the calendar, the diff is empty, and
+no review could have caught it because nothing changed. The standing rule "prefer relative dates in
+tests" already existed — what was missing is that **nothing enforces it**, so 165 candidate violations
+accumulated under a rule everybody agreed with.
+
+**Ruling: a test whose correctness depends on when it runs is a defect even while it passes.** Audit the
+25 files for the fixture-versus-`now` shape and convert those to `Date.now()` arithmetic; then guard the
+shape, not absolute dates in general — migration filenames and CHANGELOG dates are legitimately
+absolute. The guard's negative control reinstates the `passes.test.mjs` fixture and proves it reddens.
+*Queued as handoff §6.2, ahead of feature work, because it taxes everything else.*
+
 ---
 
 ## 5. Consolidation log
