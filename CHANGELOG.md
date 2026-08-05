@@ -1,5 +1,17 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.94.0 — 2026-08-05
+
+**W-C — "Plan the day": the pool-sheet planner finally has a screen, and the owner's split table was in the engine all along.**
+
+Verified before building: `poolSizes()` has implemented the owner's pool-split defaults since v0.70.0 — measured against their own examples: 15 teams → 8+7, 16 → 8+8, 17 → 9+8, 19 → 10+9, pools always inside 6–11 with the fewest pools, a small field gets an honest note rather than a refusal, and the 8-game floor (never under 8; a 5-team pool doubles its round robin) is already law in `chooseRounds`. The three planner routes — equal-game options, plan preview with plain-sentence summary, and the commit that writes real matches — existed since the format engine shipped and had **no caller anywhere**.
+
+**Built** (`tournament.js` v0.4.0 + page): the **Plan the day** panel on Tournament Ops. Teams and courts prefill from the event; "Show the options" lists every round count that gives everyone an equal number of games ("8 games each · 12 rounds · sits 4"); picking one previews the plan in the director's own language — the summary sentences plus **"Pools: 16 teams into 2 pools of 8 + 8"** — and if a listed option hits the asked-for games exactly it previews itself, one tap saved. "Use this plan" writes the schedule through `generate-schedule`: over an existing schedule the server answers 409 and says what it would do; replacing takes an explicit second press. AA/Open-run-smaller and A/BB-mix-then-split-at-bracket ride as the panel's guidance copy (defaults, not rules), pointing at the Divisions screen which owns that flow.
+
+`/api/admin/formats/plan` now returns `pool_split` alongside the summary, so every plan carries the split defaults. **Three more strikes from the uncalled-route baseline (24 → 21)** — `formats/options`, `formats/plan`, `events/*/generate-schedule` — each demanded by the reachability ratchet the moment its caller landed.
+
+Suite **1290/1290**, test files **79**, buster **393 across 63 files** at 0.94.0. No migration; ledger 0042. Next W-unit: W-D — seeding suggestions from history (proposals on the pool board, never rules).
+
 ## v0.93.0 — 2026-08-05
 
 **W-B — the league week is hand-editable and exportable (roadmap §-1b), and the differential rule was already true.**

@@ -666,6 +666,10 @@ export async function formatsRoutes(request, env, url, ctx) {
         targetPoints: b.target_points ? Number(b.target_points) : undefined,
         targetHours: b.target_hours ? Number(b.target_hours) : undefined,
       }),
+      // W-C (v0.94.0): the owner's pool-split defaults ride along with every plan — poolSizes IS
+      // the split table (fewest pools inside 6–11: 15→8+7, 16→8+8, 17→9+8, 19→10+9), and small
+      // fields get the honest note instead of a refusal.
+      pool_split: poolSizes(Number(b.teams)),
     });
   }
 

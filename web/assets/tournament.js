@@ -1,5 +1,12 @@
 /* Boomtown Platform — Tournament Ops
-   Version: v0.3.1 · Date: 2026-08-02 (v0.3.0: network-failure + stale-config guards, matching app.js v0.2.4)
+   Version: v0.4.0 · Date: 2026-08-05 · Ships in: v0.94.0
+   v0.4.0 (§-1b W-C): "Plan the day" — the formats planner (options → plan → commit) finally has
+   a screen. It shows equal-game round options, the plain-sentence plan summary, and the owner's
+   pool-split defaults (6–11 per pool, 15→8+7, 16→8+8, 17→9+8, 19→10+9; a 5-team pool doubles its
+   round robin) before a single match is written; committing 409s over an existing schedule and
+   replaces only on an explicit second press. Three D-4-baseline routes gain their callers here.
+   Also (v0.91.0 E3): auto-open the first event.
+   v0.3.1 · 2026-08-02 (v0.3.0: network-failure + stale-config guards, matching app.js v0.2.4)
    Flow: pick/create event → paste teams → generate (feasibility gate with one-tap fixes)
    → live grid (drag to move, tap to score in 2 taps) → standings → bracket → print/CSV. */
 
@@ -82,6 +89,8 @@
     if (!r.ok) return;
     currentEvent = r.data.event;
     $("teamsPanel").hidden = false;
+    $("planPanel").hidden = false; // W-C: the planner opens with the event
+    if (currentEvent.court_count) $("plCourts").value = currentEvent.court_count;
     $("printTitle").textContent = `${currentEvent.name} — Pool Play`;
     await refreshAll();
   }
@@ -93,6 +102,58 @@
     await api(`/api/events/${currentEvent.id}/teams`, { method: "POST", body: JSON.stringify({ names }) });
     $("teamPaste").value = "";
     refreshAll();
+  };
+
+  /* ---------- W-C (v0.94.0): plan the day — the formats planner finally has a screen ----------
+     options → plan (with the owner's pool-split defaults and plain-sentence summary) → commit.
+     The three routes existed since the format engine shipped and had no caller (D-4 baseline);
+     this panel is their screen. Commit replaces an existing schedule only after an explicit
+     second press — the server 409s first and says what it would do. */
+  let plannedRounds = null;
+
+  $("plOptions").onclick = async () => {
+    const t = +$("plTeams").value, c = +$("plCourts").value;
+    plannedRounds = null;
+    $("plCommit").hidden = true;
+    $("plSummary").textContent = "";
+    if (!t || !c) { $("plChoices").innerHTML = `<span class="muted">Enter teams and courts first.</span>`; return; }
+    const r = await api(`/api/admin/formats/options?teams=${t}&courts=${c}`);
+    if (!r.ok) { $("plChoices").innerHTML = `<span class="muted">${r.data.error || "Couldn't work out the options."}</span>`; return; }
+    const opts = r.data.options || [];
+    $("plChoices").innerHTML = (r.data.note ? `<p class="muted" style="margin:0 0 6px">${r.data.note}</p>` : "") +
+      opts.map((o) => `<button class="btn ghost" data-plr="${o.rounds}" style="margin:0 6px 6px 0">
+        ${o.gamesPerTeam} games each · ${o.rounds} rounds${o.byesPerTeam ? ` · sits ${o.byesPerTeam}` : ""}</button>`).join("");
+    document.querySelectorAll("[data-plr]").forEach((b) => b.onclick = () => previewPlan(t, c, +b.dataset.plr));
+    // One tap saved: if a listed option hits the asked-for games exactly, preview it right away.
+    const want = +$("plGames").value || 8;
+    const hit = opts.find((o) => o.gamesPerTeam === want);
+    if (hit) previewPlan(t, c, hit.rounds);
+  };
+
+  async function previewPlan(t, c, rounds) {
+    const r = await api("/api/admin/formats/plan", { method: "POST", body: JSON.stringify({
+      teams: t, courts: c, rounds, target_games: +$("plGames").value || undefined,
+    }) });
+    if (!r.ok) { $("plSummary").textContent = r.data.error || "That plan didn't work out."; return; }
+    plannedRounds = rounds;
+    const split = r.data.pool_split;
+    $("plSummary").innerHTML =
+      (r.data.summary || []).map((s) => `<div>${s}</div>`).join("") +
+      (split && split.note ? `<div style="margin-top:4px"><b>Pools:</b> ${split.note}${split.sizes && split.sizes.some((s) => s === 5) ? " A 5-team pool doubles its round robin so nobody goes home under 8 games." : ""}</div>` : "");
+    $("plCommit").hidden = false;
+    $("plCommit").textContent = `Use this plan (${rounds} rounds)`;
+  }
+
+  $("plCommit").onclick = async () => {
+    if (!plannedRounds || !currentEvent) return;
+    const body = { courts: +$("plCourts").value, rounds: plannedRounds, assign_refs: true };
+    let r = await api(`/api/admin/events/${currentEvent.id}/generate-schedule`, { method: "POST", body: JSON.stringify(body) });
+    if (r.status === 409) {
+      if (!confirm(`${r.data.error} Replace it with this plan?`)) return;
+      r = await api(`/api/admin/events/${currentEvent.id}/generate-schedule`, { method: "POST", body: JSON.stringify({ ...body, replace: true }) });
+    }
+    $("plMsg").textContent = r.ok ? "Schedule written — it's below." : (r.data.error || "Couldn't write the schedule.");
+    if (r.ok) refreshAll();
   };
 
   /* ---------- generate + feasibility ---------- */
@@ -132,6 +193,7 @@
     teams = tms.data.teams || [];
     teamName = Object.fromEntries(teams.map((t) => [t.id, t.name]));
     $("teamCount").textContent = teams.length ? `(${teams.length})` : "";
+    if (teams.length) $("plTeams").value = teams.length; // W-C: the field count is the default, not a retype
     matches = (sched.data.matches || []).filter((m) => m.stage === "pool");
     renderWarnings(sched.data.warnings || []);
     renderGrid();

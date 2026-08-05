@@ -99,13 +99,13 @@ const uncalledOf = (routes, callers) => {
       Strike a line ONLY when its route gains a real caller (this test will demand it). ── */
 const BASELINE = [
   "/api/admin/events/*/divisions/assign",
-  "/api/admin/events/*/generate-schedule",
+  // "/api/admin/events/*/generate-schedule" — STRUCK v0.94.0 (W-C): "Plan the day" commits here.
   "/api/admin/events/*/matches/*/court",
   // "/api/admin/events/*/schedule/teams" — STRUCK v0.93.0 (W-B): League Manager's edit-matchup
   // modal is its caller. The first strike; the list only shrinks.
   "/api/admin/facility/check",
-  "/api/admin/formats/options",
-  "/api/admin/formats/plan",
+  // "/api/admin/formats/options" and "/api/admin/formats/plan" — STRUCK v0.94.0 (W-C): the
+  // "Plan the day" panel on Tournament Ops is their screen.
   "/api/admin/grants/*",
   "/api/admin/lfg/strikes",
   "/api/admin/lfg/unban",
