@@ -1,5 +1,56 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.88.0 — 2026-08-05
+
+### Fixed
+- **Test data: "Regenerate test data" and "Wipe test data" both worked exactly once, then failed forever.**
+  `WIPE_SQL` in `worker/src/sandbox.js` deleted `brackets` before the `matches` that carry
+  `bracket_id`. **D1 enforces foreign keys**, and `D1.batch()` is one transaction, so the delete
+  raised `FOREIGN KEY constraint failed`, the whole 57-statement wipe-and-reseed rolled back, and
+  `POST /api/admin/testdata/generate` answered **500**. The rows that triggered it were written by
+  `generate` **itself** — its last step draws Winter Jam's bracket through the real generator — so
+  press #1 on an empty range succeeded and every press after it failed. `wipe` shares the same list,
+  so the button whose job is to clear a stuck seed was stuck on the same statement and there was no
+  recovery path from the UI. Reproduced against live (`failed_modules:["sandbox"]`) and in an
+  isolated SQLite built from `db/migrations/`.
+- **Two more instances of the same defect, fixed rather than left to surface one at a time:** `pools`
+  also preceded the `matches` that carry `pool_id`, and `divisions` preceded the `teams`, `pools` and
+  `brackets` that carry `division_id`. A third — `teams.pool_id`, so `teams` must precede `pools` —
+  was caught by the new mechanical guard *while the fix was being written*, which is the argument for
+  the guard.
+- **The delete list now covers every table that references the test range**, not only the fifteen it
+  knew about: `tryout_evaluations`, `tryout_profiles`, `tryout_squads`, `tryout_squad_members`, the
+  five `kotc_*` tables, `waitlists`, `form_fields`, `space_bookings`, `staff_shifts`, `notifications`
+  and `profiles`. All measured **empty** on live 2026-08-05 — so a tester evaluating one player or
+  seating one net would have re-broken the reseed, and fixing it now cost nothing.
+
+### Added
+- **`worker/test/wipe_order.test.mjs` (+8, suite 1258 → 1266, 75 files).** Two guards that
+  deliberately do not share a mechanism: a **mechanical** one that reads the foreign-key graph out of
+  `sqlite_master` and proves the order is topologically valid — a hand-checked list is correct only
+  until the next migration adds a key — and a **behavioural** one that presses the real route
+  **twice** through the real router with foreign keys enforced, plus a `wipe`-then-`generate`
+  recovery test. Both ship negative controls that mutate the real input.
+- **`createD1(schema, { foreignKeys: true })`** in `worker/testkit/d1-memory.mjs`. Opt-in, off by
+  default so narrow fixtures keep working.
+
+### Changed
+- **`worker/testkit/d1-memory.mjs` no longer claims foreign keys are "D1's default".** They are not.
+  That single false premise is why a completely dead button passed a suite of 1258: the harness was
+  strictly more permissive than production on exactly the axis under test. Measured 2026-08-05 — the
+  same 57 statements pass with the pragma OFF and fail with it ON, against the same schema.
+
+### Notes
+- **Two reasons the suite stayed green, both now closed.** `sandbox_seed.test.mjs` calls generate
+  **once**, against an empty database, and the defect only exists on the **second** press — the state
+  that breaks a reseed is the state the previous reseed left behind. And the harness did not enforce
+  foreign keys. Neither gate could have seen this.
+- No migration. No `web/**` change, so **no cache-buster sweep and no `sync-rail`** — `index.js` is a
+  byte-verified one-line bump (F-34).
+- Full audit of the 2026-08-04/05 tester round, including three root causes still open (org context
+  poisoning, the never-invalidated service-worker cache, and KOTC being unreachable from the UI), is
+  in `docs/2026-08-05_audit_tester-round_v1_0.md`; roadmap §-1 now carries the A–E fix order.
+
 ## v0.87.0 — 2026-08-04
 
 **Finished for the night.** A director can now take a player off for the evening, and put them back.

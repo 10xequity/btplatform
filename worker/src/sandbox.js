@@ -1,6 +1,6 @@
 /**
  * Boomtown Platform — Sandbox / Demo tools (Module 11.5)
- * File: worker/src/sandbox.js · Version: v2.1 · Date: 2026-08-03 · Ships in: v0.83.0
+ * File: worker/src/sandbox.js · Version: v2.2 · Date: 2026-08-05 · Ships in: v0.88.0
  *
  * Staff-gated endpoints powering the admin rail's "Sandbox" group:
  *   GET  /api/admin/testdata           → counts of test rows per table (are we seeded?)
@@ -226,20 +226,74 @@ const ids = (start, n) => Array.from({ length: n }, (_, i) => start + i);
  * safety property, not a convention: `sandbox_seed.test.mjs` carries a negative control that puts a
  * real event and a real team beside the fixture and asserts both survive.
  */
-const WIPE_SQL = [
+/* v2.2 — THE ORDER IS THE WHOLE POINT, AND IT WAS WRONG.
+ *
+ * `D1 ENFORCES FOREIGN KEYS.` The previous list deleted `brackets` at index 3 and the `matches`
+ * that carry `bracket_id` at index 8, so once anything referenced a bracket the delete raised
+ * `FOREIGN KEY constraint failed`. `D1.batch()` is one transaction, so the whole 57-statement
+ * wipe-and-reseed rolled back and the route answered 500.
+ *
+ * The rows that triggered it were written by `generate` ITSELF: its last step draws Winter Jam's
+ * bracket through the real generator, which creates the `brackets` row and the `matches.bracket_id`
+ * values that block the next run. So press #1 on an empty range succeeded and EVERY PRESS AFTER IT
+ * FAILED — including `wipe`, which shares this list, so the button whose job is to clear a stuck
+ * seed was stuck on the same statement. There was no recovery path from the UI.
+ *
+ * Two more of the same defect were latent behind it, and both are fixed here rather than left to
+ * surface one at a time: `pools` also preceded the `matches` that carry `pool_id`, and `divisions`
+ * preceded the `teams`, `pools` and `brackets` that carry `division_id`.
+ *
+ * THE RULE THIS LIST NOW OBEYS: a row may only be deleted after everything that references it.
+ * `wipe_order.test.mjs` asserts that mechanically against the real schema graph read from
+ * `sqlite_master`, so a new foreign key cannot quietly invalidate the order — a hand-checked list
+ * is correct only until the next migration.
+ *
+ * Bracket, pool and division rows get real auto-increment ids OUTSIDE the 90000 range, so the
+ * `event_id` filter is what actually catches them. Every delete is scoped to the test range; a
+ * statement that cannot be scoped does not belong here.
+ */
+export const WIPE_SQL = [
+  /* ---- deepest children: rows that reference team_members / rounds / squads ---- */
   `DELETE FROM attendance     WHERE event_id BETWEEN ${LO} AND ${HI}`,
   `DELETE FROM checkins       WHERE event_id BETWEEN ${LO} AND ${HI}`,
-  `DELETE FROM pools          WHERE event_id BETWEEN ${LO} AND ${HI}`,
-  // Bracket rows and their matches get real auto-increment ids, outside the 90000 range — the
-  // event_id filter is what actually catches them, and it is why every delete below has one.
-  `DELETE FROM brackets       WHERE event_id BETWEEN ${LO} AND ${HI}`,
+
+  /* ---- tryouts: a tester who evaluates one player used to break the next reseed ---- */
+  `DELETE FROM tryout_evaluations   WHERE event_id BETWEEN ${LO} AND ${HI}`,
+  `DELETE FROM tryout_profiles      WHERE event_id BETWEEN ${LO} AND ${HI}`,
+  `DELETE FROM tryout_squad_members WHERE squad_id IN (SELECT id FROM tryout_squads WHERE event_id BETWEEN ${LO} AND ${HI})`,
+  `DELETE FROM tryout_squads        WHERE event_id BETWEEN ${LO} AND ${HI}`,
+
+  /* ---- KOTC: scoped through the session, since only it carries an event_id ---- */
+  `DELETE FROM kotc_games    WHERE round_id IN (SELECT id FROM kotc_rounds WHERE session_id IN (SELECT id FROM kotc_sessions WHERE event_id BETWEEN ${LO} AND ${HI}))`,
+  `DELETE FROM kotc_slots    WHERE round_id IN (SELECT id FROM kotc_rounds WHERE session_id IN (SELECT id FROM kotc_sessions WHERE event_id BETWEEN ${LO} AND ${HI}))`,
+  `DELETE FROM kotc_rounds   WHERE session_id IN (SELECT id FROM kotc_sessions WHERE event_id BETWEEN ${LO} AND ${HI})`,
+  `DELETE FROM kotc_players  WHERE session_id IN (SELECT id FROM kotc_sessions WHERE event_id BETWEEN ${LO} AND ${HI})`,
+  `DELETE FROM kotc_sessions WHERE event_id BETWEEN ${LO} AND ${HI}`,
+
+  /* ---- everything that references teams / brackets / pools / divisions ---- */
   `DELETE FROM division_moves WHERE event_id BETWEEN ${LO} AND ${HI}`,
-  `DELETE FROM divisions      WHERE id BETWEEN ${LO} AND ${HI} OR event_id BETWEEN ${LO} AND ${HI}`,
-  `DELETE FROM registrations  WHERE id BETWEEN ${LO} AND ${HI} OR event_id BETWEEN ${LO} AND ${HI}`,
   `DELETE FROM standings      WHERE event_id BETWEEN ${LO} AND ${HI}`,
+  // BEFORE brackets, pools and teams — matches carries bracket_id, pool_id and team_a/b/ref_id.
   `DELETE FROM matches        WHERE id BETWEEN ${LO} AND ${HI} OR event_id BETWEEN ${LO} AND ${HI}`,
   `DELETE FROM team_members   WHERE team_id BETWEEN ${LO} AND ${HI}`,
+  // BEFORE registrations — waitlists carries claimed_registration_id.
+  `DELETE FROM waitlists      WHERE event_id BETWEEN ${LO} AND ${HI}`,
+  // BEFORE teams, waivers and contacts — registrations carries team_id, waiver_id, contact_id.
+  `DELETE FROM registrations  WHERE id BETWEEN ${LO} AND ${HI} OR event_id BETWEEN ${LO} AND ${HI}`,
+  // BEFORE pools AND brackets — teams carries pool_id, and the board sets it.
   `DELETE FROM teams          WHERE id BETWEEN ${LO} AND ${HI} OR event_id BETWEEN ${LO} AND ${HI}`,
+  `DELETE FROM brackets       WHERE event_id BETWEEN ${LO} AND ${HI}`,
+  `DELETE FROM pools          WHERE event_id BETWEEN ${LO} AND ${HI}`,
+  // AFTER teams, pools, brackets and division_moves — all four carry division_id.
+  `DELETE FROM divisions      WHERE id BETWEEN ${LO} AND ${HI} OR event_id BETWEEN ${LO} AND ${HI}`,
+
+  /* ---- remaining event- and contact-scoped rows, then the parents ---- */
+  `DELETE FROM form_fields    WHERE event_id BETWEEN ${LO} AND ${HI}`,
+  `DELETE FROM space_bookings WHERE event_id BETWEEN ${LO} AND ${HI}`,
+  `DELETE FROM staff_shifts   WHERE event_id BETWEEN ${LO} AND ${HI} OR contact_id BETWEEN ${LO} AND ${HI}`,
+  `DELETE FROM notifications  WHERE contact_id BETWEEN ${LO} AND ${HI}`,
+  `DELETE FROM profiles       WHERE contact_id BETWEEN ${LO} AND ${HI}`,
+  // events carries staff_contact_id, so it goes before contacts.
   `DELETE FROM events         WHERE id BETWEEN ${LO} AND ${HI}`,
   `DELETE FROM waivers        WHERE id BETWEEN ${LO} AND ${HI}`,
   `DELETE FROM contacts       WHERE id BETWEEN ${LO} AND ${HI}`,

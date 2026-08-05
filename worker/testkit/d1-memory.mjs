@@ -100,10 +100,22 @@ class D1PreparedStatement {
 }
 
 class D1Memory {
-  constructor(schemaSql) {
+  /* `opts.foreignKeys` — OFF by default, and that default is a fixture convenience, NOT a
+     description of D1.
+
+     The old comment here read "matching D1's default" and that was FALSE. Real D1 enforces
+     foreign keys, and this pragma is the single reason a totally dead "Regenerate test data"
+     button passed a suite of 1258: `WIPE_SQL` deleted `brackets` before the `matches` that
+     reference them, which is a hard `FOREIGN KEY constraint failed` on live and a silent success
+     here. Measured 2026-08-05 — the same 57 statements pass with the pragma OFF and fail with it
+     ON, against the same schema.
+
+     It stays OFF by default because most fixtures deliberately insert a narrow slice of rows and
+     would fail on absent parents rather than on the thing under test. Any test whose SUBJECT is
+     referential order must pass `{ foreignKeys: true }` and get the engine live D1 actually runs. */
+  constructor(schemaSql, opts = {}) {
     this.db = new DatabaseSync(":memory:");
-    // Foreign keys stay off, matching D1's default and letting the fixture stay narrow.
-    this.db.exec("PRAGMA foreign_keys = OFF");
+    this.db.exec(`PRAGMA foreign_keys = ${opts.foreignKeys ? "ON" : "OFF"}`);
     if (schemaSql) this.db.exec(schemaSql);
   }
 
@@ -132,6 +144,6 @@ class D1Memory {
   close() { this.db.close(); }
 }
 
-export function createD1(schemaSql) {
-  return new D1Memory(schemaSql);
+export function createD1(schemaSql, opts) {
+  return new D1Memory(schemaSql, opts);
 }
