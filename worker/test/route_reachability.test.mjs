@@ -101,7 +101,8 @@ const BASELINE = [
   "/api/admin/events/*/divisions/assign",
   "/api/admin/events/*/generate-schedule",
   "/api/admin/events/*/matches/*/court",
-  "/api/admin/events/*/schedule/teams",
+  // "/api/admin/events/*/schedule/teams" — STRUCK v0.93.0 (W-B): League Manager's edit-matchup
+  // modal is its caller. The first strike; the list only shrinks.
   "/api/admin/facility/check",
   "/api/admin/formats/options",
   "/api/admin/formats/plan",

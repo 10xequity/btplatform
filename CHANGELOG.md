@@ -1,5 +1,19 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.93.0 — 2026-08-05
+
+**W-B — the league week is hand-editable and exportable (roadmap §-1b), and the differential rule was already true.**
+
+Verified before building (the W-A lesson — the platform's gaps are surfaces, not engines): generate-week exists with rematch/bye warnings, League Manager scoring is already 2-tap "Who won? → by how many points?", and the captains' score links already speak pure differentials ("We won / They won → by N"). None of that was rebuilt.
+
+**What was actually missing, now built** (`admin-league.js` v1.4 + page):
+
+- **Edit a matchup by entry.** Every unscored game gets an Edit button → "Who plays this game?" with two team pickers → `POST /api/admin/events/:id/schedule/teams`. That route has been fully built in formats.js since the format engine shipped and had no caller anywhere — **the first strike from the 25-route uncalled baseline** (`route_reachability.test.mjs` demanded the strike, as designed). Scored games are deliberately not editable — changing who played a finished game rewrites history.
+- **Drag-and-drop, discoverable.** Rearranging courts and weeks lives in the Schedule Editor, where it always did with full keyboard parity; the League Manager toolbar now links there with the league preselected (Schedule Editor gains `?event=` deep-link support, ignoring ids outside the caller's org).
+- **Export.** "Print schedule" with a print stylesheet — the week cards become the hand-out on the gym door, chrome and controls stripped — and a per-week **"Copy as text"** producing paste-ready lines (`Court 1: Net Gains vs Sets on the Beach`) for a group text or email, which is the export that actually gets used between print-outs.
+
+Suite **1290/1290** (no new tests — the reachability ratchet's strike IS the assertion that the entry path has a caller), test files **79**, buster **393 across 63 files** at 0.93.0. No migration; ledger 0042. Next W-unit: W-C — registrations → divisions → pool sheets from the owner's sizing rules.
+
 ## v0.92.0 — 2026-08-05
 
 **W-A — the registration-first workflow program begins (roadmap §-1b): the roster a registration creates is finally visible and editable, and the link runs both directions.**

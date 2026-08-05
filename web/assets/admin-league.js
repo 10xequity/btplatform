@@ -1,7 +1,19 @@
 /* Boomtown Platform — League Manager
-   File: web/assets/admin-league.js · Version: v1.2 · Date: 2026-08-02 · Ships in: v0.9.1
-   RECOVERY of the lost v0.7.0 file. Levels board (gap-capped weekly scheduler),
-   generate/remove weeks, 2-tap scoring (winner → point diff), standings, staff pick. */
+   File: web/assets/admin-league.js · Version: v1.4 · Date: 2026-08-05 · Ships in: v0.93.0
+
+   v1.4 (§-1b W-B): the week is HAND-EDITABLE AND EXPORTABLE, closing the owner's league loop.
+   · Edit a matchup by ENTRY: every unscored game gets Edit → two team pickers →
+     POST /api/admin/events/:id/schedule/teams (built in formats.js since the format engine,
+     uncalled until now — struck from the reachability baseline this release).
+   · Drag-and-drop lives in the Schedule Editor, where it always did — the toolbar now links
+     there with the league preselected (?event=), instead of leaving the path undiscoverable.
+   · Export: Print schedule (print stylesheet — the sheet on the gym door) and a per-week
+     "Copy as text" that produces paste-ready lines for a group text or email.
+   Scoring stays 2-tap winner → point margin — the owner's differential rule was already the
+   design here and on the captains' score links; verified, not rebuilt.
+   v1.3 (v0.92.0, W-A): Roster button per team → shared roster modal (team-roster.js).
+   v1.2 · 2026-08-02 · RECOVERY of the lost v0.7.0 file. Levels board (gap-capped weekly
+   scheduler), generate/remove weeks, 2-tap scoring (winner → point diff), standings, staff pick. */
 
 (function () {
   const { api, guard, esc, openModal, closeModal } = window.BT_ADMIN;
@@ -15,6 +27,7 @@
     /* v0.52.0: org switcher is single-source now — populated + handled by admin-nav.js v2.19. */
     $("genWeek").onclick = generateWeek;
     $("saveLevels").onclick = saveLevels;
+    $("printWeeks").onclick = () => window.print(); // W-B: the schedule is a hand-out; print is export
     await loadLeagues();
   }
 
@@ -38,6 +51,7 @@
     data = r.data;
     $("board").hidden = false;
     $("emptyMsg").hidden = true;
+    $("editorLink").href = `admin-schedule-editor.html?event=${leagueId}`; // W-B: drag-drop lives there
     renderLevels(); renderStaff(); renderStandings(); renderWeeks();
     $("genHint").textContent = data.teams.length < 2 ? "Add at least 2 teams first." : "";
   }
@@ -93,12 +107,15 @@
       const unscored = w.matches.every(m => m.score_a == null);
       return `<section class="card wk-card">
         <div class="wk-head"><h3>Week ${w.round}</h3><div class="spacer"></div>
+          <button class="btn ghost no-print" data-copyweek="${w.round}">Copy as text</button>
           ${unscored ? `<button class="btn ghost" data-delweek="${w.round}">Remove week</button>` : ""}</div>
         ${w.matches.map(m => matchRow(m)).join("")}
       </section>`;
     }).join("") : `<section class="card"><p class="help-text" style="margin:0">No weeks yet. Set team levels, then generate week 1.</p></section>`;
 
     $("weeks").querySelectorAll("[data-score]").forEach(b => b.onclick = () => scoreModal(+b.dataset.score));
+    $("weeks").querySelectorAll("[data-edit]").forEach(b => b.onclick = () => matchupModal(+b.dataset.edit));
+    $("weeks").querySelectorAll("[data-copyweek]").forEach(b => b.onclick = () => copyWeek(+b.dataset.copyweek, b));
     $("weeks").querySelectorAll("[data-delweek]").forEach(b => b.onclick = async () => {
       const wk = b.dataset.delweek;
       const r = await api(`/api/leagues/${leagueId}/week/${wk}`, { method: "DELETE" });
@@ -116,8 +133,56 @@
         <b class="${scored && !aWin ? "win" : ""}">${esc(m.team_b || "TBD")}</b></span>
       ${scored
         ? `<span class="score">${m.score_a}–${m.score_b}</span>`
-        : `<button class="btn ghost" data-score="${m.id}">Score</button>`}
+        : `<button class="btn ghost no-print" data-edit="${m.id}" aria-label="Change who plays this game">Edit</button>
+           <button class="btn ghost" data-score="${m.id}">Score</button>`}
     </div>`;
+  }
+
+  /* W-B: edit a matchup by ENTRY — pick the two teams from lists, no dragging required. Scored
+     games are deliberately not editable here: changing who played a finished game rewrites
+     history; remove the score first if it was truly the wrong pairing. */
+  function matchupModal(matchId) {
+    let m = null;
+    for (const w of data.weeks) { const hit = w.matches.find(x => x.id === matchId); if (hit) m = hit; }
+    if (!m) return;
+    const opts = (sel) => data.teams.map(t =>
+      `<option value="${t.id}"${t.id === sel ? " selected" : ""}>${esc(t.name)}</option>`).join("");
+    const back = openModal(`
+      <h2>Who plays this game?</h2>
+      <div class="row2" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="field"><label>Team A</label><select id="muA">${opts(m.team_a_id)}</select></div>
+        <div class="field"><label>Team B</label><select id="muB">${opts(m.team_b_id)}</select></div>
+      </div>
+      <div class="actions"><button class="btn ghost" id="muCancel">Cancel</button>
+        <button class="btn" id="muGo">Save matchup</button></div>`);
+    back.querySelector("#muCancel").onclick = closeModal;
+    back.querySelector("#muGo").onclick = async () => {
+      const r = await api(`/api/admin/events/${leagueId}/schedule/teams`, { method: "POST", body: JSON.stringify({
+        match_id: matchId,
+        team_a_id: +back.querySelector("#muA").value,
+        team_b_id: +back.querySelector("#muB").value,
+      }) });
+      closeModal();
+      say(r.ok ? "Matchup updated" : r.data.error, !r.ok);
+      if (r.ok) load();
+    };
+  }
+
+  /* W-B: the week as paste-ready text — a group text or an email carries no table, so this is
+     the export that actually gets used between the print-outs. */
+  async function copyWeek(round, btn) {
+    const w = (data.weeks || []).find(x => x.round === round);
+    if (!w) return;
+    const lines = [`${data.event.name} — Week ${round}`,
+      ...w.matches.map(m => `Court ${m.court}: ${m.team_a || "TBD"} vs ${m.team_b || "TBD"}${m.score_a != null ? ` (${m.score_a}–${m.score_b})` : ""}`)];
+    try {
+      await navigator.clipboard.writeText(lines.join("\n"));
+      const was = btn.textContent;
+      btn.textContent = "Copied ✓";
+      setTimeout(() => { btn.textContent = was; }, 1400);
+    } catch {
+      say("Couldn't reach the clipboard — print the schedule instead.", true);
+    }
   }
 
   function scoreModal(matchId) {

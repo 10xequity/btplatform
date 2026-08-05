@@ -187,8 +187,13 @@
     $("sEvent").innerHTML = list.length
       ? list.map((e) => `<option value="${e.id}">${esc(e.name)}</option>`).join("")
       : `<option value="">No events yet</option>`;
-    eventId = list.length ? list[0].id : null;
+    // W-B (v0.93.0): honor ?event= so League Manager's "Rearrange courts & weeks" lands on the
+    // right league instead of whatever sorts first. An id outside this org's list is ignored.
+    const wanted = Number(new URLSearchParams(location.search).get("event"));
+    const hit = wanted && list.find((e) => e.id === wanted);
+    eventId = hit ? hit.id : (list.length ? list[0].id : null);
     if (!eventId) return BT_ADMIN.orgEmptyState("sGrid", "events"); // v0.89.0 Block B3: an empty org is not a broken module
+    if (hit) $("sEvent").value = String(eventId);
     loadSchedule();
   }
 
