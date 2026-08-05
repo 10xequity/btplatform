@@ -303,7 +303,9 @@
     wrap.innerHTML = `<table class="tbl"><thead><tr>
         <th>Team / Name</th><th>Contact</th><th>Status</th><th>Registered</th><th></th></tr></thead><tbody>
       ${regs.map(g => `<tr>
-        <td>${esc(g.team_name || g.captain_name || "—")}${g.level ? ` <span class="help-text">${esc(g.level)}</span>` : ""}</td>
+        <td>${g.team_id
+          ? `<button class="btn ghost" type="button" data-roster="${g.team_id}" aria-label="Open the roster for ${esc(g.team_name || "this team")}">${esc(g.team_name || "Team")}</button>`
+          : esc(g.team_name || g.captain_name || "—")}${g.level ? ` <span class="help-text">${esc(g.level)}</span>` : ""}</td>
         <td>${esc(g.email || "")}${g.phone ? `<div class="help-text">${esc(g.phone)}</div>` : ""}</td>
         <td><span class="chip ${g.status}">${g.status}</span></td>
         <td>${fmtDT(g.created_at)}</td>
@@ -312,6 +314,9 @@
           ${g.status === "cash-pending" ? `<button class="btn ghost" data-paid="${g.id}">Mark collected</button>` : ""}
         </td></tr>`).join("")}
     </tbody></table>`;
+    // W-A (v0.92.0): the team a registration created is one tap away — and editable there.
+    wrap.querySelectorAll("[data-roster]").forEach(b => b.addEventListener("click", () =>
+      window.BT_ROSTER && window.BT_ROSTER.open(Number(b.dataset.roster))));
     wrap.querySelectorAll("[data-remind]").forEach(b => b.addEventListener("click", async () => {
       const rr = await api(`/api/registrations/${b.dataset.remind}/remind`, { method: "POST" });
       alert(rr.ok ? (rr.data.dev_note || "Reminder sent.") : (rr.data.error || "Failed."));

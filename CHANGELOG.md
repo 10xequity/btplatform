@@ -1,5 +1,21 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.92.0 — 2026-08-05
+
+**W-A — the registration-first workflow program begins (roadmap §-1b): the roster a registration creates is finally visible and editable, and the link runs both directions.**
+
+The owner's 2026-08-05 spec: "when teams register they need to fill out a form, then that form populates after payment the roster page (which should be editable)." The claim behind League Manager's "teams land here from registrations" was verified true server-side — `submitRegistration` has written `teams` + `team_members` since day one — but nothing could read a single team back and no screen could edit one. The flow existed in the database and nowhere on screen.
+
+**New roster routes** (`worker/src/registrations.js` v1.9 — the module that owns the team writes): `GET/PATCH /api/admin/teams/:id`, `POST /api/admin/teams/:id/members`, `PATCH/DELETE /api/admin/team-members/:id` — staff-gated, org-scoped, soft-delete, every write audited, every response the full fresh roster (server truth only, the KOTC board's design). `listRegistrations` now returns `team_id` so the registrations table can link to the roster.
+
+**One shared roster modal** (`web/assets/team-roster.js` v1.0), opened from both directions: the event page's registrations table (the team name is now a button) and League Manager's levels board (each team gains Roster). The modal names the registration the team came from — status chip included — and the event, because the owner's complaint was precisely that the two were never visibly linked. Names and emails edit inline; members add and remove; the captain is marked.
+
+**Seed**: the Thursday league gets four teams with rosters, two linked to the league registrations that created them, so the registration → roster → league walk works on test data. Wipe already covers every row; the two-press guard proves it.
+
+**`team_roster.test.mjs` (+2)** drives the REAL public registration route first — the roster under edit is the one a registration actually created, not a hand-built fixture — then walks rename / fix-a-name / add / remove, asserts the soft delete, the cross-org 404, and the blank-name refusal. The reachability ratchet confirms the five new routes all have callers at birth.
+
+Suite 1288 → **1290**, test files 78 → **79**, buster **393 across 63 files** at 0.92.0 (+2: the two pages that load the roster modal). No migration; ledger 0042. Next W-unit: W-B — league weekly schedule → hand-edit → export → score entry by link, worded in differentials.
+
 ## v0.91.0 — 2026-08-05
 
 **Block E of the tester-round fixes (roadmap §-1) — the polish the round surfaced, all five items, plus the dashboard's vague 403.**

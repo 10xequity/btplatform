@@ -50,7 +50,11 @@
         <select aria-label="Level for ${esc(t.name)}">
           ${[1, 2, 3, 4, 5].map(n => `<option value="${n}"${n === t.level_num ? " selected" : ""}>${n}</option>`).join("")}
         </select>
+        <button class="btn ghost" type="button" data-roster="${t.id}" aria-label="Open the roster for ${esc(t.name)}">Roster</button>
       </div>`).join("") || `<p class="help-text">No teams yet — teams land here from registrations or Tournament Ops.</p>`;
+    // W-A (v0.92.0): each team opens the roster its registration created — names editable there.
+    $("levels").querySelectorAll("[data-roster]").forEach(b => b.addEventListener("click", () =>
+      window.BT_ROSTER && window.BT_ROSTER.open(Number(b.dataset.roster))));
   }
 
   async function saveLevels() {

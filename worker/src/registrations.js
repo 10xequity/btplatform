@@ -1,6 +1,19 @@
 /**
  * Boomtown Platform — Registration + Square + Captain-scoring routes
- * Version: v1.8 · Date: 2026-07-29 · Modules 4 + 8 · Ships in: v0.35.0
+ * Version: v1.9 · Date: 2026-08-05 · Modules 4 + 8 · Ships in: v0.92.0
+ *
+ * v1.9 (2026-08-05, v0.92.0): W-A — THE ROSTER A REGISTRATION CREATES IS FINALLY VISIBLE AND
+ *   EDITABLE (roadmap §-1b; owner 2026-08-05: "the loading of teams and names is not linked
+ *   clearly with registration … then that form populates after payment the roster page (which
+ *   should be editable)"). submitRegistration has written teams + team_members since day one;
+ *   no route ever read them back per-team and no screen could edit them. New, all staff-gated
+ *   and org-scoped, living HERE because this module owns the team writes:
+ *     GET    /api/admin/teams/:id            → team + members + the registration it came from
+ *     PATCH  /api/admin/teams/:id            → rename / set level
+ *     POST   /api/admin/teams/:id/members    → add a member {name, email?}
+ *     PATCH  /api/admin/team-members/:id     → edit a member's name/email
+ *     DELETE /api/admin/team-members/:id     → soft-delete (deleted_at, like everything else)
+ *   listRegistrations now returns r.team_id so the registrations table can link to the roster.
  *
  * v1.8 (2026-07-29, v0.35.0): F-27 CLOSED — waiverReminderSweep's NOT EXISTS was a third
  *   hand-rolled copy of "has a live waiver" and it carried F-26 verbatim: `c.email =
@@ -113,6 +126,11 @@ export async function registrationRoutes(request, env, url, ctx) {
   if ((match = p.match(/^\/api\/registrations\/(\d+)\/cancel$/)) && m === "POST") return cancelRegistration(env, ctx, +match[1]);
   if ((match = p.match(/^\/api\/registrations\/(\d+)\/retry-payment$/)) && m === "POST") return retryPayment(env, ctx, +match[1]);
   if ((match = p.match(/^\/api\/team-members\/(\d+)\/invite$/)) && m === "POST") return inviteTeammate(env, ctx, +match[1]);
+  if ((match = p.match(/^\/api\/admin\/teams\/(\d+)$/)) && m === "GET") return teamRoster(env, ctx, +match[1]);
+  if ((match = p.match(/^\/api\/admin\/teams\/(\d+)$/)) && m === "PATCH") return patchTeam(request, env, ctx, +match[1]);
+  if ((match = p.match(/^\/api\/admin\/teams\/(\d+)\/members$/)) && m === "POST") return addTeamMember(request, env, ctx, +match[1]);
+  if ((match = p.match(/^\/api\/admin\/team-members\/(\d+)$/)) && m === "PATCH") return patchTeamMember(request, env, ctx, +match[1]);
+  if ((match = p.match(/^\/api\/admin\/team-members\/(\d+)$/)) && m === "DELETE") return removeTeamMember(env, ctx, +match[1]);
   if (p === "/api/profile/connect-teams" && m === "POST") return connectTeams(env, ctx);
   if (p === "/api/profile/teams" && m === "GET") return myTeams(env, ctx);
   if ((match = p.match(/^\/api\/events\/(\d+)\/import$/)) && m === "POST") return importRows(request, env, ctx, +match[1]);
@@ -498,7 +516,7 @@ async function listRegistrations(request, env, ctx, eventId, url) {
   if (deny) return deny;
   const status = url.searchParams.get("status");
   const base = `SELECT r.id, r.status, r.payment_method, r.checkout_url, r.last_reminded_at, r.created_at,
-      c.email, c.full_name AS captain_name, c.phone, t.name AS team_name, t.level, t.gender_division
+      r.team_id, c.email, c.full_name AS captain_name, c.phone, t.name AS team_name, t.level, t.gender_division
     FROM registrations r
     LEFT JOIN contacts c ON c.id=r.contact_id
     LEFT JOIN teams t ON t.id=r.team_id
@@ -507,6 +525,110 @@ async function listRegistrations(request, env, ctx, eventId, url) {
     ? (await env.DB.prepare(base + " AND r.status=?2 ORDER BY r.created_at DESC").bind(eventId, status).all()).results
     : (await env.DB.prepare(base + " ORDER BY r.created_at DESC").bind(eventId).all()).results;
   return json({ event: { id: ev.id, name: ev.name, price_cents: ev.price_cents || 0 }, registrations: rows });
+}
+
+/* ================= W-A (v0.92.0): the roster a registration creates ================= */
+
+/** One team, its people, and the registration that made it — the link the owner asked to SEE. */
+async function teamRoster(env, ctx, teamId) {
+  const deny = await requireStaff(env, ctx);
+  if (deny) return deny;
+  const team = await env.DB.prepare(
+    `SELECT t.id, t.name, t.level, t.gender_division, t.captain_contact_id, t.event_id,
+            e.name AS event_name, e.type AS event_type
+     FROM teams t JOIN events e ON e.id = t.event_id
+     WHERE t.id=?1 AND t.org_id=?2 AND t.deleted_at IS NULL`
+  ).bind(teamId, ctx.orgId).first();
+  if (!team) return json({ error: "That team doesn't exist." }, 404);
+  const members = (await env.DB.prepare(
+    `SELECT id, contact_id, member_name, member_email FROM team_members
+     WHERE team_id=?1 AND org_id=?2 AND deleted_at IS NULL ORDER BY id`
+  ).bind(teamId, ctx.orgId).all()).results;
+  const registration = await env.DB.prepare(
+    `SELECT id, status, payment_method, created_at FROM registrations
+     WHERE team_id=?1 AND org_id=?2 AND deleted_at IS NULL ORDER BY id LIMIT 1`
+  ).bind(teamId, ctx.orgId).first();
+  return json({ team, members, registration: registration || null });
+}
+
+async function patchTeam(request, env, ctx, teamId) {
+  const deny = await requireStaff(env, ctx);
+  if (deny) return deny;
+  const row = await env.DB.prepare(
+    "SELECT id FROM teams WHERE id=?1 AND org_id=?2 AND deleted_at IS NULL"
+  ).bind(teamId, ctx.orgId).first();
+  if (!row) return json({ error: "That team doesn't exist." }, 404);
+  const b = await request.json().catch(() => ({}));
+  const sets = [], vals = [];
+  if ("name" in b) {
+    const name = String(b.name || "").trim();
+    if (!name) return json({ error: "A team needs a name." }, 400);
+    vals.push(name); sets.push(`name=?${vals.length}`);
+  }
+  if ("level" in b) { vals.push(String(b.level || "").trim() || null); sets.push(`level=?${vals.length}`); }
+  if (!sets.length) return json({ error: "Nothing to change." }, 400);
+  vals.push(teamId, ctx.orgId);
+  await env.DB.prepare(
+    `UPDATE teams SET ${sets.join(", ")}, updated_at=datetime('now') WHERE id=?${vals.length - 1} AND org_id=?${vals.length}`
+  ).bind(...vals).run();
+  await audit(env, ctx, "team.update", "teams", teamId, b);
+  return teamRoster(env, ctx, teamId);
+}
+
+async function addTeamMember(request, env, ctx, teamId) {
+  const deny = await requireStaff(env, ctx);
+  if (deny) return deny;
+  const team = await env.DB.prepare(
+    "SELECT id FROM teams WHERE id=?1 AND org_id=?2 AND deleted_at IS NULL"
+  ).bind(teamId, ctx.orgId).first();
+  if (!team) return json({ error: "That team doesn't exist." }, 404);
+  const b = await request.json().catch(() => ({}));
+  const name = String(b.name || "").trim();
+  if (!name) return json({ error: "A member needs a name." }, 400);
+  const email = String(b.email || "").trim().toLowerCase() || null;
+  await env.DB.prepare(
+    "INSERT INTO team_members (org_id, team_id, member_name, member_email) VALUES (?1,?2,?3,?4)"
+  ).bind(ctx.orgId, teamId, name, email).run();
+  await audit(env, ctx, "team.member_added", "teams", teamId, { name });
+  return teamRoster(env, ctx, teamId);
+}
+
+async function patchTeamMember(request, env, ctx, memberId) {
+  const deny = await requireStaff(env, ctx);
+  if (deny) return deny;
+  const row = await env.DB.prepare(
+    "SELECT id, team_id FROM team_members WHERE id=?1 AND org_id=?2 AND deleted_at IS NULL"
+  ).bind(memberId, ctx.orgId).first();
+  if (!row) return json({ error: "That person isn't on the roster." }, 404);
+  const b = await request.json().catch(() => ({}));
+  const sets = [], vals = [];
+  if ("name" in b) {
+    const name = String(b.name || "").trim();
+    if (!name) return json({ error: "A member needs a name." }, 400);
+    vals.push(name); sets.push(`member_name=?${vals.length}`);
+  }
+  if ("email" in b) { vals.push(String(b.email || "").trim().toLowerCase() || null); sets.push(`member_email=?${vals.length}`); }
+  if (!sets.length) return json({ error: "Nothing to change." }, 400);
+  vals.push(memberId, ctx.orgId);
+  await env.DB.prepare(
+    `UPDATE team_members SET ${sets.join(", ")}, updated_at=datetime('now') WHERE id=?${vals.length - 1} AND org_id=?${vals.length}`
+  ).bind(...vals).run();
+  await audit(env, ctx, "team.member_updated", "team_members", memberId, b);
+  return teamRoster(env, ctx, row.team_id);
+}
+
+async function removeTeamMember(env, ctx, memberId) {
+  const deny = await requireStaff(env, ctx);
+  if (deny) return deny;
+  const row = await env.DB.prepare(
+    "SELECT id, team_id, member_name FROM team_members WHERE id=?1 AND org_id=?2 AND deleted_at IS NULL"
+  ).bind(memberId, ctx.orgId).first();
+  if (!row) return json({ error: "That person isn't on the roster." }, 404);
+  await env.DB.prepare(
+    "UPDATE team_members SET deleted_at=datetime('now'), updated_at=datetime('now') WHERE id=?1 AND org_id=?2"
+  ).bind(memberId, ctx.orgId).run();
+  await audit(env, ctx, "team.member_removed", "team_members", memberId, { name: row.member_name });
+  return teamRoster(env, ctx, row.team_id);
 }
 
 async function remind(env, ctx, regId) {

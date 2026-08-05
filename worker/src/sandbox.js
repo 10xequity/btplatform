@@ -1,6 +1,12 @@
 /**
  * Boomtown Platform — Sandbox / Demo tools (Module 11.5)
- * File: worker/src/sandbox.js · Version: v2.3 · Date: 2026-08-05 · Ships in: v0.89.0
+ * File: worker/src/sandbox.js · Version: v2.4 · Date: 2026-08-05 · Ships in: v0.92.0
+ *
+ * v2.4 — W-A: the Thursday league (90003) gets four teams with rosters, two of them linked to
+ * the league registrations that created them (registrations 90005/90006 → teams 90701/90702),
+ * so the registration → roster → league flow is walkable on test data. Wipe already covers
+ * every row through the id/event ranges; registrations are deleted before teams, so team_id
+ * links never block the second press.
  *
  * v2.3 — A3 (roadmap §-1): THE SEED NOW CARRIES THE MONEY AND THE COURT BOARD.
  * (1) Every square-paid registration gets a COMPLETED `payments` mirror row at the event price.
@@ -453,6 +459,25 @@ async function generate(env, ctx) {
     `INSERT INTO registrations (id, org_id, event_id, contact_id, status, payment_method) VALUES
      (90005,1,90003,90002,'paid','square'),
      (90006,1,90003,90004,'pending',NULL)`,
+
+    /* --- W-A (v0.92.0): the Thursday league's teams, two of them LINKED to the registrations
+       that created them — the registration → roster → league flow the owner asked to see. The
+       other two carry no registration on purpose: hand-added teams exist, and the roster modal
+       says where a team came from either way. --- */
+    `INSERT INTO teams (id, org_id, event_id, name, level, gender_division, captain_contact_id, score_token) VALUES
+     (90701,1,90003,'TEST Net Gains','BB','Coed',90002,'ba11ba1100090701'),
+     (90702,1,90003,'TEST Sets on the Beach','BB','Coed',90004,'ba11ba1100090702'),
+     (90703,1,90003,'TEST Block Party','A','Coed',90006,'ba11ba1100090703'),
+     (90704,1,90003,'TEST Ace Ventura','A','Coed',90008,'ba11ba1100090704')`,
+    `INSERT INTO team_members (org_id, team_id, contact_id, member_name, member_email) VALUES
+     (1,90701,90002,'TEST Ben Cruz','test-ben@example.com'),
+     (1,90701,NULL,'TEST Mia Torres','test-mia@example.com'),
+     (1,90702,90004,'TEST Dana Reyes','test-dana@example.com'),
+     (1,90702,NULL,'TEST Leo Park',NULL),
+     (1,90703,90006,'TEST Sam Ortiz','test-sam@example.com'),
+     (1,90704,90008,'TEST Nia Wells','test-nia@example.com')`,
+    `UPDATE registrations SET team_id=90701 WHERE id=90005`,
+    `UPDATE registrations SET team_id=90702 WHERE id=90006`,
     `INSERT INTO registrations (id, org_id, event_id, contact_id, status, payment_method) VALUES
      (90021,1,90004,90005,'paid','square'),
      (90022,1,90004,90007,'paid','square'),
