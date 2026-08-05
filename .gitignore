@@ -1,5 +1,8 @@
 # Claude Code harness artifacts — transient session state, never part of a release.
 .claude/ralph-loop.local.md
-.claude/loop-task.md
 .claude/loop-blocked.md
 .claude/settings.local.json
+
+# Scratch body file for changelog-entry.mjs. Written at the repo root mid-release;
+# an uncommitted copy would trip the loop's own dirty-tree gate (RALPH.md D3).
+/entry.md
