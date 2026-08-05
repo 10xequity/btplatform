@@ -288,9 +288,51 @@ after the deploy.*
 class 2 means sweeping every restatement, and a *replacement* sentence is a restatement. Rewriting a stale
 paragraph without checking the new text against the current process is how one stale sentence becomes two.
 
+## C6 — the buster guard could not tell a needed sweep from an unneeded one. ~~OPEN since v0.56.0~~ RESOLVED 2026-08-04.
+
+`asset_versions.test.mjs` asserted the cache-buster was **one** value, not the **current** one. v0.55.0
+therefore changed `build-status.js` with no sweep and stayed green — a cached browser would have kept
+serving the wrong tester copy, so that release's fix would not have reached anyone. Swept in v0.56.0.
+
+*Second finding, 2026-08-03 (v0.66.0):* the release sweep had **never** covered `.js` — only `.html`.
+`admin-nav.js`, `site-nav.js` and `signup-widget.js` each carry a `?v=` string and all three had been
+stale for an unknown number of releases.
+
+*Third finding, 2026-08-04 (v0.85.0):* C13 and C14 both widened *what* the corpus contains and neither
+touched *what is asserted*, so C6 outlived both of them. **It was open for thirty-one releases.**
+
+**Ruling: sweep the buster in any release touching `web/**`, and assert it against `index.js`.**
+*Closed 2026-08-04 in two halves that had to ship together:*
+
+1. **`worker/scripts/sweep-buster.mjs`** — the sweep is no longer hand-rolled. Its corpus is discovered
+   by a filesystem walk (the `sync-rail.mjs` shape) with the **repo root first** in the directory list,
+   because that is the entry forgotten twice. **Its check uses a different source of truth entirely —
+   the git index (`git ls-files`) — not a second phrasing of the same walk.** The two sets are
+   deliberately asymmetric: a tracked file in a directory the walk never visits is C13/C14 caught
+   mechanically; an untracked new page is a page about to ship stale. Disagreement is the finding, and
+   the script fails on it rather than picking a winner. It also prints the count and says *"RECORD THIS
+   COUNT in the handoff"*, because a written-down number from the previous release is the only reason
+   C14 was ever found.
+2. **`asset_versions.test.mjs` v1.3** — `assert.equal(only, version)` where `version` comes from
+   `index.js`. The corpus stays this guard's own (three URL roots, `readdirSync`) and shares nothing
+   with the script's walk; only the version *parser* is shared, deliberately, because a second copy of
+   that regex is the C1/C15 shape.
+
+Both ship negative controls that mutate real input: the script's reconstructs the exact historical
+defect — the real corpus with the repo root dropped, against the real git index and the real `404.html`
+— and asserts the blind spot is caught. The guard's reconstructs v0.55.0: a bumped version with unswept
+busters, a state the old assertion passed. **Proved-it-fails-live before shipping:** `index.js` was
+really moved to v0.87.0, the guard reddened (`actual 0.86.0, expected 0.87.0`), the script exited 2, and
+`index.js` was reverted byte-for-byte.
+
+**The rule this leaves behind:** widening *what a guard scans* and fixing *what it asserts* are two
+different repairs, and doing the first can make the second look done. C13 and C14 were both real fixes
+that left C6 exactly where it was.
+
 ---
 
-*Changelog: v1.1 (2026-08-04) — **C15 moved in**, closed the same day the split was made: standards v2.3
+*Changelog: v1.2 (2026-08-04) — **C6 moved in**, closed after thirty-one releases open. Live entries in
+`INDEX.md` §4 are now C2 and C3. v1.1 (2026-08-04) — **C15 moved in**, closed the same day the split was made: standards v2.3
 struck §9's stub paragraph. Live entries in `INDEX.md` §4 are now C2, C3 and C6. v1.0 (2026-08-04) —
 created by splitting `docs/INDEX.md` §4. Twelve closed entries moved
 verbatim: C1, C4, C5, C7, C8, C9, C10, C11, C12, C13, C14, C16. C2, C3, C6 and C15 stayed live in

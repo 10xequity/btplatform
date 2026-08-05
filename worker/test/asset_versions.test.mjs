@@ -1,6 +1,13 @@
 /**
- * asset_versions.test.mjs · v1.2 · 2026-08-04 · Ships in: v0.84.0
- * (v1.1 2026-08-02, v0.49.1 · v1.0 2026-07-31, v0.41.0)
+ * asset_versions.test.mjs · v1.3 · 2026-08-04 · Ships in: (no bump)
+ * (v1.2 2026-08-04, v0.84.0 · v1.1 2026-08-02, v0.49.1 · v1.0 2026-07-31, v0.41.0)
+ *
+ * v1.3: **C6 CLOSED.** For thirty-one releases this guard asserted the busters were ONE value and
+ * never that they were the CURRENT one, so a release that bumped `index.js` and swept nothing stayed
+ * green — which is exactly what v0.55.0 did. C13 and C14 both widened WHAT is scanned and left WHAT IS
+ * ASSERTED untouched; this closes that half. The version is parsed by `versionFromIndex` from
+ * `worker/scripts/sweep-buster.mjs` — one parser, because a second copy of that regex is the C1/C15
+ * shape. The CORPUS stays this file's own and shares nothing with the script's walk (C14).
  *
  * v1.2: the corpus now includes the REPO ROOT. `404.html` ships from there, carries busters, and was
  * stale at ?v=0.74.0 for ten releases while this guard reported clean — it was scanning `web/` and
@@ -35,6 +42,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
+import { versionFromIndex } from "../scripts/sweep-buster.mjs";
 
 const WEB_DIR = new URL("../../web/", import.meta.url);
 const ASSETS_DIR = new URL("../../web/assets/", import.meta.url);
@@ -122,6 +130,44 @@ function realCorpus() {
 
 test("every ?v= buster across web/ shares one release-form value", () => {
   assertConvention(auditCorpus(realCorpus()));
+});
+
+/* ══════════════════════ C6, CLOSED (2026-08-04) ══════════════════════
+   For thirty-one releases this guard asserted the busters were ONE value and never that they were the
+   CURRENT one. So v0.55.0 changed `build-status.js` with no sweep and stayed green — a cached browser
+   would have kept serving the old tester copy, and that release's fix would not have reached anyone.
+   The register recorded it as C6 in v0.56.0 and it outlived C13 and C14, both of which widened WHAT is
+   scanned and left WHAT IS ASSERTED exactly as it was.
+
+   The version is parsed by `versionFromIndex` from sweep-buster.mjs — ONE parser, deliberately. A
+   second local copy of that regex is the C1/C15 shape: a duplicate that agrees today and drifts later.
+   The CORPUS, though, is this file's own (readdirSync over three URL roots) and shares nothing with
+   the script's walk — that separation is C14 and it is the half that must stay independent. */
+test("C6: the one shared buster value IS the version index.js reports", () => {
+  const version = versionFromIndex(readFileSync(new URL("../src/index.js", import.meta.url), "utf8"));
+  assert.match(version, /^\d+\.\d+\.\d+$/, "index.js does not carry a parseable version");
+
+  const audit = auditCorpus(realCorpus());
+  assert.equal(audit.values.size, 1, "precondition: the corpus must be at one value before comparing it");
+  const only = [...audit.values][0];
+  assert.equal(only, version,
+    `busters read ${only} but /api/health reports ${version} — a release touching web/** did not sweep, ` +
+    `and a cached browser will keep serving the previous assets`);
+});
+
+test("NC: a release that bumped index.js and forgot to sweep is now caught", () => {
+  /* The exact v0.55.0 defect, reconstructed against the real corpus: the version moves, the busters do
+     not. Under the old "one value" assertion this state was GREEN, which is the whole of C6. */
+  const version = versionFromIndex(readFileSync(new URL("../src/index.js", import.meta.url), "utf8"));
+  const bumped = version.replace(/^(\d+)\.(\d+)\./, (_, a, b) => `${a}.${Number(b) + 1}.`);
+  assert.notEqual(bumped, version, "the NC failed to construct a different version");
+
+  const audit = auditCorpus(realCorpus());
+  const only = [...audit.values][0];
+  // The old assertion still passes on this state — that is the point.
+  assert.equal(audit.values.size, 1, "the corpus is still internally consistent, as it was in v0.55.0");
+  assert.notEqual(only, bumped,
+    "NC FAILED: an unswept release would compare equal, so the C6 assertion above proves nothing");
 });
 
 test("the widest-set guard actually covers the critical surfaces", () => {

@@ -1,6 +1,6 @@
 # Boomtown Platform — Document Index
 
-**File:** docs/INDEX.md · **Version:** v2.5 · **Created:** 2026-08-02 · **Updated:** 2026-08-04
+**File:** docs/INDEX.md · **Version:** v2.6 · **Created:** 2026-08-02 · **Updated:** 2026-08-04
 **Status:** ACTIVE · **Supersedes:** nothing — first index of the doc set.
 **Purpose:** what each document is, whether it is live, and where the live documents disagree
 with each other. Read with `CLAUDE.md`.
@@ -15,11 +15,14 @@ contradiction register. The closed entries moved verbatim to
 full, plus a one-line-per-rule standing-rules block so the habits stay in the working set. Twenty-one
 obsolete documents left `docs/` root the same day (§3).
 
-**Open contradictions are now C2, C3 and C6 — three.** C15 closed later the same day (standards v2.3
-struck §9's stub paragraph), and rather than leave a resolved entry sitting in a register that had just
-been trimmed for exactly that reason, it moved to the archive with the others. That is the intended
-lifecycle: an entry lives here while it is open and leaves when it is not, with its rule staying in the
-standing-rules table if the rule is a habit rather than a fix.
+**Open contradictions are now C2 and C3 — two, and both are documentation fixes with no code behind
+them.** C15 and then C6 both closed on 2026-08-04, and rather than leave resolved entries sitting in a
+register that had just been trimmed for exactly that reason, they moved to the archive with the others.
+That is the intended lifecycle: an entry lives here while it is open and leaves when it is not, with its
+rule staying in the standing-rules table if the rule is a habit rather than a fix.
+
+**C6 had been open since v0.56.0 — thirty-one releases.** It survived two repairs to the very guard it
+was about, which is its own lesson and is in the table below.
 
 ---
 
@@ -27,10 +30,10 @@ standing-rules table if the rule is a habit rather than a fix.
 
 | File | Ver | Date | What it is |
 |---|---|---|---|
-| `2026-08-04_handoff_v0_86_0.md` | **v1.8** | 2026-08-04 | **State of record.** §0: **v0.86.0 shipped and verified live** (`/api/health` v0.86.0, five artifact checks, CI added no commit, push succeeded first try) plus the health/pages URLs, because guessing them cost two minutes. §1 measured build state. §2 what shipped — **KOTC complete as a format**, the move route's **invariant with no visible symptom** and the negative control that makes its clean report mean something, and two traps: `rotation()` throwing into a `dispatch` *decline* (a silent 404), and **a guard tripped by its own comments — four instances in two sessions**. §3: the previous handoff was **wrong about the API this session was built on**, and **documenting a cleanup can undo the cleanup** (the split bought back 9% until a second pass). §4 owner answers, incl. the **separate-page** leaderboard decision. §5 owed — three screens need human eyes, and `CLAUDE.md` now exists in two places. §6 next build: **sweep script + C6 as one job**. §7 next-session prompt. **Deliberately about half v1.7's length** — it had become the largest document in the repo. Supersedes and **deletes** v1.7. |
+| `2026-08-04_handoff_v0_86_0.md` | **v1.9** | 2026-08-04 | **State of record.** §0: **v0.86.0 shipped and verified live** (`/api/health` v0.86.0, five artifact checks, CI added no commit, push succeeded first try) plus the health/pages URLs, because guessing them cost two minutes. §1 measured build state. §2 what shipped — **KOTC complete as a format**, the move route's **invariant with no visible symptom** and the negative control that makes its clean report mean something, and two traps: `rotation()` throwing into a `dispatch` *decline* (a silent 404), and **a guard tripped by its own comments — four instances in two sessions**. §3: the previous handoff was **wrong about the API this session was built on**, and **documenting a cleanup can undo the cleanup** (the split bought back 9% until a second pass). §4 owner answers, incl. the **separate-page** leaderboard decision. **§2b: C6 closed** after thirty-one releases — `sweep-buster.mjs` (walk to sweep, **git index** to check) plus `asset_versions` v1.3 asserting the buster equals `index.js`'s version, both proved-it-fails-live. §5 owed — three screens need human eyes, and `CLAUDE.md` now exists in two places. §6 next build: **bracket disputes**, then the README/roadmap recount. §7 next-session prompt. **Deliberately about half v1.7's length** — it had become the largest document in the repo. Supersedes and **deletes** v1.7. |
 | `2026-07-30_standards_v2_0.md` | **v2.3** | 2026-08-04 | **Build and design law.** Trust order, versioning, DB rules, worker module pattern, design roster (§5), testing gates (§6), CI, member copy (§8), page/asset structure (§11), templating (§10). Reconstructed after a doc-set loss; §5/§6.5/§8/§10 anchors preserved so in-code citations stay valid. **§9's stub paragraph struck in v2.3, closing C15.** |
 | `2026-08-02_roadmap_v1_0.md` | **v1.1** | 2026-08-04 | **Roadmap of record.** 8 unbuilt modules, 5 small gaps, 4 engineering tracks, 5 owner-gated config items, 4 doc-debt items, suggested sequence. Supersedes the README roadmap block and the stale half of `build-status.js`. **§0's headline count is marked STALE — use handoff §6 for the build order, not §0.** |
-| `INDEX.md` | **v2.5** | 2026-08-04 | This file. Doc status, and the **open** contradiction register (§4). Closed entries are in `archive/contradictions-closed_v1_0.md`. |
+| `INDEX.md` | **v2.6** | 2026-08-04 | This file. Doc status, and the **open** contradiction register (§4). Closed entries are in `archive/contradictions-closed_v1_0.md`. |
 
 ## 2. Live reference — open when the topic comes up
 
@@ -60,7 +63,7 @@ documents accumulated by July 2026 and four sessions were spent specifying a mod
 | File(s) | Count | Open it only to answer |
 |---|---|---|
 | `archive/2026-07-26_library_v1_0.md` | 1 | "What were the owner's exact words on X" (§1, all 24 requirements verbatim) · "Why was decision D-… made" (§4) · "Has this defect happened before" (§2, plus the four recurring failure classes) · "What are we benchmarking against" (§5). |
-| `archive/contradictions-closed_v1_0.md` | 1 | **NEW 2026-08-04.** "Has this contradiction happened before, and what did we conclude?" The twelve **closed** register entries, moved verbatim out of §4: C1, C4, C5, C7, C8, C9, C10, C11, C12, C13, C14, C16. Their one-line rules stay live in §4. |
+| `archive/contradictions-closed_v1_0.md` | 1 | **NEW 2026-08-04**, already at v1.2. "Has this contradiction happened before, and what did we conclude?" **Fourteen** closed register entries: C1, C4, **C6**, C7, C8, C9, C10, C11, C12, C13, C14, **C15**, C16 and C5. Their one-line rules stay live in §4. |
 | `archive/2026-07-26_waiver-text-v2_candidate_v2_2_restored.md` | 1 | Seed data only. **Not published; the database does not contain it.** Waiver system CLOSED (owner 2026-07-26). Transcript reconstruction — §6/§7 carry real legal exposure. Not a specification. |
 | `archive/2026-08-01_CHANGELOG-block_v0_45_0.md` | 1 | Superseded by the repo `CHANGELOG.md`. Delete once the v0.45.0 LFG detail is confirmed against it. |
 | Superseded handoffs, `2026-07-21_design-handoff_v0.1` → `2026-07-24_handoff_v1_6` | 9 | "What did we believe at v0.2–v1.6". **Moved 2026-08-04, owner OK.** `CHANGELOG.md:2883` still cites the design-handoff at its old `docs/` path — append-only history, deliberately not rewritten. |
@@ -73,12 +76,13 @@ documents accumulated by July 2026 and four sessions were spent specifying a mod
 These are instances of **failure class 2**: a decision recorded is not a decision in force until
 every restatement changes. Fix them in the next release; until then, the ruling below governs.
 
-**Closed entries live in `docs/archive/contradictions-closed_v1_0.md`** (C1, C4, C5, C7, C8, C9, C10,
-C11, C12, C13, C14, C15, C16), moved there verbatim on 2026-08-04. Their rulings are summarised as
-standing rules at the end of this section — that block, not the archive file, is what you read every
-session.
+**Closed entries live in `docs/archive/contradictions-closed_v1_0.md`** (C1, C4, C5, C6, C7, C8, C9,
+C10, C11, C12, C13, C14, C15, C16 — fourteen of the sixteen), moved there verbatim on 2026-08-04. Their
+rulings are summarised as standing rules at the end of this section — that block, not the archive file,
+is what you read every session.
 
-**Open: C2, C3, C6.** All three are cheap. C6 is the only one with code behind it.
+**Open: C2 and C3.** Both are documentation corrections — no code. C6, the last one with code behind
+it, closed 2026-08-04.
 
 ### Open
 
@@ -95,24 +99,12 @@ That document ends at §4. The intended reference is almost certainly requiremen
 work for existing modules benchmarked against LeagueApps / TeamSnap / SportsEngine, then an owner
 interview. *Fix: correct the citation in the next handoff.*
 
-**C6 — the buster guard cannot tell a needed sweep from an unneeded one. OPEN.**
-`asset_versions.test.mjs` asserts the cache-buster is **one** value, not the **current** one.
-v0.55.0 therefore changed `build-status.js` with no sweep and stayed green — a cached browser would
-have kept serving the wrong tester copy, so that release's fix would not have reached anyone. Swept
-in v0.56.0. **Ruling: sweep the buster in any release touching `web/**`.** *Fix: a preflight check
-that blocks when the diff touches `web/**` and no buster value moved with it (handoff §6).*
-
-*Second finding, 2026-08-03 (v0.66.0):* the release sweep had **never** covered `.js` — only
-`.html`. `admin-nav.js`, `site-nav.js` and `signup-widget.js` each carry a `?v=` string and all
-three had been stale for an unknown number of releases. `asset_versions.test.mjs` did catch the
-mismatch once a `.html` page moved ahead of them, which is the only reason it surfaced. Swept.
-**C6 remains OPEN** — the original defect is unfixed: the guard still asserts the buster is *one*
-value, not the *current* one, so a release that touches `web/**` and sweeps nothing is still green.
-
-*Third finding, 2026-08-04 (v0.85.0):* C13 and C14 both widened *what* the corpus contains — the
-repo root is now in it, and 377 busters read one value. Neither touched *what is asserted*, so C6 is
-untouched by both. **It is now cheap to close:** with `worker/scripts/sweep-buster.mjs` in place
-(handoff §6.3), assert the buster equals `index.js`'s version rather than merely equalling itself.
+**C6 — CLOSED 2026-08-04**, after thirty-one releases open — it outlived C13 and C14, both of which
+widened *what* is scanned and left *what is asserted* untouched. `worker/scripts/sweep-buster.mjs`
+replaces the hand-rolled sweep (walk-discovered corpus, repo root first, checked against the **git
+index** so the check cannot reuse the sweep's corpus), and `asset_versions.test.mjs` **v1.3** asserts
+the buster equals the version `index.js` reports rather than merely equalling itself. Full entry in
+`archive/contradictions-closed_v1_0.md`; its rule is in the table below.
 
 **C15 — CLOSED 2026-08-04 (standards → v2.3).** §9's stub paragraph is struck; full entry in
 `archive/contradictions-closed_v1_0.md`. Its rule is in the table below.
@@ -133,6 +125,7 @@ than what to change. Full narrative for any of them is in
 | **C14** | **A verification that reuses the corpus of the thing it verifies is not an independent check.** It restates one assumption twice and reports the agreement as confirmation. A guard and its own check must not derive their file list the same way — and **a written-down count from the previous release is a cheap independent oracle. Write the count down; check it with a different tool.** |
 | **C16** | **A test whose correctness depends on when it runs is a defect even while it passes** — and the way to find those is to **move the clock, not to grep for dates**: `node worker/scripts/timecheck.mjs`. Deliberately not a preflight gate. **Do not build a static date-linting guard** — it would encode a heuristic where a measurement exists. |
 | **C7** | Generate a new page only from one that passes `page_structure.test.mjs`. Shell-slicing copies *and increments* stray closing tags, and browsers discard them in silence. |
+| **C6** | **Widening what a guard SCANS and fixing what it ASSERTS are two different repairs, and doing the first can make the second look done.** C13 and C14 were both real fixes to the buster corpus and both left C6 exactly where it was, for thirty-one releases. When a guard is repaired, ask which half was repaired. |
 | **C1 / C15** | Fixing failure class 2 means sweeping **every** restatement — **and a *replacement* sentence is itself a restatement.** The C1 fix swapped one stale sentence for another in the same section and the register did not reopen for two releases, which is how C15 existed at all. Rewriting a stale paragraph without checking the new text against the current process turns one stale sentence into two. |
 | **v0.85.0 / v0.86.0** | **A guard's own comments will trip it.** Three times in two sessions a comment explaining a rule set off the check for that rule. **Check the set that ships BEHAVIOUR** — strip comments first, and give the stripping its own negative control so it cannot become a quiet way of switching the check off. |
 
@@ -146,6 +139,7 @@ audit everything every session** — `grep` the single claim you are about to de
 
 | Date | Action |
 |---|---|
+| 2026-08-04 | **C6 CLOSED after thirty-one releases open**, in the two halves that had to ship together (no version bump — tooling and tests only, no `web/**` or worker change). **(1) `worker/scripts/sweep-buster.mjs`**: the sweep is no longer hand-rolled. Corpus discovered by a filesystem walk (the `sync-rail.mjs` shape) with the **repo root first** in the directory list, because that is the entry forgotten twice; a shrinking-corpus floor refuses to sweep fewer than 40 files. **Its check uses the GIT INDEX (`git ls-files`) — a different source of truth, not a second phrasing of the same walk**, which is C14 made mechanical: a tracked buster-carrying file outside the walk is reported as a blind spot and the script exits 2 rather than picking a winner. It prints the count and says *"RECORD THIS COUNT in the handoff"*. **(2) `asset_versions.test.mjs` v1.3**: asserts the shared buster **equals the version `index.js` reports**, not merely that it equals itself — the actual C6 defect, untouched by C13 and C14, both of which widened *what is scanned* and left *what is asserted* alone. Both halves ship negative controls that mutate real input: the script's **reconstructs the historical defect** (real corpus with the repo root dropped, real git index, real `404.html`) and asserts the blind spot is caught; the guard's reconstructs v0.55.0, a bumped version with unswept busters, which the old assertion passed. **Proved-it-fails-live:** `index.js` really moved to v0.87.0, the guard reddened (`actual 0.86.0, expected 0.87.0`), the script exited 2, `index.js` reverted byte-for-byte. Suite **1223 → 1238**; test files 72 → **73**. Open contradictions now **C2 and C3 only**, both documentation fixes with no code behind them. |
 | 2026-08-04 | **v0.86.0 SHIPPED AND VERIFIED LIVE — KOTC IS COMPLETE AS A FORMAT.** `/api/health` **v0.86.0**, all four new artifacts serving at buster 0.86.0, `404.html` at the repo root correct, and `git log main..origin/main` **empty** after the deploy, so CI added no commit — one push, the fourth consecutive confirmation. The push succeeded on the **first** attempt this time. Shipped: the **director's board** (`admin-kotc.html` + `admin-kotc.js`) and the **public standings** (`kotc-live.html` + `kotc-live.js`), with the **three routes** neither could exist without — `GET /api/admin/kotc`, `POST /api/admin/kotc/:id/move`, `GET /api/live/kotc/:id`. **Recorded against the previous handoff, which said this API was "complete and tested": it was complete for one screen of three**, and one `grep` settled it. The move route's invariant — a re-seat must never re-pair a game that already has a score, because `kotc_games` stores the four players on the row and the derived leaderboard would silently restate the evening — ships with a negative control that **mutates the real input** (same move, same row, scores cleared) and proves the move *does* re-pair it, so the clean report is not the boring kind. "Never refuses" is tested by **exhausting the board**, not sampling it. Two traps recorded: `rotation()` throws for any net size but 4 or 5 and `dispatch` treats a throw as a *decline*, so an unguarded call would have made a drag a **silent 404**; and **a guard's own comments tripped it twice** — the third and fourth instances in two sessions of a comment about a rule setting off the check for that rule. **Owner decision (asked, not assumed):** the public leaderboard is a **separate page**, not a third shape on the live board, because `live.js` carries the v0.84.0 diff-animation engine no human has reviewed. `live.js` untouched. Member header floor **15 → 16**, both pages generated from pages already inside the ratchets. Suite **1180 → 1223**; test files 70 → 72. No migration; ledger **0042**. Buster **0.85.0 → 0.86.0**, verified at **390 occurrences, one value, 62 files** with ripgrep against a count written down first (C14). Also closed the same day: **C15** (standards → **v2.3**, §9's stub paragraph struck) and the KOTC spec's §9 items 3–4, one of which had been telling sessions to ask the owner a question migration 0042 answered three releases earlier. |
 | 2026-08-04 | **THE CONSOLIDATION `CLAUDE.md` §7 HAD BEEN ASKING FOR, DONE.** The four-document working set measured **93,066 bytes ≈ 23,300 tokens** — 3.1× `CLAUDE.md` §0's claimed ~7,400, with §7's ">~10,000 → consolidate" trigger having fired unattended for several sessions. Two actions. **(1) INDEX split:** twelve **closed** contradiction entries moved verbatim to `docs/archive/contradictions-closed_v1_0.md` (C1, C4, C5, C7, C8, C9, C10, C11, C12, C13, C14, C16); C2, C3, C6 and C15 stay live in full; a new **standing-rules table** keeps the one-line habit rule from every closed entry in the working set, which is the part that was actually being re-read. *Deviation recorded:* the session prompt's move-list named ten entries and omitted **C9 and C12** — both carry the same "instance closed, rule is a habit" status as C14 and C16, both are among the longest entries, and leaving them would have defeated the split, so they moved on the same basis with their rules kept live. **(2) Doc hygiene, all three with the owner's explicit OK:** `2026-07-30_looker-template_v1_0.md` **deleted** (v1_1 sat beside it — the duplicate `CLAUDE.md` file hygiene forbids in as many words); **9 superseded handoffs** (2026-07-21…07-24) and **12 one-time module-install guides** `git mv`'d to `docs/archive/`. `docs/` root **40 → 18** `.md` files; `docs/archive/` **3 → 25**. Dangling references swept with grep, not assumed: `worker/src/reports.js` cited the deleted looker v1_0 in its v1.4 header entry and now cites v1_1 while preserving what was true when it shipped; `looker-template_v1_1`'s supersedes line records the deletion. `CHANGELOG.md`'s one citation of a moved handoff is **deliberately left** — it is append-only history, and rewriting it to match the present is the C9 error inverted. |
 | 2026-08-04 | Twenty-eight releases under direct commit (v0.57.0–v0.85.0), **v0.85.0 shipped and verified live** — `/api/health` v0.85.0, `404.html` at the repo root serving 0.85.0, and `origin/main` still at the pushed SHA, so CI added no commit. The `git push` refusal that had ended the session **cleared on retry with nothing changed**; `gh` stayed blocked, so CI logs are unreadable from inside a session and a deploy is confirmed by preflight plus a live fetch. Handoff v0.84.0 **renamed** into `2026-08-04_handoff_v0_85_0.md`, the state of record. **v0.85.0 shipped the KOTC player link** (`kotc.html` + `kotc.js`, screen (b) of three) with `kotc_screen.test.mjs` asserting the page never re-derives the server's `enter`/`confirm`/`done` mode — the guard caught its own first draft, which forbade the very confirm POST the screen exists to send. **Recorded against the previous handoff: the KOTC API was "complete and tested" for ONE screen of three**; the admin board and public leaderboard need three routes that do not exist, and were deliberately not added because a route with no screen is failure class 1. **C14 opened** (the buster sweep missed the repo root one release after C13 named that exact file, and its own verification shared the blind corpus) and **C15 opened** (standards §9 still describes the retired CHANGELOG-stub workflow — the C1 fix swapped one stale sentence for another). Two existing ratchets earned their keep: the byte-identical member header floor moved **14 → 15** after catching a hand-written reduced header, and the build-status registry required the new page. No migration; ledger **0042** and 42 rows **read back from live D1**. Suite 1166 → **1180**. |
@@ -168,7 +162,12 @@ set every session to say what the handoff already said.
 
 ---
 
-*Changelog: v2.5 (2026-08-04) — **v0.86.0 recorded as shipped and verified live**, and **C15 closed and
+*Changelog: v2.6 (2026-08-04) — **C6 closed and archived** after thirty-one releases open, leaving
+**C2 and C3** as the only open contradictions and neither has code behind it. `sweep-buster.mjs` +
+`asset_versions.test.mjs` v1.3; suite 1223 → 1238. The standing-rules table gains C6's lesson —
+**widening what a guard SCANS and fixing what it ASSERTS are two different repairs, and doing the first
+can make the second look done**, which is precisely how C13 and C14 both landed on this guard and left
+C6 where it was. v2.5 (2026-08-04) — **v0.86.0 recorded as shipped and verified live**, and **C15 closed and
 moved to the archive** (standards → v2.3 struck §9's stub paragraph), leaving C2, C3 and C6 open. The
 standing-rules table gains the C1/C15 corollary — *a replacement sentence is itself a restatement*, which
 is the whole reason C15 existed — and the comment-tripping rule from v0.85.0/v0.86.0: **check the set that
