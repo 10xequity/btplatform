@@ -37,6 +37,7 @@
  */
 
 import { personName, CAPTAIN_JOIN, CAPTAIN_COLS } from "./names.js"; // v0.74.0 — one name rule
+import { boardSuggestions } from "./board_suggest.js";                // v0.95.0 — read-only, W-D
 
 export const ALLOWED_BRACKET_SIZES = [8, 6, 4, 3, 2];
 export const TOP_DIVISION_TARGET = 8;
@@ -703,5 +704,11 @@ async function loadBoard(env, ctx, eventId) {
     // from the screen while remaining in the database.
     loose_pools: pools.filter((pl) => !pl.division_id).map((pl) => ({ ...pl, teams: inPool(pl.id) })),
     workspace: shaped.filter((t) => t.pool_id == null),
+    // Seeding suggestions (v0.95.0, W-D). Read-only, and the board POST already spreads `...board`,
+    // so the panel refreshes on every save with no second request and no route of its own. The
+    // `.catch` is the fifth key's whole failure story: a suggestion that cannot be computed costs
+    // information, never the board — which is the "degrade, never collapse" rule applied to a
+    // feature nobody has asked for yet.
+    suggestions: await boardSuggestions(env, ctx.orgId, eventId, shaped, divisions, pools).catch(() => []),
   };
 }

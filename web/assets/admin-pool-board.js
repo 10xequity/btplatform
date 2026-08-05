@@ -39,6 +39,7 @@
      board invented; the server treats those as new. */
   let zones = [];            // [{ key, poolId, divisionId, name, teams: [team] }]
   let workspace = [];
+  let dismissed = new Set(); // suggestion ids this director has waved away, for this event
 
   function ingest(data) {
     board = data;
@@ -54,6 +55,57 @@
     workspace = [...(data.workspace || [])];
     dirty = false;
     tempSeq = -1;
+    renderSuggestions();
+  }
+
+  /* ---------- suggestions ----------
+     Drawn from `ingest`, and from NOWHERE else. `wire()` runs at the end of every `render()` and
+     already stacks its drag handlers on #pbWork — a node that is never recreated — so wiring this
+     panel there would reproduce that leak exactly. The list node is static, one delegated listener
+     is attached once at startup, and this function only ever writes innerHTML.
+
+     There is no "no suggestions" state on purpose. When the server has nothing to say the panel is
+     simply absent: a first-ever event has no history, and a line explaining that would appear on
+     every first event forever. */
+  function renderSuggestions() {
+    const panel = $("pbSug"), list = $("pbSugList");
+    if (!panel || !list) return;
+    const items = ((board && board.suggestions) || []).filter((s) => !dismissed.has(s.id));
+    if (!items.length) { panel.hidden = true; list.innerHTML = ""; return; }
+    // The server composes every sentence, numbers and all. Nothing here builds English — a client
+    // that assembles its own copy is how two screens end up phrasing the same fact differently.
+    list.innerHTML = items.map((s) => `<li class="pb-sug-item">
+      <span class="pb-sug-text">${esc(s.text)}</span>
+      <span class="pb-sug-acts">
+        <button class="btn ghost" type="button" data-sugshow="${esc(s.id)}">Show me</button>
+        <button class="btn ghost" type="button" data-sughide="${esc(s.id)}"
+          aria-label="Dismiss this suggestion">Dismiss</button>
+      </span>
+    </li>`).join("");
+    panel.hidden = false;
+  }
+
+  /** Ring the teams a suggestion is about. The ring clears itself — a highlight left on is a lie. */
+  let hiTimer = null;
+  function highlight(id) {
+    const s = ((board && board.suggestions) || []).find((x) => x.id === id);
+    if (!s) return;
+    document.querySelectorAll(".pb-tile.pb-hi").forEach((el) => el.classList.remove("pb-hi"));
+    if (hiTimer) clearTimeout(hiTimer);
+    let first = null;
+    for (const teamId of s.team_ids || []) {
+      const el = document.querySelector(`.pb-tile[data-team="${teamId}"]`);
+      if (!el) continue;
+      el.classList.add("pb-hi");
+      if (!first) first = el;
+    }
+    if (first) first.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    $("pbHint").textContent = first
+      ? `Highlighted ${(s.team_ids || []).length} team${(s.team_ids || []).length === 1 ? "" : "s"}. Drag one wherever you want it.`
+      : "Those teams are not on the board right now.";
+    hiTimer = setTimeout(() => {
+      document.querySelectorAll(".pb-tile.pb-hi").forEach((el) => el.classList.remove("pb-hi"));
+    }, 4000);
   }
 
   const allTeams = () => [...workspace, ...zones.flatMap((z) => z.teams)];
@@ -321,7 +373,18 @@
         return;
       }
       eventId = Number($("pbEvent").value);
+      dismissed = new Set();          // a different event's suggestions were never waved away
       load();
+    });
+    // ONE delegated listener, on the static list node, attached once. Every re-render replaces the
+    // buttons inside it and this keeps working.
+    $("pbSugList").addEventListener("click", (e) => {
+      const show = e.target.closest("[data-sugshow]");
+      if (show) return highlight(show.dataset.sugshow);
+      const hide = e.target.closest("[data-sughide]");
+      if (!hide) return;
+      dismissed.add(hide.dataset.sughide);
+      renderSuggestions();
     });
     $("pbSave").addEventListener("click", save);
     $("pbReload").addEventListener("click", () => {

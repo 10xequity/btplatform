@@ -1,5 +1,30 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.95.0 — 2026-08-05
+
+**W-D — seeding suggestions on the pool board: proposals from past results, never rules, and never a word about a person.**
+
+The owner: *"split the good players (previous winners) as much as possible (using historical data) and have friends avoid playing too much with each other in pool or people from the same area … together. **These are just suggestions not rules, as it may be impossible to complete based on entered teams.**"*
+
+Built from `docs/2026-08-05_spec_seeding-suggestions_v1_0.md` rather than re-derived, because the obvious implementation is wrong here. The spec's headline correction, verified again this release by reading the writer: **`standings.rank` is an event-wide POOL-PLAY finish, not a champion and not a division placing.** `refreshStandings` reads `matches WHERE stage='pool'`, loads every team with no division filter, and `standings` has no `division_id` column. Live D1 *looks* per-division only because the seeder hand-writes three standings blocks. This feature therefore **never reads `rank`** — it recomputes placement inside each division from `wins`/`point_diff`/`points_for`.
+
+**The owner settled two open questions and the second one changed the design.** Asked what "won before" means, they widened it: *"We should rank every team … from pool they should count all teams 1-X for each division. Then simply list their placement for divisions. We can award a score/number as there is minor overlap between bottom of A and top of BB, similar to ELO score … rank includes Open/AA - A - BB - B - Recreational."* So a team's history is now a **placement plus a tier-weighted score**: division tiers sit 100 apart (Open/AA 400 · A 300 · BB 200 · B 100 · Recreational 0, plus the mixed labels the real registration form uses) and placing scores 0–100 inside a tier — which makes the bottom of A and the top of BB come out **equal by construction**, exactly the overlap the owner described. A persisted ELO rating stays unbuilt: the owner called that "potentially", and it needs a ratings table this release deliberately does not add. On subs: *"Subs for tournaments, non issue"* — so `is_sub` rows are excluded from every signal.
+
+**New:** `worker/src/board_suggest.js` (read-only) and a fifth key on the board payload. **No new route, no migration.** The board POST already spreads `...board`, so the panel refreshes on every save with no second request. Four signals, each independently guarded so one failure costs information rather than the board:
+
+- **spread_winners** — teams whose players have won a division before, bunched into one pool.
+- **spread_strength** — one pool's teams finished higher at past events than another's, stated in **divisions' worth** rather than in the internal score, which is a unit nobody has been taught.
+- **split_repeat** — two teams in one pool whose players keep sharing rosters, counted once per shared roster rather than once per pair of people.
+- **spread_area** — teams from one city bunched into one pool. Captain city, grouped on the literal stored string: **no region taxonomy**, so "Fort Collins" and "Ft Collins" stay two groups and the signal understates. "N Co" needs a mapping from the owner first.
+
+**The 6–11 pool preference suppresses a suggestion and never a save.** If the move a suggestion implies would take its source pool under six or its target over eleven, the suggestion is simply not made. **An unsatisfiable suggestion is dropped in silence** — there is no "not enough history" line anywhere, because that line would appear on every first event forever. And **no sentence names a person**: the signals resolve identity through people, the screen talks about teams, pools and counts.
+
+**The panel** sits between the board and the waiting area — outside `#pbBoard`, which `render()` rewrites and `fail()` replaces wholesale. It is drawn from `ingest()` and never from `render()` or `wire()`, and its one delegated listener is attached once to a static node, because `wire()` already stacks handlers on `#pbWork` on every render. Each row carries **Show me** (rings the teams, then clears itself) and **Dismiss**. Visually it is the board's own furniture one register quieter, with a gold left edge as a rule — never gold ink.
+
+`worker/test/board_suggestions.test.mjs` (**+22**) drives the real board route over a fixture built so all four kinds fire, because a no-write assertion over a payload that proposed nothing proves nothing. It sets `rank` to *disagree* with pool play wherever the two can be told apart; a team holding `rank=1` that placed last and lost its final must not be credited, while a team that placed third and won a scored final must be. Ties credit nobody, a drawn final credits nobody, and a future-dated `in_progress` event is not history. Four negative controls mutate the real shipped module: a renamed column degrades to silence **while the signal that never touched that column still answers**, a database that throws still returns a board, and a single no-op `UPDATE teams SET pool_id=pool_id` is caught — proving the read-only assertion can actually fail.
+
+Suite **1312/1312** (was 1290), test files **80**, modules **51**, buster **393 across 63 files** at 0.95.0. No migration; ledger **0042**, read back from live D1. Reachability baseline unchanged at **21** — W-D adds no route. Next W-unit: W-E — tryouts intake → sortable table → offers, whose six uncalled routes are the largest remaining cluster.
+
 ## v0.94.0 — 2026-08-05
 
 **W-C — "Plan the day": the pool-sheet planner finally has a screen, and the owner's split table was in the engine all along.**
