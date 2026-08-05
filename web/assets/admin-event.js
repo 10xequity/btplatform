@@ -1,5 +1,14 @@
 /* Boomtown Platform — Event Management screen
-   Version: v0.4.1 · Date: 2026-08-02
+   Version: v0.5.0 · Date: 2026-08-05 · Ships in: v0.90.0
+   v0.5.0 (roadmap §-1 Block D1, audit R4): KING OF THE COURT IS FINALLY STARTABLE BY A HUMAN.
+   POST /api/admin/events/:id/kotc and POST /api/admin/kotc/:id/players existed and were tested
+   since v0.80.0 — and no file in web/ called either, so a fully-built format could not be
+   started from the UI and the court board's empty state pointed at a control that did not
+   exist. This screen now carries the KOTC card: sessions for this event, "+ New session"
+   (name / points to / move up / rounds), and an entry-list picker searching /api/admin/members.
+   Creating a session opens the picker immediately — the entry list is always the next thing,
+   so the operator is not made to find a second button (owner req #19).
+   v0.4.1 · 2026-08-02
    One screen per event: edit details, publish/cancel, duplicate, save-as-template,
    recurring “this and future” editing, registrations (remind / mark paid), CSV download,
    and the public sign-up + pay link (register.html?event=N). */
@@ -24,6 +33,7 @@
     ev = r.data.event || r.data;
     render();
     loadRegs();
+    loadKotc();
   }
 
   function regLink() { return location.origin + location.pathname.replace(/[^/]*$/, "") + "register.html?event=" + id; }
@@ -74,6 +84,15 @@
         <button class="btn ghost" id="copyLink" style="margin-left:8px">Copy link</button>
       </div>
 
+      <div class="card" style="padding:16px;margin-bottom:18px">
+        <h2 style="font-size:16px;margin:0 0 6px">King of the Court</h2>
+        <p class="help-text">Run a King or Queen of the Court night on this event: create a session,
+          add the entry list, then seat the nets on the <a href="admin-kotc.html">court board</a>.
+          Every player gets their own score link at entry.</p>
+        <div id="kotcList" style="margin-bottom:10px"></div>
+        <button class="btn ghost" id="kotcNew">+ New session</button>
+      </div>
+
       <div class="page-head">
         <h2 style="font-size:17px;margin:0">Registrations</h2>
         <div class="spacer"></div>
@@ -83,6 +102,7 @@
 
     document.getElementById("copyLink").addEventListener("click", () =>
       navigator.clipboard.writeText(regLink()).then(() => alert("Link copied.")));
+    document.getElementById("kotcNew").addEventListener("click", newSession);
     document.getElementById("saveBtn").addEventListener("click", save);
     document.getElementById("dupBtn").addEventListener("click", duplicate);
     document.getElementById("tplBtn").addEventListener("click", saveTemplate);
@@ -163,6 +183,115 @@
       alert(r.ok ? `Updated ${r.data.updated} events.` : (r.data.error || "Failed."));
       closeModal(); load();
     });
+  }
+
+  /* ---------- King of the Court (Block D1) ---------- */
+
+  async function loadKotc() {
+    const wrap = document.getElementById("kotcList");
+    if (!wrap) return;
+    const r = await api("/api/admin/kotc");
+    if (!r.ok) { wrap.innerHTML = `<span class="help-text">Couldn't load the sessions — reload to try again.</span>`; return; }
+    const mine = (r.data.sessions || []).filter((s) => s.event_id === id);
+    if (!mine.length) {
+      wrap.innerHTML = `<span class="help-text">No sessions on this event yet.</span>`;
+      return;
+    }
+    wrap.innerHTML = mine.map((s) => `
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid var(--border)">
+        <b>${esc(s.name)}</b>
+        <span class="help-text">${s.players} player${s.players === 1 ? "" : "s"}
+          · ${s.rounds ? `round ${s.rounds}` : "not started"} · games to ${s.points_to}</span>
+        <div class="spacer"></div>
+        <button class="btn ghost" data-kotc-add="${s.id}">Add players</button>
+        <a class="btn ghost" href="admin-kotc.html" style="text-decoration:none">Court board →</a>
+      </div>`).join("");
+    wrap.querySelectorAll("[data-kotc-add]").forEach((b) =>
+      b.addEventListener("click", () => addPlayers(Number(b.dataset.kotcAdd))));
+  }
+
+  function newSession() {
+    const back = openModal(`
+      <h2>New King of the Court session</h2>
+      <div class="field"><label>Session name</label><input id="ks_name" value="King of the Court" /></div>
+      <div class="row2" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="field"><label>Games to</label><input id="ks_pts" type="number" min="1" value="21" /></div>
+        <div class="field"><label>Move up per round</label><input id="ks_up" type="number" min="1" value="1" /></div>
+      </div>
+      <div class="field"><label>Rounds planned (optional)</label><input id="ks_rounds" type="number" min="1" placeholder="decide on the night" /></div>
+      <div class="actions"><button class="btn ghost" id="ks_cancel">Cancel</button><button class="btn" id="ks_go">Create session</button></div>`);
+    back.querySelector("#ks_cancel").addEventListener("click", closeModal);
+    back.querySelector("#ks_go").addEventListener("click", async () => {
+      const r = await api(`/api/admin/events/${id}/kotc`, { method: "POST", body: JSON.stringify({
+        name: back.querySelector("#ks_name").value.trim() || "King of the Court",
+        points_to: Number(back.querySelector("#ks_pts").value) || 21,
+        move_up: Number(back.querySelector("#ks_up").value) || 1,
+        rounds_planned: Number(back.querySelector("#ks_rounds").value) || null,
+      }) });
+      if (!r.ok) return alert(r.data.error || "Couldn't create the session.");
+      closeModal();
+      loadKotc();
+      addPlayers(r.data.session_id); // the entry list is always the next step — open it, don't make them find it
+    });
+  }
+
+  function addPlayers(sessionId) {
+    const picked = new Map(); // contact_id → name; survives across searches so re-searching never unticks anyone
+    const back = openModal(`
+      <h2>Add players to the entry list</h2>
+      <p class="help-text">Search your members and tick everyone playing. Re-adding somebody keeps
+        their existing score link.</p>
+      <div class="field"><label>Search members</label><input id="kp_q" placeholder="name, email or phone" /></div>
+      <div id="kp_list" role="group" aria-label="Members found" style="max-height:260px;overflow:auto;margin:8px 0"></div>
+      <div class="actions">
+        <span id="kp_count" class="help-text" role="status" aria-live="polite"></span>
+        <div class="spacer"></div>
+        <button class="btn ghost" id="kp_cancel">Close</button>
+        <button class="btn" id="kp_go" disabled>Add players</button>
+      </div>`);
+    const listEl = back.querySelector("#kp_list");
+    const countEl = back.querySelector("#kp_count");
+    const goBtn = back.querySelector("#kp_go");
+    const sayCount = () => {
+      countEl.textContent = picked.size ? `${picked.size} selected` : "";
+      goBtn.disabled = !picked.size;
+      goBtn.textContent = picked.size ? `Add ${picked.size} player${picked.size === 1 ? "" : "s"}` : "Add players";
+    };
+    const paint = (rows) => {
+      listEl.innerHTML = rows.length ? rows.map((c) => `
+        <label style="display:flex;align-items:center;gap:10px;min-height:44px;padding:0 4px;cursor:pointer">
+          <input type="checkbox" data-cid="${c.id}" ${picked.has(c.id) ? "checked" : ""} />
+          <span>${esc(c.full_name || c.email || "(no name)")}</span>
+          <span class="help-text">${esc(c.email || "")}</span>
+        </label>`).join("")
+        : `<p class="help-text" style="padding:8px 4px">Nobody matches that search.</p>`;
+      listEl.querySelectorAll("input[data-cid]").forEach((cb) => {
+        cb.addEventListener("change", () => {
+          const c = rows.find((x) => x.id === Number(cb.dataset.cid));
+          if (cb.checked) picked.set(c.id, c.full_name || c.email || "");
+          else picked.delete(Number(cb.dataset.cid));
+          sayCount();
+        });
+      });
+    };
+    let t = null;
+    const search = async () => {
+      const q = back.querySelector("#kp_q").value.trim();
+      const r = await api("/api/admin/members" + (q ? "?q=" + encodeURIComponent(q) : ""));
+      if (!r.ok) { listEl.innerHTML = `<p class="help-text" style="padding:8px 4px">${esc(r.data.error || "Couldn't search members.")}</p>`; return; }
+      paint(r.data.members || []);
+    };
+    back.querySelector("#kp_q").addEventListener("input", () => { clearTimeout(t); t = setTimeout(search, 250); });
+    back.querySelector("#kp_cancel").addEventListener("click", closeModal);
+    goBtn.addEventListener("click", async () => {
+      const r = await api(`/api/admin/kotc/${sessionId}/players`, { method: "POST", body: JSON.stringify({
+        players: [...picked.keys()].map((cid) => ({ contact_id: cid })),
+      }) });
+      if (!r.ok) return alert(r.data.error || "Couldn't add the players.");
+      closeModal();
+      loadKotc();
+    });
+    search(); // first paint is the member list unfiltered — something to tick with zero typing
   }
 
   async function loadRegs() {

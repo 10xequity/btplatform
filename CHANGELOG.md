@@ -1,5 +1,15 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.90.0 — 2026-08-05
+
+**Block D of the tester-round fixes (roadmap §-1) — King of the Court is finally startable by a human, and reachability is guarded in the client direction.**
+
+**D1 — the KOTC card on the event page** (`web/assets/admin-event.js` v0.5.0). `POST /api/admin/events/:id/kotc` and `POST /api/admin/kotc/:id/players` existed and were tested since v0.80.0, and no file in `web/` called either — a fully-built format could not be started from the UI (audit R4). The event screen now carries a King of the Court card: this event's sessions (players, round, points), "+ New session" (name / games to / move up / rounds planned), and an entry-list picker that searches `/api/admin/members` with selections that survive re-searching. Creating a session opens the picker immediately — the entry list is always the next step, so the operator is never made to find a second button (owner req #19). The court board's empty state (`admin-kotc.js` v1.2) now links to a control that exists instead of describing one that does not.
+
+**D2 — `route_reachability.test.mjs` (+5).** The assert-call-sites rule now runs in the client direction: every `/api/admin/*` route shape derived from the worker's two routing idioms must have a caller in `web/` (template holes masked to wildcards, comments stripped on both sides — with a negative control proving a comment never counts as a route or a caller). **The scan found 25 admin routes built, tested and uncalled** — R4 at scale — recorded as a shrink-only baseline: a NEW uncalled route fails at birth, and a baseline route that gains a caller demands its own strike, so the list can only drain. The inventory is roadmap §-1c D-4; the clusters that matter are the six tryouts squads/offers routes (the owner's "tryout page does not work" — W-E's work list) and the four format-engine planning routes (W-C's substrate). The guard's own first draft ate half its caller corpus by masking `${…}` to `*` before stripping comments — `/*` read as a comment opener — which is why the order is asserted in code.
+
+Suite 1282 → **1287**, test files 77 → **78**, buster **391 across 63 files** at 0.90.0. No migration; ledger 0042.
+
 ## v0.89.0 — 2026-08-05
 
 **Blocks B + C + A3 of the tester-round fixes (roadmap §-1) — org honesty, the service-worker purge, and the seeded money.** Most of the 2026-08-04/05 tester report traced to two pieces of state, not to the modules; this release removes both.

@@ -1,5 +1,9 @@
 /* Boomtown Platform — Court board (admin page script)
-   File: web/assets/admin-kotc.js · Version: v1.1 · Date: 2026-08-04 · Ships in: v0.87.0
+   File: web/assets/admin-kotc.js · Version: v1.2 · Date: 2026-08-05 · Ships in: v0.90.0
+
+   v1.2 (v0.90.0, Block D1): the empty state's instruction finally points at a control that
+   exists. It used to say "create one on the event" when no event screen carried any KOTC
+   control (audit R4) — admin-event.js v0.5.0 now does, and the sentence links there.
 
    v1.1 (v0.87.0): the finished-for-the-night control, both directions through one `setWithdrawn`. See
    the section below that used to read "deliberately not built".
@@ -355,7 +359,7 @@
       ? list.map((s) => `<option value="${s.id}">${esc(s.name)} — ${esc(s.event)} (${s.players} player${s.players === 1 ? "" : "s"})</option>`).join("")
       : `<option value="">No sessions yet</option>`;
     if (!list.length) {
-      $("kbNets").innerHTML = `<p class="muted">No King of the Court session has been set up yet. Create one on the event, add the entry list, then come back here to seat the nets.</p>`;
+      $("kbNets").innerHTML = `<p class="muted">No King of the Court session has been set up yet. <a href="admin-events.html">Open your event</a>, create the session and entry list from its King of the Court card, then come back here to seat the nets.</p>`;
       return;
     }
     // Newest first from the server, so the night in progress is already chosen: zero taps to see it.
