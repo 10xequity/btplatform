@@ -29,8 +29,12 @@
  *
  * THE FILENAME TRAP
  * -----------------
- * `db/migrations/` carries TWO naming conventions, both live:
- *     0025_guardian_invite.sql                  bare number prefix
+ * `db/migrations/` carried TWO naming conventions; the bare form must STAY parseable:
+ *     0025_guardian_invite.sql                  bare number prefix (the last two such files
+ *                                               were date-prefixed in v0.91.0 so a lexical
+ *                                               sort replays in apply order — audit §6.6 —
+ *                                               but their applied ledger rows and any old
+ *                                               branch still carry bare names)
  *     2026-07-21_0001-foundation_v0.1.sql       date prefix, number second
  * `parseInt(basename)` returns 2026 for the second form. A gate that did that would compute
  * a repo maximum of 2026, compare it against 25, and block every deploy forever. It would

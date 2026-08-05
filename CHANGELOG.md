@@ -1,5 +1,21 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.91.0 — 2026-08-05
+
+**Block E of the tester-round fixes (roadmap §-1) — the polish the round surfaced, all five items, plus the dashboard's vague 403.**
+
+**E1** (`admin-brackets.js` v2.1): the "Who plays here?" chooser can no longer read as frozen — a filter that hides every team now says "No teams match '…'. Clear the search to see everyone," and clicking the backdrop closes the dialog (Escape and Close always did).
+
+**E2** (`admin-divisions.js` v1.1 + page): "more to do" is no longer dressed as "broken." The validator's findings render as a checklist — a lead-in line, a fix inside each sentence ("give one of them a different court") — on a `role="status"` live region instead of `role="alert"`; the court badge explains a missing court count instead of contradicting Suggest; the state line says plainly why Save is off; and the duplicated status strings collapsed into one renderer so the two voices can never drift again. `divisions_page.test.mjs` v1.1 asserts the live-region INVARIANT rather than `role="alert"` specifically (the header_shell v2.1 class: the guard was wrong, not the code), with a negative control for the unannounced case.
+
+**E3** (`tournament.js`, `admin-score-links.js` v1.1): Tournament Ops opens on the first real event like every other module instead of sitting on the "— choose event —" placeholder looking empty. Scoring Links keeps its deliberate no-write-on-paint — Get links is a POST that mints credentials — but the empty state is now an intentional block whose primary button IS the one step.
+
+**E4**: `0003_admin_schedule.sql` → `2026-07-22_0003_admin_schedule.sql` and `0025_guardian_invite.sql` → `2026-07-26_0025_guardian_invite.sql` (their real apply dates from git). A lexical sort of `db/migrations/` now replays in apply order; any automated rebuild used to apply 3 and 25 first and fail. File contents are byte-identical — they are the record of what ran on live D1 — and the schema gate's parser keeps the bare convention parseable for old branches and the applied ledger rows.
+
+**§-1c D-2** (`admin-dash.js` v1.5): a dashboard 403 renders through `loadFail` — "You don't have access to <org>" with one-tap switches — instead of a generic sentence in the KPI strip.
+
+Suite 1287 → **1288** (the new negative control), test files **78**, buster **391 across 63 files** at 0.91.0. No migration; ledger 0042. With this, every item the 2026-08-04/05 tester round produced — four root causes and seven secondary defects — is fixed or recorded in §-1c; next is the owner's registration-first workflow program (§-1b), starting at W-A.
+
 ## v0.90.0 — 2026-08-05
 
 **Block D of the tester-round fixes (roadmap §-1) — King of the Court is finally startable by a human, and reachability is guarded in the client direction.**

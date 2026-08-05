@@ -1,5 +1,11 @@
 /* Boomtown Platform — Divisions (admin page script)
-   File: web/assets/admin-divisions.js · Version: v1.0 · Date: 2026-08-03 · Ships in: v0.71.0
+   File: web/assets/admin-divisions.js · Version: v1.1 · Date: 2026-08-05 · Ships in: v0.91.0
+
+   v1.1 (Block E2, audit §6.2): "more to do" is no longer dressed as "broken". The validator's
+   findings render as a checklist with a lead-in and a fix in each sentence, the strip is
+   role="status" not role="alert", the court badge explains itself when the event has no court
+   count (it used to contradict Suggest's message), and the state line says why Save is off.
+   renderDivisions no longer carries a duplicate copy of the status strings.
 
    The screen every other division feature was waiting on. Court ranges, team assignment, and the
    balancer's proposals — all of which existed only as API calls until now, which meant a director
@@ -61,22 +67,7 @@
   function renderDivisions() {
     $("dvRows").innerHTML = rows.map(divisionRow).join("")
       || `<tr><td colspan="6" class="dv-empty">No divisions yet. Add one, or use Suggest from courts.</td></tr>`;
-
-    const { clash, claimed } = overlaps();
-    const backwards = rows.filter((d) => d.court_from && d.court_to && Number(d.court_to) < Number(d.court_from));
-    const problems = [
-      ...clash.map((c) => `Two divisions are given ${c}.`),
-      ...backwards.map((d) => `${d.name || "A division"} has its last court before its first.`),
-      ...(rows.some((d) => !String(d.name || "").trim()) ? ["Every division needs a name."] : []),
-    ];
-    $("dvWarn").innerHTML = problems.map((p) => `<li>${esc(p)}</li>`).join("");
-    $("dvWarn").hidden = !problems.length;
-    $("dvCourts").textContent = courtCount
-      ? `${claimed} of ${courtCount} courts assigned`
-      : `${claimed} courts assigned`;
-    $("dvSave").disabled = !dirty || problems.length > 0;
-    $("dvState").textContent = dirty ? (problems.length ? "Fix the problems above" : "Unsaved changes") : "Saved";
-    $("dvState").className = "dv-state" + (dirty ? " dirty" : "");
+    renderStatusOnly();
     wireDivisions();
   }
 
@@ -88,9 +79,8 @@
         rows[i][f] = f === "name" ? inp.value : (inp.value === "" ? null : Number(inp.value));
         dirty = true;
         // Only the warning strip and the buttons change while typing; re-rendering the table would
-        // steal focus out of the field mid-keystroke.
-        const { clash } = overlaps();
-        $("dvWarn").hidden = !clash.length && !rows.some((d) => !String(d.name || "").trim());
+        // steal focus out of the field mid-keystroke. renderStatusOnly owns ALL of that strip —
+        // a second partial dvWarn write here once let the two disagree for a keystroke.
         renderStatusOnly();
       });
     });
@@ -107,20 +97,32 @@
     });
   }
 
-  /** Repaint the strip and buttons without touching the inputs. */
+  /** Repaint the strip and buttons without touching the inputs (renderDivisions calls this too —
+      the two used to carry duplicate copies of these strings, which is how voices drift apart).
+      E2 (v0.91.0, audit §6.2): the list is a CHECKLIST, not an alarm. Overlap and ordering
+      findings are the validator doing its job mid-arrangement — "more to do", not "broken" —
+      so the strip leads with what it is, the court badge stops contradicting Suggest when the
+      event has no court count, and the state line says plainly why Save is off. */
   function renderStatusOnly() {
     const { clash, claimed } = overlaps();
     const backwards = rows.filter((d) => d.court_from && d.court_to && Number(d.court_to) < Number(d.court_from));
     const problems = [
-      ...clash.map((c) => `Two divisions are given ${c}.`),
-      ...backwards.map((d) => `${d.name || "A division"} has its last court before its first.`),
+      ...clash.map((c) => `Two divisions are given ${c} — give one of them a different court.`),
+      ...backwards.map((d) => `${d.name || "A division"} has its last court before its first — swap the two numbers.`),
       ...(rows.some((d) => !String(d.name || "").trim()) ? ["Every division needs a name."] : []),
     ];
-    $("dvWarn").innerHTML = problems.map((p) => `<li>${esc(p)}</li>`).join("");
+    $("dvWarn").innerHTML = problems.length
+      ? `<li class="help-text" style="list-style:none;margin-left:-1em">To finish this layout:</li>`
+        + problems.map((p) => `<li>${esc(p)}</li>`).join("")
+      : "";
     $("dvWarn").hidden = !problems.length;
-    $("dvCourts").textContent = courtCount ? `${claimed} of ${courtCount} courts assigned` : `${claimed} courts assigned`;
+    $("dvCourts").textContent = courtCount
+      ? `${claimed} of ${courtCount} courts assigned`
+      : `${claimed} courts assigned — the event has no court count set yet`;
     $("dvSave").disabled = !dirty || problems.length > 0;
-    $("dvState").textContent = dirty ? (problems.length ? "Fix the problems above" : "Unsaved changes") : "Saved";
+    $("dvState").textContent = dirty
+      ? (problems.length ? "Save is off until the list above is done" : "Unsaved changes")
+      : "Saved";
     $("dvState").className = "dv-state" + (dirty ? " dirty" : "");
   }
 

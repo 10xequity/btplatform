@@ -1,5 +1,9 @@
 /* Boomtown Platform — Control Center (manager home)
-   File: web/assets/admin-dash.js · Version: v1.4 · Date: 2026-08-02 · Ships in: v0.36.0
+   File: web/assets/admin-dash.js · Version: v1.5 · Date: 2026-08-05 · Ships in: v0.91.0
+   v1.5 (§-1c D-2): a 403 renders through BT_ADMIN.loadFail — "you don't have access to <org>"
+   with one-tap switches — instead of a generic sentence in the KPI strip. The dashboard was the
+   screen the tester round showed "working" while every module looked dead; it must never be the
+   one that fails vaguely.
    v1.3: Clear button on alert rows → POST /api/admin/alerts/:id/dismiss; feed shows only unresolved.
    Data: one call to GET /api/admin/dashboard (reports.js v1.1).
    Actions inline: Remind (existing link) and Rerun (fresh Square link) straight from
@@ -21,10 +25,7 @@
   load();
   async function load() {
     const r = await api("/api/admin/dashboard");
-    if (!r.ok) {
-      $("kpis").innerHTML = `<div class="empty">${esc(r.data.error || "Couldn't load the dashboard.")}</div>`;
-      return;
-    }
+    if (!r.ok) return BT_ADMIN.loadFail("kpis", r, "dashboard"); // v0.91.0 §-1c D-2: a 403 names the org, everything else keeps the server's sentence
     const d = r.data;
     kpis(d); schedule(d.events || []); due(d.unpaid || []); trend(d.trend || []); alerts(d.alerts || []);
     mrr(); // v0.10.0: memberships card (separate endpoint so old workers don't break the dashboard)

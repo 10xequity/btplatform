@@ -1,5 +1,11 @@
 /* Boomtown Platform — divisions page + QR image tests
-   File: worker/test/divisions_page.test.mjs · Version: v1.0 · Date: 2026-08-03 · Ships in: v0.71.0
+   File: worker/test/divisions_page.test.mjs · Version: v1.1 · Date: 2026-08-05 · Ships in: v0.91.0
+
+   v1.1 (Block E2): the announce test now asserts the INVARIANT — the strip is a live region AT
+   announces — not one implementation of it. It demanded role="alert" specifically, and E2's fix
+   (the strip is a checklist, so role="status" aria-live="polite" — an alert voice is exactly what
+   made validator findings read as breakage) reddened it. Same class as header_shell v2.1's first
+   draft demanding `defer`: the guard was wrong, not the code.
 
    The divisions engine shipped in v0.69.0 with 26 tests and no screen, so none of it was reachable.
    These tests cover the two things a page can get wrong that an API cannot:
@@ -107,7 +113,23 @@ test("every input on the divisions table has a label", () => {
 });
 
 test("problems are announced, not just coloured", () => {
-  assert.match(HTML, /id="dvWarn"[^>]*role="alert"/);
+  // Either live-region form announces; a status region must say aria-live explicitly.
+  const tag = HTML.match(/<ul[^>]*id="dvWarn"[^>]*>/);
+  assert.ok(tag, "dvWarn is gone");
+  assert.ok(
+    /role="alert"/.test(tag[0]) || (/role="status"/.test(tag[0]) && /aria-live=/.test(tag[0])),
+    `dvWarn must be a live region (role=alert, or role=status with aria-live) — got: ${tag && tag[0]}`
+  );
+});
+
+test("NC: a dvWarn with neither live-region form fails the announce check", () => {
+  const stripped = HTML.replace(/(id="dvWarn"[^>]*?)\s*role="status"\s*aria-live="polite"/, "$1");
+  const tag = stripped.match(/<ul[^>]*id="dvWarn"[^>]*>/);
+  assert.ok(tag && !/role=/.test(tag[0]), "mutation did not land — NC is vacuous");
+  assert.equal(
+    /role="alert"/.test(tag[0]) || (/role="status"/.test(tag[0]) && /aria-live=/.test(tag[0])),
+    false, "an unannounced strip must fail"
+  );
 });
 
 test("inputs are 16px, so iOS does not zoom the page on focus", () => {

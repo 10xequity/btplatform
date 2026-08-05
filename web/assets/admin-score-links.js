@@ -1,5 +1,10 @@
 /* Boomtown Platform — Scoring links (admin page script)
-   File: web/assets/admin-score-links.js · Version: v1.0 · Date: 2026-08-03 · Ships in: v0.68.0
+   File: web/assets/admin-score-links.js · Version: v1.1 · Date: 2026-08-05 · Ships in: v0.91.0
+
+   v1.1 (Block E3, audit §6.3): the first paint was a line of small text under empty controls and
+   read as a blank page. The empty state is now an intentional block whose primary button IS the
+   one step (Get links) — auto-loading was considered and rejected because minting links is a
+   write, and a page paint must never write.
 
    One card per team: name, the link, and a QR code for it. Printable, because the way this actually
    gets used is that someone prints a sheet, cuts it up, and hands a captain a slip of paper at the
@@ -91,6 +96,10 @@
       $("lEmpty").hidden = false;
     });
     $("lMake").addEventListener("click", make);
+    // E3 (v0.91.0, audit §6.3): the empty state is now the instruction AND the action. Links are
+    // deliberately NOT minted on page load — Get links is a POST that mints credentials, and a
+    // paint should never write — so the one step is made unmissable instead.
+    $("lEmptyGo").addEventListener("click", make);
     $("lPrint").addEventListener("click", () => window.print());
     loadEvents();
   });

@@ -1,5 +1,10 @@
 /* Boomtown Platform — Brackets (admin page script)
-   File: web/assets/admin-brackets.js · Version: v2.0 · Date: 2026-08-03 · Ships in: v0.72.0
+   File: web/assets/admin-brackets.js · Version: v2.1 · Date: 2026-08-05 · Ships in: v0.91.0
+
+   v2.1 (Block E1, audit §6.1): the chooser can no longer read as frozen. The filter used to hide
+   every non-matching <li> with NO empty state, so a typo emptied the dialog completely and the
+   tester report called it hung ("adfaf"). A miss now says so and how to recover, and clicking the
+   backdrop closes the dialog (Escape and the Close button always did).
 
    The bracket is drawn as one column per round, earliest on the left, so it reads the way a bracket
    on a gym wall reads.
@@ -148,7 +153,8 @@
       <button class="btn ghost br-pick" type="button" data-pick="${t.id}">
         ${esc(t.name)} <span class="br-from">${esc([t.pool, t.rank ? `${t.rank}${ord(t.rank)}` : null, t.captain].filter(Boolean).join(" · "))}</span>
       </button></li>`).join("") +
-      `<li><button class="btn ghost br-pick" type="button" data-pick="">Leave empty</button></li>`;
+      `<li><button class="btn ghost br-pick" type="button" data-pick="">Leave empty</button></li>` +
+      `<li id="bPickNone" class="help-text" style="padding:10px 4px" hidden></li>`;
     $("bPick").hidden = false;
     $("bPickFilter").value = "";
     $("bPickFilter").focus();
@@ -254,11 +260,22 @@
     $("bGen").addEventListener("click", generate);
     $("bAdvance").addEventListener("click", advance);
     $("bPickClose").addEventListener("click", closeChooser);
+    // E1: clicking the backdrop closes, same as Escape — but a click INSIDE the panel never does.
+    $("bPick").addEventListener("click", (e) => { if (e.target === $("bPick")) closeChooser(); });
     $("bPickFilter").addEventListener("input", () => {
       const q = $("bPickFilter").value.toLowerCase();
-      $("bPickList").querySelectorAll("li").forEach((li) => {
-        li.hidden = q && !li.textContent.toLowerCase().includes(q);
+      let shown = 0;
+      $("bPickList").querySelectorAll("li:not(#bPickNone)").forEach((li) => {
+        const hit = !q || li.textContent.toLowerCase().includes(q);
+        li.hidden = !hit;
+        if (hit) shown++;
       });
+      // E1: a filter that hides everything must say so — an empty dialog reads as a hung one.
+      const none = $("bPickNone");
+      if (none) {
+        none.textContent = `No teams match “${$("bPickFilter").value.trim()}”. Clear the search to see everyone.`;
+        none.hidden = shown > 0;
+      }
     });
     // Escape closes the chooser — a dialog with no keyboard exit is a trap.
     document.addEventListener("keydown", (e) => { if (e.key === "Escape" && picking) closeChooser(); });

@@ -53,7 +53,9 @@
     $("eventSelect").innerHTML = `<option value="">— choose event —</option>` +
       evs.map((e) => `<option value="${e.id}">${e.name}${e.starts_at ? " · " + e.starts_at.slice(0, 10) : ""}</option>`).join("");
     $("eventSelect").onchange = () => $("eventSelect").value && openEvent(+$("eventSelect").value);
-    if (evs.length === 1) { $("eventSelect").value = evs[0].id; openEvent(evs[0].id); }
+    // E3 (v0.91.0, audit §6.5): every other module opens on the first real event; this page used
+    // to sit on the placeholder and look like it had loaded nothing. Same rule now, any count.
+    if (evs.length) { $("eventSelect").value = evs[0].id; openEvent(evs[0].id); }
   }
 
   /* ---------- create event (≤10 clicks from template) ---------- */
