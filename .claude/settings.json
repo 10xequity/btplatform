@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node worker/scripts/preflight.mjs)",
+      "Bash(node worker/scripts/preflight.mjs *)",
+      "Bash(node --test worker/test/*)",
+      "Bash(node --check *)",
+      "Bash(node worker/scripts/changelog-entry.mjs --check *)",
+      "Bash(node worker/scripts/sync-rail.mjs)",
+
+      "Bash(gh run list *)",
+      "Bash(gh run view *)",
+      "Bash(gh run watch *)",
+      "Bash(gh auth status)",
+      "Bash(gh auth status *)",
+
+      "Bash(curl -s https://boomtown-api.vvisuth.workers.dev/*)",
+      "Bash(curl -fsS https://boomtown-api.vvisuth.workers.dev/*)",
+      "Bash(curl -s https://10xequity.github.io/btplatform/*)",
+      "Bash(curl -fsS https://10xequity.github.io/btplatform/*)",
+
+      "Bash(git add *)",
+      "Bash(git commit *)"
+    ]
+  }
+}

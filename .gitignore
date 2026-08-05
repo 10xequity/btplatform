@@ -1,0 +1,5 @@
+# Claude Code harness artifacts — transient session state, never part of a release.
+.claude/ralph-loop.local.md
+.claude/loop-task.md
+.claude/loop-blocked.md
+.claude/settings.local.json
