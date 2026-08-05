@@ -1,5 +1,46 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.87.0 — 2026-08-04
+
+**Finished for the night.** A director can now take a player off for the evening, and put them back.
+`kotc_players.withdrawn_at` shipped in migration 0042 and was **read in seven places** from that day —
+the player link 409s on it, round 1 deals around it, the bench hides them, the session list leaves them
+out of its count — and **nothing ever wrote it.** Failure class 1 from the far end: not a route with no
+caller, but a state with no cause. Every read was correct and unreachable. Five of twenty-four players
+left before round 3 of the owner's real tournament, two of them from the top four.
+
+`POST /api/admin/kotc/:id/withdraw` writes the flag **and frees their seat**, and the seat is the part
+that matters: `nextRound` builds the next round from the previous round's nets, so a slot left behind
+would carry somebody who has gone home into round 3. Their evening survives — the leaderboard is derived
+from the games with no stored counter anywhere, so every point they won still counts. Reversible in the
+same route: `withdrawn: false` brings them back to the **bench**, not to a net, because where somebody
+plays is the director's drag and not this route's guess.
+
+**Two defects found by building it, both pre-existing:**
+
+- **The player's own link told a withdrawn player the wrong thing.** The 409 sentence sat below the
+  "are you on a net" check and inside the POST branch, so somebody who had been marked finished was told
+  *"You're not on a net for this round. Find whoever is running the night"* — sending a person who had
+  gone home to go and find the director. The check now runs first, and a GET gets a 200 that says they
+  are done and their scores still count.
+- **A net left at three made the next round a 500 that half-wrote a round.** `gamesForRound` calls
+  `rotation()`, which throws for any size that is not four or five, and the round row plus all of its
+  slots are inserted *before* that call — so the throw left a round with seating and no games behind it.
+  The drag could already produce that state by benching a player. It now refuses with a human sentence
+  before writing anything. **This is the refusal, not the redistribution** — ranking and redistributing
+  over the nets that exist is still to come.
+
+`repairUnplayed` was extracted and is shared by `/move` and `/withdraw`: two routes that re-seat people
+must not own two copies of "a finished game is never rewritten", an invariant with no visible symptom.
+Both directions ship with the screen — an Off control on every seat and bench tile, one tap, no confirm
+dialog because it is reversible and stays visible, and a "Finished for the night" section that exists
+precisely because the server keeps those players off the bench.
+
+Suite 1238 → **1258** (14 in a new `kotc_withdraw.test.mjs`, 6 added to `kotc_board_screen.test.mjs`),
+74 test files. Two negative controls that mutate the real input: the history-rewrite guard is re-run with
+the scores cleared on the very same game and must re-pair it, and the short-net refusal is re-run with
+the net back to four and must succeed. No migration.
+
 ## v0.86.0 — 2026-08-04
 
 ### The other two KOTC screens, and the three routes they needed

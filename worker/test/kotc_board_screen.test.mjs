@@ -1,5 +1,10 @@
 /* Boomtown Platform — KOTC screens (a) and (c): the director's board and the public standings
-   File: worker/test/kotc_board_screen.test.mjs · Version: v1.0 · Date: 2026-08-04 · Ships in: v0.86.0
+   File: worker/test/kotc_board_screen.test.mjs · Version: v1.1 · Date: 2026-08-04 · Ships in: v0.87.0
+
+   v1.1 (v0.87.0): the finished-for-the-night control — one writer for both directions, the withdrawn
+   list fed from the ROSTER rather than the bench (the server excludes them from the bench on purpose,
+   so a page filtering the bench would render an empty list forever and the undo would be unreachable),
+   the 44px target floor with a negative control, and reduced motion covering the new press.
 
    Two pages shipped with the three routes in kotc_board.test.mjs. Routes and screens together, because
    a route with no screen is failure class 1 and the KOTC engine already paid for that once in v0.76.0.
@@ -275,3 +280,67 @@ for (const [name, src] of [["admin-kotc.html", BOARD_HTML], ["kotc-live.html", L
       "NC FAILED: the check would have passed a block that silences nothing that moves");
   });
 }
+
+/* ============ finished for the night (v0.87.0) ============
+   The route shipped with a control, because a route with no screen is failure class 1 — and this route
+   in particular spent seven releases as the other half of that defect: a state with no cause. */
+
+test("admin-kotc.html: the board can actually mark somebody finished, and undo it", () => {
+  const js = code(BOARD_JS);
+  assert.match(js, /\/withdraw`/, "the board must call the withdraw route — otherwise the route is uncalled");
+  assert.match(js, /data-off=/, "there must be an Off control on a player");
+  assert.match(js, /data-back=/, "and a way back, or a mis-tap is unrecoverable");
+
+  /* ONE writer for both directions, the same discipline the move path is held to. Two functions posting
+     to this route is two chances for the undo to diverge from the do. */
+  const writers = new Set([...js.matchAll(/async function (\w+)\([^)]*\)\s*\{[\s\S]*?\n  \}/g)]
+    .filter((m) => m[0].includes("/withdraw`")).map((m) => m[1]));
+  assert.equal(writers.size, 1, `exactly one function may POST a withdraw — found ${[...writers].join(", ")}`);
+});
+
+test("admin-kotc.html: the withdrawn list is fed from the ROSTER, because the server keeps them off the bench", () => {
+  /* The server excludes withdrawn players from `bench` on purpose, so they cannot be dragged onto a net.
+     A page that filtered `bench` for them would render an empty list forever and the undo would be
+     unreachable — a bug with no error and no visible symptom until somebody needed it. */
+  const js = code(BOARD_JS);
+  const list = js.match(/const done = [^;]+;/);
+  assert.ok(list, "the page must build a list of who has finished");
+  assert.match(list[0], /roster/, "it must come from the roster");
+  assert.ok(!/bench/.test(list[0]), "and NOT from the bench, which the server deliberately excludes them from");
+});
+
+test("admin-kotc.html: the withdraw response IS the next board — the page does not patch its own", () => {
+  const js = code(BOARD_JS);
+  const fn = js.match(/async function setWithdrawn[\s\S]*?\n  \}/);
+  assert.ok(fn, "setWithdrawn must exist");
+  assert.match(fn[0], /data = r\.data;/,
+    "the response replaces the board wholesale, the same as a move — a spliced local array drifts silently");
+  assert.ok(!/\.push\(|\.splice\(/.test(fn[0]), "no local mutation of the board");
+});
+
+test("admin-kotc.html: the new controls meet the target floor and show a focus ring", () => {
+  const css = code(BOARD_HTML);
+  const rule = css.match(/\.kb-off,\s*\.kb-back\s*\{[^}]*\}/);
+  assert.ok(rule, "the Off / Back in controls must be styled, not inherit whatever a bare button gives");
+  const min = rule[0].match(/min-height:\s*(\d+)px/);
+  assert.ok(min && Number(min[1]) >= 44, `standards §5 floor is 44px, found ${min ? min[1] : "none"}`);
+  assert.match(css, /\.kb-off:focus-visible,\s*\.kb-back:focus-visible\s*\{[^}]*--focus-ring/,
+    "a bare :focus-visible ring via --focus-ring (F-35)");
+  assert.match(css, /\.kb-off:active,\s*\.kb-back:active\s*\{[^}]*scale/,
+    "a pressable control confirms the press");
+});
+
+test("admin-kotc.html: NC — a target under the floor is caught", () => {
+  const mutated = BOARD_HTML.replace(
+    /(\.kb-off,\s*\.kb-back\s*\{[^}]*min-height:\s*)44px/, "$130px");
+  assert.notEqual(mutated, BOARD_HTML, "NC did not mutate anything");
+  const rule = code(mutated).match(/\.kb-off,\s*\.kb-back\s*\{[^}]*\}/);
+  const min = rule[0].match(/min-height:\s*(\d+)px/);
+  assert.ok(min && Number(min[1]) < 44, "NC FAILED: the check would have passed a 30px target");
+});
+
+test("admin-kotc.html: reduced motion silences the new controls' press too", () => {
+  const block = reducedBlock(BOARD_HTML);
+  assert.match(block, /\.kb-off:active/,
+    "the Off control scales on :active, so the reduced-motion block has to name it");
+});

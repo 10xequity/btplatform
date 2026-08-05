@@ -1,5 +1,11 @@
 <!DOCTYPE html>
-<!-- Boomtown Platform — Court board (admin) · Version: v1.0 · Date: 2026-08-04 · Ships in: v0.86.0
+<!-- Boomtown Platform — Court board (admin) · Version: v1.1 · Date: 2026-08-04 · Ships in: v0.87.0
+     v1.1 (v0.87.0): FINISHED FOR THE NIGHT — an Off control on every seat and bench tile, and a
+     "Finished for the night" section that appears only when somebody has. One tap each way, no confirm
+     dialog: the action is reversible and stays visible, and spending a tap on every correct use to save
+     one on a rare mistake is the wrong trade (owner req #19). The server keeps withdrawn players off the
+     bench so they cannot be dragged onto a net, which is exactly why that section has to exist — without
+     it they would be off the board entirely and the undo would be unreachable.
      The director's board for King/Queen of the Court: nets down the page, a person on each seat, drag
      to re-seat. Screen (a) of the format's three; the player link is kotc.html, the public standings
      are kotc-live.html.
@@ -15,9 +21,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Court board — Boomtown Athletics</title>
   <script>/* Pre-paint state — collapse + theme (uiux-review §4/§6.4, v0.52.0): read the bt_nav cookie and the saved theme BEFORE the first stylesheet so the rail state AND the theme are right on frame one — no post-paint snap of either. admin-nav.js writes the cookie on rail toggle and bt_theme on theme toggle; the localStorage bt_nav fallback migrates pre-v0.51 sessions. */(function(){try{var m=document.cookie.match(/(?:^|; )bt_nav=([^;]*)/);var v=m?m[1]:((window.localStorage&&localStorage.getItem("bt_nav_collapsed")==="1")?"min":"");if(v==="min")document.documentElement.dataset.nav="min";var t=(window.localStorage&&localStorage.getItem("bt_theme"))||(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.dataset.theme=t;}catch(e){}})();</script>
-  <link rel="stylesheet" href="assets/tokens.css?v=0.86.0" />
-  <link rel="stylesheet" href="assets/app.css?v=0.86.0" />
-  <link rel="stylesheet" href="assets/admin.css?v=0.86.0" />
+  <link rel="stylesheet" href="assets/tokens.css?v=0.87.0" />
+  <link rel="stylesheet" href="assets/app.css?v=0.87.0" />
+  <link rel="stylesheet" href="assets/admin.css?v=0.87.0" />
   <style>
     /* Nets down the page, a person on each seat. Tokens only (standards §5) — every colour, radius and
        duration below resolves from assets/tokens.css, so a theme change moves this page with it.
@@ -106,6 +112,28 @@
     .kb-benchlist { list-style:none; margin:0; padding:0; display:flex; flex-wrap:wrap; gap:6px; }
     .kb-benchlist .kb-seat { min-width:180px; }
 
+    /* Off / Back in. 44px is the standards §5 floor for a target that is not thumb-critical — the SEAT
+       around it stays 52 because that is the one being dragged one-handed at the side of a court. */
+    .kb-off, .kb-back {
+      flex:none; min-height:44px; min-width:44px; padding:0 10px;
+      border:1px solid var(--border); border-radius:var(--radius-control);
+      background:transparent; color:var(--text-dim);
+      font:inherit; font-size:.78rem; cursor:pointer;
+      transition: transform var(--dur-press) var(--ease-out),
+                  border-color var(--dur-pop) var(--ease-out),
+                  color var(--dur-pop) var(--ease-out);
+    }
+    .kb-off:active, .kb-back:active { transform:scale(0.97); }
+    .kb-off:focus-visible, .kb-back:focus-visible { outline:var(--focus-ring); outline-offset:2px; }
+    /* --warn as INK on a transparent surface, never as a fill behind light text (C11 / the gold rule). */
+    .kb-off:hover { color:var(--warn); border-color:var(--warn); }
+    .kb-back { color:var(--emphasis); }
+
+    /* A finished player is quieter than a playing one, and NOT draggable — no grab cursor to promise a
+       gesture that does nothing. */
+    .kb-doneseat { cursor:default; opacity:.85; }
+    .kb-done .pb-div-h { color:var(--text-dim); }
+
     .kb-lb { margin-top:22px; }
     .kb-lb table { width:100%; border-collapse:collapse; font-size:.9rem; }
     .kb-lb th, .kb-lb td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--border); }
@@ -131,7 +159,8 @@
        @keyframes running, which is the half of the rule that actually moves things. */
     @media (prefers-reduced-motion: reduce) {
       .kb-seat, .kb-net, .kb-empty { transition: border-color var(--dur-pop) linear, background-color var(--dur-pop) linear; }
-      .kb-seat:active { transform:none; }
+      .kb-off, .kb-back { transition: border-color var(--dur-pop) linear, color var(--dur-pop) linear; }
+      .kb-seat:active, .kb-off:active, .kb-back:active { transform:none; }
       .kb-landed { animation: kb-fade var(--dur-pop) linear both; }
       @keyframes kb-fade { from { opacity:.65; } to { opacity:1; } }
     }
@@ -139,7 +168,7 @@
 </head>
 <body>
     <header class="header chrome-glass no-print">
-    <a class="wordmark" href="admin.html" style="text-decoration:none;color:inherit"><img class="brand-logo" src="assets/logo-boom-icon-512.png?v=0.86.0" alt="" width="22" height="22" />Boomtown <span>Athletics</span></a>
+    <a class="wordmark" href="admin.html" style="text-decoration:none;color:inherit"><img class="brand-logo" src="assets/logo-boom-icon-512.png?v=0.87.0" alt="" width="22" height="22" />Boomtown <span>Athletics</span></a>
     <div class="spacer"></div>
     <select id="orgSwitcher" class="org-switcher" aria-label="Switch organization"></select>
     <a id="btHdrMail" class="btn ghost hdr-mail" href="admin-messages.html" aria-label="Messages">✉</a>
@@ -244,6 +273,14 @@
         <ul class="kb-benchlist" id="kbBench"></ul>
       </section>
 
+      <!-- Hidden until somebody has actually finished, so a normal night carries no empty section. It is
+           what makes withdrawing undoable: the server keeps these people off the bench on purpose. -->
+      <section class="kb-bench kb-done" id="kbDoneWrap" hidden>
+        <h2 class="pb-div-h" id="kbDoneH">Finished for the night <span class="pb-courts" id="kbDoneCount"></span></h2>
+        <p class="mf-note">Their scores still count. Put somebody back in and they return here to the bench, ready to drag onto a net.</p>
+        <ul class="kb-benchlist" id="kbDone"></ul>
+      </section>
+
       <section class="kb-lb" aria-labelledby="kbLbH">
         <h2 class="pb-div-h" id="kbLbH">Standings</h2>
         <p class="muted" id="kbLbNote">Worked out from the games as they come in — wins first, then point difference. There is no stored total anywhere to disagree with this.</p>
@@ -251,8 +288,8 @@
       </section>
     </main>
   </div>
-  <script src="assets/config.js?v=0.86.0"></script>
-  <script src="assets/admin-nav.js?v=0.86.0"></script>
-  <script src="assets/admin-kotc.js?v=0.86.0"></script>
+  <script src="assets/config.js?v=0.87.0"></script>
+  <script src="assets/admin-nav.js?v=0.87.0"></script>
+  <script src="assets/admin-kotc.js?v=0.87.0"></script>
 </body>
 </html>

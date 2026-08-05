@@ -1,6 +1,15 @@
 /**
  * Boomtown Platform — King / Queen of the Court, the playable surface
- * File: worker/src/kotcplay.js · Version: v1.1 · Date: 2026-08-04 · Ships in: v0.86.0
+ * File: worker/src/kotcplay.js · Version: v1.2 · Date: 2026-08-04 · Ships in: v0.87.0
+ *
+ * v1.2 (2026-08-04, v0.87.0): `POST /api/admin/kotc/:id/withdraw` — finished for the night, and back
+ *   in again. `withdrawn_at` shipped in migration 0042 and was READ in seven places from that day with
+ *   NOTHING ever writing it: built-and-uncalled from the far end, where the state existed and could not
+ *   be caused. Five of twenty-four players left before round 3 of the owner's real tournament. The
+ *   withdraw frees their seat as well as setting the flag, because `nextRound` seats the next round from
+ *   the previous round's nets and a slot left behind carries somebody who has gone home into round 3.
+ *   Also extracted `repairUnplayed`, now shared by `/move` and `/withdraw`: two routes that re-seat
+ *   people must not own two copies of "a finished game is never rewritten".
  *
  * v1.1 (2026-08-04, v0.86.0): the three routes the other two screens needed, and the two screens.
  *   Recorded because the previous handoff said this module's API was "complete and tested": it was
@@ -93,6 +102,69 @@ const netsFrom = (slots) => {
     .map(([net_no, seats]) => ({ net_no, seats: seats.filter((x) => x != null) }));
 };
 
+/**
+ * Re-pair the UNPLAYED games on every net whose line-up just changed, and report what it did.
+ *
+ * FINISHED IS FINISHED. `kotc_games` stores the four players ON the game row (a1/a2/b1/b2) rather than
+ * a reference to the seating — that is what lets the leaderboard be derived from games alone with no
+ * stored counter to disagree with. The cost is that re-pairing *could* retroactively change who played
+ * a game that already has scores, and because the leaderboard is derived, the evening would be silently
+ * restated. Nothing on any screen would look wrong. So a game with BOTH scores in is never touched.
+ *
+ * This is shared by the drag (`/move`) and by withdrawing somebody (`/withdraw`) deliberately. Two
+ * routes that both re-seat people must not own two copies of this rule: the day they diverge is the day
+ * one of them starts rewriting history and the other does not, and the invariant has no visible symptom
+ * to catch it. Same reasoning the player POST gives for making submit and dispute one write path.
+ *
+ * A net that is not 4 or 5 is REPORTED, NOT REPAIRED. `rotation()` throws for any other size and
+ * `dispatch` treats a throw as a decline, which would turn a route into a silent 404 — the worst way
+ * for a director's action to fail. Its unplayed games keep the previous line-up and the caller says so
+ * in a sentence (brackets.js precedent: warns, never refuses).
+ */
+async function repairUnplayed(env, orgId, roundId, netNos) {
+  const after = await loadRound(env, orgId, roundId);
+  const short = [];
+  let repaired = 0, kept = 0;
+
+  for (const net of netsFrom(after.slots).filter((n) => netNos.includes(n.net_no))) {
+    if (!NET_SIZES.includes(net.seats.length)) {
+      short.push({ net_no: net.net_no, players: net.seats.length });
+      continue;
+    }
+    for (const g of gamesForRound([net])) {
+      const row = after.games.find((y) => y.net_no === g.net_no && y.game_no === g.game_no);
+      if (!row) continue;
+      if (row.score_a !== null && row.score_b !== null) { kept++; continue; }
+      if (row.a1_contact_id === g.a1_contact_id && row.a2_contact_id === g.a2_contact_id &&
+          row.b1_contact_id === g.b1_contact_id && row.b2_contact_id === g.b2_contact_id) continue;
+      await env.DB.prepare(
+        `UPDATE kotc_games SET a1_contact_id=?1, a2_contact_id=?2, b1_contact_id=?3, b2_contact_id=?4,
+                               updated_at=datetime('now')
+          WHERE id=?5 AND org_id=?6`
+      ).bind(g.a1_contact_id, g.a2_contact_id, g.b1_contact_id, g.b2_contact_id, row.id, orgId).run();
+      repaired++;
+    }
+  }
+
+  /* A re-pair changes who is being asked what, so a confirmation given against the old line-up is stale
+     for the same reason an edit makes one stale. Only nets whose unplayed games actually moved are
+     reset — nudging seats on a net that is already finished should not un-tick four people for nothing. */
+  if (repaired) {
+    await env.DB.prepare(
+      `UPDATE kotc_slots SET confirmed='pending', confirmed_at=NULL, updated_at=datetime('now')
+        WHERE org_id=?1 AND round_id=?2 AND net_no IN (${netNos.map(() => "?").join(",")})
+          AND deleted_at IS NULL`
+    ).bind(orgId, roundId, ...netNos).run();
+  }
+
+  /** The sentence a short net needs, so both callers say the same thing about the same state. */
+  const shortNote = short.length
+    ? `Net ${short.map((s) => s.net_no).join(", ")} now has an odd number of players — its games still show the old pairings until it is back to four or five.`
+    : "";
+
+  return { short, repaired, kept, shortNote };
+}
+
 /* ─────────────────────────── routes ─────────────────────────── */
 
 export async function kotcRoutes(request, env, url, ctx) {
@@ -121,6 +193,29 @@ export async function kotcRoutes(request, env, url, ctx) {
     ).bind(player.org_id, player.session_id).first();
     if (!round) return json({ error: "The first round hasn't been set yet. Hang on." }, 409);
 
+    /* FINISHED FOR THE NIGHT IS CHECKED BEFORE "are you on a net", and the order is the whole point.
+       v0.87.0: withdrawing frees the player's seat, so a withdrawn player has no slot — and this route
+       used to answer that state with "You're not on a net for this round. Find whoever is running the
+       night," which sends somebody who has gone home to go and find the director. The 409 that migration
+       0042 shipped for exactly this person was unreachable in exactly the state it was written for,
+       because it sat below the seat check and inside the POST branch.
+
+       It is a 200 rather than the POST's 409 because for a GET nothing has gone wrong: they asked what
+       is happening and the answer is "you're done". The POST keeps its 409 — writing scores after being
+       marked finished IS a conflict. */
+    if (player.withdrawn_at) {
+      if (m === "GET") {
+        return json({
+          session: player.session_name, round: round.round_no,
+          you: personName(player.full_name, { full: true }),
+          on_a_net: false,
+          withdrawn: true,
+          prompt: "You've been marked as finished for the night. Thanks for playing — your scores still count.",
+        }, 200, { "Cache-Control": "no-store" });
+      }
+      return json({ error: "You've been marked as finished for the night." }, 409);
+    }
+
     const { slots, games } = await loadRound(env, player.org_id, round.id);
     const mine = slots.find((s) => s.contact_id === player.contact_id);
     if (!mine) {
@@ -136,7 +231,6 @@ export async function kotcRoutes(request, env, url, ctx) {
     if (m === "GET") return json(playerView(player, round, slots, games, mine), 200, { "Cache-Control": "no-store" });
 
     if (m === "POST") {
-      if (player.withdrawn_at) return json({ error: "You've been marked as finished for the night." }, 409);
       const b = await request.json().catch(() => ({}));
       const netGames = games.filter((g) => g.net_no === mine.net_no);
       const netSlots = slots.filter((s) => s.net_no === mine.net_no);
@@ -345,6 +439,28 @@ export async function kotcRoutes(request, env, url, ctx) {
       nets = moved.nets;
     }
 
+    /* ── EVERY NET MUST BE A SIZE THE ENGINE CAN PAIR, CHECKED BEFORE ANYTHING IS WRITTEN ──
+       `gamesForRound` below calls `rotation()`, which THROWS for any size that is not 4 or 5, and
+       `dispatch` turns a throw into a 500. The round row and all of its slots are inserted ABOVE this
+       point, so the throw used to leave a half-written round behind: a round with seating and no games,
+       which no screen can show and nothing cleans up.
+
+       v0.87.0 made the state easy to reach — withdrawing somebody for the night takes their net from
+       four to three — but the drag could already produce it by benching a player, so this was always
+       reachable and always a 500. It fails closed with a human sentence instead, naming the nets and
+       what to do about them.
+
+       This is NOT the redistribution fix. Ranking and redistributing over the nets that EXIST is
+       handoff §6.3, and it is what will make this refusal rare rather than routine. Until then the
+       director's move is the drag board, which is the mechanism the owner actually uses. */
+    const unpairable = nets.filter((n) => !NET_SIZES.includes(n.seats.length));
+    if (unpairable.length) {
+      return json({
+        error: `Net ${unpairable.map((n) => n.net_no).join(", ")} would have ${unpairable.map((n) => n.seats.length).join(", ")} players, and a net has to have four or five. Move people about on the board first, then start the round.`,
+        nets: nets.map((n) => ({ net_no: n.net_no, players: n.seats.length })),
+      }, 409);
+    }
+
     const roundNo = last ? last.round_no + 1 : 1;
     const r = await env.DB.prepare(
       "INSERT INTO kotc_rounds (org_id, session_id, round_no) VALUES (?1,?2,?3)"
@@ -513,49 +629,11 @@ export async function kotcRoutes(request, env, url, ctx) {
     }
     await env.DB.batch(stmts);
 
-    /* ── re-pair the UNPLAYED games on every net this touched ── */
+    /* ── re-pair the UNPLAYED games on every net this touched ──
+       The rule itself lives in `repairUnplayed`, shared with `/withdraw`, because both routes re-seat
+       people and neither may own a private copy of "finished is finished". */
     const touched = [...new Set([netNo, ...(mover ? [mover.net_no] : []), ...(benched ? [benched.net_no] : [])])];
-    const after = await loadRound(env, ctx.orgId, round.id);
-    const short = [];
-    let repaired = 0, kept = 0;
-
-    for (const net of netsFrom(after.slots).filter((n) => touched.includes(n.net_no))) {
-      /* `rotation()` THROWS for any size that is not 4 or 5, and `dispatch` treats a throw as a
-         DECLINE — an unguarded call here would turn this route into a silent 404, which is the worst
-         possible way for a drag to fail. A short net warns and is left alone (brackets.js precedent:
-         warns, never refuses). Its unplayed games still name the previous line-up, and the response
-         says so in a sentence rather than leaving a director to notice. */
-      if (!NET_SIZES.includes(net.seats.length)) {
-        short.push({ net_no: net.net_no, players: net.seats.length });
-        continue;
-      }
-      for (const g of gamesForRound([net])) {
-        const row = after.games.find((y) => y.net_no === g.net_no && y.game_no === g.game_no);
-        if (!row) continue;
-        // FINISHED IS FINISHED. This is the invariant the whole route is written around.
-        if (row.score_a !== null && row.score_b !== null) { kept++; continue; }
-        if (row.a1_contact_id === g.a1_contact_id && row.a2_contact_id === g.a2_contact_id &&
-            row.b1_contact_id === g.b1_contact_id && row.b2_contact_id === g.b2_contact_id) continue;
-        await env.DB.prepare(
-          `UPDATE kotc_games SET a1_contact_id=?1, a2_contact_id=?2, b1_contact_id=?3, b2_contact_id=?4,
-                                 updated_at=datetime('now')
-            WHERE id=?5 AND org_id=?6`
-        ).bind(g.a1_contact_id, g.a2_contact_id, g.b1_contact_id, g.b2_contact_id, row.id, ctx.orgId).run();
-        repaired++;
-      }
-    }
-
-    /* A re-seat changes who is being asked what, so a confirmation given against the old line-up is
-       stale for the same reason an edit makes one stale (see the POST above). Only nets whose unplayed
-       games actually moved are reset — a director nudging seats on a net that is already finished
-       should not un-tick four people for nothing. */
-    if (repaired) {
-      await env.DB.prepare(
-        `UPDATE kotc_slots SET confirmed='pending', confirmed_at=NULL, updated_at=datetime('now')
-          WHERE org_id=?1 AND round_id=?2 AND net_no IN (${touched.map(() => "?").join(",")})
-            AND deleted_at IS NULL`
-      ).bind(ctx.orgId, round.id, ...touched).run();
-    }
+    const { short, repaired, kept, shortNote } = await repairUnplayed(env, ctx.orgId, round.id, touched);
 
     await audit(env, ctx, "kotc.move", "kotc_rounds", round.id, {
       contact_id: contactId, to_net: netNo, to_seat: seat,
@@ -579,9 +657,131 @@ export async function kotcRoutes(request, env, url, ctx) {
           : `Moved to net ${netNo}.`,
         kept ? `${kept} game${kept === 1 ? "" : "s"} already scored — left exactly as played.` : "",
         repaired ? "The remaining games were re-paired, so everyone on those nets has been asked to check again." : "",
-        short.length ? `Net ${short.map((s) => s.net_no).join(", ")} now has an odd number of players — its games still show the old pairings until it is back to four or five.` : "",
+        shortNote,
       ].filter(Boolean).join(" "),
       ...(await boardPayload(env, ctx.orgId, sessionId)),
+    });
+  }
+
+  /* ══════════ finished for the night, and back in again ══════════
+
+     `kotc_players.withdrawn_at` shipped in migration 0042 and has been READ in seven places ever since
+     — the player link 409s on it, round 1 deals around it, the bench hides them, the session list skips
+     them in its count — and until now NOTHING WROTE IT. Built and uncalled from the other end: the
+     column, the reads and the player's sentence all existed, and there was no way to cause the state.
+     Five of twenty-four players left before round 3 of the owner's real tournament, two of them from
+     the top four (reference run §4). This is the one thing the board could not express about a normal
+     night.
+
+     THE SEAT IS THE WHOLE PROBLEM, AND IT IS WHY THIS IS NOT A ONE-LINE UPDATE. Setting the flag alone
+     would leave somebody holding a seat on a net while being excluded from the bench — a person with a
+     net and no way off it, which is the exact failure `admin-kotc.js` refused to ship a client-side half
+     of. Worse, `nextRound` builds the next round from the PREVIOUS round's nets, so a slot left in place
+     carries somebody who has gone home into round 3. So the withdraw soft-deletes their slot, and the
+     seat is then a real empty seat the director can drop somebody into.
+
+     THEIR EVENING SURVIVES. The leaderboard is `rankPlayers(tally(allGames))` — derived from the games,
+     with no stored per-player counter anywhere (migration 0040). Every point a withdrawn player won
+     still counts, which is why the two who left from the top four still read as the top four. The
+     `withdrawn_at IS NULL` filters are all about who is still PLAYABLE, never about who played.
+
+     AND IT IS REVERSIBLE IN THE SAME ROUTE. A mis-tap at the side of a court must cost one tap to undo,
+     so `withdrawn: false` clears the flag. They come back to the BENCH, not to a net: where somebody
+     plays is the director's drag, and having this route guess a seat would be a second, hidden seating
+     mechanism competing with the board. */
+  if ((x = p.match(/^\/api\/admin\/kotc\/(\d+)\/withdraw$/)) && m === "POST") {
+    const denied = await requireStaff(env, ctx); if (denied) return denied;
+    const sessionId = +x[1];
+    const se = await env.DB.prepare(
+      "SELECT id FROM kotc_sessions WHERE id=?1 AND org_id=?2 AND deleted_at IS NULL"
+    ).bind(sessionId, ctx.orgId).first();
+    if (!se) return json({ error: "That session doesn't exist." }, 404);
+
+    const b = await request.json().catch(() => ({}));
+    const contactId = Number(b.contact_id);
+    if (!contactId) return json({ error: "Say who is finishing for the night." }, 400);
+    /* Only an explicit `false` brings somebody back. A body that omitted the flag means what the route
+       is named, which keeps the common case a one-field request from a tablet. */
+    const leaving = b.withdrawn !== false;
+
+    const entry = await env.DB.prepare(
+      `SELECT pl.id, pl.withdrawn_at, c.full_name FROM kotc_players pl
+         LEFT JOIN contacts c ON c.id = pl.contact_id AND c.deleted_at IS NULL
+        WHERE pl.org_id=?1 AND pl.session_id=?2 AND pl.contact_id=?3 AND pl.deleted_at IS NULL`
+    ).bind(ctx.orgId, sessionId, contactId).first();
+    // Not on the list at all: the same sentence the drag gives, for the same reason — the entry list is
+    // what mints their link, so this is an entry problem, not a withdrawal problem.
+    if (!entry) {
+      return json({ error: "They're not on the entry list for this session. Add them to it first — that's what mints their link." }, 400);
+    }
+
+    const who = personName(entry.full_name, { full: true });
+    const board = async (extra) => json({
+      ...extra,
+      ...(await boardPayload(env, ctx.orgId, sessionId)),
+      ...(await roster(env, ctx.orgId, sessionId)),
+    });
+
+    /* Already in the asked-for state. Two directors on two tablets tapping the same person is a Tuesday,
+       not a conflict, so this is a 200 with the board — not a 409. The alternative would be a route that
+       fails for a reason the director cannot see and cannot fix. */
+    if (!!entry.withdrawn_at === leaving) {
+      return board({
+        ok: true, changed: false, withdrawn: leaving,
+        note: leaving ? `${who} was already finished for the night.` : `${who} is already back in.`,
+      });
+    }
+
+    const round = await env.DB.prepare(
+      `SELECT id, round_no FROM kotc_rounds
+        WHERE org_id=?1 AND session_id=?2 AND deleted_at IS NULL ORDER BY round_no DESC LIMIT 1`
+    ).bind(ctx.orgId, sessionId).first();
+
+    await env.DB.prepare(
+      `UPDATE kotc_players SET withdrawn_at=${leaving ? "datetime('now')" : "NULL"}, updated_at=datetime('now')
+        WHERE id=?1 AND org_id=?2`
+    ).bind(entry.id, ctx.orgId).run();
+
+    let freed = null, repaired = 0, kept = 0, shortNote = "";
+    if (leaving && round) {
+      const { slots } = await loadRound(env, ctx.orgId, round.id);
+      const seated = slots.find((s) => s.contact_id === contactId);
+      if (seated) {
+        freed = { net_no: seated.net_no, seat: seated.seat };
+        /* SOFT delete: every partial unique index on `kotc_slots` is `WHERE deleted_at IS NULL`, so the
+           seat becomes fillable again while the row survives for the audit. */
+        await env.DB.prepare(
+          "UPDATE kotc_slots SET deleted_at=datetime('now'), updated_at=datetime('now') WHERE id=?1 AND org_id=?2"
+        ).bind(seated.slot_id, ctx.orgId).run();
+        ({ repaired, kept, shortNote } = await repairUnplayed(env, ctx.orgId, round.id, [seated.net_no]));
+      }
+    }
+
+    await audit(env, ctx, leaving ? "kotc.withdraw" : "kotc.reinstate", "kotc_sessions", sessionId, {
+      contact_id: contactId,
+      round_id: round ? round.id : null,
+      freed_net: freed ? freed.net_no : null,
+      freed_seat: freed ? freed.seat : null,
+      games_repaired: repaired, games_kept: kept,
+    });
+
+    return board({
+      ok: true,
+      changed: true,
+      withdrawn: leaving,
+      freed,
+      games_repaired: repaired,
+      games_kept: kept,
+      note: leaving
+        ? [
+            `${who} is finished for the night.`,
+            freed ? `Seat ${freed.seat + 1} on net ${freed.net_no} is free.` : "",
+            "Their scores so far still count.",
+            kept ? `${kept} game${kept === 1 ? "" : "s"} already scored — left exactly as played.` : "",
+            repaired ? "The remaining games were re-paired, so everyone on that net has been asked to check again." : "",
+            shortNote,
+          ].filter(Boolean).join(" ")
+        : `${who} is back in — drag them onto a net when you're ready.`,
     });
   }
 

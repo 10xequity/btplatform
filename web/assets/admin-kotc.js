@@ -1,5 +1,8 @@
 /* Boomtown Platform — Court board (admin page script)
-   File: web/assets/admin-kotc.js · Version: v1.0 · Date: 2026-08-04 · Ships in: v0.86.0
+   File: web/assets/admin-kotc.js · Version: v1.1 · Date: 2026-08-04 · Ships in: v0.87.0
+
+   v1.1 (v0.87.0): the finished-for-the-night control, both directions through one `setWithdrawn`. See
+   the section below that used to read "deliberately not built".
 
    Screen (a) of King/Queen of the Court. Nets down the page, a person on each seat, drag to re-seat.
 
@@ -28,11 +31,24 @@
      Moving a player: one drag. Keyboard: focus, Enter, arrows, Enter.
      Starting the next round: one tap.
 
-   ── DELIBERATELY NOT BUILT ──
-   There is no "take someone off the board" control. You free a seat by dragging a benched player onto
-   it, which is the same gesture and one the server already supports. Withdrawing somebody for the night
-   is a different operation (`kotc_players.withdrawn_at`) with no route yet, and inventing a client-side
-   half of it would leave a person with a net and no standing. */
+   ── FINISHED FOR THE NIGHT (v0.87.0) ──
+   This used to read "deliberately not built", because `kotc_players.withdrawn_at` had no route and
+   inventing a client-side half of it would leave a person with a net and no standing. The route exists
+   now (`POST /api/admin/kotc/:id/withdraw`), so the control does too.
+
+   ONE TAP, NO CONFIRM DIALOG, BECAUSE IT IS REVERSIBLE AND VISIBLE. Asking "are you sure?" for an
+   action that undoes in one tap spends a tap on every correct use to save one on a rare mistake — the
+   wrong trade under owner req #19. Instead the withdrawn player stays on screen in their own list with
+   a Back in button. Reversible and visible beats confirmed and hidden.
+
+   AND THE LIST IS NOT DECORATION. Without it a withdrawn player would vanish from the board entirely:
+   off the nets, off the bench (the server excludes them so they cannot be dragged), and unreachable.
+   That is the "person with a net and no standing" failure with the halves swapped, and the list is what
+   makes the operation undoable at all.
+
+   Clicks: withdrawing is ONE tap from the board. Bringing somebody back is one tap, then one drag to
+   seat them — the drag is deliberate, because where they play is the director's call and not this
+   screen's guess. */
 (function () {
   "use strict";
   const { api, esc, fail } = window.BT_ADMIN;
@@ -68,12 +84,18 @@
       : state === "disputed" ? '<span class="kb-tick no" title="Said the scores were wrong">!</span>'
       : '<span class="kb-tick" title="Has not checked yet">·</span>';
 
+  /* The off-for-the-night button. `type="button"` so it never submits anything, and a real <button> so
+     it is in the tab order and works on Enter and Space without this file re-implementing either. */
+  const offBtn = (contactId, name) =>
+    `<button class="kb-off" type="button" data-off="${contactId}"
+        title="Finished for the night" aria-label="Mark ${esc(name)} finished for the night">Off</button>`;
+
   function seatHtml(net, p) {
     return `<li class="kb-seat${landed === p.contact_id ? " kb-landed" : ""}" draggable="true" tabindex="0"
         data-net="${net.net_no}" data-seat="${p.seat}" data-contact="${p.contact_id}"
         aria-label="${esc(p.name)}, net ${net.net_no} seat ${p.seat + 1}. Press Enter to pick up.">
       <span class="kb-no">${p.seat + 1}</span>
-      <span class="kb-who">${esc(p.name)}</span>${tick(p.confirmed)}
+      <span class="kb-who">${esc(p.name)}</span>${tick(p.confirmed)}${offBtn(p.contact_id, p.name)}
     </li>`;
   }
 
@@ -140,10 +162,24 @@
       ? bench.map((p) => `<li class="kb-seat${landed === p.contact_id ? " kb-landed" : ""}" draggable="true" tabindex="0"
             data-contact="${p.contact_id}" data-bench="1"
             aria-label="${esc(p.name)}, not on a net. Press Enter to pick up.">
-          <span class="kb-who">${esc(p.name)}</span>
+          <span class="kb-who">${esc(p.name)}</span>${offBtn(p.contact_id, p.name)}
         </li>`).join("")
       : `<li class="kb-empty" style="cursor:default">Everybody entered is on a net.</li>`;
     $("kbBenchCount").textContent = bench.length ? `${bench.length} waiting` : "";
+
+    /* Who has finished for the night. The server marks them on the ROSTER rather than the bench, because
+       it deliberately keeps them off the bench so they cannot be dragged onto a net by accident. Without
+       this list they would be off the board entirely and there would be no way to undo a mis-tap. */
+    const done = (data.roster || []).filter((p) => p.withdrawn);
+    $("kbDone").innerHTML = done.length
+      ? done.map((p) => `<li class="kb-seat kb-doneseat">
+          <span class="kb-who">${esc(p.name)}</span>
+          <button class="kb-back" type="button" data-back="${p.contact_id}"
+            aria-label="Put ${esc(p.name)} back in">Back in</button>
+        </li>`).join("")
+      : "";
+    $("kbDoneWrap").hidden = !done.length;
+    $("kbDoneCount").textContent = done.length ? `${done.length}` : "";
 
     $("kbLb").innerHTML = leaderboardHtml();
     landed = null;           // flash once, not on every later render
@@ -164,6 +200,24 @@
       });
       el.addEventListener("dragend", () => el.classList.remove("dragging"));
       el.addEventListener("keydown", onKey);
+    });
+
+    /* The Off and Back in buttons live INSIDE draggable seats, so their events have to stop there or a
+       tap on Off would also be read as the start of a drag on the seat around it. */
+    document.querySelectorAll("[data-off]").forEach((el) => {
+      el.addEventListener("mousedown", (e) => e.stopPropagation());
+      el.addEventListener("keydown", (e) => e.stopPropagation());
+      el.addEventListener("click", (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        setWithdrawn(Number(el.dataset.off), true);
+      });
+    });
+    document.querySelectorAll("[data-back]").forEach((el) => {
+      el.addEventListener("click", (e) => {
+        e.preventDefault();
+        setWithdrawn(Number(el.dataset.back), false);
+      });
     });
 
     for (const el of targets()) {
@@ -253,6 +307,26 @@
     render();
     // The server says what the move cost — including what it deliberately left alone.
     $("kbHint").textContent = r.data.note || "Moved.";
+  }
+
+  /** Finished for the night, and back in again. Both directions, one function, one route. */
+  async function setWithdrawn(contactId, withdrawn) {
+    if (!sessionId) return;
+    const r = await api(`/api/admin/kotc/${sessionId}/withdraw`, {
+      method: "POST",
+      body: JSON.stringify({ contact_id: contactId, withdrawn }),
+    });
+    if (!r.ok) {
+      return fail("kbNets", (r.data && r.data.error) ||
+        (withdrawn ? "Couldn't mark them finished just now." : "Couldn't put them back just now."));
+    }
+    // Flash them where they land, so a person moving between two lists is followable.
+    landed = withdrawn ? null : contactId;
+    data = r.data;                          // the response IS the next board, same as the drag
+    render();
+    // The server's sentence, because it knows what the change cost — a freed seat, re-paired games, or
+    // a net now too short to pair. This screen must not summarise that itself.
+    $("kbHint").textContent = r.data.note || (withdrawn ? "Marked finished." : "Back in.");
   }
 
   /* ---------- load ---------- */
