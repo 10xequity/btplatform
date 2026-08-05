@@ -528,9 +528,26 @@ test("A9 — the panel sits between the board and the workspace, and is wired ou
 
   // The reason a suggestion is being made is not small print.
   assert.match(PBHTML, /\.pb-sug-text \{[^}]*font-size: 13px/, ".pb-sug-text must be 13px");
-  // Gold is a rule here, never ink.
-  assert.match(PBHTML, /\.pb-sug \{[^}]*border-left: 3px solid var\(--accent\)/, "the gold edge is a border");
-  assert.ok(!/\.pb-sug[a-z-]* \{[^}]*color: var\(--accent\)/.test(PBHTML), "gold must never be text");
+  /* Gold is never ink — the invariant, not one spelling of it.
+     The first version of this assertion demanded the literal `border-left: 3px solid var(--accent)`,
+     which is a pinned IMPLEMENTATION rather than the rule. It duly went red on the correct fix (that
+     3px gold slab spent the page's loudest device on its least important element), and the guard was
+     the wrong one of the two. What actually matters is that no .pb-sug rule paints TEXT gold: gold
+     ink on a light surface is ~1.7:1 and an AA failure. --emphasis is permitted and is the point —
+     it resolves to navy on light and gold on dark, so it is safe in both. */
+  const sugRules = [...PBHTML.matchAll(/(\.pb-sug[\w-]*(?:::?[\w-]+)?(?:\s*,\s*[^{]+)?)\s*\{([^}]*)\}/g)];
+  assert.ok(sugRules.length >= 5, `only ${sugRules.length} .pb-sug rules found — the selectors moved, so this check is reading the wrong thing`);
+  for (const [, sel, body] of sugRules) {
+    assert.ok(!/color\s*:\s*var\(--accent\)/.test(body), `${sel} paints text with raw gold`);
+    assert.ok(!/color\s*:\s*#(d4af37|e6b800)/i.test(body), `${sel} paints text with a literal gold hex`);
+  }
+  // And the panel really does borrow the board's own container, which is what makes it read as part
+  // of the board rather than a second product: same border, same radius token as .pb-pool.
+  const poolBorder = /\.pb-pool \{[^}]*border:\s*1px solid var\(--border\)/.test(PBHTML);
+  const sugBorder = /\.pb-sug \{[^}]*border:\s*1px solid var\(--border\)/.test(PBHTML);
+  assert.ok(poolBorder && sugBorder, "the panel must use the same container treatment as a pool");
+  assert.ok(!/\.pb-sug \{[^}]*border-(left|right|top|bottom):\s*[2-9]/.test(PBHTML),
+    "a thick single-side accent border is the tell this panel was rewritten to avoid");
 });
 
 test("A9b — one delegated listener on the static list node, so re-rendering cannot stack handlers", () => {

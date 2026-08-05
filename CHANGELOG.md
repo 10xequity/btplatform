@@ -1,5 +1,19 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.95.1 — 2026-08-05
+
+**The suggestions panel stops shouting over the board it advises — and the guard that pinned the wrong thing is fixed with it.**
+
+A design review caught the v0.95.0 panel's **3px gold left edge**. It was a real defect, and the cliché ("a thick coloured border down one side of a card") is the lesser half of why. The larger half is hierarchy: the pool board's signature is the tiles a director drags, and that edge spent the loudest device on the page on its **least important element** — an advisory panel. Standards §5's own rule is to spend boldness in one place and keep everything around it quiet, and this did the opposite.
+
+**Fixed** (`web/admin-pool-board.html`): the panel now borrows `.pb-pool`'s container **exactly** — same `1px solid var(--border)`, same radius token — so it reads as part of the board rather than a second product bolted on, which was the stated intent all along. The marker is now the dot idiom **this page already uses** for unsaved state (`.pb-state.dirty::before`), in `--emphasis`, the token built for exactly this: navy on light, gold on dark, AA in both. Gold remains never ink — gold text on a light surface is ~1.7:1.
+
+**The guard was the other half of the defect.** `board_suggestions.test.mjs` A9 asserted the literal string `border-left: 3px solid var(--accent)` — a pinned *implementation*, not the rule — so it went red on the correct fix. That is precisely the failure class this repo recorded one release earlier (`divisions_page.test.mjs` v1.1 demanded `role="alert"` and reddened on the right change), and the resolution is the same: **ask which of the two is wrong before touching either.** Here it was the guard. It now asserts the invariant instead — no `.pb-sug` rule paints text with `var(--accent)` or a literal gold hex, the panel's container matches `.pb-pool`'s, and no `.pb-sug` rule carries a thick single-side accent border. It also counts the rules it found, so a selector rename cannot make it pass by matching nothing.
+
+**Proved it can fail, in both directions, before shipping:** re-inserting the 3px edge into the real page text flips the slab check to true; changing the dot's `--emphasis` to `--accent` flips the gold-ink check to true. The unmutated file passes all three with 8 rules matched against a floor of 5.
+
+Suite **1312/1312**, test files **80**, modules **51**, buster **393 across 63 files** at 0.95.1. No migration; ledger **0042**. No route change; D-4 baseline **21**. Behaviour is untouched — this release changes two CSS declarations, one class attribute and one assertion.
+
 ## v0.95.0 — 2026-08-05
 
 **W-D — seeding suggestions on the pool board: proposals from past results, never rules, and never a word about a person.**

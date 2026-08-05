@@ -12,9 +12,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Pool board — Boomtown Athletics</title>
   <script>/* Pre-paint state — collapse + theme (uiux-review §4/§6.4, v0.52.0): read the bt_nav cookie and the saved theme BEFORE the first stylesheet so the rail state AND the theme are right on frame one — no post-paint snap of either. admin-nav.js writes the cookie on rail toggle and bt_theme on theme toggle; the localStorage bt_nav fallback migrates pre-v0.51 sessions. */(function(){try{var m=document.cookie.match(/(?:^|; )bt_nav=([^;]*)/);var v=m?m[1]:((window.localStorage&&localStorage.getItem("bt_nav_collapsed")==="1")?"min":"");if(v==="min")document.documentElement.dataset.nav="min";var t=(window.localStorage&&localStorage.getItem("bt_theme"))||(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.dataset.theme=t;}catch(e){}})();</script>
-  <link rel="stylesheet" href="assets/tokens.css?v=0.95.0" />
-  <link rel="stylesheet" href="assets/app.css?v=0.95.0" />
-  <link rel="stylesheet" href="assets/admin.css?v=0.95.0" />
+  <link rel="stylesheet" href="assets/tokens.css?v=0.95.1" />
+  <link rel="stylesheet" href="assets/app.css?v=0.95.1" />
+  <link rel="stylesheet" href="assets/admin.css?v=0.95.1" />
   <style>
     .mf-head { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; margin-bottom: 12px; }
     .mf-head p { max-width: 74ch; }
@@ -80,15 +80,20 @@
     .pb-worklist .pb-tile { width: 196px; }
     .pb-empty { font-size: 12px; color: var(--text-muted); list-style: none; }
 
-    /* SUGGESTIONS. Deliberately the board's own furniture one register quieter — same surface,
-       border and radius language as .pb-pool, so it reads as part of the board rather than a second
-       product bolted on. The one device that is not borrowed is the gold left edge, and it earns its
-       place by encoding something true: this section advises, where everything else on the page
-       states. Gold is a RULE here, never ink — gold text on a light surface is ~1.7:1 and an AA
-       failure, so the sentences are plain --text. */
+    /* SUGGESTIONS. The board's own furniture, one register quieter — the SAME surface, border and
+       radius as .pb-pool, borrowed exactly, so this reads as part of the board rather than a second
+       product bolted on.
+
+       The first draft marked it with a 3px gold left edge. That was wrong, and not only because a
+       thick coloured side border is a tell: it spent the loudest device on the page on its LEAST
+       important element. The board's signature is the tiles a director drags; an advisory panel that
+       shouts over them has the hierarchy backwards. The marker is now the dot idiom this page already
+       uses for unsaved state (.pb-state.dirty::before), in --emphasis, which is the token built for
+       exactly this and stays AA in both themes — navy on light, gold on dark. Gold is never ink here:
+       gold text on a light surface is ~1.7:1. */
     .pb-sug { background: var(--surface); border: 1px solid var(--border);
-      border-left: 3px solid var(--accent); border-radius: var(--radius-card, 10px);
-      padding: 12px; margin-bottom: 12px; }
+      border-radius: var(--radius-card, 10px); padding: 12px; margin-bottom: 12px; }
+    .pb-sug-h::before { content: "● "; color: var(--emphasis); }
     .pb-sug-lead { font-size: 12px; color: var(--text-muted); margin: 0 0 10px; max-width: 74ch; }
     .pb-sug-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
     .pb-sug-item { display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
@@ -126,7 +131,7 @@
 </head>
 <body>
     <header class="header chrome-glass no-print">
-    <a class="wordmark" href="admin.html" style="text-decoration:none;color:inherit"><img class="brand-logo" src="assets/logo-boom-icon-512.png?v=0.95.0" alt="" width="22" height="22" />Boomtown <span>Athletics</span></a>
+    <a class="wordmark" href="admin.html" style="text-decoration:none;color:inherit"><img class="brand-logo" src="assets/logo-boom-icon-512.png?v=0.95.1" alt="" width="22" height="22" />Boomtown <span>Athletics</span></a>
     <div class="spacer"></div>
     <select id="orgSwitcher" class="org-switcher" aria-label="Switch organization"></select>
     <a id="btHdrMail" class="btn ghost hdr-mail" href="admin-messages.html" aria-label="Messages">✉</a>
@@ -230,7 +235,7 @@
            so a panel living inside it would be destroyed by both. Hidden until the server sends
            something — an empty suggestions panel is worse than no panel. -->
       <section id="pbSug" class="pb-sug" hidden aria-labelledby="pbSugH">
-        <h2 class="pb-div-h" id="pbSugH">Suggestions</h2>
+        <h2 class="pb-div-h pb-sug-h" id="pbSugH">Suggestions</h2>
         <p class="pb-sug-lead">Ideas from past results. Nothing here changes the board — move a team yourself, or dismiss the idea.</p>
         <ul id="pbSugList" class="pb-sug-list"></ul>
       </section>
@@ -241,8 +246,8 @@
       </section>
     </main>
   </div>
-  <script src="assets/config.js?v=0.95.0"></script>
-  <script src="assets/admin-nav.js?v=0.95.0"></script>
-  <script src="assets/admin-pool-board.js?v=0.95.0"></script>
+  <script src="assets/config.js?v=0.95.1"></script>
+  <script src="assets/admin-nav.js?v=0.95.1"></script>
+  <script src="assets/admin-pool-board.js?v=0.95.1"></script>
 </body>
 </html>
