@@ -73,12 +73,13 @@
 
   async function loadEvents() {
     const r = await api("/api/events");
-    if (!r.ok) return fail("lCards", "Couldn't load your events.");
+    if (!r.ok) return BT_ADMIN.loadFail("lCards", r, "events"); // v0.89.0 Block B4: a 403 names the org, not the module
     const list = (r.data.events || []).slice(0, 40);
     $("lEvent").innerHTML = list.length
       ? list.map((e) => `<option value="${e.id}">${esc(e.name)}</option>`).join("")
       : `<option value="">No events yet</option>`;
     eventId = list.length ? list[0].id : null;
+    if (!eventId) return BT_ADMIN.orgEmptyState("lCards", "events"); // v0.89.0 Block B3: an empty org is not a broken module
     $("lEmpty").hidden = false;
   }
 

@@ -153,14 +153,15 @@
 
   async function loadEvents() {
     const r = await api("/api/events");
-    if (!r.ok) return fail("tList", "Couldn't load your events.");
+    if (!r.ok) return BT_ADMIN.loadFail("tList", r, "events"); // v0.89.0 Block B4: a 403 names the org, not the module
     // Tryouts are run as training or event records; show the recent ones and let staff pick.
     const list = (r.data.events || []).slice(0, 40);
     $("tEvent").innerHTML = list.length
       ? list.map((e) => `<option value="${e.id}">${esc(e.name)}</option>`).join("")
       : `<option value="">No events yet</option>`;
     eventId = list.length ? list[0].id : null;
-    $("tSummary").href = eventId ? `admin-buildstatus.html#tryout-${eventId}` : "#";
+    if (!eventId) return BT_ADMIN.orgEmptyState("tList", "events"); // v0.89.0 Block B3: an empty org is not a broken module
+    $("tSummary").href = `admin-buildstatus.html#tryout-${eventId}`;
     loadBoard();
   }
 

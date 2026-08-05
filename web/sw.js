@@ -1,12 +1,29 @@
 /* Boomtown Platform — Service Worker (PWA)
-   File: web/sw.js · Version: v1.0 · Date: 2026-07-25 · Ships in: v0.20.0
+   File: web/sw.js · Version: v2.0 · Date: 2026-08-05 · Ships in: v0.89.0
    Strategy (deliberately conservative — never serve stale admin data):
      - Same-origin GET static files: NETWORK-FIRST, cache fallback (offline shell).
      - API origin (boomtown-api.*.workers.dev): NEVER touched — requests pass through.
      - push: show notification (payload JSON {title, body, url, tag}).
-     - notificationclick: focus an open tab on our scope or open the target URL. */
+     - notificationclick: focus an open tab on our scope or open the target URL.
 
-const CACHE = "bt-shell-v1"; // bump suffix to invalidate everything
+   v2.0 (roadmap §-1 Block C, audit R3 — the stale-cache class):
+     - THE CACHE NAME DERIVES FROM THE RELEASE BUSTER. v1.0 pinned "bt-shell-v1" and never
+       changed it across 67 releases, and `activate` only evicts keys !== CACHE — so the cache
+       from v0.20.0 was never invalidated. The literal below is rewritten by sweep-buster.mjs
+       on every release, so every deploy gets a fresh cache and `activate` evicts the old one —
+       INCLUDING the long-poisoned "bt-shell-v1" the moment this file reaches a browser (the SW
+       update check bypasses HTTP cache, so a normal navigation delivers it; that IS the
+       one-time purge the audit asked for, and it needs no flag).
+     - THE FALLBACK IS EXACT. v1.0 matched with `ignoreSearch: true`, so an asset cached under
+       an OLD buster satisfied a request carrying the NEW one and one failed fetch left new HTML
+       running old JS/CSS. (No literal example versions here — sweep-buster rewrites every
+       `?v=` literal in this file, which would rewrite the example into nonsense; the real
+       before/after pair is in the audit, docs/2026-08-05_audit_tester-round_v1_0.md §3.)
+       A stale asset can no longer satisfy a fresh request; the offline fallback never crosses
+       a version boundary. */
+
+const V = ("?v=0.89.0").slice(3); // ← swept by sweep-buster.mjs --write on every release
+const CACHE = "bt-shell-v" + V;
 
 self.addEventListener("install", (e) => {
   self.skipWaiting();
@@ -37,7 +54,7 @@ self.addEventListener("fetch", (e) => {
       }
       return fresh;
     } catch {
-      const hit = await caches.match(req, { ignoreSearch: true });
+      const hit = await caches.match(req); // exact URL, buster included — never cross a version boundary
       return hit || Response.error();
     }
   })());
@@ -70,5 +87,9 @@ self.addEventListener("notificationclick", (e) => {
 });
 
 /* CHANGELOG
+ * v2.0 (2026-08-05): Block C — version-derived cache name (swept per release, so activate
+ *   finally evicts; the first activation purges the long-poisoned bt-shell-v1) and an exact
+ *   fallback match (ignoreSearch retired — a stale asset can never satisfy a fresh request).
+ *   Ships in v0.89.0.
  * v1.0 (2026-07-25): Initial SW — network-first shell cache, API pass-through,
  *   push display + click-through. Ships in v0.20.0. */

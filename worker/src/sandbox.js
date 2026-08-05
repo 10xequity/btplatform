@@ -1,6 +1,16 @@
 /**
  * Boomtown Platform — Sandbox / Demo tools (Module 11.5)
- * File: worker/src/sandbox.js · Version: v2.2 · Date: 2026-08-05 · Ships in: v0.88.0
+ * File: worker/src/sandbox.js · Version: v2.3 · Date: 2026-08-05 · Ships in: v0.89.0
+ *
+ * v2.3 — A3 (roadmap §-1): THE SEED NOW CARRIES THE MONEY AND THE COURT BOARD.
+ * (1) Every square-paid registration gets a COMPLETED `payments` mirror row at the event price.
+ *     Sales & Reports sums card revenue from `payments`, so 'paid' rows with no payment printed
+ *     "$0 ALL-TIME REVENUE" beside "20 PAID REGISTRATIONS" — a tester reads that as a money bug.
+ *     WIPE_SQL deletes payments BEFORE registrations (registration_id FK — the v0.88.0 class).
+ * (2) A draft KOTC session with a 12-player entry list sits on the Thursday league (90003), so
+ *     the Court Board has a session to open and round 1 is drawn by the REAL engine when the
+ *     director starts it — seeded state stops at the exact point the create-session UI (Block D)
+ *     will hand over. Wipe already covered kotc_* through the session's event_id.
  *
  * Staff-gated endpoints powering the admin rail's "Sandbox" group:
  *   GET  /api/admin/testdata           → counts of test rows per table (are we seeded?)
@@ -278,6 +288,9 @@ export const WIPE_SQL = [
   `DELETE FROM team_members   WHERE team_id BETWEEN ${LO} AND ${HI}`,
   // BEFORE registrations — waitlists carries claimed_registration_id.
   `DELETE FROM waitlists      WHERE event_id BETWEEN ${LO} AND ${HI}`,
+  // BEFORE registrations — payments carries registration_id (added v0.89.0 with the A3 payment
+  // rows; without this line the SECOND press dies on the same FK class v0.88.0 fixed).
+  `DELETE FROM payments       WHERE registration_id BETWEEN ${LO} AND ${HI}`,
   // BEFORE teams, waivers and contacts — registrations carries team_id, waiver_id, contact_id.
   `DELETE FROM registrations  WHERE id BETWEEN ${LO} AND ${HI} OR event_id BETWEEN ${LO} AND ${HI}`,
   // BEFORE pools AND brackets — teams carries pool_id, and the board sets it.
@@ -492,6 +505,45 @@ async function generate(env, ctx) {
      (90044,1,90006,90025,'cash-pending','cash'),
      (90045,1,90006,90033,'paid','square'),
      (90046,1,90006,90041,'comped','comp')`,
+
+    /* --- A3: the payments mirror for every square-paid registration above, at its event's
+       price. Card revenue is summed from `payments` (COMPLETED only); cash and comped rows are
+       counted at event price by the report itself and need no mirror. Ids are auto-increment —
+       the wipe finds these through registration_id, exactly like the FK does. --- */
+    `INSERT INTO payments (org_id, registration_id, square_payment_id, amount_cents, status) VALUES
+     (1,90001,'TEST-PM-90001',6000,'COMPLETED'),
+     (1,90011,'TEST-PM-90011',6000,'COMPLETED'),
+     (1,90012,'TEST-PM-90012',6000,'COMPLETED'),
+     (1,90014,'TEST-PM-90014',6000,'COMPLETED'),
+     (1,90005,'TEST-PM-90005',12000,'COMPLETED'),
+     (1,90021,'TEST-PM-90021',5500,'COMPLETED'),
+     (1,90022,'TEST-PM-90022',5500,'COMPLETED'),
+     (1,90031,'TEST-PM-90031',5500,'COMPLETED'),
+     (1,90032,'TEST-PM-90032',5500,'COMPLETED'),
+     (1,90033,'TEST-PM-90033',5500,'COMPLETED'),
+     (1,90041,'TEST-PM-90041',6500,'COMPLETED'),
+     (1,90042,'TEST-PM-90042',6500,'COMPLETED'),
+     (1,90043,'TEST-PM-90043',6500,'COMPLETED'),
+     (1,90045,'TEST-PM-90045',6500,'COMPLETED')`,
+
+    /* --- A3: a KOTC session parked at the exact state the Court Board can pick up — a draft
+       with its entry list in, round 1 NOT drawn (the real engine draws it when the director
+       starts the night; hand-written engine output is the only kind of fixture that lies). --- */
+    `INSERT INTO kotc_sessions (id, org_id, event_id, name, players_per_net, move_up, points_to, status) VALUES
+     (90001,1,90003,'TEST Kings Court — Thursday league night',4,1,21,'draft')`,
+    `INSERT INTO kotc_players (org_id, session_id, contact_id, score_token, seed) VALUES
+     (1,90001,90001,'c0ffee0000090001',1),
+     (1,90001,90002,'c0ffee0000090002',2),
+     (1,90001,90003,'c0ffee0000090003',3),
+     (1,90001,90004,'c0ffee0000090004',4),
+     (1,90001,90005,'c0ffee0000090005',5),
+     (1,90001,90006,'c0ffee0000090006',6),
+     (1,90001,90007,'c0ffee0000090007',7),
+     (1,90001,90008,'c0ffee0000090008',8),
+     (1,90001,90009,'c0ffee0000090009',9),
+     (1,90001,90010,'c0ffee000009000a',10),
+     (1,90001,90011,'c0ffee000009000b',11),
+     (1,90001,90012,'c0ffee000009000c',12)`,
   ];
   // Clear then seed, as ONE transaction. D1 runs a batch as a SQL transaction, so if any statement
   // fails the whole sequence rolls back and the database is left exactly as it was — no half-written

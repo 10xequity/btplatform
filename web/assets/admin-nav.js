@@ -1,5 +1,17 @@
 /* Boomtown Platform — Admin sidebar (shared)
-   Version: v2.21 · Date: 2026-08-04 · Ships in: v0.83.0
+   Version: v2.22 · Date: 2026-08-05 · Ships in: v0.89.0
+   v2.22: ORG HONESTY (roadmap §-1 Block B, audit R1 — the root cause of most of the tester round).
+   B1: the switcher offers ONLY orgs where /api/me reports an admin/staff role; the old block
+   populated straight from /api/orgs and offered an org the owner had no role in, and one click
+   there 403'd the whole admin surface. B2: once the role-filtered list resolves, the header
+   wordmark names the ACTIVE org (post-paint text swap, same model as brandLogo's image swap —
+   static markup unchanged, so header_shell's byte-identity holds). SELF-HEAL: a stored bt_org
+   outside the role list resets to the first role org and reloads once — sticky localStorage
+   poison is what turned one stray click into "almost every module is broken". B3/B4 helpers:
+   orgEmptyState() renders "No X in <org> yet" with one-tap switch buttons (+ Generate test data
+   on org 1, where the seeder writes) instead of a blank board; loadFail() renders a 403 as
+   "you don't have access to <org>" instead of blaming the module. B5 (localStorage vs session
+   scope) is an owner decision — deliberately not changed here.
    v2.21: the Test data modal no longer greys out Generate when a seed exists. `generate` clears and
    reseeds as of sandbox.js v2.1, so a stale seed is something to replace, not a dead end — the
    button reads "Regenerate test data" and recovery is ONE tap instead of Wipe-then-Generate plus a
@@ -146,6 +158,11 @@
     .bt-fail { border: 1px solid var(--border); border-radius: var(--radius-card);
       padding: 18px; background: var(--surface); }
     .bt-fail .bt-fail-actions { display: flex; gap: 10px; margin-top: 12px; }
+    /* v2.22: org-scoped empty state (Block B3) — same visual family as .bt-fail, calmer voice:
+       an empty org is a situation, not an error. Actions wrap for narrow boards. */
+    .bt-empty-org { border: 1px dashed var(--border); border-radius: var(--radius-card);
+      padding: 18px; background: var(--surface); }
+    .bt-empty-org .bt-fail-actions { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
     @media (max-width: 860px) {
       html[data-nav="min"] .admin-layout { grid-template-columns: 1fr; }
       .sidebar .rail-foot { display: none; }
@@ -444,6 +461,72 @@
     el.querySelector('[data-act="retry"]').onclick = () => location.reload();
   }
 
+  /* v2.22 (Block B4): an access error names the ORG and never blames the module. A 403 means
+     the server said "no staff role here" — the fix is switching org, so switching is the action
+     offered. Every other failure keeps the standard fail() box, with the server's own sentence
+     when it sent one. */
+  async function loadFail(el, r, what) {
+    if (typeof el === "string") el = document.getElementById(el);
+    if (!el) return;
+    if (r && r.status === 403) {
+      const ctx = await orgsReady;
+      const id = Number(localStorage.getItem("bt_org")) || 0;
+      const hit = (ctx.all || []).find((o) => Number(o.id) === id);
+      const org = hit ? hit.name : "this organization";
+      el.innerHTML = `<div class="bt-fail"><b>You don't have access to ${esc(org)}.</b>
+        <p class="help-text" style="margin:6px 0 0">Your account has no staff role there — the ${esc(what || "page")} itself is fine. Switch to one of your organizations to keep working.</p>
+        <div class="bt-fail-actions"></div></div>`;
+      orgSwitchActions(el.querySelector(".bt-fail-actions"), ctx);
+      return;
+    }
+    fail(el, (r && r.data && r.data.error) || "Couldn't load this page.");
+  }
+
+  /* v2.22 (Block B3): an EMPTY org must be distinguishable from a broken module. "No events
+     yet" on a board that worked yesterday reads as breakage; this names the org, offers a
+     one-tap switch to each of the caller's other orgs, and on org 1 offers Generate test data
+     (the sandbox seeder writes its whole range as org 1 — offering it elsewhere would generate
+     data the current view can never show; org-scoped seeding is recorded in roadmap §-1c). */
+  async function orgEmptyState(el, what) {
+    if (typeof el === "string") el = document.getElementById(el);
+    if (!el) return;
+    const ctx = await orgsReady;
+    const active = (ctx.orgs || []).find((o) => Number(o.id) === Number(ctx.current));
+    let orgName = "this organization";
+    try { orgName = (active && active.name) || localStorage.getItem("bt_org_name") || orgName; } catch (e) {}
+    el.innerHTML = `<div class="bt-empty-org"><b>No ${esc(what || "events")} in ${esc(orgName)} yet.</b>
+      <p class="help-text" style="margin:6px 0 0">If you expected data here, you may be working in the wrong organization.</p>
+      <div class="bt-fail-actions"></div></div>`;
+    orgSwitchActions(el.querySelector(".bt-fail-actions"), ctx);
+  }
+
+  /* Shared action row for the two states above: one button per other role-org (a switch is one
+     tap, owner req #19), plus Generate test data where the seed can actually land (org 1). */
+  function orgSwitchActions(box, ctx) {
+    if (!box) return;
+    const current = Number(localStorage.getItem("bt_org")) || 0;
+    (ctx.orgs || []).filter((o) => Number(o.id) !== current).forEach((o) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "btn ghost";
+      b.textContent = "Switch to " + o.name;
+      b.onclick = () => {
+        try { localStorage.setItem("bt_org", String(o.id)); } catch (e) {}
+        const href = document.body.dataset.orgSwitchHref;
+        if (href) location.href = href; else location.reload();
+      };
+      box.appendChild(b);
+    });
+    if (current === 1 && document.getElementById("btTestData")) {
+      const g = document.createElement("button");
+      g.type = "button";
+      g.className = "btn";
+      g.textContent = "Generate test data";
+      g.onclick = () => document.getElementById("btTestData").click();
+      box.appendChild(g);
+    }
+  }
+
   const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const money = c => c ? "$" + (c / 100).toFixed(2).replace(/\.00$/, "") : "Free";
@@ -510,28 +593,71 @@
   })();
 
   /* v2.19: unified org switcher — SINGLE SOURCE (uiux-review §6 step 4). Populates the static
-     #orgSwitcher on every admin page from /api/orgs, selects the persisted org, and on change
-     persists + reloads. Detail pages whose URL pins a record in the OLD org declare
+     #orgSwitcher on every admin page, selects the persisted org, and on change persists +
+     reloads. Detail pages whose URL pins a record in the OLD org declare
      <body data-org-switch-href="..."> to navigate to a safe landing instead (admin-event.html
      → admin-events.html — a reload there would 404 the event under the new org). The 12
      per-page copies of this block are deleted this release; header_shell.test.mjs guards
-     against their return. Click budget unchanged: open + pick = 2 (owner req #19). */
+     against their return. Click budget unchanged: open + pick = 2 (owner req #19).
+     v2.22 (Block B): the option list is the INTERSECTION of /api/orgs and the caller's
+     admin/staff roles from /api/me — the server enforces per-org access (requireStaff), so an
+     org outside that set can only ever produce 403s, and offering it was audit root cause R1.
+     A stored bt_org outside the set self-heals to the first role org; the reload fires only
+     when a poisoned value was actually replaced AND the write took (a blocked localStorage
+     write must not loop the page). orgsReady lets orgEmptyState()/loadFail() reuse this fetch. */
+  let _orgsResolve;
+  const orgsReady = new Promise((res) => { _orgsResolve = res; });
   (function orgSwitcher() {
     const sw = document.getElementById("orgSwitcher");
-    if (!sw) return;
-    api("/api/orgs").then((r) => {
-      if (!r.ok) return;
-      const orgs = r.data.orgs || [];
-      const current = Number(localStorage.getItem("bt_org")) || (orgs[0] && orgs[0].id) || 1;
+    if (!sw) { _orgsResolve({ orgs: [], all: [], current: null }); return; }
+    Promise.all([api("/api/orgs"), guard()]).then(([r, me]) => {
+      if (!r.ok || !me) { _orgsResolve({ orgs: [], all: [], current: null }); return; }
+      const all = r.data.orgs || [];
+      const roleIds = new Set((me.roles || [])
+        .filter((x) => x.role === "admin" || x.role === "staff")
+        .map((x) => Number(x.org_id)));
+      const orgs = all.filter((o) => roleIds.has(Number(o.id)));
+      if (!orgs.length) { _orgsResolve({ orgs: [], all, current: null }); return; } // guard() already bounced non-staff
+      const stored = Number(localStorage.getItem("bt_org")) || 0;
+      let current = stored;
+      if (!orgs.some((o) => Number(o.id) === current)) {
+        current = Number(orgs[0].id);
+        try { localStorage.setItem("bt_org", String(current)); } catch (e) {}
+        if (stored && Number(localStorage.getItem("bt_org")) === current) { location.reload(); return; } // heal, then re-fetch everything this page already loaded under the poisoned org
+      }
       try { if (!localStorage.getItem("bt_org")) localStorage.setItem("bt_org", String(current)); } catch (e) {} // first visit: persist so api() sends X-Org-Id (admin.js precedent)
-      sw.innerHTML = orgs.map((o) => `<option value="${o.id}" ${o.id === current ? "selected" : ""}>${esc(o.name)}</option>`).join("");
-    }).catch(() => {});
+      sw.innerHTML = orgs.map((o) => `<option value="${o.id}" ${Number(o.id) === current ? "selected" : ""}>${esc(o.name)}</option>`).join("");
+      const active = orgs.find((o) => Number(o.id) === current);
+      try { localStorage.setItem("bt_org_name", (active && active.name) || ""); } catch (e) {}
+      if (active) orgWordmark(active.name);
+      _orgsResolve({ orgs, all, current });
+    }).catch(() => _orgsResolve({ orgs: [], all: [], current: null }));
     sw.addEventListener("change", () => {
       localStorage.setItem("bt_org", sw.value);
       const href = document.body.dataset.orgSwitchHref;
       if (href) location.href = href; else location.reload();
     });
   })();
+
+  /* v2.22 (Block B2): the header wordmark names the ACTIVE org. The static markup ships the
+     app brand so the header paints complete on frame one; once the role-filtered list resolves,
+     the text becomes the org being acted in — "which org am I in?" is answered top-left on
+     every admin screen, beside that org's own logo. DOM APIs only (text can never parse as
+     markup); the last word keeps the accent <span> so the two-tone wordmark survives any name. */
+  function orgWordmark(name) {
+    const wm = document.querySelector(".wordmark");
+    if (!wm || !name) return;
+    const img = wm.querySelector(".brand-logo");
+    while (wm.lastChild && wm.lastChild !== img) wm.removeChild(wm.lastChild);
+    const parts = String(name).trim().split(/\s+/);
+    const last = parts.length > 1 ? parts.pop() : "";
+    wm.appendChild(document.createTextNode(parts.join(" ") + (last ? " " : "")));
+    if (last) {
+      const sp = document.createElement("span");
+      sp.textContent = last;
+      wm.appendChild(sp);
+    }
+  }
 
   /* v2.19: theme toggle — SINGLE SOURCE. The shared inline <head> snippet applies the saved
      (or system) theme BEFORE first paint; this listener only flips + persists. Fired often →
@@ -554,7 +680,7 @@
      about to be bounced. A rejected guard leaves the header exactly as it painted. */
   guard().then((me) => { if (me) mailBadgeFill(); }).catch(() => {});
 
-  window.BT_ADMIN = { api, guard, esc, money, fmtDT, openModal, closeModal, downloadText, fail };
+  window.BT_ADMIN = { api, guard, esc, money, fmtDT, openModal, closeModal, downloadText, fail, loadFail, orgEmptyState, orgsReady };
 
   /* v0.59.0: keep <meta name="theme-color"> in step with the ACTIVE theme.
      It was pinned to #0B0B0D on every page, so a member in light mode saw a near-black status
@@ -593,7 +719,7 @@
       if (window.BT_STATUS || document.getElementById("bt-status-js")) return;
       var s = document.createElement("script");
       s.id = "bt-status-js";
-      s.src = "assets/build-status.js?v=0.88.0";
+      s.src = "assets/build-status.js?v=0.89.0";
       s.async = false;
       document.head.appendChild(s);
     } catch (e) { /* indicators are never load-blocking */ }

@@ -1,5 +1,17 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.89.0 — 2026-08-05
+
+**Blocks B + C + A3 of the tester-round fixes (roadmap §-1) — org honesty, the service-worker purge, and the seeded money.** Most of the 2026-08-04/05 tester report traced to two pieces of state, not to the modules; this release removes both.
+
+**Block B — org honesty** (`web/assets/admin-nav.js` v2.22 + the six event-driven modules). The org switcher now offers only orgs where `/api/me` reports an admin/staff role — it used to offer an org the owner had no role in, and one click there put every module into a 403. A stored `bt_org` outside the role list **self-heals** to the first role org and reloads once, so a poisoned browser recovers on its own. The header wordmark now names the **active org** on every admin screen. New shared states: `BT_ADMIN.orgEmptyState()` renders "No events in <org> yet" with one-tap switch buttons (+ Generate test data on org 1) instead of a blank board, and `BT_ADMIN.loadFail()` renders a 403 as "You don't have access to <org>" — the string "Couldn't load your events." is retired repo-wide. B5 (`bt_org` storage scope) remains an owner decision. New guard `worker/test/org_honesty.test.mjs` (+9): drives the real router as a staff user of an **empty org** (200, empty, no cross-org leak) and as a user with **no role** (403 with a human sentence) — the two states the tester round lived in and no test had ever run — plus single-source scans with negative controls. Found on the way: the harness's first user is bootstrapped admin of ALL orgs (F-12), so the test burns the bootstrap on a throwaway account first.
+
+**Block C — the stale-cache class** (`web/sw.js` v2.0). The service-worker cache name was pinned to `bt-shell-v1` for 67 releases and never invalidated, and the offline fallback matched with `ignoreSearch: true`, so one failed fetch could leave new HTML running months-old JS/CSS — the best explanation for tester breakage a clean browser could not reproduce, including "regenerate test data still fails" reported after the v0.88.0 fix shipped. The cache name now derives from the swept release buster (this file carries the literal `sweep-buster.mjs` rewrites), the fallback matches the exact URL, and the first activation evicts every old cache including the poisoned one — the one-time purge, no flag needed. New guard `worker/test/sw_cache.test.mjs` (+7) reconstructs the 67-release defect as its negative control, with comment-stripping (fifth strike of that class) NC'd in both directions.
+
+**A3 — the seed carries the money and the Court Board.** Every square-paid test registration gets a COMPLETED `payments` mirror at the event price — Sales & Reports now shows **$895 all-time** instead of `$0` beside 20 paid registrations. `payments` joined `WIPE_SQL` **before** `registrations`, so the second press stays alive (the v0.88.0 FK class; the two-press guard exercises it). A draft KOTC session — "TEST Kings Court — Thursday league night", 12 players — sits on the league event at exactly the state Block D's create-session UI will hand over; round 1 is left for the real engine to draw.
+
+Docs: roadmap → v1.4 (**§-1b registration-first workflow program** from the owner's 2026-08-05 spec; §-1c deferred-defect register), `RALPH.md` → v3.0 (the loop queue re-pointed at §-1/§-1b), handoff → v1.12. Suite 1266 → **1282**, test files 75 → **77**, buster **391 across 63 files** (sw.js joins the corpus), ledger 0042 unchanged — no migration.
+
 ## v0.88.0 — 2026-08-05
 
 ### Fixed
