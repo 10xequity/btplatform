@@ -145,7 +145,23 @@ const LASTS = [
   "Iqbal", "Jordan", "Kaur", "Larsen", "Moss", "Nolan", "Oyelaran", "Price",
 ];
 const CITIES = ["Aurora", "Denver", "Pueblo", "Monument", "Fountain", "Castle Rock"];
-const NC = FIRSTS.length; // 24 test people
+const NC = FIRSTS.length; // 48 test people — the comment here read "24" while the list held 48
+
+/* §-1b W-G — shapes taken from the owner's REAL REVCO exports (2026 Spring, 21 team rows; the
+   Valentines sheet is the same form). The "Emails of Teammates" cell is FREE TEXT and routinely
+   does not carry one address per player: it holds three addresses for a team of four, or one
+   address covering everybody, or the literal "N/A" / "No" / "Don't have.". So a real roster
+   contains people with NO email on file.
+
+   Exactly one seeded contact is therefore email-less, and that is what lets `reachable` and
+   `total` DISAGREE on the marketing overview. With an address on every row the distinction cannot
+   be seen at all, and W-F's segments — whose BASE_WHERE requires an address — would count every
+   contact as reachable forever, in the fixture the owner uses to judge the feature.
+
+   The index is chosen so the id is EVEN. Every contactOffset passed to teamRows() is even, so
+   captains are always odd ids; this person is only ever a team MEMBER. That matches the real
+   sheets, where the registering captain always supplies an address and the teammates may not. */
+const NO_EMAIL_IDX = FIRSTS.length - 1;
 
 /**
  * SQL string literal, apostrophes doubled.
@@ -160,7 +176,7 @@ const q = (s) => "'" + String(s).replace(/'/g, "''") + "'";
 /** Every name is deterministic, so a bug found against the fixture is reproducible from it alone. */
 function contactRows() {
   return FIRSTS.map((f, i) =>
-    `(${90001 + i},1,${q(`test.${f.toLowerCase()}@example.com`)},${q(`TEST ${f} ${LASTS[i]}`)},` +
+    `(${90001 + i},1,${i === NO_EMAIL_IDX ? "NULL" : q(`test.${f.toLowerCase()}@example.com`)},${q(`TEST ${f} ${LASTS[i]}`)},` +
     `${q(`555-01${String(i + 1).padStart(2, "0")}`)},${q(CITIES[i % CITIES.length])},'CO')`
   ).join(",\n     ");
 }
@@ -455,7 +471,13 @@ async function generate(env, ctx) {
      (90011,1,90002,90009,'paid','square',NULL),
      (90012,1,90002,90011,'paid','square',NULL),
      (90013,1,90002,90013,'pending',NULL,NULL),
-     (90014,1,90002,90015,'paid','square',NULL)`,
+     (90014,1,90002,90015,'paid','square',NULL),
+     /* W-G: 'email-sent' is the commonest UNPAID state on the real sheets — the payment link went
+        out and the team never finished checkout (3 of 21 Spring rows, 4 of 29 Valentines rows).
+        The registrations screen's "Unpaid" filter is the three statuses pending / email-sent /
+        cash-pending, and the fixture produced only two of them, so a third of that filter had
+        never selected a seeded row. */
+     (90015,1,90002,90017,'email-sent',NULL,NULL)`,
     `INSERT INTO registrations (id, org_id, event_id, contact_id, status, payment_method) VALUES
      (90005,1,90003,90002,'paid','square'),
      (90006,1,90003,90004,'pending',NULL)`,
@@ -467,8 +489,14 @@ async function generate(env, ctx) {
     `INSERT INTO teams (id, org_id, event_id, name, level, gender_division, captain_contact_id, score_token) VALUES
      (90701,1,90003,'TEST Net Gains','BB','Coed',90002,'ba11ba1100090701'),
      (90702,1,90003,'TEST Sets on the Beach','BB','Coed',90004,'ba11ba1100090702'),
-     (90703,1,90003,'TEST Block Party','A','Coed',90006,'ba11ba1100090703'),
-     (90704,1,90003,'TEST Ace Ventura','A','Coed',90008,'ba11ba1100090704')`,
+     /* W-G: both real level labels now appear. The REVCO form offers "BB/A" and "A/AA" and nothing
+        else, and board_suggest's tier ladder scores them 250 and 350 — but every seeded team was
+        BB/A, BB or A, so the 350 rung was never occupied and no seeded comparison could span two
+        tiers. "Block Party" at A/AA is lifted verbatim from the Spring sheet. The comma in the
+        other name is also real ("Jarvis, Jork It A Lil") and is the shape that breaks a naive CSV
+        split — the same class as the apostrophe in "Spike Lee's" that q() exists for. */
+     (90703,1,90003,'TEST Block Party','A/AA','Coed',90006,'ba11ba1100090703'),
+     (90704,1,90003,'TEST Jarvis, Jork It A Lil','BB/A','Coed',90008,'ba11ba1100090704')`,
     `INSERT INTO team_members (org_id, team_id, contact_id, member_name, member_email) VALUES
      (1,90701,90002,'TEST Ben Cruz','test-ben@example.com'),
      (1,90701,NULL,'TEST Mia Torres','test-mia@example.com'),

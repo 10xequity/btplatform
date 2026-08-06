@@ -64,7 +64,7 @@ const TIERS = [
   [/^(rec|recreational|novice|c)$/, 0],
 ];
 
-const tierOf = (name) => {
+export const tierOf = (name) => {
   const k = String(name || "").trim().toLowerCase();
   if (!k) return null;
   for (const [re, base] of TIERS) if (re.test(k)) return base;

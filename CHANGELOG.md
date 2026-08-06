@@ -1,5 +1,22 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.100.0 — 2026-08-06
+
+**§-1b W-G — the sample data now has the shapes real registrations have.**
+
+**Google Drive turned out to be reachable, so this was built from the real sheets rather than deferred.** Every previous session recorded W-G as needing an interactive session; one search proved otherwise. The 2026 Spring REVCO export — 21 team rows — was read alongside the Valentines sheet already on file.
+
+Sample data is a product: it is what you look at when you try a feature before real registrations exist, so when it is unrealistic you cannot tell a broken feature from unrealistic sample data — and you reasonably assume the feature. Four things real sign-ups do that the old sample data never did:
+
+- **Somebody with no email address.** Your "Emails of Teammates" box is free text and rarely holds one address per player — it holds three for a team of four, or one address covering everybody, or the word "N/A". Every sample person used to have an address, which meant the Marketing screen's "reachable contacts" number could never differ from the total. Now it does.
+- **A team that got the payment link and never finished.** The commonest unpaid state on your sheets (three of 21 in Spring). The Registrations screen's "Unpaid" filter covers three states and the sample data only ever produced two of them.
+- **Both skill levels.** Your form offers "BB/A" and "A/AA"; the sample data only ever made BB/A, so nothing that compares two levels had anything to compare. "Block Party at A/AA" is lifted straight from the Spring sheet.
+- **A team name with a comma in it** — "Jarvis, Jork It A Lil" is real, and it is the shape that breaks naive spreadsheet imports.
+
+Also corrected: a comment claiming the sample set held 24 people when it has held 48 for some time.
+
+`sandbox_real_shapes.test.mjs` (+10, 1364 → 1374). Each check proves the shape **changes an answer** rather than that a row exists — counting rows is what passed on the sample data that was broken once before. Four negative controls, each editing the real generated data to prove the checks catch its removal. No database migration and no new route.
+
 ## v0.99.0 — 2026-08-06
 
 **§-1b W-F — registration → members → comms. Segments can target one event.**
