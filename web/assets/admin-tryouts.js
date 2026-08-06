@@ -23,12 +23,124 @@
   let rollup = [];                 // the director's view: every coach's verdict, per player
   let rollOpen = false;
   let sortKey = "name", sortDir = 1;
+  let fixOpen = null;              // the one contact whose correction form is open
+  let fixDraft = null;             // its live values, so a filter keystroke cannot discard typing
 
   const POS_LABEL = { S: "Setter", OH: "Outside", RS: "Opposite", MB: "Middle", L: "Libero", DS: "Def. specialist" };
+
+  /* ---------- staff card correction (W-E.2b) ----------
+     `PUT /api/admin/tryouts/:eventId/card/:contactId` has been built, tested and org-scoped since
+     v0.60.0 with no caller anywhere — the last tryouts route where the engine was whole and only
+     the screen was missing. It exists so staff can fix what a player typed at registration.
+
+     TWO THINGS THIS FILE DELIBERATELY DOES NOT DO:
+
+     1. It does not convert feet and inches to centimetres. Height is STORED metric and the server
+        renders the imperial a coach actually reads (`cmToImperial`). A converter here would have
+        to round-trip — and 5'11" is a range of centimetres, not one — so every save would quietly
+        rewrite a stored height that was never wrong. The field asks for centimetres, says so in
+        its own label, and shows what is on file today in the server's words.
+
+     2. It never sends a comma-separated STRING for a list. `parseList` JSON.parses a string before
+        it falls back to splitting, so a lone "16" would parse as the NUMBER 16, fail the
+        Array.isArray check, and come back as an empty list — a silent delete of the age group the
+        user just typed. Arrays go over the wire. */
+
+  function fixForm(p) {
+    const v = fixDraft || {
+      positions: p.positions.slice(),
+      age_groups: p.age_groups.join(", "),
+      height_cm: p.height_cm == null ? "" : String(p.height_cm),
+      prev_club: p.prev_club || "",
+      jersey_size: p.jersey_size || "",
+      player_note: p.player_note || "",
+    };
+    // Checkboxes rather than the aria-pressed toggles the rating row uses: those fire an action on
+    // tap, these are a value saved with the rest of the form.
+    const boxes = Object.keys(POS_LABEL).map((x) =>
+      `<label><input type="checkbox" data-pos="${x}"${v.positions.includes(x) ? " checked" : ""} /> ${esc(POS_LABEL[x])}</label>`
+    ).join("");
+
+    return `<div class="fix-form" id="fix${p.contact_id}" data-fixform="${p.contact_id}">
+      <fieldset class="fix-set fix-wide">
+        <legend class="fix-hint">Positions</legend>
+        <div class="fix-pos">${boxes}</div>
+      </fieldset>
+      <label>Age groups
+        <input data-f="age_groups" value="${esc(v.age_groups)}" placeholder="14U, 16U" autocomplete="off" />
+        <span class="fix-hint">Separate them with commas.</span>
+      </label>
+      <label>Height in centimetres
+        <input data-f="height_cm" type="number" inputmode="numeric" min="90" max="250" value="${esc(v.height_cm)}" />
+        <span class="fix-hint">${p.height ? `On file now: ${esc(p.height)}.` : "Nothing on file yet."}</span>
+      </label>
+      <label>Previous club
+        <input data-f="prev_club" value="${esc(v.prev_club)}" maxlength="120" autocomplete="off" />
+      </label>
+      <label>Jersey size
+        <input data-f="jersey_size" value="${esc(v.jersey_size)}" maxlength="12" autocomplete="off" />
+      </label>
+      <label class="fix-wide">What they told us
+        <textarea class="fix-note" data-f="player_note" maxlength="1000">${esc(v.player_note)}</textarea>
+      </label>
+      <div class="fix-actions fix-wide">
+        <button class="btn" type="button" data-fixsave="${p.contact_id}">Save details</button>
+        <span class="fix-error" data-fixerror hidden></span>
+      </div>
+    </div>`;
+  }
+
+  /** Put focus back on the card's own toggle after a re-render replaced it. */
+  function refocusFix(contactId) {
+    const b = document.querySelector(`[data-fixopen="${contactId}"]`);
+    if (b) b.focus();
+  }
+
+  function readForm(form) {
+    const get = (n) => { const el = form.querySelector(`[data-f="${n}"]`); return el ? el.value : ""; };
+    return {
+      positions: [...form.querySelectorAll("[data-pos]")].filter((b) => b.checked).map((b) => b.dataset.pos),
+      age_groups: get("age_groups"),
+      height_cm: get("height_cm"),
+      prev_club: get("prev_club"),
+      jersey_size: get("jersey_size"),
+      player_note: get("player_note"),
+    };
+  }
+
+  async function saveCard(contactId, form) {
+    if (!form) return;
+    const v = readForm(form);
+    const err = form.querySelector("[data-fixerror]");
+    err.hidden = true;
+    const r = await api(`/api/admin/tryouts/${eventId}/card/${contactId}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        positions: v.positions,
+        age_groups: v.age_groups.split(",").map((s) => s.trim()).filter(Boolean),
+        height_cm: v.height_cm,
+        prev_club: v.prev_club,
+        jersey_size: v.jersey_size,
+        player_note: v.player_note,
+      }),
+    });
+    // The error belongs in the form, next to the field that caused it — fail() would replace the
+    // whole list with a dead end and take the half-typed correction with it.
+    if (!r.ok) {
+      err.textContent = r.data.error || "Couldn't save those details.";
+      err.hidden = false;
+      return;
+    }
+    fixOpen = null;
+    fixDraft = null;
+    await loadBoard();   // the server normalises what it stores, so the card is redrawn from the server
+    refocusFix(contactId);
+  }
 
   /* ---------- render ---------- */
 
   function card(p) {
+    const open = fixOpen === p.contact_id;
     const facts = [
       p.age ? `<span class="num">${p.age}</span> yrs` : null,
       p.height ? `<span class="num">${esc(p.height)}</span>` : null,
@@ -48,6 +160,11 @@
       <div class="eval-top"><b>${esc(p.name)}</b> ${tags}</div>
       <div class="eval-facts">${facts || "<span>nothing recorded at registration</span>"}</div>
       ${p.player_note ? `<div class="mf-note">They wrote: ${esc(p.player_note)}</div>` : ""}
+      <div class="fix-open">
+        <button class="btn ghost sm" type="button" data-fixopen="${p.contact_id}"
+          aria-expanded="${open}"${open ? ` aria-controls="fix${p.contact_id}"` : ""}>${open ? "Close details" : "Fix details"}</button>
+      </div>
+      ${open ? fixForm(p) : ""}
       <label class="sr-only" for="n${p.contact_id}">Notes on ${esc(p.name)}</label>
       <textarea class="eval-note" id="n${p.contact_id}" placeholder="What did you see?">${esc(p.my_evaluation.notes || "")}</textarea>
       <div class="eval-actions">
@@ -266,6 +383,27 @@
       if (key === sortKey) sortDir = -sortDir;
       else { sortKey = key; sortDir = key === "name" ? 1 : -1; }
       renderRollup();
+    });
+    /* The correction form is delegated on #tList, at boot, once. render() replaces that node's
+       innerHTML but never the node itself, so a listener attached here cannot accumulate — which
+       is §-1c D-6, the pool board's handler leak, deliberately not inherited a second time. */
+    $("tList").addEventListener("click", (e) => {
+      const open = e.target.closest("[data-fixopen]");
+      if (open) {
+        const id = Number(open.dataset.fixopen);
+        fixOpen = fixOpen === id ? null : id;   // one open at a time; closing discards the draft
+        fixDraft = null;
+        render();
+        return refocusFix(id);   // render() just replaced this button; focus must not fall to body
+      }
+      const save = e.target.closest("[data-fixsave]");
+      if (save) saveCard(Number(save.dataset.fixsave), save.closest("[data-fixform]"));
+    });
+    // Every keystroke is kept, so typing in the filter box — which rebuilds every card — cannot
+    // silently discard a half-finished correction.
+    $("tList").addEventListener("input", (e) => {
+      const form = e.target.closest("[data-fixform]");
+      if (form) fixDraft = readForm(form);
     });
     loadEvents();
   });

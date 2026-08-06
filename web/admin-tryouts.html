@@ -11,9 +11,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Tryout evaluations — Boomtown Athletics</title>
   <script>/* Pre-paint state — collapse + theme (uiux-review §4/§6.4, v0.52.0): read the bt_nav cookie and the saved theme BEFORE the first stylesheet so the rail state AND the theme are right on frame one — no post-paint snap of either. admin-nav.js writes the cookie on rail toggle and bt_theme on theme toggle; the localStorage bt_nav fallback migrates pre-v0.51 sessions. */(function(){try{var m=document.cookie.match(/(?:^|; )bt_nav=([^;]*)/);var v=m?m[1]:((window.localStorage&&localStorage.getItem("bt_nav_collapsed")==="1")?"min":"");if(v==="min")document.documentElement.dataset.nav="min";var t=(window.localStorage&&localStorage.getItem("bt_theme"))||(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.dataset.theme=t;}catch(e){}})();</script>
-  <link rel="stylesheet" href="assets/tokens.css?v=0.97.0" />
-  <link rel="stylesheet" href="assets/app.css?v=0.97.0" />
-  <link rel="stylesheet" href="assets/admin.css?v=0.97.0" />
+  <link rel="stylesheet" href="assets/tokens.css?v=0.98.0" />
+  <link rel="stylesheet" href="assets/app.css?v=0.98.0" />
+  <link rel="stylesheet" href="assets/admin.css?v=0.98.0" />
   <style>
     .eval-list { display: grid; gap: 12px; }
     .eval-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card, 10px); padding: 14px; }
@@ -32,6 +32,36 @@
       color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-control, 8px); cursor: pointer; }
     .eval-rate button[aria-pressed="true"] { border-color: var(--accent); color: var(--emphasis); }
     .eval-saved { font-size: 12px; color: var(--positive); }
+
+    /* STAFF CARD CORRECTION (v0.98.0, W-E.2b). A form over what the player typed at registration,
+       folded away until somebody needs it: a coach judging forty players wants none of this on
+       screen, and the one person fixing a typo wants it exactly here, on the player it is about.
+       Almost no new vocabulary is invented — tokens.css already themes every input, gives it the
+       44px target and the bare :focus-visible ring (F-35), and app.css already gives .btn its
+       press feedback. What is left is layout. */
+    .fix-open { margin-top: 10px; }
+    .fix-form { margin-top: 10px; padding-top: 12px; border-top: 1px solid var(--border);
+      display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+    .fix-form > label { display: grid; gap: 4px; font-size: 13px; color: var(--text-muted); }
+    .fix-form input, .fix-form textarea { width: 100%; }
+    .fix-wide { grid-column: 1 / -1; }
+    .fix-set { border: 0; padding: 0; margin: 0; }   /* a real fieldset/legend, without the chrome */
+    .fix-note { min-height: 66px; resize: vertical; background: var(--surface-2); }
+    /* Checkboxes, not the aria-pressed toggles the rating row uses: those fire an action on tap,
+       these are a value that is saved with the rest of the form. The label is the 44px target. */
+    .fix-pos { display: flex; gap: 6px; flex-wrap: wrap; }
+    .fix-pos label { display: inline-flex; align-items: center; gap: 6px; min-height: 44px;
+      font-size: 14px; color: var(--text); padding: 0 8px; border: 1px solid var(--border);
+      border-radius: var(--radius-control, 8px); }
+    .fix-pos input { width: auto; min-height: 0; margin: 0; }
+    .fix-hint { font-size: 12px; color: var(--text-muted); }
+    .fix-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .fix-error { font-size: 13px; color: var(--danger); }
+    /* Opacity only. The card grows by its own height and no layout property is animated; a
+       correction is occasional, so the entrance earns 150ms rather than nothing. */
+    .fix-form { animation: fixIn 150ms var(--ease-out) both; }
+    @keyframes fixIn { from { opacity: 0; } }
+    @media (prefers-reduced-motion: reduce) { .fix-form { animation: none; } }
 
     /* THE DIRECTOR'S ROLL-UP. Uses the shared .tbl vocabulary from admin.css rather than a private
        table style — a second table language on one page is how two screens stop looking like one
@@ -63,7 +93,7 @@
 </head>
 <body>
     <header class="header chrome-glass no-print">
-    <a class="wordmark" href="admin.html" style="text-decoration:none;color:inherit"><img class="brand-logo" src="assets/logo-boom-icon-512.png?v=0.97.0" alt="" width="22" height="22" />Boomtown <span>Athletics</span></a>
+    <a class="wordmark" href="admin.html" style="text-decoration:none;color:inherit"><img class="brand-logo" src="assets/logo-boom-icon-512.png?v=0.98.0" alt="" width="22" height="22" />Boomtown <span>Athletics</span></a>
     <div class="spacer"></div>
     <select id="orgSwitcher" class="org-switcher" aria-label="Switch organization"></select>
     <a id="btHdrMail" class="btn ghost hdr-mail" href="admin-messages.html" aria-label="Messages">✉</a>
@@ -211,8 +241,8 @@
       </section>
     </main>
   </div>
-  <script src="assets/config.js?v=0.97.0"></script>
-  <script src="assets/admin-nav.js?v=0.97.0"></script>
-  <script src="assets/admin-tryouts.js?v=0.97.0"></script>
+  <script src="assets/config.js?v=0.98.0"></script>
+  <script src="assets/admin-nav.js?v=0.98.0"></script>
+  <script src="assets/admin-tryouts.js?v=0.98.0"></script>
 </body>
 </html>

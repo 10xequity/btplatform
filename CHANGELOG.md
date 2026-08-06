@@ -1,5 +1,55 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.98.0 — 2026-08-06
+
+**§-1b W-E.2b — staff card correction. Tryouts is finished.** `PUT /api/admin/tryouts/:eventId/card/:contactId`
+had been built, tested and org-scoped since **v0.60.0 with no caller anywhere** — the last route in
+the cluster behind the owner's "try out page does not work — no form to use". Verified before
+designing, for the sixth consecutive W-unit, and again the engine was whole and only the screen was
+missing. **D-4 baseline 16 → 15, and the tryouts cluster is now empty.**
+
+**A correction form on the evaluate card** in `admin-tryouts.html`, folded away behind a quiet
+"Fix details" button on each player. Correcting a card is **two taps and typing** — open, edit, save
+(owner req #19). It covers exactly `CARD_COLS`: positions, age groups, height, previous club, jersey
+size, and the note the player wrote at registration.
+
+- **A list crosses the wire as an ARRAY, never a comma-separated string.** `parseList` JSON.parses a
+  string before it falls back to splitting, so the single value `"16"` parses as the *number* 16,
+  fails `Array.isArray`, and comes back empty — a form that posted its text box raw would silently
+  delete the age group the user just typed, for roughly one input in ten, and look correct in
+  review. `"14U, 16U"` happens to work, which is exactly why that bug would survive. The client
+  splits the box itself and posts an array; the guard proves the trap against the real validator.
+- **The client does no unit arithmetic.** Height is stored in centimetres and rendered imperial by
+  the server (`cmToImperial`). A feet-and-inches box here would have to round-trip, and 5'11" is a
+  range of centimetres rather than one, so every save of an unrelated field would quietly rewrite a
+  stored height that was never wrong. The field asks for centimetres, says so in its own label, and
+  shows what is on file today in the server's words.
+- **Both `#tList` listeners are delegated and attached once, at boot.** That node has its innerHTML
+  replaced on every render but is never itself recreated, so a listener attached during a render
+  would accumulate for the life of the page — §-1c D-6, the pool board's live defect, deliberately
+  not inherited a second time. The assertion is positional, so a rename cannot satisfy it.
+- **A re-render cannot discard a half-typed correction.** Typing in the "Find a player" box rebuilds
+  every card; the form's live values are kept and redrawn, and focus is put back on the control the
+  user pressed rather than falling to `<body>`.
+- **The error appears in the form, not over the page.** `fail()` would replace the whole list with a
+  dead end and take the half-typed correction with it. An unrecognised position is dropped by the
+  server rather than refused, and the form offers exactly the six it accepts.
+
+**No new visual vocabulary.** `tokens.css` already themes every input with the 44px target and the
+bare `:focus-visible` ring (F-35), and `app.css` already gives `.btn` its press feedback, so what
+was left to write was layout. This is the v0.95.1 / v0.96.1 lesson applied *before* the release
+rather than after: two of that session's four releases were design fixes spent inventing a step the
+shared scale already declared.
+
+`tryouts_card.test.mjs` **(+12, 1338 → 1350)**, with three negative controls that each mutate the
+real shipped client: posting the raw comma string, moving a `#tList` listener into `render()`, and
+the comment-stripper controlled in both directions.
+
+**W-E.3 is not in this release and never will be.** The owner settled it on 2026-08-06: offers are
+handled in a separate system. There is no offer route, there will not be one, and nothing here
+sends, tracks or records an offer. Same shape as SafeSport/M25 — the correct build is no field and
+no route. The tryouts workflow ends at the squad board: evaluate → roll up → place on a team.
+
 ## v0.97.0 — 2026-08-06
 
 **§-1b W-E.2 — the tryout squad board.** Five admin routes that had been built, tested and org-scoped

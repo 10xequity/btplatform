@@ -119,10 +119,11 @@ const BASELINE = [
   // "/api/admin/squads/*", "/api/admin/squads/*/assign", "/api/admin/squads/*/remove" and
   // "/api/admin/tryouts/*/squads" — STRUCK v0.97.0 (W-E.2): admin-squads.html is their screen.
   // Four at once because they are one surface — a board you cannot create a team on is not a
-  // board. `tryouts/*/card/*` stays: staff card correction is W-E.2b and has no screen yet.
+  // board. `tryouts/*/card/*` — STRUCK v0.98.0 (W-E.2b): the correction form on the evaluate card
+  // in admin-tryouts.html is its caller. That was the LAST uncalled tryouts route; the cluster the
+  // owner's "try out page does not work — no form to use" pointed at is now empty.
   "/api/admin/subs/requests",
   "/api/admin/subs/signups",
-  "/api/admin/tryouts/*/card/*",
   // "/api/admin/tryouts/*/summary" — STRUCK v0.96.0 (W-E): the Director summary control on
   // admin-tryouts.html is its caller. Until then that button pointed at admin-buildstatus.html.
 ];
