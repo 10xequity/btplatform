@@ -11,9 +11,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Tryout evaluations — Boomtown Athletics</title>
   <script>/* Pre-paint state — collapse + theme (uiux-review §4/§6.4, v0.52.0): read the bt_nav cookie and the saved theme BEFORE the first stylesheet so the rail state AND the theme are right on frame one — no post-paint snap of either. admin-nav.js writes the cookie on rail toggle and bt_theme on theme toggle; the localStorage bt_nav fallback migrates pre-v0.51 sessions. */(function(){try{var m=document.cookie.match(/(?:^|; )bt_nav=([^;]*)/);var v=m?m[1]:((window.localStorage&&localStorage.getItem("bt_nav_collapsed")==="1")?"min":"");if(v==="min")document.documentElement.dataset.nav="min";var t=(window.localStorage&&localStorage.getItem("bt_theme"))||(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.dataset.theme=t;}catch(e){}})();</script>
-  <link rel="stylesheet" href="assets/tokens.css?v=0.96.0" />
-  <link rel="stylesheet" href="assets/app.css?v=0.96.0" />
-  <link rel="stylesheet" href="assets/admin.css?v=0.96.0" />
+  <link rel="stylesheet" href="assets/tokens.css?v=0.96.1" />
+  <link rel="stylesheet" href="assets/app.css?v=0.96.1" />
+  <link rel="stylesheet" href="assets/admin.css?v=0.96.1" />
   <style>
     .eval-list { display: grid; gap: 12px; }
     .eval-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card, 10px); padding: 14px; }
@@ -37,7 +37,11 @@
        table style — a second table language on one page is how two screens stop looking like one
        product. Only the sort control and the numeric columns are new here. */
     .roll { margin-top: 4px; }
-    .roll h2 { font-size: 16px; margin: 0 0 4px; }
+    /* 18px is this product's h2 (admin.css `.modal h2`), between the 22px page h1 and the 14.5px
+       table body. The first draft set it to 16px, which is the h3 size — it collided exactly with
+       `.eval-top b`, a player's name on a card, so a heading introducing an entire view ranked no
+       higher than one row's label. Take the step from the shared scale, never invent one. */
+    .roll h2 { font-size: 18px; margin: 0 0 4px; }
     .roll-scroll { overflow-x: auto; }            /* the table scrolls, the page never does */
     .roll-sort { font: inherit; font-size: inherit; font-weight: 600; color: inherit; background: none;
       border: 0; padding: 0; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
@@ -59,7 +63,7 @@
 </head>
 <body>
     <header class="header chrome-glass no-print">
-    <a class="wordmark" href="admin.html" style="text-decoration:none;color:inherit"><img class="brand-logo" src="assets/logo-boom-icon-512.png?v=0.96.0" alt="" width="22" height="22" />Boomtown <span>Athletics</span></a>
+    <a class="wordmark" href="admin.html" style="text-decoration:none;color:inherit"><img class="brand-logo" src="assets/logo-boom-icon-512.png?v=0.96.1" alt="" width="22" height="22" />Boomtown <span>Athletics</span></a>
     <div class="spacer"></div>
     <select id="orgSwitcher" class="org-switcher" aria-label="Switch organization"></select>
     <a id="btHdrMail" class="btn ghost hdr-mail" href="admin-messages.html" aria-label="Messages">✉</a>
@@ -205,8 +209,8 @@
       </section>
     </main>
   </div>
-  <script src="assets/config.js?v=0.96.0"></script>
-  <script src="assets/admin-nav.js?v=0.96.0"></script>
-  <script src="assets/admin-tryouts.js?v=0.96.0"></script>
+  <script src="assets/config.js?v=0.96.1"></script>
+  <script src="assets/admin-nav.js?v=0.96.1"></script>
+  <script src="assets/admin-tryouts.js?v=0.96.1"></script>
 </body>
 </html>

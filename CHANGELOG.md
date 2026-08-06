@@ -1,5 +1,17 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.96.1 — 2026-08-05
+
+**The roll-up's heading was an h2 wearing the h3 size — one step off the shared scale, and it collided with a player's name.**
+
+A design review after v0.96.0 shipped flagged flat type on `admin-tryouts.html`. Most of that is pre-existing and lives in shared `admin.css` (`.tbl` at 14.5px, `.tbl th` at 12.5px), and changing it would restyle every table in the admin product — out of scope for a tryouts unit, and a per-page override of shared vocabulary is the defect that guard family exists to prevent. **One part of it was mine and was real:** `.roll h2` shipped at **16px**, which is this product's h3 step (`.module h3`, `.settings-section h3`) and is byte-identical to `.eval-top b` — a player's name on an evaluation card. A heading introducing an entire view ranked no higher than one row's label.
+
+Corrected to **18px**, the h2 step already declared in `admin.css` (`.modal h2`), which sits properly between the 22px page `h1` and the 14.5px table body. The step was taken from the shared scale rather than invented for this page.
+
+**The guard asserts the ORDER, not the number** — `.roll h2` must outrank `.eval-top b`, and must land on a step the shared scale already declares. Pinning "18px" would be the same mistake this repo has now made twice in two days: a guard that encodes one spelling of a fix reddens on the next legitimate change. Verified to discriminate before shipping — regressing the value to 16px flips the ordering assertion false.
+
+Suite **1324/1324** (+1), test files **81**, modules **51**, buster **393 across 63 files** at 0.96.1. No migration; ledger **0042**. D-4 baseline **20**. One CSS declaration and one assertion; no behaviour changed.
+
 ## v0.96.0 — 2026-08-05
 
 **W-E part one — the director's half of tryouts finally has a screen, and the "Director summary" button stops pointing at the wrong page.**

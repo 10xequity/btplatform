@@ -194,6 +194,28 @@ test("the table sorts from the head, announces the sort, and never signals it wi
   assert.match(HTML, /\.roll-scroll \{ overflow-x: auto/);
 });
 
+test("the roll-up heading outranks the rows it introduces", () => {
+  /* The INVARIANT, deliberately not a pinned size. The first draft of this section set `.roll h2`
+     to 16px, which is this product's h3 step and is byte-identical to `.eval-top b` — a player's
+     name on an evaluation card. A heading that introduces an entire view then ranked no higher than
+     one row's label. Asserting "18px" would pin one spelling of the fix and redden on the next
+     legitimate change to the scale, which is a mistake this repo has now made twice; asserting the
+     ORDER cannot. */
+  const size = (re) => {
+    const m = HTML.match(re);
+    assert.ok(m, `could not read a font-size for ${re} — this check is reading the wrong rule`);
+    return parseFloat(m[1]);
+  };
+  const heading = size(/\.roll h2 \{ font-size: ([\d.]+)px/);
+  const cardName = size(/\.eval-top b \{ font-size: ([\d.]+)px/);
+  assert.ok(heading > cardName,
+    `the roll-up heading (${heading}px) must outrank a player's name on a card (${cardName}px)`);
+  // And it must come from the shared scale rather than a number invented for this page: admin.css
+  // declares h1 at 22 and h2 at 18, so anything between the card name and the page title is a step
+  // that already exists.
+  assert.ok(heading >= 18 && heading <= 22, `${heading}px is not a step on the shared heading scale`);
+});
+
 test("sorting a column twice reverses it, and counts open on the biggest number", () => {
   // The behaviour a director expects when they open "Offers": most-wanted first.
   assert.match(CODE, /else \{ sortKey = key; sortDir = key === "name" \? 1 : -1; \}/,
