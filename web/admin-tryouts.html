@@ -11,9 +11,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Tryout evaluations — Boomtown Athletics</title>
   <script>/* Pre-paint state — collapse + theme (uiux-review §4/§6.4, v0.52.0): read the bt_nav cookie and the saved theme BEFORE the first stylesheet so the rail state AND the theme are right on frame one — no post-paint snap of either. admin-nav.js writes the cookie on rail toggle and bt_theme on theme toggle; the localStorage bt_nav fallback migrates pre-v0.51 sessions. */(function(){try{var m=document.cookie.match(/(?:^|; )bt_nav=([^;]*)/);var v=m?m[1]:((window.localStorage&&localStorage.getItem("bt_nav_collapsed")==="1")?"min":"");if(v==="min")document.documentElement.dataset.nav="min";var t=(window.localStorage&&localStorage.getItem("bt_theme"))||(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.dataset.theme=t;}catch(e){}})();</script>
-  <link rel="stylesheet" href="assets/tokens.css?v=0.95.1" />
-  <link rel="stylesheet" href="assets/app.css?v=0.95.1" />
-  <link rel="stylesheet" href="assets/admin.css?v=0.95.1" />
+  <link rel="stylesheet" href="assets/tokens.css?v=0.96.0" />
+  <link rel="stylesheet" href="assets/app.css?v=0.96.0" />
+  <link rel="stylesheet" href="assets/admin.css?v=0.96.0" />
   <style>
     .eval-list { display: grid; gap: 12px; }
     .eval-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card, 10px); padding: 14px; }
@@ -32,6 +32,24 @@
       color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-control, 8px); cursor: pointer; }
     .eval-rate button[aria-pressed="true"] { border-color: var(--accent); color: var(--emphasis); }
     .eval-saved { font-size: 12px; color: var(--positive); }
+
+    /* THE DIRECTOR'S ROLL-UP. Uses the shared .tbl vocabulary from admin.css rather than a private
+       table style — a second table language on one page is how two screens stop looking like one
+       product. Only the sort control and the numeric columns are new here. */
+    .roll { margin-top: 4px; }
+    .roll h2 { font-size: 16px; margin: 0 0 4px; }
+    .roll-scroll { overflow-x: auto; }            /* the table scrolls, the page never does */
+    .roll-sort { font: inherit; font-size: inherit; font-weight: 600; color: inherit; background: none;
+      border: 0; padding: 0; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
+    .roll-sort:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; border-radius: 4px; }
+    /* The arrow is on the SORTED column only, and it is a character rather than colour — a sort
+       state signalled by colour alone is invisible to a third of the people who use this. */
+    [aria-sort="ascending"] .roll-sort::after { content: " ↑"; }
+    [aria-sort="descending"] .roll-sort::after { content: " ↓"; }
+    .roll-num { font-variant-numeric: tabular-nums; text-align: right; }
+    .roll-range { font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .roll-none { color: var(--text-muted); }
+
     @media (max-width: 430px) {
       .eval-actions { display: grid; grid-template-columns: 1fr 1fr; }
       .eval-rate { grid-column: 1 / -1; }
@@ -41,7 +59,7 @@
 </head>
 <body>
     <header class="header chrome-glass no-print">
-    <a class="wordmark" href="admin.html" style="text-decoration:none;color:inherit"><img class="brand-logo" src="assets/logo-boom-icon-512.png?v=0.95.1" alt="" width="22" height="22" />Boomtown <span>Athletics</span></a>
+    <a class="wordmark" href="admin.html" style="text-decoration:none;color:inherit"><img class="brand-logo" src="assets/logo-boom-icon-512.png?v=0.96.0" alt="" width="22" height="22" />Boomtown <span>Athletics</span></a>
     <div class="spacer"></div>
     <select id="orgSwitcher" class="org-switcher" aria-label="Switch organization"></select>
     <a id="btHdrMail" class="btn ghost hdr-mail" href="admin-messages.html" aria-label="Messages">✉</a>
@@ -130,7 +148,7 @@
           <label class="mf-inline">Tryout
             <select id="tEvent" aria-label="Choose a tryout"></select>
           </label>
-          <a class="btn ghost" id="tSummary" href="#">Director summary</a>
+          <button class="btn ghost" id="tSummary" type="button" aria-pressed="false">Director summary</button>
         </div>
       </div>
 
@@ -159,10 +177,36 @@
 
       <div id="tList" class="eval-list"></div>
       <p class="empty" id="tEmpty" hidden>Nobody has registered for this tryout yet.</p>
+
+      <!-- The director's roll-up (v0.96.0, W-E). A VIEW on this page rather than a second page:
+           it is the same tryout and the same event picker, so navigating away and re-choosing the
+           event would be two taps to see the other half of one thing (owner req #19).
+           This is the only surface where every coach's verdict is visible at once — the evaluating
+           cards above deliberately show one coach their own work only. -->
+      <section id="tRollup" class="roll" hidden aria-labelledby="tRollH">
+        <h2 id="tRollH">Everyone, with every coach's verdict</h2>
+        <p class="mf-note" id="tRollLead">Ratings are shown as the <b>range</b> coaches gave, never an average — two coaches at 2 and 5 is the case worth looking at, and a single number hides it. Sort by any column.</p>
+        <div class="roll-scroll">
+          <table class="tbl" id="tRollTable">
+            <thead>
+              <tr>
+                <th scope="col" aria-sort="ascending"><button type="button" class="roll-sort" data-sort="name">Player</button></th>
+                <th scope="col" aria-sort="none"><button type="button" class="roll-sort" data-sort="offer">Offers</button></th>
+                <th scope="col" aria-sort="none"><button type="button" class="roll-sort" data-sort="no_offer">No</button></th>
+                <th scope="col" aria-sort="none"><button type="button" class="roll-sort" data-sort="evaluations">Coaches</button></th>
+                <th scope="col" aria-sort="none"><button type="button" class="roll-sort" data-sort="rating">Rating range</button></th>
+                <th scope="col">Where it stands</th>
+              </tr>
+            </thead>
+            <tbody id="tRollBody"></tbody>
+          </table>
+        </div>
+        <p class="empty" id="tRollEmpty" hidden>No coach has written an evaluation for this tryout yet.</p>
+      </section>
     </main>
   </div>
-  <script src="assets/config.js?v=0.95.1"></script>
-  <script src="assets/admin-nav.js?v=0.95.1"></script>
-  <script src="assets/admin-tryouts.js?v=0.95.1"></script>
+  <script src="assets/config.js?v=0.96.0"></script>
+  <script src="assets/admin-nav.js?v=0.96.0"></script>
+  <script src="assets/admin-tryouts.js?v=0.96.0"></script>
 </body>
 </html>

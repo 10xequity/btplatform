@@ -1,5 +1,23 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.96.0 — 2026-08-05
+
+**W-E part one — the director's half of tryouts finally has a screen, and the "Director summary" button stops pointing at the wrong page.**
+
+Verified before building, which is now the fourth consecutive W-unit where that changed the work: **the engine was already there.** `GET /api/admin/tryouts/:eventId/summary` has been built, tested and org-scoped since v0.60.0 — it rolls every coach's verdict up per player — and it had **no caller anywhere**. The page's "Director summary" control was an `<a href>` pointing at `admin-buildstatus.html#tryout-N`: a page about which modules exist, not about this tryout. That is failure class 1 with a button on top of it, and it is exactly what the owner's *"try out page does not work … no test data here or form to use"* was pointing at.
+
+**Built** (`admin-tryouts.js` v1.1 + page): the roll-up is now a **view on the same page**, not a second page — same tryout, same event picker, one tap either way (owner req #19). It lists every evaluated player with the number of offers, the number of noes, how many coaches have looked at them, the **rating range**, and where it stands ("2/3 offer"). Every column sorts from its header; a second click reverses; the count columns open **descending**, because a director opening "Offers" wants the most-wanted players first. Sort state is written to `aria-sort` and shown as an arrow character rather than colour, so it survives greyscale.
+
+**The rating is a range and nothing averages it.** `rollUp` sends `rating_low` and `rating_high` with the comment *"Range, not mean. Two coaches at 2 and 5 is the interesting case, and a mean of 3.5 erases it."* The screen honours that literally — it does no arithmetic on the two ends at all. A 2 and a 5 render as **2–5**. This is the property most likely to be "tidied up" by a future change, so **NC-1 mutates the real shipped client to compute a mean and proves the guard catches it**.
+
+The two views are exclusive, and the card filters go with the cards: leaving "I said offer" applied over a table that is not about one coach would silently filter the director's view by one person's opinion. Coach privacy is untouched — the evaluating cards still show one coach their own work only, enforced in SQL, and the guard asserts **both halves against the same fixture** so "the roll-up aggregates everybody" is not a claim about an empty set.
+
+`worker/test/tryouts_rollup.test.mjs` (**+11**) drives two coaches who genuinely disagree, then asserts the call site in both directions, the range, the aggregation, that an unevaluated player is **absent rather than a row of zeroes**, the sort contract, and the exclusivity of the two views. Three negative controls mutate real shipped files: averaging the range, restoring the build-status link, and the comment stripper proved in both directions.
+
+**One D-4 baseline strike: 21 → 20.** The reachability ratchet demanded it the moment the caller landed, as designed. The other five tryouts routes — the squad board (`squads` GET/POST, `squads/:id` PATCH/DELETE, `assign`, `remove`) and the staff card correction (`card/:contactId`) — are **deliberately still uncalled**: that is a second screen, drag-and-drop shaped, and half-building two screens is worse than finishing one. It is W-E part two.
+
+Suite **1323/1323** (was 1312), test files **81**, modules **51**, buster **393 across 63 files** at 0.96.0. No migration; ledger **0042**. No new route — every route this release calls was already built.
+
 ## v0.95.1 — 2026-08-05
 
 **The suggestions panel stops shouting over the board it advises — and the guard that pinned the wrong thing is fixed with it.**

@@ -6,14 +6,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Event — Boomtown Admin</title>
   <script>/* Pre-paint state — collapse + theme (uiux-review §4/§6.4, v0.52.0): read the bt_nav cookie and the saved theme BEFORE the first stylesheet so the rail state AND the theme are right on frame one — no post-paint snap of either. admin-nav.js writes the cookie on rail toggle and bt_theme on theme toggle; the localStorage bt_nav fallback migrates pre-v0.51 sessions. */(function(){try{var m=document.cookie.match(/(?:^|; )bt_nav=([^;]*)/);var v=m?m[1]:((window.localStorage&&localStorage.getItem("bt_nav_collapsed")==="1")?"min":"");if(v==="min")document.documentElement.dataset.nav="min";var t=(window.localStorage&&localStorage.getItem("bt_theme"))||(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.dataset.theme=t;}catch(e){}})();</script>
-  <link rel="stylesheet" href="assets/tokens.css?v=0.95.1" />
-  <link rel="stylesheet" href="assets/app.css?v=0.95.1" />
-  <link rel="stylesheet" href="assets/admin.css?v=0.95.1" />
+  <link rel="stylesheet" href="assets/tokens.css?v=0.96.0" />
+  <link rel="stylesheet" href="assets/app.css?v=0.96.0" />
+  <link rel="stylesheet" href="assets/admin.css?v=0.96.0" />
   <script>document.documentElement.dataset.theme = localStorage.getItem("bt_theme") || "dark";</script>
 </head>
 <body data-org-switch-href="admin-events.html">
   <header class="header chrome-glass no-print">
-    <a class="wordmark" href="admin.html" style="text-decoration:none;color:inherit"><img class="brand-logo" src="assets/logo-boom-icon-512.png?v=0.95.1" alt="" width="22" height="22" />Boomtown <span>Athletics</span></a>
+    <a class="wordmark" href="admin.html" style="text-decoration:none;color:inherit"><img class="brand-logo" src="assets/logo-boom-icon-512.png?v=0.96.0" alt="" width="22" height="22" />Boomtown <span>Athletics</span></a>
     <div class="spacer"></div>
     <select id="orgSwitcher" class="org-switcher" aria-label="Switch organization"></select>
     <a id="btHdrMail" class="btn ghost hdr-mail" href="admin-messages.html" aria-label="Messages">✉</a>
@@ -97,9 +97,9 @@
     </main>
   </div>
 
-  <script src="assets/config.js?v=0.95.1"></script>
-  <script src="assets/admin-nav.js?v=0.95.1"></script>
-  <script src="assets/team-roster.js?v=0.95.1"></script>
-  <script src="assets/admin-event.js?v=0.95.1"></script>
+  <script src="assets/config.js?v=0.96.0"></script>
+  <script src="assets/admin-nav.js?v=0.96.0"></script>
+  <script src="assets/team-roster.js?v=0.96.0"></script>
+  <script src="assets/admin-event.js?v=0.96.0"></script>
 </body>
 </html>

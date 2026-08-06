@@ -123,7 +123,8 @@ const BASELINE = [
   "/api/admin/subs/signups",
   "/api/admin/tryouts/*/card/*",
   "/api/admin/tryouts/*/squads",
-  "/api/admin/tryouts/*/summary",
+  // "/api/admin/tryouts/*/summary" — STRUCK v0.96.0 (W-E): the Director summary control on
+  // admin-tryouts.html is its caller. Until then that button pointed at admin-buildstatus.html.
 ];
 
 test("every /api/admin route has a caller in web/, except the recorded shrink-only baseline", () => {

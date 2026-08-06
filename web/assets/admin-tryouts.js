@@ -20,6 +20,9 @@
 
   let eventId = null;
   let players = [];
+  let rollup = [];                 // the director's view: every coach's verdict, per player
+  let rollOpen = false;
+  let sortKey = "name", sortDir = 1;
 
   const POS_LABEL = { S: "Setter", OH: "Outside", RS: "Opposite", MB: "Middle", L: "Libero", DS: "Def. specialist" };
 
@@ -80,6 +83,79 @@
       ? `${list.length} shown · you have judged ${judged} of ${players.length}`
       : "";
     wire();
+  }
+
+  /* ---------- the director's roll-up ----------
+     The one place every coach's verdict is visible at once. The evaluating cards above show one
+     coach their own work only, and that is enforced in SQL — this view is the deliberate exception,
+     for after the gym has emptied.
+
+     THE RATING IS A RANGE, NEVER A MEAN. The server sends `rating_low` and `rating_high` and this
+     file does no arithmetic on them at all. Two coaches at 2 and 5 is the case a director needs to
+     see; an average of 3.5 is a number no coach gave and it hides the disagreement that matters. */
+
+  const SORTS = {
+    name: (p) => String(p.name || "").toLowerCase(),
+    offer: (p) => p.offer || 0,
+    no_offer: (p) => p.no_offer || 0,
+    evaluations: (p) => p.evaluations || 0,
+    // Sorting by "rating" means sorting by the top mark anyone gave, with the low end breaking ties.
+    // Not an average — see above.
+    rating: (p) => (p.rating_high == null ? -1 : p.rating_high * 10 + (p.rating_low || 0)),
+  };
+
+  function sortedRollup() {
+    const get = SORTS[sortKey] || SORTS.name;
+    return [...rollup].sort((a, b) => {
+      const x = get(a), y = get(b);
+      if (x < y) return -1 * sortDir;
+      if (x > y) return 1 * sortDir;
+      return String(a.name || "").localeCompare(String(b.name || ""));   // stable, always by name
+    });
+  }
+
+  function renderRollup() {
+    const rows = sortedRollup();
+    $("tRollBody").innerHTML = rows.map((p) => {
+      const range = p.rating_high == null
+        ? `<span class="roll-none">not rated</span>`
+        : p.rating_low === p.rating_high
+          ? `${p.rating_low}`
+          : `${p.rating_low}–${p.rating_high}`;
+      return `<tr>
+        <td>${esc(p.name)}</td>
+        <td class="roll-num">${p.offer || 0}</td>
+        <td class="roll-num">${p.no_offer || 0}</td>
+        <td class="roll-num">${p.evaluations || 0}</td>
+        <td class="roll-range">${range}</td>
+        <td>${esc(p.split)}</td>
+      </tr>`;
+    }).join("");
+    $("tRollEmpty").hidden = rows.length > 0;
+    // aria-sort lives on the th, which is what a screen reader announces — the arrow is its twin.
+    $("tRollTable").querySelectorAll("th[aria-sort]").forEach((th) => {
+      const key = th.querySelector(".roll-sort")?.dataset.sort;
+      th.setAttribute("aria-sort", key !== sortKey ? "none" : sortDir === 1 ? "ascending" : "descending");
+    });
+  }
+
+  async function openRollup() {
+    const r = await api(`/api/admin/tryouts/${eventId}/summary`);
+    if (!r.ok) return fail("tRollup", r.data.error || "Couldn't load the summary.");
+    rollup = r.data.players || [];
+    renderRollup();
+  }
+
+  /** Swap which half of the tryout is on screen. One tap, no navigation, same event. */
+  function showRollup(on) {
+    rollOpen = on;
+    $("tRollup").hidden = !on;
+    $("tList").hidden = on;
+    $("tEmpty").hidden = on || players.length > 0;
+    document.querySelector(".mf-filter").hidden = on;   // those filters drive the cards, not the table
+    $("tSummary").setAttribute("aria-pressed", String(on));
+    $("tSummary").textContent = on ? "Back to my evaluations" : "Director summary";
+    if (on) openRollup();
   }
 
   /* ---------- saving ---------- */
@@ -161,13 +237,31 @@
       : `<option value="">No events yet</option>`;
     eventId = list.length ? list[0].id : null;
     if (!eventId) return BT_ADMIN.orgEmptyState("tList", "events"); // v0.89.0 Block B3: an empty org is not a broken module
-    $("tSummary").href = `admin-buildstatus.html#tryout-${eventId}`;
     loadBoard();
   }
 
   document.addEventListener("DOMContentLoaded", () => {
-    $("tEvent").addEventListener("change", () => { eventId = Number($("tEvent").value); loadBoard(); });
+    $("tEvent").addEventListener("change", () => {
+      eventId = Number($("tEvent").value);
+      loadBoard();
+      if (rollOpen) openRollup();          // stay on the view the director chose, on the new tryout
+    });
     ["tFind", "tPos", "tShow"].forEach((k) => $(k).addEventListener("input", render));
+    // Until v0.96.0 this button was an <a> pointing at admin-buildstatus.html — a page about which
+    // modules exist, not about this tryout. The summary route it should always have called has been
+    // built and tested since v0.60.0 with no caller anywhere.
+    $("tSummary").addEventListener("click", () => showRollup(!rollOpen));
+    // One delegated listener on the static table head; the body is rewritten on every sort.
+    $("tRollTable").addEventListener("click", (e) => {
+      const b = e.target.closest(".roll-sort");
+      if (!b) return;
+      const key = b.dataset.sort;
+      // Same column again reverses. A new column starts descending for the counts — a director
+      // opening "Offers" wants the most-wanted players first, not the least.
+      if (key === sortKey) sortDir = -sortDir;
+      else { sortKey = key; sortDir = key === "name" ? 1 : -1; }
+      renderRollup();
+    });
     loadEvents();
   });
 })();
