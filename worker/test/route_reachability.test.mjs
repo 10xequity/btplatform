@@ -116,13 +116,13 @@ const BASELINE = [
   "/api/admin/shifts/*/approve",
   "/api/admin/shifts/*/assign",
   "/api/admin/sms/consent",
-  "/api/admin/squads/*",
-  "/api/admin/squads/*/assign",
-  "/api/admin/squads/*/remove",
+  // "/api/admin/squads/*", "/api/admin/squads/*/assign", "/api/admin/squads/*/remove" and
+  // "/api/admin/tryouts/*/squads" — STRUCK v0.97.0 (W-E.2): admin-squads.html is their screen.
+  // Four at once because they are one surface — a board you cannot create a team on is not a
+  // board. `tryouts/*/card/*` stays: staff card correction is W-E.2b and has no screen yet.
   "/api/admin/subs/requests",
   "/api/admin/subs/signups",
   "/api/admin/tryouts/*/card/*",
-  "/api/admin/tryouts/*/squads",
   // "/api/admin/tryouts/*/summary" — STRUCK v0.96.0 (W-E): the Director summary control on
   // admin-tryouts.html is its caller. Until then that button pointed at admin-buildstatus.html.
 ];

@@ -235,8 +235,13 @@
     $("tEvent").innerHTML = list.length
       ? list.map((e) => `<option value="${e.id}">${esc(e.name)}</option>`).join("")
       : `<option value="">No events yet</option>`;
-    eventId = list.length ? list[0].id : null;
+    // Arriving back from the squad board carries the tryout in the URL, so the director does not
+    // re-choose the event they were already looking at (req #19). v0.97.0.
+    const want = Number(new URLSearchParams(location.search).get("event")) || null;
+    eventId = want && list.some((e) => e.id === want) ? want : (list.length ? list[0].id : null);
     if (!eventId) return BT_ADMIN.orgEmptyState("tList", "events"); // v0.89.0 Block B3: an empty org is not a broken module
+    $("tEvent").value = String(eventId);
+    $("tSquads").href = `admin-squads.html?event=${eventId}`;
     loadBoard();
   }
 

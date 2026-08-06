@@ -179,6 +179,7 @@
       { href: "admin-waitlists.html",     ico: "regs",   text: "Waitlists" },
       { href: "admin-checkin.html",       ico: "door",   text: "Check-in" },
       { href: "admin-tryouts.html",       ico: "regs",   text: "Tryouts" },
+      { href: "admin-squads.html",        ico: "members", text: "Tryout Squads" },
       { href: "admin-facility.html",      ico: "sched",  text: "Facility Calendar" },
       { href: "tournament.html",          ico: "ops",    text: "Tournament Ops" },
       { href: "admin-league.html",        ico: "league", text: "League Manager" },
@@ -719,7 +720,7 @@
       if (window.BT_STATUS || document.getElementById("bt-status-js")) return;
       var s = document.createElement("script");
       s.id = "bt-status-js";
-      s.src = "assets/build-status.js?v=0.96.1";
+      s.src = "assets/build-status.js?v=0.97.0";
       s.async = false;
       document.head.appendChild(s);
     } catch (e) { /* indicators are never load-blocking */ }

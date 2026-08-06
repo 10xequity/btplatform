@@ -1,5 +1,43 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.97.0 — 2026-08-06
+
+**§-1b W-E.2 — the tryout squad board.** Five admin routes that had been built, tested and org-scoped
+with no caller anywhere now have a screen: `GET/POST /api/admin/tryouts/:id/squads`,
+`PATCH/DELETE /api/admin/squads/:id`, `POST /api/admin/squads/:id/assign`, and
+`POST /api/admin/squads/:id/remove`. This was the largest remaining cluster behind the owner's
+"try out page does not work — no form to use". The engine was never the gap.
+
+**New page `admin-squads.html`** (rail: Tryout Squads, beside Tryouts), with `admin-squads.js`:
+
+- **Placement is two taps and there is no dragging.** Pick a player from the unplaced list, then
+  pick the team. Moving a player who is already placed is the same two taps, because the assign
+  route moves them. Drag was the pool board's answer and is the wrong one here — a director does
+  this holding a phone at the side of a court, and drag has no keyboard path that is not a worse
+  second one.
+- **Every listener is delegated and attached once, at boot.** `#sqUnplaced` and `#sqGrid` have their
+  innerHTML replaced on each render but are never themselves recreated, so a listener added inside
+  a render would accumulate for the life of the page. That is §-1c D-6, the pool board's live
+  defect; this page is written not to inherit it and a positional guard enforces it.
+- **The server owns "short" and "full".** `squadNeeds()` defines full as headcount met AND no
+  position short — a team of 10 with no setter is not full. The client renders that verdict and
+  does no arithmetic of its own.
+- Each team says what it still needs by position; the event-wide line totals teams full, players
+  placed, and what is still short. Editing a team saves name, size and per-position needs together;
+  removing a team returns its players to the unplaced list and the confirm says so.
+- Both pages carry the chosen tryout across in the URL, so moving between evaluations and squads
+  never costs a re-pick (req #19).
+
+**Route reachability baseline 20 → 16.** Four struck at once because they are one surface — a board
+you cannot create a team on is not a board. `tryouts/:id/card/:contactId` stays on the baseline:
+staff card correction is W-E.2b and has no screen yet.
+
+`tryouts_squads.test.mjs` (+14): the five routes end to end through the real router, including that
+assigning a placed player moves rather than duplicates them, and that a deleted team strands nobody.
+Three negative controls, each mutating the real shipped client — one computes fullness client-side,
+one attaches a listener inside a render, and one proves the comment stripper works in both
+directions.
+
 ## v0.96.1 — 2026-08-05
 
 **The roll-up's heading was an h2 wearing the h3 size — one step off the shared scale, and it collided with a player's name.**

@@ -1,101 +1,99 @@
 <!DOCTYPE html>
-<!-- Boomtown Platform — Files (generic upload library) · Version: v1.0 · Date: 2026-07-26 · Ships in: v0.30.0
-     One org-scoped file store. Drop files, label them, set who can see them, attach them to a
-     record. No compliance, screening or approval fields — those live in an external system by
-     owner decision (2026-07-26).
+<!-- Boomtown Platform — Tryout squads (admin) · Version: v1.0 · Date: 2026-08-06 · Ships in: v0.97.0
+     Building teams out of a finished tryout. Roadmap §-1b W-E.2.
 
-     DESIGN NOTES (standards §1–§3, /visual-design-principles, /emil-design-eng)
-       Hierarchy, three tiers: (1) the drop zone is the focal point — 28px heading, largest
-       target on the page; (2) the file table; (3) the filter row, deliberately quiet.
-       Motion: the drop zone changes BACKGROUND only on dragover — dragover fires continuously,
-       and per §2 a continuous event gets no transform. The progress bar is constant motion, so
-       it is `linear`; every other easing here is the §2 ease-out curve. Table rows do not
-       animate: list rendering is a tens-per-day interaction.
-       Spacing is the 4px scale only. No hardcoded hex — tokens.css owns colour. -->
+     A SECOND SCREEN, not a third view on admin-tryouts.html — the roadmap's own words, and the
+     pool board is the named precedent. Evaluating players and assembling teams happen at different
+     times, by different people, and the evaluation page already carries two views.
+
+     PLACEMENT IS TWO TAPS AND THERE IS NO DRAGGING. Pick a player, then pick the team. A director
+     doing this holds a phone in one hand in a gym; drag needs press-move-release and a pointer that
+     never leaves the target. Two taps also give keyboard and screen-reader users the same path
+     rather than a worse one, and it means no drag handlers to leak (§-1c D-6, which the pool board
+     does have and this page deliberately does not inherit).
+
+     Click budget (req #19): placing a player is 2 taps. Moving one is also 2 — assign moves. -->
 <html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Files — Boomtown Athletics</title>
-  <script>document.documentElement.dataset.theme = localStorage.getItem("bt_theme") || "dark";</script>
+  <title>Tryout squads — Boomtown Athletics</title>
   <script>/* Pre-paint state — collapse + theme (uiux-review §4/§6.4, v0.52.0): read the bt_nav cookie and the saved theme BEFORE the first stylesheet so the rail state AND the theme are right on frame one — no post-paint snap of either. admin-nav.js writes the cookie on rail toggle and bt_theme on theme toggle; the localStorage bt_nav fallback migrates pre-v0.51 sessions. */(function(){try{var m=document.cookie.match(/(?:^|; )bt_nav=([^;]*)/);var v=m?m[1]:((window.localStorage&&localStorage.getItem("bt_nav_collapsed")==="1")?"min":"");if(v==="min")document.documentElement.dataset.nav="min";var t=(window.localStorage&&localStorage.getItem("bt_theme"))||(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.dataset.theme=t;}catch(e){}})();</script>
   <link rel="stylesheet" href="assets/tokens.css?v=0.97.0" />
   <link rel="stylesheet" href="assets/app.css?v=0.97.0" />
   <link rel="stylesheet" href="assets/admin.css?v=0.97.0" />
   <style>
-    .up-wrap { max-width: 1100px; margin: 0 auto; padding: 16px; }
-    .up-h1 { font-size: 28px; margin: 8px 0 4px; }
-    .up-sub { color: var(--text-dim, var(--text-muted)); margin: 0 0 24px; max-width: 68ch; }
+    /* Containers borrow `.eval-card` from admin-tryouts.html exactly — same 1px border, same radius
+       token, same surface. A second card language across two screens of one workflow is how a
+       product stops looking like one product. Only the shortfall chip is new here, and it is new
+       because it is the one fact this screen knows that no other screen does. */
+    .sq-wrap { display: grid; grid-template-columns: minmax(260px, 320px) 1fr; gap: 16px; align-items: start; }
+    .sq-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card, 10px); padding: 14px; }
+    /* 18px is this product's h2 step (admin.css `.modal h2`), between the 22px page h1 and the
+       14.5px body. Taken from the shared scale, never invented — a heading that lands on the h3
+       step collides with a player's name and stops outranking the rows it introduces. */
+    .sq-card h2 { font-size: 18px; margin: 0 0 2px; }
+    .sq-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
 
-    /* ---- tier 1: the drop zone ---- */
-    .up-drop {
-      position: relative; display: block; width: 100%;
-      border: 2px dashed var(--border); border-radius: 10px;
-      background: var(--surface); padding: 32px 16px; text-align: center;
-      cursor: pointer;
-      /* dragover fires continuously — colour only, never transform (§2) */
-      transition: background-color 120ms ease, border-color 120ms ease;
+    /* Pressables. `:active` scale is the whole feedback budget of this page — placing a player is
+       the only thing it does, and the press must be felt before the network answers. */
+    .sq-pick, .sq-place, .sq-off {
+      font: inherit; text-align: left; width: 100%; cursor: pointer;
+      background: var(--surface-2); color: var(--text);
+      border: 1px solid var(--border); border-radius: var(--radius-control, 8px);
+      padding: 8px 10px; min-height: 44px;
+      transition: transform 160ms ease-out, border-color 160ms ease;
     }
-    .up-drop:hover { border-color: var(--primary); }
-    .up-drop.over { background: var(--surface-2, var(--surface-raised)); border-color: var(--primary); }
-    .up-drop:focus-within { outline: 2px solid var(--primary); outline-offset: 2px; }
-    .up-drop .big { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
-    .up-drop .small { font-size: 13px; color: var(--text-dim, var(--text-muted)); }
-    .up-drop input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+    .sq-pick:active, .sq-place:active, .sq-off:active { transform: scale(0.97); }
+    .sq-pick:focus-visible, .sq-place:focus-visible, .sq-off:focus-visible,
+    .sq-edit:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+    .sq-pick[aria-pressed="true"] { border-color: var(--accent); }
+    .sq-pick .nm { font-weight: 600; }
+    .sq-meta { color: var(--text-muted); font-size: 12.5px; }
+    .sq-meta .num { font-variant-numeric: tabular-nums; }
+    .pos-tag { display: inline-block; padding: 1px 8px; border-radius: 999px; border: 1px solid currentColor; font-size: 11px; font-weight: 800; letter-spacing: .04em; }
 
-    .up-opts { display: flex; gap: 12px; flex-wrap: wrap; margin: 16px 0 0; align-items: flex-end; }
-    .up-field { display: flex; flex-direction: column; gap: 4px; min-width: 160px; }
-    .up-field label { font-size: 14px; font-weight: 600; }           /* labels ABOVE inputs, §3 */
-    .up-field select, .up-field input {
-      font: inherit; min-height: 44px; padding: 10px 12px; color: var(--text);
-      background: var(--surface-2, var(--surface-raised));
-      border: 1px solid var(--border); border-radius: 8px;
+    .sq-list { display: grid; gap: 6px; margin-top: 8px; }
+    /* The place button exists only while a player is picked. An always-visible "place here" on
+       every team is a control that does nothing on the first tap of the pair, and a dead control
+       reads as a broken one. */
+    .sq-place { display: none; margin-top: 8px; font-weight: 600; }
+    [data-picking="1"] .sq-place { display: block; }
+    [data-picking="1"] .sq-place { border-color: var(--accent); }
+
+    .sq-mem { display: flex; align-items: center; gap: 8px; justify-content: space-between;
+      padding: 6px 0; border-top: 1px solid var(--border); font-size: 14px; }
+    .sq-mem:first-child { border-top: 0; }
+    .sq-off { width: auto; min-width: 44px; min-height: 44px; text-align: center; padding: 4px 10px; color: var(--text-muted); }
+
+    /* THE SIGNATURE ELEMENT — what this team still needs. `squadNeeds()` on the server is the one
+       definition of both "short" and "full", and this chip is its only rendering. The figure takes
+       `--emphasis` (navy on light, gold on dark); the chip is never gold text on a light surface. */
+    .sq-needs { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+    .sq-need { display: inline-flex; align-items: baseline; gap: 4px; font-size: 12.5px;
+      background: var(--surface-2); border: 1px solid var(--border); border-radius: 999px; padding: 2px 10px; }
+    .sq-need b { color: var(--emphasis); font-variant-numeric: tabular-nums; }
+    /* "Full" is the dot idiom this product already uses for state, not a colour-only signal — the
+       word "Full" carries it for anyone who cannot see the dot. */
+    .sq-fullmark { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-muted); margin-top: 8px; }
+    .sq-fullmark::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--positive); }
+    .sq-count { font-variant-numeric: tabular-nums; color: var(--text-muted); font-size: 12.5px; }
+
+    .sq-edit { font: inherit; font-size: 12.5px; background: none; border: 0; padding: 4px; cursor: pointer;
+      color: var(--text-muted); text-decoration: underline; }
+    .sq-form { display: grid; gap: 8px; margin-top: 10px; }
+    .sq-form input, .sq-form select { font: inherit; font-size: 16px; padding: 8px 10px; min-height: 44px;
+      background: var(--surface-2); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-control, 8px); }
+    .sq-form .row { display: flex; gap: 8px; flex-wrap: wrap; }
+    .sq-form .row > * { flex: 1 1 120px; }
+
+    @media (max-width: 860px) { .sq-wrap { grid-template-columns: 1fr; } }
+    @media (max-width: 430px) {
+      .sq-pick, .sq-place { min-height: 52px; }        /* thumb-critical: this is the whole page */
     }
-    .up-field .hint { font-size: 12px; color: var(--text-dim, var(--text-muted)); }
-
-    /* ---- upload progress: constant motion, therefore linear (§2) ---- */
-    .up-queue { margin: 16px 0 0; display: grid; gap: 8px; }
-    .up-item { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; }
-    .up-item .name { font-weight: 600; font-size: 15px; word-break: break-all; }
-    .up-item .meta { font-size: 13px; color: var(--text-dim, var(--text-muted)); margin-top: 2px; }
-    .up-bar { height: 6px; border-radius: 999px; background: var(--surface-2, var(--surface-raised)); margin-top: 8px; overflow: hidden; }
-    .up-bar > i { display: block; height: 100%; width: 0; background: var(--primary); transition: width 120ms linear; }
-    .up-item.err { border-color: var(--danger); }
-    .up-item.err .meta { color: var(--danger); }
-    .up-item.done .meta { color: var(--positive); }
-
-    /* ---- tier 3: filters, deliberately quiet ---- */
-    .up-filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; margin: 32px 0 12px; }
-
-    /* ---- tier 2: the table ---- */
-    .up-table { width: 100%; border-collapse: collapse; }
-    .up-table th, .up-table td { text-align: left; padding: 12px 8px; border-top: 1px solid var(--border); font-size: 15px; vertical-align: top; }
-    .up-table th { font-size: 13px; font-weight: 700; color: var(--text-dim, var(--text-muted)); border-top: 0; }
-    .up-table tr.gone td { opacity: 0.55; }
-    .up-name { font-weight: 600; word-break: break-all; }
-    .up-chip { display: inline-block; border-radius: 999px; padding: 3px 10px; font-size: 12px; font-weight: 700;
-               background: var(--surface-2, var(--surface-raised)); border: 1px solid var(--border); }
-    .up-chip.public { color: var(--warn, #e6a23c); }
-    .up-chip.members { color: var(--primary); }
-    .up-row-actions { display: flex; gap: 4px; flex-wrap: wrap; }
-    .up-row-actions button, .up-row-actions a {
-      min-height: 44px; min-width: 44px; padding: 8px 12px; font: inherit; font-size: 14px;
-      background: none; border: 1px solid var(--border); border-radius: 8px; color: var(--text);
-      cursor: pointer; display: inline-flex; align-items: center;
-    }
-    .up-row-actions button:active { transform: scale(0.97); }        /* §2 press feedback */
-    .up-row-actions button:focus-visible, .up-row-actions a:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
-    .up-row-actions .danger { color: var(--danger); border-color: var(--danger); }
-
-    /* ---- skeleton, not a spinner: the shape of the answer arrives first (§3) ---- */
-    .sk { height: 16px; border-radius: 4px; background: var(--surface-2, var(--surface-raised)); }
-    .up-empty { padding: 32px 16px; text-align: center; color: var(--text-dim, var(--text-muted)); }
-    .up-empty b { color: var(--text); display: block; font-size: 18px; margin-bottom: 4px; }
-    .up-quota { font-size: 13px; color: var(--text-dim, var(--text-muted)); margin-top: 16px; }
-    .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
     @media (prefers-reduced-motion: reduce) {
-      .up-drop, .up-bar > i { transition: none; }
-      .up-row-actions button:active { transform: none; }
+      .sq-pick, .sq-place, .sq-off { transition: border-color 160ms ease; }
+      .sq-pick:active, .sq-place:active, .sq-off:active { transform: none; }
     }
   </style>
 </head>
@@ -181,71 +179,58 @@
       </nav>
       <button class="bt-edge" type="button" aria-label="Collapse or expand navigation"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
     </aside>
-    <main class="admin-main up-wrap">
-      <h1 class="up-h1">Files</h1>
-      <p class="up-sub">
-        One place for anything you need to keep — rosters, schedules, logos, receipts, imports.
-        Files belong to the organization you're currently switched into. Set who can see each one;
-        the default is staff only.
-      </p>
-
-      <fieldset style="border:0; padding:0; margin:0;">
-        <legend class="sr-only">Upload files</legend>
-
-        <label class="up-drop" id="drop">
-          <span class="big">Drop files here, or click to choose</span>
-          <span class="small" id="dropHint">Images, PDF, CSV, Word, Excel, ZIP · up to 10 MB each</span>
-          <input type="file" id="file" multiple aria-describedby="dropHint" />
-        </label>
-
-        <div class="up-opts">
-          <div class="up-field">
-            <label for="kind">Label these as</label>
-            <select id="kind"></select>
-          </div>
-          <div class="up-field">
-            <label for="vis">Who can see them</label>
-            <select id="vis">
-              <option value="private" selected>Staff only</option>
-              <option value="members">Signed-in members</option>
-              <option value="public">Anyone with the link</option>
-            </select>
-            <span class="hint" id="visHint">Staff only is the default.</span>
-          </div>
-          <div class="up-field">
-            <label for="notes">Note (optional)</label>
-            <input id="notes" type="text" maxlength="200" placeholder="What this is for" />
-          </div>
+    <main class="admin-main" id="main">
+      <div class="mf-head">
+        <div>
+          <h1>Tryout squads</h1>
+          <p class="muted">Build the teams. Pick a player, then pick the team they go on — two taps, and moving someone already placed is the same two taps. A team is only <strong>full</strong> when it has the headcount <em>and</em> nothing short by position.</p>
         </div>
-
-        <div class="up-queue" id="queue" aria-live="polite"></div>
-      </fieldset>
-
-      <div class="up-filters">
-        <div class="up-field">
-          <label for="fKind">Filter by label</label>
-          <select id="fKind"><option value="">All labels</option></select>
-        </div>
-        <div class="up-field">
-          <label for="fQ">Search filenames</label>
-          <input id="fQ" type="search" placeholder="e.g. roster" />
-        </div>
-        <div class="up-field">
-          <label for="fDel">Show</label>
-          <select id="fDel">
-            <option value="0" selected>Current files</option>
-            <option value="1">Include removed</option>
-          </select>
+        <div class="mf-row" style="margin:0">
+          <label class="mf-inline">Tryout
+            <select id="sqEvent" aria-label="Choose a tryout"></select>
+          </label>
+          <a class="btn ghost" id="sqBack" href="admin-tryouts.html">Evaluations</a>
         </div>
       </div>
 
-      <div id="list"></div>
-      <p class="up-quota" id="quota"></p>
+      <!-- The only status line on the page, and it is the pick. A two-tap interaction where the
+           first tap is silent is a two-tap interaction people press twice. -->
+      <p class="mf-note" id="sqStatus" aria-live="polite">Pick a player to place.</p>
+
+      <div class="sq-wrap" id="sqWrap" data-picking="0">
+        <section class="sq-card" aria-labelledby="sqUnH">
+          <h2 id="sqUnH">Not on a team yet</h2>
+          <p class="sq-count" id="sqUnCount"></p>
+          <label class="sr-only" for="sqFind">Find a player</label>
+          <input id="sqFind" placeholder="Find a player" autocomplete="off"
+                 style="font:inherit;font-size:16px;width:100%;min-height:44px;margin-top:8px;padding:8px 10px;background:var(--surface-2);color:var(--text);border:1px solid var(--border);border-radius:var(--radius-control,8px)" />
+          <div class="sq-list" id="sqUnplaced"></div>
+          <p class="empty" id="sqUnEmpty" hidden>Everyone who registered is on a team.</p>
+        </section>
+
+        <div>
+          <p class="sq-count" id="sqTotals" aria-live="polite"></p>
+          <div class="sq-grid" id="sqGrid"></div>
+          <p class="empty" id="sqEmpty" hidden>No teams yet. Make the first one below.</p>
+
+          <section class="sq-card" style="margin-top:12px" aria-labelledby="sqNewH">
+            <h2 id="sqNewH">New team</h2>
+            <form class="sq-form" id="sqNewForm">
+              <div class="row">
+                <label class="sr-only" for="sqNewName">Team name</label>
+                <input id="sqNewName" placeholder="Team name" autocomplete="off" required />
+                <label class="sr-only" for="sqNewTarget">How many players</label>
+                <input id="sqNewTarget" type="number" min="1" max="30" value="10" inputmode="numeric" aria-label="How many players" />
+              </div>
+              <div><button class="btn" type="submit" id="sqNewBtn" style="min-height:44px">Add team</button></div>
+            </form>
+          </section>
+        </div>
+      </div>
     </main>
   </div>
-
   <script src="assets/config.js?v=0.97.0"></script>
   <script src="assets/admin-nav.js?v=0.97.0"></script>
-  <script src="assets/admin-uploads.js?v=0.97.0" defer></script>
+  <script src="assets/admin-squads.js?v=0.97.0"></script>
 </body>
 </html>
