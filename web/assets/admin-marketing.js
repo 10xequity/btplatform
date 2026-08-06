@@ -1,5 +1,6 @@
 /* Boomtown Platform — Marketing (admin)
-   File: web/assets/admin-marketing.js · Version: v1.1 · Date: 2026-08-01 · Ships in: v0.44.0 (v1.0 shipped in v0.16.0)
+   File: web/assets/admin-marketing.js · Version: v1.2 · Date: 2026-08-06 · Ships in: v0.99.0 (v1.0 shipped in v0.16.0)
+   v1.2 — §-1b W-F: segments target one event; ?event= arrives from the registrations screen.
    v1.1 — Marketing SMS scope C: campaigns carry a channel (Email / Text). Text campaigns get a
    plain-text body with a live segment-count meter (480 cap = 3 SMS segments), reuse the same
    segments, and stay clearly labeled in the list. While Twilio is unconfigured the strip says
@@ -16,6 +17,18 @@
   const fmt = (s) => String(s || "").replace("T", " ").slice(0, 16);
 
   let SEGMENTS = [];
+  let EVENTS = [];
+
+  /* The event picker's options. Loaded once at boot — /api/events is already org-scoped, so the
+     list an operator can segment by is exactly the list they can see. */
+  async function loadEvents() {
+    const r = await api("/api/events");
+    EVENTS = (r.ok && r.data.events) || [];
+  }
+  const eventName = (id) => {
+    const e = EVENTS.find((x) => Number(x.id) === Number(id));
+    return e ? e.name : `event #${id}`;
+  };
 
   /* ---------- overview strip + settings ---------- */
   async function loadOverview() {
@@ -74,17 +87,21 @@
     if (f.played === "league") bits.push("played a league");
     if (f.played === "tournament") bits.push("played a tournament");
     if (f.played === "none") bits.push("never played yet");
+    if (f.event) bits.push(`registered for ${eventName(f.event)}`);
     if (f.since) bits.push(`joined since ${f.since}`);
     return bits.length ? bits.join(" · ") : "Everyone reachable";
   }
 
-  function segmentModal(seg) {
-    const f = (seg && seg.filter) || {};
+  function segmentModal(seg, presetEvent) {
+    const f = (seg && seg.filter) || (presetEvent ? { event: presetEvent } : {});
+    /* Arriving from an event's registrations, the segment is already named for the thing the
+       operator was looking at — they confirm rather than compose. */
+    const presetName = presetEvent ? `${eventName(presetEvent)} — registrants` : "";
     openModal(`
       <h2 style="margin-top:0">${seg ? "Edit segment" : "New segment"}</h2>
       <div class="mkt-form">
         <label for="mSegName">Name</label>
-        <input id="mSegName" value="${seg ? esc(seg.name) : ""}" placeholder="League players, fall" />
+        <input id="mSegName" value="${seg ? esc(seg.name) : esc(presetName)}" placeholder="League players, fall" />
         <label for="mSegTags">Has any of these tags (comma-separated, optional)</label>
         <input id="mSegTags" value="${f.tags ? esc(f.tags.join(", ")) : ""}" placeholder="newsletter, queens-club" />
         <label for="mSegPlayed">Play history</label>
@@ -94,6 +111,11 @@
           <option value="league" ${f.played === "league" ? "selected" : ""}>Played a league</option>
           <option value="tournament" ${f.played === "tournament" ? "selected" : ""}>Played a tournament</option>
           <option value="none" ${f.played === "none" ? "selected" : ""}>Never played yet</option>
+        </select>
+        <label for="mSegEvent">Registered for a specific event (optional)</label>
+        <select id="mSegEvent">
+          <option value="">Any event</option>
+          ${EVENTS.map((e) => `<option value="${Number(e.id)}" ${Number(f.event) === Number(e.id) ? "selected" : ""}>${esc(e.name)}</option>`).join("")}
         </select>
         <label for="mSegSince">Joined on or after (optional)</label>
         <input id="mSegSince" type="date" value="${f.since || ""}" />
@@ -110,6 +132,8 @@
         filter: {
           tags: $("mSegTags").value.split(",").map((t) => t.trim()).filter(Boolean),
           played: $("mSegPlayed").value || undefined,
+          /* The server coerces this string; sending it raw is deliberate and asEventId is its guard. */
+          event: $("mSegEvent").value || undefined,
           since: $("mSegSince").value || undefined,
         },
       });
@@ -285,9 +309,18 @@
   }
 
   await loadOverview();
+  await loadEvents();
   await loadSegments();
   await loadCampaigns();
+
+  /* Arrived from "Email these registrants" on an event's registrations: open the new-segment
+     form with that event already chosen. Two taps from the registration list to a real segment. */
+  const fromEvent = Number(new URLSearchParams(location.search).get("event")) || 0;
+  if (fromEvent) segmentModal(null, fromEvent);
 })();
+/* Changelog: v1.2 (2026-08-06, v0.99.0) — §-1b W-F: segments can target ONE event. Event picker in
+   the segment form, the event named in the segment's description, and a ?event= deep link that
+   arrives from the registrations screen with the event chosen and the segment named. */
 /* Changelog: v1.1 (2026-08-01, v0.44.0) — Marketing SMS scope C: channel select, plain-text SMS
    body with live segment meter (480 cap), texting status chip, channel-labeled campaign rows,
    channel-aware send confirm. */

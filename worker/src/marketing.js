@@ -1,6 +1,11 @@
 /**
  * Boomtown Platform — Marketing & Comms module (M14 Phase A)
- * File: worker/src/marketing.js · Version: v1.1 · Date: 2026-08-01 · Ships in: v0.44.0 (v1.0 shipped in v0.16.0)
+ * File: worker/src/marketing.js · Version: v1.2 · Date: 2026-08-06 · Ships in: v0.99.0 (v1.0 shipped in v0.16.0)
+ *
+ * v1.2 — §-1b W-F, registration → members → comms. Segments gain an `event` filter, so an operator
+ * can email the people who registered for ONE event; `played` only ever knew the event TYPE.
+ * The clause reuses ?1 for e.org_id (no extra bind, cannot reach across orgs). `asEventId` coerces
+ * the string a <select> posts — dropping it silently would WIDEN the segment to the whole org.
  *
  * v1.1 — Marketing SMS, scope C (owner req #17; sequencing override of record 2026-08-01:
  * built DORMANT ahead of live SMS proof). Campaigns gain channel 'email'|'sms' (migration
@@ -58,8 +63,21 @@ const API_ORIGIN_DEFAULT = "https://boomtown-api.vvisuth.workers.dev";
 
 /* ---------------- pure helpers (unit-tested in worker/test/marketing.test.mjs) ---------------- */
 
-/** filter: { tags:[], played:'any'|'league'|'tournament'|'none'|null, since:'YYYY-MM-DD'|null }
- *  Returns { where, binds } to append after: org_id=? AND deleted_at IS NULL AND unsubscribed=0 AND email present. */
+/** One event id, or 0 for "no event filter".
+ *  A <select> hands back the STRING "7", never the number 7. Validating with Number.isInteger
+ *  alone would drop it silently — and a dropped event filter does not narrow to nothing, it
+ *  WIDENS the segment to every reachable contact in the org. Same narrow-input shape as
+ *  parseList, worse blast radius: the operator meant one event's registrants and would email
+ *  everybody. Booleans are rejected explicitly (Number(true) === 1). */
+export function asEventId(v) {
+  if (typeof v !== "number" && typeof v !== "string") return 0;
+  const n = Number(v);
+  return Number.isInteger(n) && n > 0 ? n : 0;
+}
+
+/** filter: { tags:[], played:'any'|'league'|'tournament'|'none'|null, since:'YYYY-MM-DD'|null, event:<id>|null }
+ *  Returns { where, binds } to append after: org_id=?1 AND deleted_at IS NULL AND unsubscribed=0 AND email present.
+ *  `event` narrows to the people who registered for ONE event — `played` only knows the event TYPE. */
 export function buildSegmentWhere(filter) {
   const f = filter || {};
   const parts = [];
@@ -78,6 +96,15 @@ export function buildSegmentWhere(filter) {
     parts.push("EXISTS (SELECT 1 FROM registrations r WHERE r.contact_id = c.id AND r.deleted_at IS NULL)");
   } else if (f.played === "none") {
     parts.push("NOT EXISTS (SELECT 1 FROM registrations r WHERE r.contact_id = c.id AND r.deleted_at IS NULL)");
+  }
+  const eventId = asEventId(f.event);
+  if (eventId) {
+    /* e.org_id reuses ?1 — the org bind BASE_WHERE already carries — so this adds NO bind and a
+       stored filter_json holding another org's event id can never reach across orgs. */
+    parts.push(
+      "EXISTS (SELECT 1 FROM registrations r JOIN events e ON e.id = r.event_id WHERE r.contact_id = c.id AND r.deleted_at IS NULL AND e.deleted_at IS NULL AND e.org_id = ?1 AND e.id = ?)"
+    );
+    binds.push(eventId);
   }
   if (f.since && /^\d{4}-\d{2}-\d{2}$/.test(f.since)) {
     parts.push("c.created_at >= ?");
@@ -249,11 +276,13 @@ async function listSegments(env, ctx) {
   return H.json({ segments: out });
 }
 
-function cleanFilter(raw) {
+export function cleanFilter(raw) {
   const f = raw && typeof raw === "object" ? raw : {};
   const out = {};
   if (Array.isArray(f.tags) && f.tags.length) out.tags = f.tags.map((t) => String(t).trim()).filter(Boolean).slice(0, 10);
   if (["any", "league", "tournament", "none"].includes(f.played)) out.played = f.played;
+  const eventId = asEventId(f.event);
+  if (eventId) out.event = eventId;
   if (typeof f.since === "string" && /^\d{4}-\d{2}-\d{2}$/.test(f.since)) out.since = f.since;
   return out;
 }

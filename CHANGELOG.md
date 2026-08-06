@@ -1,5 +1,18 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.99.0 — 2026-08-06
+
+**§-1b W-F — registration → members → comms. Segments can target one event.**
+
+Registration already built the members database and the members screen already rendered it — verified before designing, and for the first time in seven W-units the engine was not only built but already called. The gap was the join between them: a segment could filter on tags, on *play history*, or on join date, and play history knows only the event **type**. "Email the people who registered for the Valentines tournament" could not be asked for. Live D1 also says none of the org's 49 contacts carry a tag, so that filter reaches nobody today.
+
+- **Segments gain an event filter.** Pick one event in the segment form and the segment is the people who registered for it. The event is named in the segment's description, so a list of segments still reads in plain language.
+- **"Email these registrants"** on the registrations screen carries the chosen event straight to a new segment, already named for that event. One tap there, one confirm here — no retyping the event, no hunting for it on a second screen.
+- **A dropped event filter would widen the segment, not empty it.** With no clause the query falls back to everyone reachable, so a silently discarded filter means emailing the whole org instead of one event's registrants. A dropdown posts the text `"7"`, never the number 7, so the value is coerced before it is validated and the test proves that against the real code rather than describing it.
+- **The clause cannot reach across organisations.** It reuses the organisation the query is already bound to, which costs nothing and means a saved segment pointing at another org's event matches no one.
+
+`marketing_segments_event.test.mjs` (+14, 1350 → 1364), four negative controls that each mutate the real shipped source. No database migration and no new route.
+
 ## v0.98.0 — 2026-08-06
 
 **§-1b W-E.2b — staff card correction. Tryouts is finished.** `PUT /api/admin/tryouts/:eventId/card/:contactId`

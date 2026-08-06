@@ -110,6 +110,14 @@
     navigator.clipboard.writeText(link).then(() => say(`Registration link copied ✓ <code>${esc(link)}</code>`));
   };
 
+  /* Hand this event's registrants to Marketing as a segment. The registration list is where an
+     operator already is when they decide to email the people on it, so the trip is one tap from
+     here and a confirm there — no retyping the event, no hunting for it in a second screen. */
+  $("emailRegistrants").onclick = () => {
+    if (!eventId) { say("Pick an event first.", true); return; }
+    location.href = `admin-marketing.html?event=${encodeURIComponent(eventId)}`;
+  };
+
   /* ---------- captain score links ---------- */
   $("scoreLinksBtn").onclick = async () => {
     if (!eventId) { say("Pick an event first.", true); return; }
