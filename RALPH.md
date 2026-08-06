@@ -1,7 +1,11 @@
 # RALPH LOOP — Boomtown Platform (btplatform)
 
-**File:** `RALPH.md` · **Version:** v3.0 · **Created:** 2026-08-04 · **Updated:** 2026-08-05
+**File:** `RALPH.md` · **Version:** v3.1 · **Created:** 2026-08-04 · **Updated:** 2026-08-06
 **Status:** ACTIVE — the loop's instruction set. Re-read from disk every iteration.
+**Supersedes:** v3.0 (2026-08-05). Change: PHASE 3 step 7 — the Pages confirmation pointed at the
+repo root, a bustless redirect stub that answers 200 forever, so it could not fail. It now reads
+`/web/` and says why, and `preflight` grew a `pages` check that enforces it (v0.99.0 shipped a
+worker with no matching static build and every check reported clean).
 **Supersedes:** v2.0 (2026-08-04). Changes: the v2 queue (§6.1–§6.3) is DONE and replaced by the
 tester-fix blocks (roadmap §-1) plus the owner's 2026-08-05 registration-first workflow program
 (roadmap §-1b). Adds the owner's build-bias rule, the owner-report→root-cause map, and the /loop
@@ -169,10 +173,19 @@ RELEASE, only if the unit changed `worker/**` or `web/**`:
        node worker/scripts/changelog-entry.mjs --check --version vX.Y.Z   (--version REQUIRED)
        Then DELETE entry.md.
     6. commit (git commit -F <file>; PowerShell has no heredoc), then push
-    7. confirm the deploy — preflight `deployed` PASS, then fetch the live artifact and SAMPLE
-       TO CONVERGENCE (the health check flaps ~2 min across edge locations):
+    7. confirm the deploy — preflight `deployed` AND `pages` both PASS, then fetch the live
+       artifacts and SAMPLE TO CONVERGENCE (the health check flaps ~2 min across edge locations):
          health https://boomtown-api.vvisuth.workers.dev/api/health
-         pages  https://10xequity.github.io/btplatform/
+         pages  https://10xequity.github.io/btplatform/web/     ← /web/, NOT the root
+       **THE SHIP HAS TWO HALVES AND THEY DEPLOY ON SEPARATE PIPELINES.** `deploy-worker.yml`
+       ships `worker/**` to Cloudflare; the static app is shipped by a GitHub-managed
+       `pages-build-deployment` run this repo does not own and cannot gate. On 2026-08-06
+       v0.99.0's worker went green while its Pages build FAILED, so the API served v0.99.0 to a
+       browser still running the v0.98.0 bundle — and this step reported clean, because until
+       v1.1 it fetched the repo ROOT: a redirect stub last edited 2026-07-22 that carries no
+       buster and answers 200 identically whether Pages built today or never. `/api/health`
+       proves the WORKER and nothing else. If Pages is behind:
+         gh run list --workflow=pages-build-deployment --limit 5
        `git log main..origin/main` must be EMPTY after. A release is ONE push.
 
   Docs-only or tooling-only: NO bump, NO sweep. Still commit and push.

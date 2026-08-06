@@ -6,7 +6,10 @@
    checkpoint the ZIP drag used to provide. */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseTestTotals, sourceVersion, schemaVerdict, gitVerdict, syntaxErrorFor } from "../scripts/preflight.mjs";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { parseTestTotals, sourceVersion, schemaVerdict, gitVerdict, syntaxErrorFor, pagesVerdict, REPO } from "../scripts/preflight.mjs";
+import { versionFromIndex, bustersIn } from "../scripts/sweep-buster.mjs";
 
 /* ---------- syntaxErrorFor ---------- */
 
@@ -105,4 +108,59 @@ test("NC-6: being behind origin BLOCKS — building on a stale tree is the defec
 
 test("NC-7: an unfetched branch warns — unknown sync state is not a clean one", () => {
   assert.equal(gitVerdict({ ...CLEAN, fetched: false }).status, "warn");
+});
+
+/* ---------- pagesVerdict (v1.1, 2026-08-06) ----------
+   The static app and the worker deploy on SEPARATE pipelines and only the worker had a check.
+   On 2026-08-06 v0.99.0's worker went live while its pages-build-deployment FAILED, and the
+   release ritual reported clean throughout — it "checked Pages" by fetching the repo-root
+   redirect stub, a page that carries no buster and answers 200 forever.
+
+   These read two REAL files off disk (the decision function stays pure; only its input is
+   sourced from the tree) because the whole defect was about WHICH page you point at, and a
+   hand-written fixture would have been written to contain the thing the real page lacked. */
+
+const REAL_WEB_INDEX = readFileSync(join(REPO, "web", "index.html"), "utf8");
+const REAL_ROOT_INDEX = readFileSync(join(REPO, "index.html"), "utf8");
+const REAL_WANT = versionFromIndex(readFileSync(join(REPO, "worker", "src", "index.js"), "utf8"));
+
+test("pagesVerdict passes when the live page carries the source's own buster", () => {
+  const v = pagesVerdict(REAL_WANT, REAL_WEB_INDEX);
+  assert.equal(v.status, "ok", `web/index.html should agree with index.js at ${REAL_WANT}: ${v.detail}`);
+});
+
+test("NC-8: the REAL page, mutated to an older buster, is caught — this is the v0.99.0 miss", () => {
+  // Mutate the real input, not a fixture: rewrite web/index.html's busters to the version Pages
+  // was actually serving on 2026-08-06 while the worker reported v0.99.0.
+  const stale = REAL_WEB_INDEX.replace(/\?v=[0-9][0-9.]*/g, "?v=0.98.0");
+  assert.notEqual(stale, REAL_WEB_INDEX, "the mutation must actually change the input, or this NC proves nothing");
+  const v = pagesVerdict(REAL_WANT, stale);
+  assert.equal(v.status, "warn");
+  assert.match(v.detail, /Pages serves 0\.98\.0/);
+  assert.match(v.detail, /pages-build-deployment/, "the detail must name the pipeline to go look at");
+});
+
+test("NC-9: the repo-root redirect stub — the page the old ritual fetched — can never report ok", () => {
+  // THE ORIGINAL DEFECT, as an assertion. This is the literal file served at
+  // https://10xequity.github.io/btplatform/ : it carries no buster, so no version can be read
+  // out of it, so agreeing with it is impossible. If someone re-points PAGES_URL at the root,
+  // this is the behaviour that has to hold — WARN, never a clean pass (C10, failure class 3).
+  assert.equal(bustersIn(REAL_ROOT_INDEX).length, 0, "root index.html is expected to carry no buster; if it gained one, re-read this test");
+  const v = pagesVerdict(REAL_WANT, REAL_ROOT_INDEX);
+  assert.equal(v.status, "warn", "a page with no version in it must not read as agreement");
+  assert.notEqual(v.status, "ok");
+  assert.match(v.detail, /NO \?v= buster/);
+});
+
+test("NC-10: two different busters on one page report a partial build, not a pass", () => {
+  const mixed = REAL_WEB_INDEX.replace(/\?v=[0-9][0-9.]*/, "?v=0.98.0"); // first occurrence only
+  const seen = [...new Set(bustersIn(mixed))];
+  assert.ok(seen.length > 1, "the mutation must leave two distinct values, or this NC proves nothing");
+  const v = pagesVerdict(REAL_WANT, mixed);
+  assert.equal(v.status, "warn");
+  assert.match(v.detail, /different buster values/);
+});
+
+test("NC-11: no version in index.js FAILS — the check cannot silently have nothing to compare", () => {
+  assert.equal(pagesVerdict(null, REAL_WEB_INDEX).status, "fail");
 });

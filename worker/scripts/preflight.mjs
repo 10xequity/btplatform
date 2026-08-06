@@ -26,6 +26,22 @@
  *   suite      · node --test test/*.mjs, counts MEASURED not projected       (CI gate step 3)
  *   schema     · highest migration in db/migrations/ vs live D1              (CI gate step 5)
  *   deployed   · /api/health vs the version string in worker/src/index.js    (CI deploy step 3)
+ *   pages      · the cache buster live on GitHub Pages vs the same source    (NO CI equivalent)
+ *
+ * THE SHIP HAS TWO HALVES AND ONLY ONE OF THEM HAD A CHECK (added 2026-08-06, v1.1).
+ * `deploy-worker.yml` deploys `worker/**` to Cloudflare and asserts `/api/health` afterwards.
+ * The static app is deployed by a SEPARATE, GitHub-managed `pages-build-deployment` run that
+ * this repo does not own, does not gate, and cannot see. On 2026-08-06 those pipelines came
+ * apart: v0.99.0's worker deploy went green while its Pages build FAILED, so the API served
+ * v0.99.0 to a browser still running the v0.98.0 bundle — and every check in the release
+ * ritual reported clean, because `deployed` only ever asked the worker.
+ *
+ * The ritual did nominally say "check Pages", pointed at `https://10xequity.github.io/btplatform/`
+ * — the repo-root redirect stub, last edited 2026-07-22, which carries NO buster and returns a
+ * byte-identical 200 whether Pages last built today or never. That is failure class 3 exactly: a
+ * guard narrower than its subject, reporting clean. This check reads `/web/` instead, the page
+ * that actually carries `?v=`, and a response with no buster in it WARNS — an absence must never
+ * read as agreement (C10).
  *
  * FAIL CLOSED, AND NEVER LAUNDER AN UNKNOWN INTO A PASS. A check that cannot run reports WARN
  * and is named in the summary; it never reports OK. The v0.33.1 lesson is that a projected
@@ -51,11 +67,16 @@ import { dirname, resolve, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
 import { scanMigrations, pad } from "./schema-gate.mjs";
+// Reuse the sweeper's own idioms rather than re-deriving them here. C14: a check that parses the
+// version a second way is not an independent check, it is a second thing that can disagree.
+import { versionFromIndex, bustersIn } from "./sweep-buster.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const REPO = resolve(HERE, "..", "..");
 const WORKER = join(REPO, "worker");
 const HEALTH_URL = "https://boomtown-api.vvisuth.workers.dev/api/health";
+// NOT the repo root. The root is a redirect stub with no buster in it — see the header block.
+const PAGES_URL = "https://10xequity.github.io/btplatform/web/";
 
 /* ============================ pure helpers (unit-tested) ============================ */
 
@@ -226,6 +247,45 @@ async function readAppliedMigration(noNet) {
   } catch { return null; }
 }
 
+/**
+ * Decide the Pages verdict from a version and a page body. Pure, so the interesting cases are
+ * unit-testable without a network: the whole point of this check is the cases where the ANSWER IS
+ * ABSENT, and those are exactly the ones a live fetch is least likely to show you on any given day.
+ *
+ * NEVER returns ok for a body it could not read a buster out of. The defect this check exists to
+ * catch was a URL that always answered 200 and never carried a version; "I found nothing" must
+ * therefore be a WARN, never agreement (C10 — an absence never goes red unless you make it).
+ *
+ * @param {string|null} want  buster version from worker/src/index.js, e.g. "0.100.0"
+ * @param {string} html       the body GitHub Pages served
+ * @returns {{status:"ok"|"warn"|"fail", detail:string}}
+ */
+export function pagesVerdict(want, html) {
+  if (!want) return { status: "fail", detail: "no version string in worker/src/index.js — cannot tell what Pages should be serving." };
+  const live = [...new Set(bustersIn(html || ""))];
+  if (!live.length) {
+    return { status: "warn", detail: `source is ${want}; the Pages response carries NO ?v= buster, so it cannot say which build is live. If PAGES_URL was re-pointed at a page without one, this check is blind — that was the original defect.` };
+  }
+  if (live.length > 1) {
+    return { status: "warn", detail: `source is ${want}; Pages serves ${live.length} different buster values (${live.join(", ")}) — a partial or interrupted build.` };
+  }
+  return live[0] === want
+    ? { status: "ok", detail: `source and GitHub Pages both ${want}.` }
+    : { status: "warn", detail: `source is ${want}, Pages serves ${live[0]}. Expected mid-release; AFTER a green push it means the pages-build-deployment run failed — check \`gh run list --workflow=pages-build-deployment\`. The worker and the static app deploy on SEPARATE pipelines.` };
+}
+
+async function checkPages(noNet) {
+  const want = versionFromIndex(readFileSync(join(WORKER, "src", "index.js"), "utf8"));
+  if (!want) return pagesVerdict(want, "");
+  if (noNet) return { status: "warn", detail: `source says ${want}; GitHub Pages NOT checked (--no-net).` };
+  try {
+    const res = await fetch(`${PAGES_URL}?preflight=${Date.now()}`, { headers: { "Cache-Control": "no-cache" } });
+    return pagesVerdict(want, await res.text());
+  } catch (e) {
+    return { status: "warn", detail: `source says ${want}; GitHub Pages unreachable (${e.message}).` };
+  }
+}
+
 async function checkDeployed(noNet) {
   const src = readFileSync(join(WORKER, "src", "index.js"), "utf8");
   const want = sourceVersion(src);
@@ -269,6 +329,7 @@ async function main() {
     : schemaVerdict(highest, await readAppliedMigration(noNet));
 
   checks.deployed = await checkDeployed(noNet);
+  checks.pages = await checkPages(noNet);
 
   const failed = Object.entries(checks).filter(([, c]) => c.status === "fail");
   const warned = Object.entries(checks).filter(([, c]) => c.status === "warn");
