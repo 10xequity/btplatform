@@ -27,7 +27,15 @@
    empty — a member never sees a broken rail. (2) rail visual pass to the design guide:
    the brand card's hardcoded #000/#F2F0EA move behind tokens with the same literals as
    fallbacks (uiux-review §1 — the card is deliberately dark so gold-on-dark logos read).
-   File: web/assets/site-nav.js · Version: v2.14 · Date: 2026-08-02 · Ships in: v0.53.1
+   v2.15 (v0.101.0, owner 2026-08-06): the member sidebar stops advertising the admin shell.
+   The "Manage" group — four admin destinations pushed into the MEMBER nav for any staff viewer —
+   is deleted; the admin shell already links back to the member site, so the two offered each
+   other and the owner reported the member page "switching back and forth and exposing the admin
+   page". The single header #btHdrAdmin link remains the way back. Also: the role lookup no longer
+   falls back to `roles[0]`, which handed a caller their role in ANOTHER org when they had none in
+   the org on screen. Both are presentation-only — requireStaff re-checks userId + orgId on every
+   admin route — but presentation is what was reported. Guards: header_actions.test.mjs.
+   File: web/assets/site-nav.js · Version: v2.15 · Date: 2026-08-06 · Ships in: v0.101.0
    v2.11: header "Admin" switch (owner 2026-08-02) — staff/admin who are also players get a
    header button on member pages to jump back to the Control Center, next to the mail icon
    and theme toggle. Clears bt_demo_member on click (same escape as the exit pill). Role-gated
@@ -151,7 +159,14 @@
           signedIn = true;
           const me = await resp.json();
           const orgId = Number(localStorage.getItem("bt_org")) || null;
-          const r = (me.roles || []).find(x => !orgId || x.org_id === orgId) || (me.roles || [])[0];
+          /* v2.15: NO `|| roles[0]` fallback. A role in ANOTHER org is not a role HERE, and the
+             fallback meant someone who is a plain member in the org on screen but staff somewhere
+             else was shown the Admin link for an org they hold no role in. Presentation-only —
+             every /api/admin route re-checks server-side against userId + orgId (index.js
+             requireStaff) — but presentation is exactly what the owner saw. No org chosen yet
+             (orgId null) still takes the first role: that is "before you have picked", not
+             "wrong org". */
+          const r = (me.roles || []).find(x => !orgId || Number(x.org_id) === orgId);
           role = r ? r.role : "member";
         }
       } catch (e) { /* offline: render public nav */ }
@@ -232,14 +247,15 @@
         pill.onclick = () => { sessionStorage.removeItem("bt_demo_member"); location.href = "admin.html"; };
         document.body.appendChild(pill);
       }
-      if ((role === "admin" || role === "staff") && !demoMember) {
-        NAV.push({ label: "Manage", items: [
-          { href: "tournament.html",          ico: "◫", text: "Tournament Ops" },
-          { href: "admin-events.html",        ico: "▤", text: "Events & Programs" },
-          { href: "admin-registrations.html", ico: "✓", text: "Registrations" },
-          { href: "admin-users.html",         ico: "◉", text: "Member Management" },
-        ]});
-      }
+      /* v2.15 (owner 2026-08-06): the "Manage" group is GONE from the member sidebar.
+         It pushed four admin destinations (Tournament Ops, Events & Programs, Registrations,
+         Member Management) into the MEMBER navigation for any staff viewer, and the admin shell
+         header links back to the member site — so the two shells offered each other and the owner
+         reported the member page "switching back and forth and exposing the admin page".
+         The way back to the Control Center is the ONE header link (#btHdrAdmin, revealed above);
+         a second, four-item copy of the admin rail on the member site is duplication, not a
+         shortcut, and it is what made the member site read as an admin surface.
+         Also serves the same report's "menus need to be optimized and reviewed for brevity". */
     } else {
       NAV.push({ label: "Account", items: [
         { href: "index.html#signin", ico: "→", text: "Sign in" },
@@ -339,7 +355,7 @@
       if (window.BT_STATUS || document.getElementById("bt-status-js")) return;
       var s = document.createElement("script");
       s.id = "bt-status-js";
-      s.src = "assets/build-status.js?v=0.100.0";
+      s.src = "assets/build-status.js?v=0.101.0";
       s.async = false;
       document.head.appendChild(s);
     } catch (e) { /* indicators are never load-blocking */ }

@@ -215,3 +215,117 @@ test("NC: the call-site gate fails when the invocation is removed", () => {
   const called = /mailBadgeFill\(\)/.test(mutated.replace(/(async\s+)?function mailBadgeFill\s*\([^)]*\)/, ""));
   assert.equal(called, false, "with the call deleted the gate must report uncalled");
 });
+
+/* ---------- v2.15 (owner 2026-08-06): the member sidebar is not a second admin rail ----------
+   The owner reported the member page "switching back and forth and exposing the admin page".
+   site-nav.js used to push a "Manage" group of four ADMIN destinations into the MEMBER nav for
+   any staff viewer, while the admin shell's header links back to the member site — so each shell
+   advertised the other. Removed. The one way back is the single header #btHdrAdmin link, which
+   adminRevealVerdict above still requires, so this pair cannot be "fixed" by deleting both. */
+
+/* NAV hrefs only. site-nav.js legitimately names admin.html once more — the "Viewing as member —
+   Exit" pill — and a verdict that scanned the whole file would fail on that and be wrong. */
+const navHrefs = (src) => [...stripJs(src).matchAll(/\bhref:\s*"([^"]+)"/g)].map((m) => m[1]);
+const isAdminSurface = (h) => /^admin[-.]/.test(h) || h.split("#")[0] === "tournament.html";
+const memberNavVerdict = (src) => navHrefs(src).filter(isAdminSurface);
+
+test("the member sidebar offers NO admin destination (v2.15 — the reported shell ping-pong)", () => {
+  const src = read("assets/site-nav.js");
+  assert.ok(navHrefs(src).length >= 10, `NAV href extraction collapsed (${navHrefs(src).length}) — idiom drift, not a clean scan`);
+  assert.deepEqual(memberNavVerdict(src), [],
+    "an admin destination is back in the member nav; the way to the Control Center is the header link");
+});
+
+test("NC-A1: re-adding one admin link to the member NAV FAILS the verdict", () => {
+  // Mutate the REAL source, in the real idiom, at a real insertion point.
+  const src = read("assets/site-nav.js");
+  const mutated = src.replace('{ href: "profile.html"',
+    '{ href: "admin-events.html", ico: "x", text: "Events and Programs" },\n        { href: "profile.html"');
+  assert.notEqual(mutated, src, "mutation did not land — NC is vacuous");
+  assert.deepEqual(memberNavVerdict(mutated), ["admin-events.html"],
+    "the verdict must catch an admin href put back into the member nav");
+});
+
+test("NC-A2: tournament.html counts as an admin surface (it loads admin-nav.js)", () => {
+  // It does not match /^admin[-.]/, so it needs its own arm — and that arm needs its own control.
+  const src = read("assets/site-nav.js");
+  const mutated = src.replace('{ href: "profile.html"',
+    '{ href: "tournament.html", ico: "x", text: "Tournament Ops" },\n        { href: "profile.html"');
+  assert.notEqual(mutated, src, "mutation did not land — NC is vacuous");
+  assert.deepEqual(memberNavVerdict(mutated), ["tournament.html"]);
+  assert.match(read("tournament.html"), /assets\/admin-nav\.js/,
+    "tournament.html must still be an admin page, or this rule is pinning the wrong file");
+});
+
+/* ---------- v2.15: a role in another org is not a role on this page ---------- */
+
+/* The old line ended `|| (me.roles || [])[0]`, which handed the caller their FIRST role in ANY org
+   when they had none in the org on screen — so a member here who is staff elsewhere saw the Admin
+   link for an org they hold no role in. Server-side this was always refused (requireStaff reads
+   userId + orgId), so it was presentation-only; presentation is what the owner saw. */
+const orgRoleVerdict = (src) => {
+  const s = stripJs(src);
+  return s.includes("(me.roles || []).find(x => !orgId || Number(x.org_id) === orgId)") &&
+         !/\.find\(x => !orgId[^\n]*\)\s*\|\|\s*\(me\.roles \|\| \[\]\)\[0\]/.test(s);
+};
+
+test("the member header role comes from the ACTIVE org, with no cross-org fallback", () => {
+  assert.ok(orgRoleVerdict(read("assets/site-nav.js")),
+    "site-nav.js must resolve role against the active org and must not fall back to roles[0]");
+});
+
+test("NC-A3: restoring the cross-org fallback FAILS the verdict", () => {
+  const src = read("assets/site-nav.js");
+  const mutated = src.replace(
+    "(me.roles || []).find(x => !orgId || Number(x.org_id) === orgId)",
+    "(me.roles || []).find(x => !orgId || x.org_id === orgId) || (me.roles || [])[0]");
+  assert.notEqual(mutated, src, "mutation did not land — NC is vacuous");
+  assert.equal(orgRoleVerdict(mutated), false,
+    "the verdict must reject the roles[0] fallback that showed admin nav for the wrong org");
+});
+
+/* ---------- v2.23: guard() bounces with replace(), so Back cannot re-enter the admin shell ----
+   admin.html ships its whole rail as static markup, so the admin shell is on screen before
+   /api/me can answer. With location.href the bounce PUSHED history — [.., admin.html, home.html]
+   — so Back re-entered admin.html, repainted the shell, and bounced forward again, forever. That
+   is the owner's "switch back and forth and expose the admin page" (2026-08-06). replace()
+   overwrites the entry instead. Deliberate user navigations (View as member, the history.back()
+   helpers) are NOT covered: a user's own click belongs in their history. */
+
+const guardBody = (src) => {
+  const s = stripJs(src);
+  const i = s.indexOf("async function guard()");
+  assert.notEqual(i, -1, "guard() not found — this guard is pinning a function that moved");
+  const j = s.indexOf("\n  }", i);
+  assert.notEqual(j, -1, "guard() body end not found");
+  return s.slice(i, j);
+};
+const guardBouncesVerdict = (src) => {
+  const b = guardBody(src);
+  return { replaces: (b.match(/location\.replace\(/g) || []).length, hrefs: (b.match(/location\.href\s*=/g) || []).length };
+};
+
+test("every guard() bounce uses location.replace, never location.href (v2.23 — the back-trap)", () => {
+  const v = guardBouncesVerdict(adminNavSrc);
+  assert.equal(v.hrefs, 0, "a location.href bounce in guard() pushes history and re-opens the back-trap");
+  assert.equal(v.replaces, 4, `guard() must bounce in exactly its 4 rejection paths (found ${v.replaces}) — a new path needs replace() too`);
+});
+
+test("NC-A4: turning ONE guard() bounce back into location.href FAILS the verdict", () => {
+  const mutated = adminNavSrc.replace(
+    'if (!bearer()) { location.replace("index.html"); return null; }',
+    'if (!bearer()) { location.href = "index.html"; return null; }');
+  assert.notEqual(mutated, adminNavSrc, "mutation did not land — NC is vacuous");
+  const v = guardBouncesVerdict(mutated);
+  assert.equal(v.hrefs, 1, "the verdict must see the reintroduced href");
+  assert.notEqual(v.replaces, 4, "and must no longer count 4 replaces");
+});
+
+test("NC-A5: the deliberate 'View as member' navigation is NOT caught (scope control)", () => {
+  // If this ever fails, the verdict has widened past guard() and would start forbidding
+  // navigations a user asked for — the opposite of the fix.
+  assert.match(stripJs(adminNavSrc), /location\.href = "home\.html";/,
+    "View as member should still push history — it is a user's own click");
+  assert.equal(guardBouncesVerdict(adminNavSrc).hrefs, 0,
+    "...and it must sit OUTSIDE guard(), or the scope of this rule is wrong");
+});

@@ -397,20 +397,33 @@
   }
 
   /* Redirect to sign-in if there's no session; bounce non-staff to home.html (v2.4).
-     Returns /api/me payload only for admin/staff. Memoized: auto-run + page guard() = 1 fetch. */
+     Returns /api/me payload only for admin/staff. Memoized: auto-run + page guard() = 1 fetch.
+
+     v2.23 (v0.101.0, owner 2026-08-06) — EVERY BOUNCE USES location.replace, NEVER location.href.
+     This is the mechanism behind the owner's "members page v admin page seems to switch back and
+     forth and expose the admin page". `location.href` PUSHES a history entry, so a bounce leaves
+     [..., admin.html, home.html] on the stack: press Back and the browser re-enters admin.html,
+     repaints the ENTIRE static admin shell (admin.html ships the rail and all module names as
+     markup, so it is on screen before /api/me can answer), and guard() bounces forward again.
+     Back never escapes and the admin shell is re-exposed every time. `replace` overwrites the
+     entry instead, so the page a user was bounced off is not somewhere Back can return to.
+     The `bt_demo_member` path (View as member) is the likeliest way to hit it: while that flag is
+     set every admin page bounces, so Back-to-the-Control-Center loops until the flag is cleared.
+     NOT changed: line ~289's "View as member" and the two history.back() helpers — those are
+     deliberate user navigations, and a user's own click SHOULD be in their history. */
   let _mePromise = null;
   async function guard() {
     // Admin pages exit member-demo mode automatically (View-as-member is presentation only).
-    if (sessionStorage.getItem("bt_demo_member") === "1") { location.href = "home.html"; return null; }
-    if (!bearer()) { location.href = "index.html"; return null; }
+    if (sessionStorage.getItem("bt_demo_member") === "1") { location.replace("home.html"); return null; }
+    if (!bearer()) { location.replace("index.html"); return null; }
     if (!_mePromise) _mePromise = api("/api/me");
     const me = await _mePromise;
-    if (!me.ok) { location.href = "index.html"; return null; }
+    if (!me.ok) { location.replace("index.html"); return null; }
     // v2.4 member-view isolation: staff/admin on ANY org may enter (org switcher rescopes);
     // everyone else never sees the admin shell. Server-side requireStaff still enforces per-org.
     const roles = (me.data && me.data.roles) || [];
     if (!roles.some((r) => r.role === "admin" || r.role === "staff")) {
-      location.href = "home.html"; return null;
+      location.replace("home.html"); return null;
     }
     return me.data;
   }
@@ -720,7 +733,7 @@
       if (window.BT_STATUS || document.getElementById("bt-status-js")) return;
       var s = document.createElement("script");
       s.id = "bt-status-js";
-      s.src = "assets/build-status.js?v=0.100.0";
+      s.src = "assets/build-status.js?v=0.101.0";
       s.async = false;
       document.head.appendChild(s);
     } catch (e) { /* indicators are never load-blocking */ }

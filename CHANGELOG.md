@@ -1,5 +1,21 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.101.0 — 2026-08-06
+
+**The member page and the admin page no longer bounce you back and forth.**
+
+You reported it as *"members page v admin page seems to switch back and forth and expose the admin page."* There were **two** separate causes, and the second one is what actually trapped you.
+
+**The member sidebar was advertising the admin shell.** The member menu quietly grew a "Manage" group — Tournament Ops, Events & Programs, Registrations, Member Management — shown to anyone with a staff role. Meanwhile the admin header links back to the member site. Each side offered the other, so the two shells sat one click apart in both directions. The Manage group is gone. The single "Admin" button in the header is the one way back, which is what it was always for.
+
+**The Back button could not escape — and this is the real fault.** When the site sends you off a page you should not be on, it was *adding* a step to your browser history instead of *replacing* it. So being bounced off an admin page left both pages in your history: press Back, the browser re-enters the admin page, paints the entire admin menu on screen before it can check who you are, then bounces you forward again. Back never got you out, and the admin shell flashed up every single time you tried. That is the "switch back and forth and expose" you described, exactly. Every one of those automatic bounces now replaces the entry instead of adding one, so the page you were bounced off is no longer somewhere Back can return to. Your own clicks — "View as member", the back arrows inside screens — still work normally; those belong in your history.
+
+**Also fixed, found in the same file:** if you were a plain member in the organization on screen but staff in a *different* one, the header showed you the Admin button for an organization you hold no role in. It never granted access — the server checks your role against the specific organization on every request — but it should not have been offered.
+
+`header_actions.test.mjs` (+8 checks, 1379 → 1387), each with a negative control that edits the real file to prove the check would catch the problem coming back. No database change and no new route.
+
+**Recorded, not built, from the same evening report:** roadmap §-1d now carries the navigation and program-scoping program in your own words — programs appearing only in their own module, one "Tournaments Manager" rail item with tabs inside the screen, the menu brevity pass, and "no bracket without pool" — plus three questions that need your answer before anything is built. Roadmap §-1e opens the security and penetration-test track you asked for, and it starts with a real finding rather than an empty heading.
+
 ## v0.100.0 — 2026-08-06
 
 **§-1b W-G — the sample data now has the shapes real registrations have.**
