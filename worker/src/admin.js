@@ -45,7 +45,22 @@ export async function adminRoutes(request, env, url, ctx) {
   const m = request.method;
   let match;
 
-  if (p === "/api/admin/permissions" && m === "GET") return json({ roles: ROLES, permissions: PERMISSIONS });
+  /* v0.102.0 — roadmap §-1e finding S-1a. This was the FIRST line of the dispatch, above every
+     gate, and it had no session check of any kind: the role list and the entire capability matrix
+     answered any anonymous caller. There is no org data and no PII here, so the severity is low —
+     but it published the authorisation model to anyone who asked, and one ungated /api/admin/*
+     route makes "every admin route is gated" false rather than nearly-true.
+
+     requireStaff, NOT requireAdmin, and the reason is worth keeping: it is the least that closes
+     the disclosure and it cannot break a caller that works today. The single caller is
+     admin-users.js:286, on a page whose own data is separately admin-gated (listUsers →
+     requireAdmin), so tightening this to admin is available and is a reviewable decision — not
+     something to slip in under cover of a security fix. */
+  if (p === "/api/admin/permissions" && m === "GET") {
+    const gate = await requireStaff(env, ctx);
+    if (gate) return gate;
+    return json({ roles: ROLES, permissions: PERMISSIONS });
+  }
 
   if (p === "/api/admin/users" && m === "GET") return listUsers(env, ctx);
   if (p === "/api/admin/users" && m === "POST") return addUser(request, env, ctx);

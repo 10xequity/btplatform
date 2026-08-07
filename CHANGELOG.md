@@ -1,5 +1,23 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.102.0 — 2026-08-07
+
+**The security review you asked for starts here — one hole closed, and a permanent check so it cannot come back.**
+
+**What was open.** One admin address — the one that returns the list of roles and what each role is allowed to do — answered anybody, signed in or not. It was the first line of the admin routing, sitting above the check that guards everything else.
+
+**What it did not expose.** No member data, no names, no emails, nothing about your organization. It returned two fixed lists that never change: the three role names, and the permissions grid you see on the Users screen. Nobody's information was reachable through it. What it did give away is the *shape* of how permissions work here — useful to somebody probing the site, and not something that should be handed out for free. It is now closed to anyone who is not signed in as staff or admin.
+
+**The part that matters more than the fix.** Yesterday's security pass was done by a scan that reported "all clear" across roughly 25 modules. It was wrong — it had walked past this exact line. This release replaces that one-off scan with a permanent check that runs on every build: every admin address must be behind a sign-in check, and if one ever is not, the build fails and names it.
+
+**It was written before the fix and watched to fail.** That is the point. A test that has never failed is not evidence of anything — it may simply be looking at nothing. This one was run against the broken code first, and it named exactly one problem out of 102 admin addresses: the real one, and no false alarms. Then the fix went in and it went green.
+
+**It also caught a bug in itself on that same run**, which is worth saying plainly because it is the reason to trust the rest. It initially flagged a *second* address as unprotected. Reading the actual code showed that one was fine — the check had a blind spot around a slightly different way that part of the site is written. The check was wrong, not the site. Fixed, and the blind spot is written down.
+
+`admin_route_gating.test.mjs` (+12, 1387 → 1399), with four negative controls, each one breaking the real code on purpose to prove the check notices. No database change and no new address.
+
+**Recorded for the next round, not built:** a second finding from the same review — the list of organizations is readable without signing in. That is very likely deliberate, because the sign-in screen needs your logo and branding before anyone has signed in. It is written down with the question attached rather than changed on a guess.
+
 ## v0.101.0 — 2026-08-06
 
 **The member page and the admin page no longer bounce you back and forth.**
