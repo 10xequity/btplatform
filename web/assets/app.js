@@ -83,13 +83,66 @@
   }
 
   /* ---------- views ---------- */
+  /* v0.106.0 (§-1f F-3) — WHICH ORG THIS SIGN-IN SCREEN IS FOR.
+     `?org=<slug|id>` first: it is explicit, shareable, and the only source that works for someone
+     who has never signed in here and so has no stored org. Then the last org they used. Then
+     nothing — and "nothing" means no lockup is rendered at all, which is also why that branch
+     cannot shift: there is never anything to arrive. Subdomains were not an option; the app is
+     served from a PATH (10xequity.github.io/btplatform/web), not a host an org could own. */
+  function loginOrgHint() {
+    try {
+      const q = (new URLSearchParams(location.search).get("org") || "").trim();
+      if (q) return q;
+      return localStorage.getItem("bt_org") || null;
+    } catch (e) { return null; }
+  }
+
+  /* The org brand, swapped INTO a lockup that is already on screen. This is applyOrgBrand()
+     from site-nav.js, which has done exactly this for the member rail since v0.50.0 — same
+     endpoint, same 5-minute cache key, same fail-closed rules. Deliberately NOT /api/orgs:
+     that enumerates every active org to brand one card, and S-1b now gates it. */
+  async function applyLoginBrand(org) {
+    if (!org || !API || API.includes("PENDING")) return;
+    const KEY = "bt_org_brand:" + org;
+    let brand = null;
+    try {
+      const cached = JSON.parse(localStorage.getItem(KEY) || "null");
+      if (cached && (Date.now() - cached.at) < 5 * 60 * 1000) brand = cached.v;
+    } catch (e) { /* bad cache = no cache */ }
+    if (!brand) {
+      try {
+        const r = await fetch(API + "/api/public/org-brand?org=" + encodeURIComponent(org));
+        if (!r.ok) return;                      // unknown org = the default lockup stays
+        brand = await r.json();
+        localStorage.setItem(KEY, JSON.stringify({ at: Date.now(), v: brand }));
+      } catch (e) { return; }                   // offline = the default lockup stays
+    }
+    if (!brand || !brand.display_name) return;  // a nameless payload changes nothing
+    const nameEl = document.getElementById("loginBrandName");
+    if (nameEl) nameEl.textContent = brand.display_name;
+    const img = document.getElementById("loginBrandLogo");
+    if (img && brand.logo_url) {
+      img.onerror = () => { img.src = "assets/logo-boom-icon-512.png?v=0.106.0"; }; // fail closed on 404
+      img.src = brand.logo_url;
+    }
+  }
+
   function renderLogin(errorMsg) {
     logoutBtn.hidden = true;
     orgSwitcher.hidden = true;
     const savedRole = localStorage.getItem("bt_login_role") || "member";
+    const org = loginOrgHint();
+    /* The lockup ships in the SYNCHRONOUS template, never injected after the fetch — D-15 closed
+       exactly that defect on the member rail one release ago and the card is one await from it.
+       The logo carries explicit width/height so it reserves its box before it loads, and the name
+       fills sideways into a fixed-width card, so the swap changes no height. */
+    const brandSlot = org
+      ? `<div class="login-brand"><img id="loginBrandLogo" src="assets/logo-boom-icon-512.png?v=0.106.0" alt="" width="36" height="36" /><span id="loginBrandName"></span></div>`
+      : "";
     render(`
       <div class="login-wrap">
         <div class="card login-card reveal">
+          ${brandSlot}
           <h1>Sign in</h1>
           <div class="login-tabs" role="tablist" aria-label="Sign in as">
             <button id="tabMember" class="login-tab" role="tab" aria-selected="false">Member</button>
@@ -105,6 +158,7 @@
         </div>
       </div>`);
     if (errorMsg) notice(errorMsg, true);
+    applyLoginBrand(org); // v0.106.0 — AFTER the card exists, deliberately not awaited
 
     const tabs = { member: document.getElementById("tabMember"), manager: document.getElementById("tabManager") };
     function pickRole(r) {

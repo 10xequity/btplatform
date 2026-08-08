@@ -361,9 +361,20 @@ export default {
       } else if (url.pathname === "/api/me" && request.method === "GET") {
         res = await me(request, env);
       } else if (url.pathname === "/api/orgs" && request.method === "GET") {
-        res = await listOrgs(env);
+        /* v0.106.0 — roadmap §-1e S-1b, CLOSED. This enumerated `id, name, slug, logo_url,
+           brand_json` for EVERY active org to anyone who asked. It was left open on the reasoning
+           that a sign-in surface needs org branding before anyone has a session — the owner's
+           per-org branding answer is real, but that inference was wrong: `/api/public/org-brand`
+           (below) has served exactly one org, by id or slug, cached, since v0.50.0, and §-1f F-3
+           now uses it. Both real callers of THIS route are signed-in surfaces — `admin-nav.js:627`
+           pairs it with `guard()`, and `app.js`'s dashboard runs only after `/api/me` succeeds —
+           so a session check breaks nobody. A SESSION is the bar, not a role: the org switcher
+           must still list orgs for a plain member. login_brand.test.mjs asserts both directions,
+           and that org-brand stays public. */
+        const session = await currentSession(request, env);
+        res = session ? await listOrgs(env) : json({ error: "Sign in first." }, 401);
       } else if (url.pathname === "/api/health") {
-        res = json({ ok: true, version: "v0.105.0" });
+        res = json({ ok: true, version: "v0.106.0" });
       } else if (url.pathname === "/api/webhooks/square" && request.method === "POST") {
         res = await membershipWebhook(request, env); // verifies signature; forwards payment.* to squareWebhook
       } else if (url.pathname === "/api/public/org-brand" && request.method === "GET") {

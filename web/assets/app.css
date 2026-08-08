@@ -135,6 +135,21 @@ html, body {
 .login-card h1 { font-size: 22px; margin: 0 0 4px; }
 .login-card p { color: var(--text-muted); margin: 0 0 16px; }
 
+/* v0.106.0 (§-1f F-3): the per-org lockup above "Sign in". Borrows the rail's .nav-brand idiom
+   rather than inventing a second brand treatment — same 36px mark, same horizontal pairing — so
+   the card reads as the same product a member already knows. The name fills sideways into a
+   fixed-width card, so resolving the org changes no height and the card never shifts. Tokens
+   only; the mark keeps its own dark plate because gold-on-dark logos need it (uiux-review §1). */
+.login-brand { display: flex; align-items: center; gap: 10px; margin: 0 0 14px; }
+.login-brand img {
+  width: 36px; height: 36px; flex: none; border-radius: var(--radius-control, 8px);
+  background: var(--brand-card-bg, #000); padding: 3px; box-sizing: border-box;
+}
+.login-brand span {
+  font-weight: 700; font-size: 15px; color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
 .field { display: grid; gap: 6px; margin-bottom: 14px; }
 .field label { font-size: 14px; font-weight: 600; }
 .field input {
