@@ -1,5 +1,10 @@
 -- Boomtown Platform — end-to-end journey schema fixture
--- File: worker/testkit/journey-schema.sql · Version: v1.0 · Date: 2026-08-02 · Ships in: v0.57.0
+-- File: worker/testkit/journey-schema.sql · Version: v1.1 · Date: 2026-08-08 · Ships in: v0.107.0
+-- v1.1 (migration 0043, v0.107.0): `sessions` re-read from live sqlite_master after
+-- `ALTER TABLE sessions ADD COLUMN acting_role TEXT` — which is why that column trails the closing
+-- paren on its own line rather than sitting in the column list. It is copied VERBATIM, including
+-- the odd formatting ALTER produces, because the provenance rule below is the whole point: a
+-- prettier hand-typed version is a schema that has never existed anywhere.
 --
 -- PROVENANCE — this is not hand-written. Every CREATE TABLE below was read VERBATIM from live D1
 -- (db 6cde5d11-4199-4e57-b10f-2b7e968264ea) via `sqlite_master` on 2026-08-02, at ledger 0033.
@@ -58,7 +63,7 @@ CREATE TABLE sessions (
   expires_at TEXT NOT NULL,
   revoked_at TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
+, acting_role TEXT);
 
 CREATE TABLE magic_links (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

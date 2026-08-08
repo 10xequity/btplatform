@@ -20,6 +20,12 @@ export function wireAdmin(h) { ({ json, audit, isStaff, requireStaff } = h); }
 
 async function isAdmin(env, ctx, orgId) {
   if (!ctx.session) return false;
+  /* v0.107.0 (§-1f F-1): the acting-role drop, honoured here as well as in index.js's isStaff.
+     THE TWO PREDICATES LIVE IN DIFFERENT FILES, and that is precisely how a half-implementation
+     ships: patch isStaff, watch the staff routes go 403, and the four requireAdmin routes stay
+     wide open to a "member". authorization_matrix.test.mjs asserts both tiers separately for
+     that reason. */
+  if (ctx.actingRole === "member") return false;
   const row = await env.DB.prepare(
     "SELECT 1 FROM user_org_roles WHERE user_id=?1 AND org_id=?2 AND role='admin' AND deleted_at IS NULL"
   ).bind(ctx.userId, orgId).first();

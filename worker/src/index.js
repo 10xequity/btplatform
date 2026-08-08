@@ -325,11 +325,21 @@ async function buildCtx(request, env) {
     ).bind(userId, orgId).first();
     role = r ? r.role : null;
   }
-  return { session, orgId, orgOk, userId, role };
+  /* v0.107.0 (§-1f F-1) — the acting-role. NULL means "act with your real roles"; 'member' means
+     this SESSION has voluntarily dropped to member. It is read once here so both predicates below
+     see the same value, and so nothing downstream has to know it lives on the session row. */
+  const actingRole = session ? (session.acting_role || null) : null;
+  return { session, orgId, orgOk, userId, role, actingRole };
 }
 
 async function isStaff(env, ctx, orgId = ctx.orgId) {
   if (!ctx.session) return false;
+  /* v0.107.0: the drop, honoured BEFORE the role lookup — the point is to refuse, and querying
+     user_org_roles first would only spend a round trip to reach the same answer. Both this and
+     admin.js's isAdmin must carry this check: honouring it in one alone leaves the other tier's
+     routes open to a "member", which is the exact half-implementation
+     authorization_matrix.test.mjs asserts against, per tier. */
+  if (ctx.actingRole === "member") return false;
   const row = await env.DB.prepare(
     "SELECT role FROM user_org_roles WHERE user_id=?1 AND org_id=?2 AND deleted_at IS NULL"
   ).bind(ctx.userId, orgId).first();
@@ -360,6 +370,15 @@ export default {
         res = await logout(request, env);
       } else if (url.pathname === "/api/me" && request.method === "GET") {
         res = await me(request, env);
+      } else if (url.pathname === "/api/auth/act-as" && request.method === "POST") {
+        /* v0.107.0 (§-1f F-1) — enter or leave "acting as a member".
+           GATED ON A SESSION, NEVER ON A ROLE, and it sits here beside /api/me rather than in the
+           admin chain for exactly that reason: an escape hatch gated by the privilege it clears is
+           a lockout. An admin who dropped could not undrop, and would wait out the session.
+           There is no privilege check because there is no escalation to prevent — the only thing
+           this route can do is REMOVE your own privileges for your own session, or give you back
+           what user_org_roles already says is yours. */
+        res = await actAs(request, env);
       } else if (url.pathname === "/api/orgs" && request.method === "GET") {
         /* v0.106.0 — roadmap §-1e S-1b, CLOSED. This enumerated `id, name, slug, logo_url,
            brand_json` for EVERY active org to anyone who asked. It was left open on the reasoning
@@ -374,7 +393,7 @@ export default {
         const session = await currentSession(request, env);
         res = session ? await listOrgs(env) : json({ error: "Sign in first." }, 401);
       } else if (url.pathname === "/api/health") {
-        res = json({ ok: true, version: "v0.106.0" });
+        res = json({ ok: true, version: "v0.107.0" });
       } else if (url.pathname === "/api/webhooks/square" && request.method === "POST") {
         res = await membershipWebhook(request, env); // verifies signature; forwards payment.* to squareWebhook
       } else if (url.pathname === "/api/public/org-brand" && request.method === "GET") {
@@ -679,6 +698,19 @@ async function listOrgs(env) {
 
 /* ---------- helpers ---------- */
 
+/* v0.107.0 (§-1f F-1): set or clear this session's acting-role.
+   `{ role: "member" }` drops; `{ role: null }` (or anything else) restores. Only 'member' is
+   accepted as a drop target — an unrecognised value CLEARS rather than being stored, so a typo can
+   never park the session in a role that no predicate understands and that nothing can clear. */
+async function actAs(request, env) {
+  const session = await currentSession(request, env);
+  if (!session) return json({ error: "Sign in first." }, 401);
+  const b = await request.json().catch(() => ({}));
+  const role = b && b.role === "member" ? "member" : null;
+  await env.DB.prepare("UPDATE sessions SET acting_role = ?1 WHERE id = ?2").bind(role, session.id).run();
+  return json({ ok: true, acting_role: role });
+}
+
 async function currentSession(request, env) {
   let token = null;
   const auth = request.headers.get("Authorization") || "";
@@ -691,7 +723,10 @@ async function currentSession(request, env) {
   if (!token) return null;
   const hash = await sha256(token);
   return env.DB.prepare(
-    "SELECT id, user_id FROM sessions WHERE token_hash = ?1 AND revoked_at IS NULL AND expires_at > datetime('now')"
+    // v0.107.0 (migration 0043): acting_role rides along here because this is the ONE place a
+    // session is resolved. Selecting it anywhere else would mean a second query per request and a
+    // second thing to forget.
+    "SELECT id, user_id, acting_role FROM sessions WHERE token_hash = ?1 AND revoked_at IS NULL AND expires_at > datetime('now')"
   ).bind(hash).first();
 }
 

@@ -60,7 +60,7 @@ import { createD1 } from "../testkit/d1-memory.mjs";
 import {
   blankComments, lineOf, functionRanges, enclosing,
   adminDispatchesIn, dispatchRegion, calleeNames,
-  gateKindCallsIn, handlerGateKind,
+  gateKindCallsIn, handlerGateKind, blockEnd,
 } from "../testkit/route-extract.mjs";
 
 const SRC_DIR = new URL("../src/", import.meta.url);
@@ -398,5 +398,130 @@ test("PERMISSIONS declares manage_users as admin-only, and the gates ENFORCE it"
     assert.equal(r.status, 403,
       `PERMISSIONS says staff cannot manage_users, but ${c.what} answered ${r.status} to staff. ` +
       "The declared matrix and the enforced matrix disagree — fix one of them.");
+  }
+});
+
+/* ═══════════ §-1f F-1 — THE REAL PRIVILEGE DROP (acting-role), v0.107.0 ═══════════
+ *
+ * The owner settled it: an admin "operating as a member" must be refused by the SERVER, not hidden
+ * by the UI. This file established WHY that is not a front-end change — `isStaff` (index.js) and
+ * `isAdmin` (admin.js) each SELECT `user_org_roles` by user_id + org_id at request time, and
+ * NOTHING read a role carried on the session. So the drop lives on the session row (migration
+ * 0043, `sessions.acting_role`), `buildCtx` reads it, and BOTH predicates honour it.
+ *
+ * THE FAILURE THIS SECTION EXISTS TO CATCH, named before it was built: a drop that only
+ * `requireStaff` honours leaves all four `requireAdmin` routes open to a "member". Both tiers are
+ * therefore asserted separately — a dropped admin must be refused on a STAFF route AND on an
+ * ADMIN-ONLY route. Passing one and failing the other is the whole defect.
+ *
+ * AND THE ESCAPE HATCH MUST WORK WHILE DROPPED. If clearing the drop were gated by the very
+ * predicate the drop turns off, an admin who pressed "View as member" could never get back —
+ * a self-inflicted lockout with no route out but expiry. `/api/auth/act-as` is therefore gated on
+ * a SESSION, exactly like /api/me, never on a role. That is asserted, not assumed. */
+
+const ACT_AS = "/api/auth/act-as";
+
+test("F-1: a dropped admin is refused on BOTH tiers — staff routes and admin-only routes", async () => {
+  const env = makeEnv();
+  const { adminToken } = await setupRoles(env);
+
+  // CONTROL FIRST: without the drop this same admin passes both, so the 403s below are the drop.
+  const beforeStaff = await call(env, STAFF_CALL.method, STAFF_CALL.path, { token: adminToken });
+  assert.notEqual(beforeStaff.status, 403, `CONTROL: admin must reach ${STAFF_CALL.what} before dropping`);
+  const beforeAdmin = await call(env, ADMIN_ONLY_CALLS[0].method, ADMIN_ONLY_CALLS[0].path, { token: adminToken });
+  assert.notEqual(beforeAdmin.status, 403, "CONTROL: admin must reach the admin-only route before dropping");
+
+  const dropped = await call(env, "POST", ACT_AS, { token: adminToken, body: { role: "member" } });
+  assert.equal(dropped.status, 200, `act-as failed: ${JSON.stringify(dropped.data).slice(0, 200)}`);
+
+  const staffAfter = await call(env, STAFF_CALL.method, STAFF_CALL.path, { token: adminToken });
+  assert.equal(staffAfter.status, 403,
+    `${STAFF_CALL.what}: a dropped admin got ${staffAfter.status}. requireStaff does not honour the drop.`);
+
+  for (const c of ADMIN_ONLY_CALLS) {
+    const r = await call(env, c.method, c.path, { token: adminToken, body: c.body });
+    assert.equal(r.status, 403,
+      `${c.what}: a dropped admin got ${r.status}. THIS IS THE NAMED FAILURE — a drop that only ` +
+      "requireStaff honours leaves every requireAdmin route open to a member.");
+  }
+});
+
+test("F-1: the escape hatch is reachable WHILE dropped, and clearing it restores both tiers", async () => {
+  const env = makeEnv();
+  const { adminToken } = await setupRoles(env);
+  await call(env, "POST", ACT_AS, { token: adminToken, body: { role: "member" } });
+  const denied = await call(env, STAFF_CALL.method, STAFF_CALL.path, { token: adminToken });
+  assert.equal(denied.status, 403, "precondition: the drop must be in force");
+
+  // The hatch must NOT be gated by the predicate the drop turns off, or this is a lockout.
+  const cleared = await call(env, "POST", ACT_AS, { token: adminToken, body: { role: null } });
+  assert.equal(cleared.status, 200,
+    `clearing the drop answered ${cleared.status} WHILE DROPPED — the admin is locked out of their ` +
+    "own account until the session expires. The hatch is gated on a session, never on a role.");
+
+  const staffBack = await call(env, STAFF_CALL.method, STAFF_CALL.path, { token: adminToken });
+  assert.notEqual(staffBack.status, 403, "staff access did not come back after clearing the drop");
+  const adminBack = await call(env, ADMIN_ONLY_CALLS[0].method, ADMIN_ONLY_CALLS[0].path, { token: adminToken });
+  assert.notEqual(adminBack.status, 403, "admin access did not come back after clearing the drop");
+});
+
+test("F-1: act-as requires a session — anonymous cannot drop anyone", async () => {
+  const env = makeEnv();
+  seedOrg(env);
+  const health = await call(env, "GET", "/api/health");
+  assert.equal(health.status, 200, "health must answer 200 — otherwise a 401 could mean a dead worker");
+  const anon = await call(env, "POST", ACT_AS, { body: { role: "member" } });
+  assert.equal(anon.status, 401, `anonymous act-as answered ${anon.status}, expected 401`);
+});
+
+test("F-1: the drop is PER SESSION — a second sign-in by the same user is unaffected", async () => {
+  /* The semantics have to be pinned deliberately: acting_role lives on the session row, so an
+     admin previewing on their laptop does not lose admin on their phone. Storing it per USER would
+     be a different product, and the difference is invisible without this test. */
+  const env = makeEnv();
+  const { adminToken } = await setupRoles(env);
+  await call(env, "POST", ACT_AS, { token: adminToken, body: { role: "member" } });
+  const second = await signIn(env, "boss@boomtown.test"); // same user, a NEW session
+  const r = await call(env, STAFF_CALL.method, STAFF_CALL.path, { token: second });
+  assert.notEqual(r.status, 403,
+    "a fresh session for the same user inherited the drop — acting_role is being read per user, not per session");
+});
+
+/** A named function's BODY, brace-matched. Not a character window from its signature.
+ *  THIS FILE'S FIRST RUN USED /function isStaff[\s\S]{0,400}?actingRole/ AND FAILED ON CORRECT
+ *  CODE: the explanatory comment above the check is blanked to spaces (length preserved, by
+ *  design), which pushed `actingRole` past the 400-character window. A distance window pins how
+ *  far apart two things happen to sit — a spelling, not a behaviour. §-1c D-17b, fifth instance,
+ *  and the second one inside a guard written to respect the rule. */
+function bodyOf(src, name) {
+  const t = blankComments(src);
+  const sig = t.search(new RegExp("function\\s+" + name + "\\s*\\("));
+  if (sig < 0) return null;
+  const brace = t.indexOf("{", sig);
+  return brace < 0 ? null : t.slice(sig, blockEnd(t, brace));
+}
+
+test("NC-F1: BOTH gate predicates must consult the acting role — one alone is the defect", () => {
+  /* Behavioural coverage above proves the live tree is correct. This is the static half, and it
+     exists because the two predicates live in DIFFERENT FILES: isStaff in index.js, isAdmin in
+     admin.js. It is entirely possible to patch one, watch the staff route go 403, and ship. */
+  const staffBody = bodyOf(readSrc("index.js"), "isStaff");
+  const adminBody = bodyOf(readSrc("admin.js"), "isAdmin");
+  assert.ok(staffBody, "isStaff could not be located in index.js");
+  assert.ok(adminBody, "isAdmin could not be located in admin.js");
+  assert.match(staffBody, /actingRole/,
+    "index.js isStaff does not consult the acting role — a dropped admin still passes requireStaff");
+  assert.match(adminBody, /actingRole/,
+    "admin.js isAdmin does not consult the acting role — a dropped admin still passes requireAdmin, " +
+    "which is exactly the half-implementation this section was written to catch");
+});
+
+test("NC-F2: stripping the acting-role check from EITHER predicate FAILS the static verdict", () => {
+  for (const [file, fn] of [["index.js", "isStaff"], ["admin.js", "isAdmin"]]) {
+    const src = readSrc(file);
+    const mutated = src.replace(/\n\s*if \(ctx\.actingRole === "member"\) return false;/, "");
+    assert.notEqual(mutated, src, `mutation did not land in ${file} — NC is vacuous`);
+    assert.ok(!/actingRole/.test(bodyOf(mutated, fn) || ""),
+      `${file} ${fn} still appears to consult the acting role after the check was stripped`);
   }
 });

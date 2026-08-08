@@ -283,8 +283,19 @@
       lbl.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } });
     });
     // sandbox actions
-    aside.querySelector("#btViewMember").addEventListener("click", e => {
+    aside.querySelector("#btViewMember").addEventListener("click", async e => {
       e.preventDefault();
+      /* v0.107.0 (§-1f F-1) — the drop is now REAL, and the order here is the whole point.
+         Tell the SERVER first and only navigate once it has confirmed: migration 0043 put
+         acting_role on the session, so until that call returns the preview would still carry full
+         admin privileges and would show 200s where a member gets 403s — which is the one thing
+         this button exists to reveal. The sessionStorage flag stays because it drives the
+         presentation half (the admin-page bounce and the Exit pill) that has worked since v0.15.0;
+         it is no longer the mechanism, only the signal that a drop is in force.
+         FAIL CLOSED: if the server call fails we do NOT navigate, because a preview that silently
+         kept admin rights is worse than no preview. */
+      const r = await api("/api/auth/act-as", { method: "POST", body: JSON.stringify({ role: "member" }) });
+      if (!r.ok) { alert("Couldn't switch to the member view. Try again."); return; }
       sessionStorage.setItem("bt_demo_member", "1");
       location.href = "home.html";
     });
@@ -733,7 +744,7 @@
       if (window.BT_STATUS || document.getElementById("bt-status-js")) return;
       var s = document.createElement("script");
       s.id = "bt-status-js";
-      s.src = "assets/build-status.js?v=0.106.0";
+      s.src = "assets/build-status.js?v=0.107.0";
       s.async = false;
       document.head.appendChild(s);
     } catch (e) { /* indicators are never load-blocking */ }

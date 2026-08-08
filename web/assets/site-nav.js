@@ -214,7 +214,7 @@
         const a = document.getElementById("btHdrAdmin");
         if (!a) return;
         a.hidden = false;
-        a.addEventListener("click", () => { try { sessionStorage.removeItem("bt_demo_member"); } catch (e) {} });
+        a.addEventListener("click", (e) => { e.preventDefault(); exitMemberView(a.getAttribute("href") || "admin.html"); });
       })();
       if ((role === "admin" || role === "staff") && demoMember) {
         const pill = document.createElement("button");
@@ -224,7 +224,7 @@
           "position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:60;" +
           "min-height:44px;padding:10px 18px;border-radius:999px;border:1px solid var(--warning,#e6a23c);" +
           "background:var(--surface);color:var(--text);font:inherit;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.25)");
-        pill.onclick = () => { sessionStorage.removeItem("bt_demo_member"); location.href = "admin.html"; };
+        pill.onclick = () => exitMemberView("admin.html");
         document.body.appendChild(pill);
       }
       /* v2.15 (owner 2026-08-06): the "Manage" group is GONE from the member sidebar.
@@ -351,6 +351,24 @@
     }
   }
 
+  /* v2.17 (§-1f F-1, v0.107.0) — LEAVE "acting as a member", server side first.
+     Since migration 0043 the drop is a real privilege drop on the session row, so clearing the
+     sessionStorage flag alone would strand an admin in a shell where every call 403s: the way back
+     would look available and do nothing. BOTH exits — the Exit pill and the header Admin link —
+     route through here, because there is no such thing as a half-cleared drop.
+     It navigates even if the call fails: the destination re-checks server-side and shows an honest
+     error, which beats trapping someone on a member page with a button that refuses to work. */
+  async function exitMemberView(dest) {
+    try {
+      await fetch(API + "/api/auth/act-as", {
+        method: "POST", headers: Object.assign({ "content-type": "application/json" }, authHeaders()),
+        credentials: "include", body: JSON.stringify({ role: null }),
+      });
+    } catch (e) { /* offline: fall through — the destination will re-check and say so */ }
+    try { sessionStorage.removeItem("bt_demo_member"); } catch (e) {}
+    location.href = dest;
+  }
+
   function authHeaders() {
     const h = { "content-type": "application/json" };
     if (token) h["Authorization"] = "Bearer " + token;
@@ -396,7 +414,7 @@
       if (window.BT_STATUS || document.getElementById("bt-status-js")) return;
       var s = document.createElement("script");
       s.id = "bt-status-js";
-      s.src = "assets/build-status.js?v=0.106.0";
+      s.src = "assets/build-status.js?v=0.107.0";
       s.async = false;
       document.head.appendChild(s);
     } catch (e) { /* indicators are never load-blocking */ }
