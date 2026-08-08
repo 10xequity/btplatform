@@ -184,41 +184,21 @@
       ]},
     ];
     if (signedIn) {
-      let unread = 0, inboxUnread = 0;
-      try {
-        const n = await fetch(API + "/api/notifications", { headers: authHeaders(), credentials: "include" });
-        if (n.ok) unread = (await n.json()).unread || 0;
-      } catch (e) { /* worker older than v0.9.1 or offline: no badge */ }
-      try {
-        const iu = await fetch(API + "/api/messages/unread-count", { headers: authHeaders(), credentials: "include" });
-        if (iu.ok) inboxUnread = (await iu.json()).unread || 0;
-      } catch (e) { /* worker older than v0.17.0 or offline: no badge */ }
-      /* v2.13: FILL the static ✉ (badge + aria) — data fill only; the element ships in
-         static markup on all 13 canonical member pages (admin v0.52.0 inversion). */
-      (function headerMailFill() {
-        const a = document.getElementById("btHdrMail");
-        if (!a) return;
-        a.setAttribute("aria-label", inboxUnread ? "Messages — " + inboxUnread + " unread" : "Messages");
-        /* v2.14: DOM APIs, idempotent. textContent can never be parsed as markup, and
-           reusing/removing an existing .badge means a second run cannot stack a second one. */
-        let badge = a.querySelector(".badge");
-        if (inboxUnread) {
-          a.style.position = "relative";
-          if (!badge) {
-            badge = document.createElement("span");
-            badge.className = "badge";
-            badge.setAttribute("style", "position:absolute;top:2px;right:2px;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:var(--accent);color:var(--gold-ink);font-size:11px;font-weight:800;display:grid;place-items:center");
-            a.appendChild(badge);
-          }
-          badge.textContent = inboxUnread > 9 ? "9+" : String(inboxUnread);
-        } else if (badge) {
-          badge.remove();
-        }
-      })();
+      /* v2.16 (§-1c D-15) — THE BADGE FETCHES NO LONGER GATE THE RAIL.
+         They used to sit here, two SERIALLY AWAITED round trips before the rail was appended at
+         the bottom of this function. The rail is not in static markup on any member page, so a
+         member page rendered with NO navigation column until /api/me, /api/notifications and
+         /api/messages/unread-count had all returned — then inserted a whole column and displaced
+         everything beside it. That is the "shift" in the owner's "menus shift and reload every
+         interaction"; the "reload" half is that every rail item is an <a href>, which is the
+         §-1d/§-1g C-2 frame question and NOT this change.
+         The rail's STRUCTURE depends only on `role`. The counts are decoration on two items, so
+         they are filled into the live DOM by fillNavBadges() AFTER the append, and fetched in
+         PARALLEL rather than in series. member_nav_paint.test.mjs pins the ordering. */
       NAV.push({ label: "You", items: [
         { href: "home.html",     ico: "▦", text: "My Dashboard" },
-        { href: "home.html#notifications", ico: "◔", text: "Notifications", badge: unread },
-        { href: "member-inbox.html", ico: "✉", text: "Inbox", badge: inboxUnread },
+        { href: "home.html#notifications", ico: "◔", text: "Notifications", key: "notifications" },
+        { href: "member-inbox.html", ico: "✉", text: "Inbox", key: "inbox" },
         { href: "profile.html",  ico: "◉", text: "My Profile" },
         { href: "membership.html", ico: "★", text: "Membership" },
         { href: "settings.html", ico: "⚙", text: "Settings" },
@@ -275,11 +255,72 @@
       <div class="nav-group" role="group" aria-label="${g.label}">
         <div class="nav-label">${g.label}</div>
         ${g.items.map(i => `<a class="nav-item${i.href.split("#")[0] === here ? " active" : ""}" href="${i.href}"
-          ${i.href.split("#")[0] === here ? 'aria-current="page"' : ""}><span class="ico" aria-hidden="true">${i.ico}</span>${i.text}${i.badge ? `<span class="badge" aria-label="${i.badge} unread">${i.badge > 9 ? "9+" : i.badge}</span>` : ""}</a>`).join("")}
+          ${i.key ? `data-nav-key="${i.key}"` : ""}
+          ${i.href.split("#")[0] === here ? 'aria-current="page"' : ""}><span class="ico" aria-hidden="true">${i.ico}</span>${i.text}</a>`).join("")}
       </div>`).join("");
     layout.appendChild(aside);
     layout.appendChild(main);
     applyOrgBrand(aside); // v2.12 — async; rail paints with the default first (fail-closed)
+    if (signedIn) fillNavBadges(aside); // v2.16 — AFTER the append, deliberately not awaited
+  }
+
+  /* v2.16 (§-1c D-15): the unread counts, fetched in PARALLEL and written into the rail that is
+     already on screen. Nothing here can delay the rail — it is called after appendChild and is
+     not awaited. Both endpoints fail closed to 0, exactly as the serial version did. */
+  async function fillNavBadges(aside) {
+    const count = async (path) => {
+      try {
+        const r = await fetch(API + path, { headers: authHeaders(), credentials: "include" });
+        return r.ok ? ((await r.json()).unread || 0) : 0;
+      } catch (e) { return 0; } // worker older than v0.9.1/v0.17.0, or offline: no badge
+    };
+    const [unread, inboxUnread] = await Promise.all([
+      count("/api/notifications"),
+      count("/api/messages/unread-count"),
+    ]);
+    setNavBadge(aside && aside.querySelector('[data-nav-key="notifications"]'), unread, "unread");
+    setNavBadge(aside && aside.querySelector('[data-nav-key="inbox"]'), inboxUnread, "unread");
+    headerMailFill(inboxUnread);
+  }
+
+  /* DOM APIs, idempotent — the v2.14 rule. textContent can never be parsed as markup, and reusing
+     or removing an existing .badge means a second run cannot stack a second one. */
+  function setNavBadge(el, n, word) {
+    if (!el) return;
+    let badge = el.querySelector(".badge");
+    if (n) {
+      if (!badge) {
+        badge = document.createElement("span");
+        badge.className = "badge";
+        el.appendChild(badge);
+      }
+      badge.setAttribute("aria-label", n + " " + word);
+      badge.textContent = n > 9 ? "9+" : String(n);
+    } else if (badge) {
+      badge.remove();
+    }
+  }
+
+  /* v2.13: FILL the static ✉ (badge + aria) — data fill only; the element ships in static markup
+     on all 13 canonical member pages (admin v0.52.0 inversion). v2.16: takes the count as an
+     argument now that it runs after the rail paints rather than inside the fetch block. */
+  function headerMailFill(inboxUnread) {
+    const a = document.getElementById("btHdrMail");
+    if (!a) return;
+    a.setAttribute("aria-label", inboxUnread ? "Messages — " + inboxUnread + " unread" : "Messages");
+    let badge = a.querySelector(".badge");
+    if (inboxUnread) {
+      a.style.position = "relative";
+      if (!badge) {
+        badge = document.createElement("span");
+        badge.className = "badge";
+        badge.setAttribute("style", "position:absolute;top:2px;right:2px;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:var(--accent);color:var(--gold-ink);font-size:11px;font-weight:800;display:grid;place-items:center");
+        a.appendChild(badge);
+      }
+      badge.textContent = inboxUnread > 9 ? "9+" : String(inboxUnread);
+    } else if (badge) {
+      badge.remove();
+    }
   }
 
   /* v2.12: org-brand rail card. Cache ~5 min per org; fail closed to the default. */
@@ -355,7 +396,7 @@
       if (window.BT_STATUS || document.getElementById("bt-status-js")) return;
       var s = document.createElement("script");
       s.id = "bt-status-js";
-      s.src = "assets/build-status.js?v=0.104.0";
+      s.src = "assets/build-status.js?v=0.105.0";
       s.async = false;
       document.head.appendChild(s);
     } catch (e) { /* indicators are never load-blocking */ }

@@ -26,6 +26,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
+/* v0.105.0: brace-matching for badgeSafeVerdict's body extraction. Imported from the TESTKIT, not
+   from a test file — importing an export from a test file re-registers that file's tests. */
+import { blockEnd } from "../testkit/route-extract.mjs";
 
 const WEB_DIR = new URL("../../web/", import.meta.url);
 const read = (p) => readFileSync(new URL(p, WEB_DIR), "utf8");
@@ -39,9 +42,18 @@ const isMemberCanon = (f, html) =>
    injector's assignment form, which cannot appear in static markup. */
 const noInjectorVerdict = (src) =>
   !src.includes('a.id = "btHdrMail"') && !src.includes('a.id = "btHdrAdmin"');
-/* site-nav must FILL the static ✉ (badge + aria) instead of creating it */
+/* site-nav must FILL the static ✉ (badge + aria) instead of creating it.
+   v0.105.0 — THE ARITY PIN WAS DROPPED, DELIBERATELY, AND THE INVARIANT IS UNCHANGED. This read
+   `function headerMailFill()` with empty parens. §-1c D-15's fix moved the badge fetches out of
+   the rail's critical path, so the helper now takes the count as an argument
+   (`headerMailFill(inboxUnread)`) instead of closing over it — and this verdict failed against a
+   CORRECT change. The claim being guarded is "site-nav FILLS the static element rather than
+   INJECTING one", and all three parts of that survive: the named function still exists, it still
+   resolves the STATIC #btHdrMail by id, and it still uses the count. The empty parens pinned the
+   helper's arity, which never encoded anything. §-1c D-17 for the second time in one session —
+   the marker sweep it records is owed. */
 const mailFillVerdict = (src) =>
-  src.includes('function headerMailFill()') &&
+  src.includes("function headerMailFill(") &&
   src.includes('document.getElementById("btHdrMail")') &&
   src.includes("inboxUnread");
 /* the Admin control: role-gated REVEAL of the static hidden element, still → admin.html
@@ -111,7 +123,16 @@ test("NC-1: a re-added site-nav injector fails the no-injector check (v3.0 subje
 });
 
 test("NC-2: a stripped badge fill fails the fill check", () => {
-  assert.equal(mailFillVerdict(read("assets/site-nav.js").replace("function headerMailFill()", "function x()")), false);
+  /* v0.105.0: this mutation used to target `function headerMailFill()` with empty parens. When
+     D-15's fix gave the helper an argument, the replace stopped matching, became a NO-OP, and the
+     NC failed — correctly, and that is the useful part: it reported its own vacuousness instead of
+     passing while testing nothing. It lacked the "mutation did not land" assertion every newer
+     guard in this repo carries, so it could only announce the problem by failing. It has one now. */
+  const src = read("assets/site-nav.js");
+  const mutated = src.replace("function headerMailFill(", "function x(");
+  assert.notEqual(mutated, src, "mutation did not land — NC is vacuous");
+  assert.equal(mailFillVerdict(mutated), false,
+    "removing the named fill helper must fail the verdict — if it passes, the verdict is blind");
 });
 
 test("NC-3: an un-gated Admin reveal fails the check", () => {
@@ -126,11 +147,21 @@ test("NC-4: a reveal that stops un-hiding fails the check", () => {
 
 /* ═══════════════ v3.1 — the two review fixes (v0.53.1) ═══════════════ */
 
-/* (a) badge construction: DOM APIs, never markup-parsing, and idempotent. */
+/* (a) badge construction: DOM APIs, never markup-parsing, and idempotent.
+   v0.105.0 — THE EXTRACTION WAS REWRITTEN; THE FOUR CHECKS BELOW ARE UNTOUCHED. It used to grab
+   the body with /function headerMailFill\(\)[\s\S]*?\n      \}\)\(\);/ — a regex pinned to BOTH
+   empty parens AND the old `(function …)();` IIFE shape at six-space indent. D-15's fix made the
+   helper a plain two-space function taking the count as an argument, so the match failed and this
+   reported "headerMailFill not found" against code that still satisfies every rule it guards.
+   Now brace-matched with the repo's own `blockEnd`, so it survives re-indentation and re-wrapping.
+   THE INVARIANT IS UNCHANGED: built with createElement, written with textContent, never by
+   parsing markup, and idempotent via an existing-.badge lookup. */
 const badgeSafeVerdict = (src) => {
-  const fn = src.match(/function headerMailFill\(\)[\s\S]*?\n      \}\)\(\);/);
-  if (!fn) return { ok: false, why: "headerMailFill not found" };
-  const body = fn[0];
+  const sig = src.indexOf("function headerMailFill(");
+  if (sig < 0) return { ok: false, why: "headerMailFill not found" };
+  const brace = src.indexOf("{", sig);
+  if (brace < 0) return { ok: false, why: "headerMailFill has no body" };
+  const body = src.slice(sig, blockEnd(src, brace));
   if (/insertAdjacentHTML|innerHTML\s*=/.test(body)) return { ok: false, why: "badge built by parsing markup" };
   if (!body.includes("createElement")) return { ok: false, why: "badge not built with createElement" };
   if (!body.includes("textContent")) return { ok: false, why: "count not written via textContent" };
