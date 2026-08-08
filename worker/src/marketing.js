@@ -89,7 +89,12 @@ export function buildSegmentWhere(filter) {
   }
   if (f.played === "league" || f.played === "tournament") {
     parts.push(
-      "EXISTS (SELECT 1 FROM registrations r JOIN events e ON e.id = r.event_id WHERE r.contact_id = c.id AND r.deleted_at IS NULL AND e.deleted_at IS NULL AND e.type = ?)"
+      // v0.104.0 — §-1c D-11. The events JOIN did not pin the org, so a contact of THIS org whose
+      // registration pointed at a foreign event could be miscounted. BASE_WHERE already pins
+      // c.org_id=?1, so no other org's contacts were ever exposed; this closes the join itself.
+      // ?1 is a NUMBERED parameter and is reused, so it consumes NO new bind — the trailing `?`
+      // still resolves to ?2 and marketing.test.mjs:36's binds:["league"] stays green.
+      "EXISTS (SELECT 1 FROM registrations r JOIN events e ON e.id = r.event_id AND e.org_id = ?1 WHERE r.contact_id = c.id AND r.deleted_at IS NULL AND e.deleted_at IS NULL AND e.type = ?)"
     );
     binds.push(f.played);
   } else if (f.played === "any") {

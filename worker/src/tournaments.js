@@ -306,11 +306,16 @@ async function scoreMatch(request, env, ctx, matchId) {
   });
 }
 
+/* v0.104.0 — roadmap §-1c D-8, closed under §-1e priority 3. Both reads below were scoped by
+   event_id ALONE while the write beneath them pinned org_id, so this function trusted its caller
+   to have already proved the event belongs to the org. Every route reaching it does — which is why
+   this was a latent defect and not a live leak — but "org-scoped by default" is not a property you
+   inherit from your callers, and the orgId needed to fix it was already a parameter. Free. */
 export async function refreshStandings(env, eventId, orgId) {
   const rows = (await env.DB.prepare(
-    "SELECT team_a_id AS teamA, team_b_id AS teamB, score_a AS scoreA, score_b AS scoreB FROM matches WHERE event_id=?1 AND stage='pool' AND deleted_at IS NULL"
-  ).bind(eventId).all()).results;
-  const teams = (await env.DB.prepare("SELECT id FROM teams WHERE event_id=?1 AND deleted_at IS NULL").bind(eventId).all()).results.map((t) => t.id);
+    "SELECT team_a_id AS teamA, team_b_id AS teamB, score_a AS scoreA, score_b AS scoreB FROM matches WHERE event_id=?1 AND org_id=?2 AND stage='pool' AND deleted_at IS NULL"
+  ).bind(eventId, orgId).all()).results;
+  const teams = (await env.DB.prepare("SELECT id FROM teams WHERE event_id=?1 AND org_id=?2 AND deleted_at IS NULL").bind(eventId, orgId).all()).results.map((t) => t.id);
   const table = computeStandings(rows, teams);
   for (const r of table) {
     await env.DB.prepare(

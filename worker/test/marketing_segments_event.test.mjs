@@ -97,9 +97,17 @@ test("A6 — event sits between played and since, and bind order follows the SQL
   const { where, binds } = buildSegmentWhere({ tags: ["a"], played: "league", event: 7, since: "2026-06-01" });
   assert.deepEqual(binds, ["a", "league", 7, "2026-06-01"]);
   /* `r.event_id` appears in the played clause's JOIN too, so the marker has to be one only the
-     event clause carries — the org pin. Ordering is what keeps binds aligned with placeholders. */
-  assert.ok(where.indexOf("e.type") < where.indexOf("e.org_id = ?1"));
-  assert.ok(where.indexOf("e.org_id = ?1") < where.indexOf("created_at"));
+     event clause carries. Ordering is what keeps binds aligned with placeholders.
+     v0.104.0: THE MARKER MOVED, AND THE REASON IS THE POINT. This asserted on `e.org_id = ?1`
+     because only the event clause pinned the org — then §-1c D-11 added that same pin to the
+     PLAYED clause, so `indexOf` began finding the played one and this test failed against a
+     CORRECT change. The invariant it guards never broke: `binds` above is still exactly
+     ["a","league",7,"2026-06-01"], which is the actual alignment claim. Only the marker was wrong.
+     `e.id = ?` is unique to the event clause — the played clause joins on `e.id = r.event_id`,
+     which does not match. A marker must be unique to the thing under test, and a marker that is
+     merely unique TODAY is a test that will accuse the next correct change. */
+  assert.ok(where.indexOf("e.type") < where.indexOf("e.id = ?"));
+  assert.ok(where.indexOf("e.id = ?") < where.indexOf("created_at"));
 });
 
 test("A7 — the existing contract is unchanged: an empty filter still adds nothing", () => {
