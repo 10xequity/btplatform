@@ -215,12 +215,63 @@
     render();
   }
 
-  async function generate() {
-    const body = {
+  /* WHAT FITS IN THE TIME WE HAVE LEFT — v0.108.0.
+
+     Owner, 2026-08-08: the end-of-league tournament "changes based on participants and timeframe
+     available", and the goal is "to get everyone sufficient games (so we can double games in pool
+     play if needbe)". So this line is not a validation message and never blocks the button: a
+     director is allowed to draw a bracket that overruns, because they are the one who knows whether
+     the gym will be handed back on time. It is a number offered before the decision, not after it.
+
+     THE ARITHMETIC IS THE SERVER'S, DELIBERATELY. Doing it here would be a second implementation of
+     "how many rounds is this", and it would agree with the real draw right up until it didn't.
+     /brackets/preview runs the same planner and the same allocator the draw runs and writes nothing.
+
+     No animation on this line. It updates on every keystroke, which is exactly the frequency at
+     which motion turns into noise. */
+  let fitSeq = 0, fitTimer = null;
+
+  function bodyFromControls() {
+    return {
       a_size: Number($("bASize").value) || undefined,
       include_rest: $("bRest").checked,
       points_to: Number($("bPoints").value) || undefined,
       courts: Number($("bCourts").value) || undefined,
+    };
+  }
+
+  async function estimate() {
+    if (!eventId) return;
+    const slot = Number($("bSlot").value) || undefined;
+    const have = Number($("bHave").value) || undefined;
+    // A stale response must never overwrite a fresher one — the requests are debounced, not serial.
+    const seq = ++fitSeq;
+    const r = await api(`/api/admin/events/${eventId}/brackets/preview`, {
+      method: "POST",
+      body: JSON.stringify({ ...bodyFromControls(), slot_minutes: slot, minutes_available: have }),
+    });
+    if (seq !== fitSeq) return;
+
+    if (!r.ok) { $("bFit").textContent = r.data.error || ""; return; }
+    const d = r.data;
+    const bits = [
+      `${d.teams} team${d.teams === 1 ? "" : "s"}`,
+      `${d.games} game${d.games === 1 ? "" : "s"}`,
+      `${d.waves} round${d.waves === 1 ? "" : "s"} on ${d.courts} court${d.courts === 1 ? "" : "s"}`,
+    ];
+    if (d.needs_minutes) bits.push(`about ${d.needs_minutes} minutes`);
+    $("bFit").textContent = bits.join(" · ") + (d.suggestion ? " — " + d.suggestion : ".");
+  }
+
+  const scheduleEstimate = () => {
+    clearTimeout(fitTimer);
+    fitTimer = setTimeout(estimate, 250);
+  };
+
+  async function generate() {
+    const body = {
+      ...bodyFromControls(),
+      slot_minutes: Number($("bSlot").value) || undefined,
     };
     let r = await api(`/api/admin/events/${eventId}/brackets`, { method: "POST", body: JSON.stringify(body) });
     if (r.status === 409 && r.data.existing_matches) {
@@ -252,10 +303,15 @@
     eventId = list.length ? list[0].id : null;
     if (!eventId) return BT_ADMIN.orgEmptyState("bTrees", "events"); // v0.89.0 Block B3: an empty org is not a broken module
     load();
+    estimate();
   }
 
   document.addEventListener("DOMContentLoaded", () => {
-    $("bEvent").addEventListener("change", () => { eventId = Number($("bEvent").value); load(); });
+    $("bEvent").addEventListener("change", () => { eventId = Number($("bEvent").value); load(); estimate(); });
+    // Every control that changes the shape of the draw also changes how long it takes.
+    ["bASize", "bPoints", "bCourts", "bSlot", "bHave"].forEach((id) =>
+      $(id).addEventListener("input", scheduleEstimate));
+    $("bRest").addEventListener("change", scheduleEstimate);
     $("bReload").addEventListener("click", load);
     $("bGen").addEventListener("click", generate);
     $("bAdvance").addEventListener("click", advance);

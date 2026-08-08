@@ -1,10 +1,10 @@
 /* Boomtown Platform — the end-of-league tournament (roadmap §-1d, Shape A)
-   File: worker/test/league_bracket.test.mjs · Version: v1.0 · Date: 2026-08-08 · Added under v0.107.0
+   File: worker/test/league_bracket.test.mjs · Version: v2.0 · Date: 2026-08-08 · Ships in: v0.108.0
 
-   NO VERSION BUMP ACCOMPANIES THIS FILE, DELIBERATELY. It changes nothing that ships — it documents
-   and pins behaviour the worker already had. A release number with no shipped change would spend a
-   deploy, a buster sweep and a convergence sample on nothing, and would make the changelog claim a
-   capability was added in v0.108.0 when it has been there since v0.66.0.
+   v1.0 SHIPPED WITH NO VERSION BUMP, DELIBERATELY: it pinned behaviour the worker already had, and a
+   release number with no shipped change would have made the changelog claim a capability arrived in
+   v0.108.0 when it had been there since v0.66.0. v2.0 adds the timeframe estimate, which IS new code,
+   so this file now ships with a release.
 
    WHY THIS FILE EXISTS. Owner, 2026-08-08: "We do a tournament at the end of the leagues. It changes
    based on participants and timeframe available." §-1d had this queued behind an unanswered question
@@ -237,4 +237,151 @@ test("NC-2: a missing event 404s while the live one 200s — so a refusal is nev
 
   const gone = await call(env, "POST", "/api/admin/events/4242/brackets", { token, body: { courts: 2 } });
   assert.equal(gone.status, 404);
+});
+
+/* ============ v0.108.0 · the timeframe estimate (owner, 2026-08-08) ============
+
+   Owner: the end-of-league tournament "changes based on participants and timeframe available", and
+   the goal is "to get everyone sufficient games (so we can double games in pool play if needbe)".
+   Asked which knob gives when time is short, the answer was "top 8". Asked per-division or
+   league-wide: "Generally, 1 bracket across the league", splitting only for a large unrated field
+   with wide skill variation.
+
+   THE ESTIMATE IS ONLY WORTH ANYTHING IF IT MATCHES THE DRAW. An estimate produced by a second
+   implementation agrees with reality right up until it doesn't, and on that day it still looks
+   exactly like an estimate. So the load-bearing test here is the AGREEMENT test: preview and
+   generation must report the same games and the same waves for the same input. */
+
+const preview = (env, token, body, id = 1) =>
+  call(env, "POST", `/api/admin/events/${id}/brackets/preview`, { token, body });
+
+test("preview and the real draw agree on games and waves — the estimate is not a second opinion", async () => {
+  // Several shapes, including one that splits into A and BB, because the wave count is where a
+  // parallel implementation would drift first: two brackets share courts and queue against them.
+  for (const body of [{ courts: 3 }, { courts: 2, a_size: 8 }, { courts: 4, a_size: 8, include_rest: true }]) {
+    const env = boot(13);
+    await burnBootstrap(env);
+    const token = await staff(env);
+
+    const p = await preview(env, token, body);
+    assert.equal(p.status, 200, `preview refused: ${JSON.stringify(p.data)}`);
+
+    const g = await call(env, "POST", "/api/admin/events/1/brackets", { token, body });
+    assert.equal(g.status, 200, `generate refused: ${JSON.stringify(g.data)}`);
+
+    assert.equal(p.data.games, g.data.matches_written, `games disagree for ${JSON.stringify(body)}`);
+    assert.equal(p.data.waves, g.data.waves, `waves disagree for ${JSON.stringify(body)}`);
+    assert.equal(p.data.seeded_by, g.data.seeded_by);
+    assert.deepEqual(p.data.brackets.map((x) => x.name), g.data.brackets.map((x) => x.name));
+  }
+});
+
+test("preview writes nothing — a director can ask without committing", async () => {
+  const env = boot(12);
+  await burnBootstrap(env);
+  const token = await staff(env);
+
+  const p = await preview(env, token, { courts: 3, slot_minutes: 20 });
+  assert.equal(p.status, 200);
+  assert.ok(p.data.games > 0, "the preview must actually have computed something");
+
+  assert.equal(drawn(env).length, 0, "preview must not write matches");
+  assert.equal(env.DB.query("SELECT id FROM brackets WHERE deleted_at IS NULL").length, 0,
+    "preview must not write bracket rows either");
+});
+
+test("waves are rounds of simultaneous play, not games — courts change the clock, not the game count", async () => {
+  const env = boot(8);
+  await burnBootstrap(env);
+  const token = await staff(env);
+
+  const wide = await preview(env, token, { courts: 4, slot_minutes: 20 });
+  const narrow = await preview(env, token, { courts: 1, slot_minutes: 20 });
+
+  assert.equal(wide.data.games, narrow.data.games, "the same field plays the same number of games");
+  assert.ok(narrow.data.waves > wide.data.waves,
+    `one court must take more waves than four (got ${narrow.data.waves} vs ${wide.data.waves})`);
+  assert.equal(wide.data.needs_minutes, wide.data.waves * 20, "minutes are waves times slot length");
+});
+
+test("with time to spare, the spare is reported as more pool play — the owner's actual goal", async () => {
+  const env = boot(8);
+  await burnBootstrap(env);
+  const token = await staff(env);
+
+  const p = await preview(env, token, { courts: 4, slot_minutes: 20, minutes_available: 180 });
+  assert.equal(p.status, 200);
+  assert.equal(p.data.fits, true);
+  assert.equal(p.data.spare_minutes, 180 - p.data.needs_minutes);
+  assert.match(p.data.suggestion, /pool play/i,
+    "spare time must be offered as more pool play, not as slack");
+});
+
+test("when it overruns, the suggestion is top 8 with the number attached", async () => {
+  const env = boot(24);
+  await burnBootstrap(env);
+  const token = await staff(env);
+
+  // One court and a long slot, so the full field cannot possibly fit the window.
+  const p = await preview(env, token, { courts: 1, slot_minutes: 25, minutes_available: 60 });
+  assert.equal(p.status, 200);
+  assert.equal(p.data.fits, false, "this shape must genuinely overrun or the test proves nothing");
+  assert.ok(p.data.needs_minutes > 60);
+  assert.match(p.data.suggestion, /top-8/i, "the owner's answer for the short case is top 8");
+  assert.match(p.data.suggestion, /\d+ minutes/, "a suggestion with no number cannot be acted on");
+});
+
+test("a top-8 draw that still overruns is told so, rather than recommended to itself", async () => {
+  const env = boot(24);
+  await burnBootstrap(env);
+  const token = await staff(env);
+
+  const p = await preview(env, token, { courts: 1, slot_minutes: 30, minutes_available: 20, a_size: 8 });
+  assert.equal(p.data.fits, false);
+  assert.match(p.data.suggestion, /already a top-8|even a top-8/i,
+    "recommending top 8 to a top-8 bracket is advice that cannot be followed");
+});
+
+test("league-wide is the default: no division is stamped unless one is asked for", async () => {
+  // Owner: "Generally, 1 bracket across the league." The split is the exception, so the default
+  // path must not quietly scope to a division.
+  const env = boot(10);
+  await burnBootstrap(env);
+  const token = await staff(env);
+  const g = await call(env, "POST", "/api/admin/events/1/brackets", { token, body: { courts: 3 } });
+  assert.equal(g.status, 200);
+  const rows = env.DB.query("SELECT division_id FROM brackets WHERE deleted_at IS NULL");
+  assert.ok(rows.length > 0);
+  assert.ok(rows.every((r) => r.division_id === null || r.division_id === undefined),
+    "the default draw is league-wide and must stamp no division");
+});
+
+test("NC-3: preview refuses an event that isn't there, while a live one 200s", async () => {
+  const env = boot(8);
+  await burnBootstrap(env);
+  const token = await staff(env);
+  const alive = await preview(env, token, { courts: 2 });
+  assert.equal(alive.status, 200, "positive control — the preview route must be reachable");
+  const gone = await preview(env, token, { courts: 2 }, 4242);
+  assert.equal(gone.status, 404);
+});
+
+test("NC-4: with the teams gone, preview refuses instead of estimating an empty bracket", async () => {
+  const env = boot(10);
+  await burnBootstrap(env);
+  const token = await staff(env);
+
+  env.DB.exec("UPDATE teams SET deleted_at = datetime('now') WHERE event_id = 1");
+  const left = env.DB.query("SELECT id FROM teams WHERE event_id = 1 AND deleted_at IS NULL");
+  assert.equal(left.length, 0, "MUTATION DID NOT LAND — this NC would prove nothing");
+
+  const p = await preview(env, token, { courts: 3, slot_minutes: 20 });
+  assert.notEqual(p.status, 200, "an empty field has no bracket to estimate");
+});
+
+test("NC-5: preview requires staff — an anonymous caller gets no answer", async () => {
+  const env = boot(8);
+  await burnBootstrap(env);
+  const anon = await preview(env, undefined, { courts: 2 });
+  assert.ok(anon.status === 401 || anon.status === 403, `expected a refusal, got ${anon.status}`);
 });

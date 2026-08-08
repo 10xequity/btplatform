@@ -269,6 +269,179 @@ async function seedOrder(env, ctx, eventId, explicit) {
   return { source: "entry seed", ids: bySeed.map((t) => t.id), names: known };
 }
 
+/** Which division a group's bracket row is stamped with. A is the caller's; BB may name its own. */
+function divisionForGroup(b, name) {
+  const d = Number(b.division_id) || null;
+  return name === "A" ? d : (Number(b.bb_division_id) || d);
+}
+
+/**
+ * WHAT WOULD BE PLAYED — decided once, with no writes, so the preview and the draw cannot disagree.
+ *
+ * Extracted in v0.108.0 for the "what fits in the time we have left" estimate. The alternative was
+ * to let the screen do the arithmetic itself, and that is the failure this loop keeps naming: an
+ * estimate computed by a second implementation agrees with the real draw right up until it doesn't,
+ * and the day it stops agreeing it still looks exactly like an estimate. `generateBracketFor` now
+ * calls this and so does `previewBracketFor`, so there is one answer to "how many games".
+ *
+ * Everything here is either a pure function or a READ. Nothing in it may write, because the whole
+ * point is that a director can ask the question without committing to the answer.
+ */
+async function planFor(env, ctx, ev, b) {
+  const seeds = await seedOrder(env, ctx, ev.id, b.seeds);
+  if (seeds.error) return { ok: false, error: seeds.error, status: 400 };
+  if (seeds.ids.length < 2) {
+    return { ok: false, error: "Add the teams first — there is nothing to bracket yet.", status: 409 };
+  }
+
+  // "Top X into A, everyone else into BB." Splitting is what keeps a 16-team day meaningful for
+  // the teams that finished tenth — one bracket means half the field plays once and goes home.
+  const aSize = Number(b.a_size) > 0 ? Math.min(Number(b.a_size), seeds.ids.length) : seeds.ids.length;
+  const includeRest = b.include_rest !== false;
+  const groups = [{ name: "A", ids: seeds.ids.slice(0, aSize) }];
+  if (includeRest && seeds.ids.length > aSize) {
+    const rest = seeds.ids.slice(aSize);
+    if (rest.length >= 2) groups.push({ name: "BB", ids: rest });
+  }
+
+  const pointsTo = Number(b.points_to) > 0 ? Number(b.points_to) : 25;
+  const cap = Number(b.cap) > 0 ? Number(b.cap) : pointsTo + 2;
+  const courts = Number(b.courts) > 0 ? Number(b.courts) : (ev.court_count || 4);
+
+  // Every tree is built and checked BEFORE anything is written. A refusal on the second group after
+  // the first has already been inserted leaves half a bracket on the table and no way to tell.
+  const plans = [];
+  for (const g of groups) {
+    const tree = buildTree(g.ids.length);
+    if (!tree.ok) return { ok: false, error: tree.error, status: 400 };
+    plans.push({ g, tree });
+  }
+  return { ok: true, seeds, aSize, groups, plans, pointsTo, cap, courts };
+}
+
+/** The event's divisions, keyed by id — the court ranges the allocator has to respect. */
+async function divisionRanges(env, ctx, eventId) {
+  return new Map(((await env.DB.prepare(
+    "SELECT id, court_from, court_to FROM divisions WHERE org_id=?1 AND event_id=?2 AND deleted_at IS NULL"
+  ).bind(ctx.orgId, eventId).all()).results || []).map((d) => [d.id, d]));
+}
+
+/**
+ * HOW LONG THE BRACKET TAKES, WITHOUT DRAWING IT.
+ *
+ * Owner, 2026-08-08: the end-of-league tournament "changes based on participants and timeframe
+ * available", and the goal is "to get everyone sufficient games (so we can double games in pool play
+ * if needbe)". Those two sentences set the shape of this function and it is worth being explicit
+ * about why, because the obvious reading is the wrong one.
+ *
+ * THE CONSTRAINT IS A FLOOR ON GAMES PLAYED, NOT A CEILING ON MINUTES USED. A director who is short
+ * on time does not want to be told "it doesn't fit" — they want to know what to cut, and the answer
+ * is the bracket, not pool play, because pool play is where everyone gets their games. So when the
+ * draw overruns, the suggestion is the owner's own: TOP 8. And when it underruns, the spare time is
+ * reported as what it actually buys — another round of pool play — rather than as slack.
+ *
+ * `waves` is the number of rounds of simultaneous play, which is what actually consumes clock: eight
+ * games on four courts is two waves, not eight slots. `allocate` has always computed it and thrown
+ * it away; this returns it, and so does generation now.
+ */
+export async function previewBracketFor(env, ctx, eventId, b = {}) {
+  const ev = await env.DB.prepare(
+    "SELECT id, name, court_count, starts_at FROM events WHERE id=?1 AND org_id=?2 AND deleted_at IS NULL"
+  ).bind(eventId, ctx.orgId).first();
+  if (!ev) return { ok: false, error: "That event doesn't exist.", status: 404 };
+
+  const plan = await planFor(env, ctx, ev, b);
+  if (!plan.ok) return plan;
+
+  const waves = await wavesFor(env, ctx, eventId, plan, b);
+  const games = plan.plans.reduce((n, p) => n + p.tree.matches.length, 0);
+
+  const slotMinutes = Number(b.slot_minutes) > 0 ? Number(b.slot_minutes) : null;
+  const needsMinutes = slotMinutes ? waves * slotMinutes : null;
+  const haveMinutes = Number(b.minutes_available) > 0 ? Number(b.minutes_available) : null;
+
+  const out = {
+    ok: true,
+    event: ev.name,
+    teams: plan.seeds.ids.length,
+    seeded_by: plan.seeds.source,
+    courts: plan.courts,
+    games,
+    waves,
+    slot_minutes: slotMinutes,
+    needs_minutes: needsMinutes,
+    minutes_available: haveMinutes,
+    brackets: plan.plans.map((p) => ({
+      name: p.g.name, teams: p.g.ids.length, size: p.tree.size,
+      rounds: p.tree.depth, byes: p.tree.byes, games: p.tree.matches.length,
+    })),
+  };
+
+  if (needsMinutes !== null && haveMinutes !== null) {
+    out.fits = needsMinutes <= haveMinutes;
+    out.spare_minutes = haveMinutes - needsMinutes;
+    out.suggestion = out.fits
+      // Spare time goes back into pool play, because that is where "everyone gets enough games"
+      // lives. Only offered when a whole extra wave fits — half a wave is not a round of anything.
+      ? (out.spare_minutes >= slotMinutes
+        ? `About ${out.spare_minutes} spare minutes — roughly ${Math.floor(out.spare_minutes / slotMinutes)} more round${Math.floor(out.spare_minutes / slotMinutes) === 1 ? "" : "s"} of pool play if you want to double up.`
+        : "It fits, with no time to spare.")
+      : await shortSuggestion(env, ctx, eventId, ev, b, slotMinutes, haveMinutes, needsMinutes);
+  }
+  return out;
+}
+
+/**
+ * What to cut when the draw overruns. Owner, 2026-08-08, asked which knob gives: "top 8".
+ *
+ * So this does not offer a menu — it re-runs the plan at a top-8 A bracket and reports what that
+ * actually costs, because a suggestion with no number attached is a suggestion a director cannot
+ * act on at the scorer's table. If top 8 is already the shape, or still overruns, it says so rather
+ * than recommending something that would not help.
+ */
+async function shortSuggestion(env, ctx, eventId, ev, b, slotMinutes, haveMinutes, needsMinutes) {
+  const over = needsMinutes - haveMinutes;
+  if (Number(b.a_size) === 8) {
+    return `About ${over} minutes over, and this is already a top-8 bracket — shorten the games or start earlier.`;
+  }
+  const alt = { ...b, a_size: 8, include_rest: false };
+  const plan = await planFor(env, ctx, ev, alt);
+  if (!plan.ok) return `About ${over} minutes over. Try a smaller bracket.`;
+  const altWaves = await wavesFor(env, ctx, eventId, plan, alt);
+  const altMinutes = altWaves * slotMinutes;
+  return altMinutes <= haveMinutes
+    ? `About ${over} minutes over. A top-8 bracket is ${plan.plans[0].tree.matches.length} games in ${altWaves} rounds — about ${altMinutes} minutes — and pool play keeps everyone else on the court.`
+    : `About ${over} minutes over, and even a top-8 bracket needs about ${altMinutes} minutes — shorten the games or start earlier.`;
+}
+
+/**
+ * The wave count for a plan.
+ *
+ * THE COURT RANGE IS SYNTHESISED HERE RATHER THAN READ BACK, AND THAT IS THE ONE PLACE THIS FILE
+ * KEEPS TWO COPIES OF A FACT. Generation inserts the bracket row and re-reads it so the allocator
+ * sees what the database holds; a preview has no row to read. The values are the same three the
+ * INSERT binds, with the same coercions — but "the same" is a claim, so `league_bracket.test.mjs`
+ * asserts that preview and generation report identical games and waves for identical input. If they
+ * ever drift, that test is what says so.
+ */
+async function wavesFor(env, ctx, eventId, plan, b) {
+  const divisions = await divisionRanges(env, ctx, eventId);
+  const alloc = allocate(plan.plans.map((p, i) => {
+    const row = {
+      division_id: divisionForGroup(b, p.g.name),
+      court_from: Number(b.court_from) || null,
+      court_to: Number(b.court_to) || null,
+    };
+    return {
+      bracketId: i + 1,
+      depth: p.tree.depth,
+      matches: p.tree.matches,
+      courts: courtsFor(row, divisions.get(row.division_id), plan.courts),
+    };
+  }));
+  return alloc.slots;
+}
+
 /**
  * Draw the bracket(s) for an event and write them into `matches`.
  *
@@ -285,11 +458,9 @@ export async function generateBracketFor(env, ctx, eventId, b = {}) {
   ).bind(eventId, ctx.orgId).first();
   if (!ev) return { ok: false, error: "That event doesn't exist.", status: 404 };
 
-  const seeds = await seedOrder(env, ctx, eventId, b.seeds);
-  if (seeds.error) return { ok: false, error: seeds.error, status: 400 };
-  if (seeds.ids.length < 2) {
-    return { ok: false, error: "Add the teams first — there is nothing to bracket yet.", status: 409 };
-  }
+  const plan = await planFor(env, ctx, ev, b);
+  if (!plan.ok) return plan;
+  const { seeds, aSize, plans, pointsTo, cap, courts } = plan;
 
   const existing = await env.DB.prepare(
     `SELECT COUNT(*) AS n FROM matches
@@ -315,41 +486,11 @@ export async function generateBracketFor(env, ctx, eventId, b = {}) {
     ).bind(ctx.orgId, eventId).run();
   }
 
-  // "Top X into A, everyone else into BB." Splitting is what keeps a 16-team day meaningful for
-  // the teams that finished tenth — one bracket means half the field plays once and goes home.
-  const aSize = Number(b.a_size) > 0 ? Math.min(Number(b.a_size), seeds.ids.length) : seeds.ids.length;
-  const includeRest = b.include_rest !== false;
-  const groups = [{ name: "A", ids: seeds.ids.slice(0, aSize) }];
-  if (includeRest && seeds.ids.length > aSize) {
-    const rest = seeds.ids.slice(aSize);
-    if (rest.length >= 2) groups.push({ name: "BB", ids: rest });
-  }
-
-  const pointsTo = Number(b.points_to) > 0 ? Number(b.points_to) : 25;
-  const cap = Number(b.cap) > 0 ? Number(b.cap) : pointsTo + 2;
-  const courts = Number(b.courts) > 0 ? Number(b.courts) : (ev.court_count || 4);
-
   const poolMax = await env.DB.prepare(
     `SELECT COALESCE(MAX(round), 0) AS r FROM matches
       WHERE org_id=?1 AND event_id=?2 AND bracket_id IS NULL AND deleted_at IS NULL`
   ).bind(ctx.orgId, eventId).first();
 
-  // Every tree is built and checked BEFORE anything is written. A refusal on the second group after
-  // the first has already been inserted leaves half a bracket on the table and no way to tell.
-  const plans = [];
-  for (const g of groups) {
-    const tree = buildTree(g.ids.length);
-    if (!tree.ok) return { ok: false, error: tree.error, status: 400 };
-    plans.push({ g, tree });
-  }
-
-  /* A bracket may carry its own court range, and may belong to a division that has one. Both are read
-     back after the insert so the allocator sees exactly what the database holds rather than what this
-     function believes it just wrote — the same reason standings are derived and never stored. */
-  const divisionFor = (name) => {
-    const d = Number(b.division_id) || null;
-    return name === "A" ? d : (Number(b.bb_division_id) || d);
-  };
   const built = [];
   for (const p of plans) {
     const ins = await env.DB.prepare(
@@ -357,9 +498,10 @@ export async function generateBracketFor(env, ctx, eventId, b = {}) {
        VALUES (?1,?2,?3,?4,?5,?6,?7,?8)`
     ).bind(ctx.orgId, eventId, p.g.name, aSize < seeds.ids.length ? `top${aSize}` : "all",
            JSON.stringify({ seeded_by: seeds.source, seeds: p.g.ids, points_to: pointsTo }),
-           divisionFor(p.g.name),
+           divisionForGroup(b, p.g.name),
            Number(b.court_from) || null, Number(b.court_to) || null).run();
     p.bracketId = ins.meta.last_row_id;
+    // Read back rather than trust what we just bound: the allocator must see what the database holds.
     p.bracketRow = await env.DB.prepare(
       "SELECT id, division_id, court_from, court_to FROM brackets WHERE id=?1 AND org_id=?2"
     ).bind(p.bracketId, ctx.orgId).first();
@@ -398,9 +540,7 @@ export async function generateBracketFor(env, ctx, eventId, b = {}) {
      its division's, or the whole event), and games take the earliest slot with a free allowed court.
      Brackets with disjoint ranges therefore run simultaneously; brackets that share courts queue; and a
      bracket down to its final leaves its other courts free for whoever else may use them. */
-  const divisions = new Map(((await env.DB.prepare(
-    "SELECT id, court_from, court_to FROM divisions WHERE org_id=?1 AND event_id=?2 AND deleted_at IS NULL"
-  ).bind(ctx.orgId, eventId).all()).results || []).map((d) => [d.id, d]));
+  const divisions = await divisionRanges(env, ctx, eventId);
 
   const alloc = allocate(plans.map((p) => ({
     bracketId: p.bracketId,
@@ -435,13 +575,24 @@ export async function generateBracketFor(env, ctx, eventId, b = {}) {
     }
   }
 
-  return { ok: true, event: ev.name, seededBy: seeds.source, built, written, replaced };
+  // `waves` is rounds of simultaneous play, which is what consumes clock. It was computed and thrown
+  // away until v0.108.0; returning it is what lets the screen say how long the draw will take.
+  return { ok: true, event: ev.name, seededBy: seeds.source, built, written, replaced, waves: alloc.slots };
 }
 
 export async function bracketRoutes(request, env, url, ctx) {
   const p = url.pathname;
   const m = request.method;
   let x;
+
+  // ---- preview: what would be played, and how long it takes. Writes nothing, on purpose. ----
+  if ((x = p.match(/^\/api\/admin\/events\/(\d+)\/brackets\/preview$/)) && m === "POST") {
+    const denied = await requireStaff(env, ctx);
+    if (denied) return denied;
+    const b = await request.json().catch(() => ({}));
+    const g = await previewBracketFor(env, ctx, +x[1], b);
+    return g.ok ? json(g) : json({ error: g.error }, g.status || 400);
+  }
 
   /* ---- generate ---- */
   if ((x = p.match(/^\/api\/admin\/events\/(\d+)\/brackets$/)) && m === "POST") {
@@ -468,6 +619,7 @@ export async function bracketRoutes(request, env, url, ctx) {
       brackets: built,
       matches_written: written,
       matches_replaced: replaced,
+      waves: g.waves,
       summary: built.map((x2) =>
         `${x2.name}: ${x2.teams} team${x2.teams === 1 ? "" : "s"}, ${x2.matches} game${x2.matches === 1 ? "" : "s"}` +
         (x2.byes ? `, ${x2.byes} bye${x2.byes === 1 ? "" : "s"} to the top seed${x2.byes === 1 ? "" : "s"} — no play-in games` : ", no byes")),
