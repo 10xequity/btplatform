@@ -1,5 +1,9 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.103.0 — 2026-08-08
+
+- Auto-recorded by CI on deploy. `/api/health` reported `v0.103.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
+
 ## v0.102.0 — 2026-08-07
 
 **The security review you asked for starts here — one hole closed, and a permanent check so it cannot come back.**
