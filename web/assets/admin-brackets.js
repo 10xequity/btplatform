@@ -237,6 +237,7 @@
       include_rest: $("bRest").checked,
       points_to: Number($("bPoints").value) || undefined,
       courts: Number($("bCourts").value) || undefined,
+      best_of: $("bBo3").checked ? 3 : 1,
     };
   }
 
@@ -254,13 +255,18 @@
 
     if (!r.ok) { $("bFit").textContent = r.data.error || ""; return; }
     const d = r.data;
+    /* GAMES PER TEAM LEADS. Owner, 2026-08-08: "do not use time as the core unit of measure." The
+       clock is still shown — the day has to end — but it comes after the number the decision is
+       actually made on, and it is never the verdict. */
     const bits = [
-      `${d.teams} team${d.teams === 1 ? "" : "s"}`,
-      `${d.games} game${d.games === 1 ? "" : "s"}`,
-      `${d.waves} round${d.waves === 1 ? "" : "s"} on ${d.courts} court${d.courts === 1 ? "" : "s"}`,
+      `${d.guaranteed_games} games each (floor ${d.target_games})`,
+      `${d.pool_games_per_team.min} from pool`,
+      `${d.teams} teams · ${d.games} bracket game${d.games === 1 ? "" : "s"} · ${d.waves} round${d.waves === 1 ? "" : "s"} on ${d.courts} court${d.courts === 1 ? "" : "s"}`,
     ];
-    if (d.needs_minutes) bits.push(`about ${d.needs_minutes} minutes`);
+    if (d.needs_minutes) bits.push(`about ${d.needs_minutes} min`);
     $("bFit").textContent = bits.join(" · ") + (d.suggestion ? " — " + d.suggestion : ".");
+    $("bFit").dataset.short = d.meets_minimum ? "" : "1";
+    $("bSeedWarn").textContent = d.seed_warning || "";
   }
 
   const scheduleEstimate = () => {
@@ -312,6 +318,7 @@
     ["bASize", "bPoints", "bCourts", "bSlot", "bHave"].forEach((id) =>
       $(id).addEventListener("input", scheduleEstimate));
     $("bRest").addEventListener("change", scheduleEstimate);
+    $("bBo3").addEventListener("change", scheduleEstimate);
     $("bReload").addEventListener("click", load);
     $("bGen").addEventListener("click", generate);
     $("bAdvance").addEventListener("click", advance);

@@ -10,9 +10,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Scoring links — Boomtown Athletics</title>
   <script>/* Pre-paint state — collapse + theme (uiux-review §4/§6.4, v0.52.0): read the bt_nav cookie and the saved theme BEFORE the first stylesheet so the rail state AND the theme are right on frame one — no post-paint snap of either. admin-nav.js writes the cookie on rail toggle and bt_theme on theme toggle; the localStorage bt_nav fallback migrates pre-v0.51 sessions. */(function(){try{var m=document.cookie.match(/(?:^|; )bt_nav=([^;]*)/);var v=m?m[1]:((window.localStorage&&localStorage.getItem("bt_nav_collapsed")==="1")?"min":"");if(v==="min")document.documentElement.dataset.nav="min";var t=(window.localStorage&&localStorage.getItem("bt_theme"))||(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.dataset.theme=t;}catch(e){}})();</script>
-  <link rel="stylesheet" href="assets/tokens.css?v=0.108.0" />
-  <link rel="stylesheet" href="assets/app.css?v=0.108.0" />
-  <link rel="stylesheet" href="assets/admin.css?v=0.108.0" />
+  <link rel="stylesheet" href="assets/tokens.css?v=0.109.0" />
+  <link rel="stylesheet" href="assets/app.css?v=0.109.0" />
+  <link rel="stylesheet" href="assets/admin.css?v=0.109.0" />
   <style>
     .mf-head { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; margin-bottom: 12px; }
     .mf-head p { max-width: 68ch; }
@@ -44,7 +44,7 @@
 </head>
 <body>
     <header class="header chrome-glass no-print">
-    <a class="wordmark" href="admin.html" style="text-decoration:none;color:inherit"><img class="brand-logo" src="assets/logo-boom-icon-512.png?v=0.108.0" alt="" width="22" height="22" />Boomtown <span>Athletics</span></a>
+    <a class="wordmark" href="admin.html" style="text-decoration:none;color:inherit"><img class="brand-logo" src="assets/logo-boom-icon-512.png?v=0.109.0" alt="" width="22" height="22" />Boomtown <span>Athletics</span></a>
     <div class="spacer"></div>
     <select id="orgSwitcher" class="org-switcher" aria-label="Switch organization"></select>
     <a id="btHdrMail" class="btn ghost hdr-mail" href="admin-messages.html" aria-label="Messages">✉</a>
@@ -150,9 +150,9 @@
       </div>
     </main>
   </div>
-  <script src="assets/config.js?v=0.108.0"></script>
-  <script src="assets/admin-nav.js?v=0.108.0"></script>
-  <script src="assets/qr.js?v=0.108.0"></script>
-  <script src="assets/admin-score-links.js?v=0.108.0"></script>
+  <script src="assets/config.js?v=0.109.0"></script>
+  <script src="assets/admin-nav.js?v=0.109.0"></script>
+  <script src="assets/qr.js?v=0.109.0"></script>
+  <script src="assets/admin-score-links.js?v=0.109.0"></script>
 </body>
 </html>

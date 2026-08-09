@@ -50,7 +50,7 @@ test("every control that changes the draw also re-runs the estimate", () => {
   // Field size, points, courts, slot length, time available and the BB checkbox all change either
   // how many games are played or how long each takes. A control wired to the draw but not to the
   // estimate produces a number that is quietly about the previous settings.
-  for (const id of ["bASize", "bPoints", "bCourts", "bSlot", "bHave"]) {
+  for (const id of ["bASize", "bPoints", "bCourts", "bSlot", "bHave", "bBo3"]) {
     assert.ok(new RegExp(`"${id}"`).test(JS), `${id} must be wired into the estimate`);
   }
   assert.ok(/bRest[\s\S]*?scheduleEstimate|scheduleEstimate[\s\S]*?bRest/.test(JS),
@@ -90,4 +90,58 @@ test("NC: the guard fails when the screen stops asking the server", () => {
   assert.notEqual(broken, JS, "MUTATION DID NOT LAND — the endpoint string was not found");
   assert.ok(!/\/brackets\/preview/.test(broken),
     "with the endpoint gone the first test above must fail, which is what makes it a check");
+});
+
+/* ============ v0.109.0 · the unit is GAMES (owner, 2026-08-08) ============
+   "however do not use time as the core unit of measure." The screen must lead with games per team;
+   minutes stay on the line because the day has to end, but they are not the verdict. */
+
+/**
+ * The body of a named function, by brace matching.
+ *
+ * §-1c D-17b, SIXTH INSTANCE — and this one was mine, in this file, one run ago. The first draft
+ * sliced 600 characters after `const bits = [`, which (a) is a character-distance window, the exact
+ * spelling-not-behaviour trap, and (b) matched a DIFFERENT `const bits = [` four hundred lines
+ * earlier in `origin()`. Both assertions read -1 and the test failed against correct code.
+ * An ambiguous anchor plus a distance window is two spellings pinned instead of one behaviour.
+ */
+function bodyOf(src, signature) {
+  const at = src.indexOf(signature);
+  if (at < 0) return null;
+  const open = src.indexOf("{", at);
+  let depth = 0;
+  for (let i = open; i < src.length; i++) {
+    if (src[i] === "{") depth++;
+    else if (src[i] === "}" && --depth === 0) return src.slice(open, i + 1);
+  }
+  return null;
+}
+
+test("the estimate line leads with games per team, not minutes", () => {
+  const body = bodyOf(JS, "async function estimate(");
+  assert.ok(body, "the estimate function must exist to be checked");
+  const games = body.indexOf("guaranteed_games");
+  const minutes = body.indexOf("needs_minutes");
+  assert.ok(games > -1, "games per team must appear on the line");
+  assert.ok(minutes > -1, "the time boundary is still reported");
+  assert.ok(games < minutes, "games must come BEFORE minutes — the owner reversed this unit");
+});
+
+test("the floor is the server's number — the screen never restates 8", () => {
+  // A literal 8 here would be a second definition of MIN_GAMES_PER_TEAM, free to drift from
+  // formats.js. The screen renders target_games as sent.
+  assert.ok(/target_games/.test(JS), "the floor is read from the response");
+});
+
+test("a bracket not seeded by pool play is announced on the screen", () => {
+  assert.ok(/seed_warning/.test(JS), "N-6: the screen must surface the seeding warning");
+  assert.ok(/id="bSeedWarn"/.test(HTML), "and it needs somewhere to render");
+  const warn = HTML.slice(HTML.indexOf('id="bSeedWarn"'));
+  assert.ok(/aria-live="polite"/.test(warn.slice(0, 200)), "it appears without a reload");
+});
+
+test("NC: the games-first guard fails if the line reverts to minutes-first", () => {
+  const broken = JS.replace(/guaranteed_games/g, "zzz_removed");
+  assert.notEqual(broken, JS, "MUTATION DID NOT LAND — the field name was not found");
+  assert.ok(!/guaranteed_games/.test(broken), "with games gone the ordering test above must fail");
 });

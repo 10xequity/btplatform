@@ -1,5 +1,11 @@
 /* Boomtown Platform — the end-of-league tournament (roadmap §-1d, Shape A)
-   File: worker/test/league_bracket.test.mjs · Version: v2.0 · Date: 2026-08-08 · Ships in: v0.108.0
+   File: worker/test/league_bracket.test.mjs · Version: v3.0 · Date: 2026-08-08 · Ships in: v0.109.0
+
+   v3.0 — THE OWNER REVERSED v0.108.0's CORE UNIT: "however do not use time as the core unit of
+   measure." The measure is GAMES PER TEAM against a floor of 8. Three v2.0 tests asserted the old
+   minutes-first rule and were REWRITTEN rather than deleted — the surfaces they covered still need
+   cover; what changed is the correct answer on each. N-6 is answered here too: a bracket that was
+   not seeded by pool play now says so.
 
    v1.0 SHIPPED WITH NO VERSION BUMP, DELIBERATELY: it pinned behaviour the worker already had, and a
    release number with no shipped change would have made the changelog claim a capability arrived in
@@ -304,44 +310,55 @@ test("waves are rounds of simultaneous play, not games — courts change the clo
   assert.equal(wide.data.needs_minutes, wide.data.waves * 20, "minutes are waves times slot length");
 });
 
-test("with time to spare, the spare is reported as more pool play — the owner's actual goal", async () => {
+/* THESE THREE TESTS ASSERTED THE v0.108.0 RULE AND THE OWNER REVERSED IT ON 2026-08-08.
+   They are rewritten rather than deleted: the surfaces they covered (spare time, an overrunning
+   draw, an already-minimal field) still need cover — what changed is the correct ANSWER on each. */
+
+/** Write  real pool games for every pair, so the count is measured rather than asserted. */
+function seedPool(env, teams, rounds, base) {
+  let mid = base;
+  for (let round = 1; round <= rounds; round++) {
+    for (let t = 1; t <= teams; t += 2) {
+      env.DB.exec(
+        "INSERT INTO matches (id, org_id, event_id, stage, round, court, team_a_id, team_b_id, points_to, cap, game_number) VALUES " +
+        `(${mid++},1,1,'pool',${round},${(t + 1) / 2},${t},${t + 1},25,27,1)`
+      );
+    }
+  }
+  const n = env.DB.query("SELECT id FROM matches WHERE stage='pool' AND deleted_at IS NULL").length;
+  assert.equal(n, (teams / 2) * rounds, "the pool fixture must land or the test proves nothing");
+}
+
+test("once the floor is met, spare time buys MORE POOL PLAY — not a bigger bracket", async () => {
   const env = boot(8);
   await burnBootstrap(env);
   const token = await staff(env);
+  seedPool(env, 8, 8, 900);
 
-  const p = await preview(env, token, { courts: 4, slot_minutes: 20, minutes_available: 180 });
+  const p = await preview(env, token, { courts: 4, slot_minutes: 20, minutes_available: 300 });
   assert.equal(p.status, 200);
+  assert.equal(p.data.meets_minimum, true, "eight pool games already clears the floor");
   assert.equal(p.data.fits, true);
-  assert.equal(p.data.spare_minutes, 180 - p.data.needs_minutes);
   assert.match(p.data.suggestion, /pool play/i,
-    "spare time must be offered as more pool play, not as slack");
+    "spare time is offered as more pool play, because that is where the games are");
 });
 
-test("when it overruns, the suggestion is top 8 with the number attached", async () => {
-  const env = boot(24);
+test("an overrunning draw reports the overrun and still does not tell you to cut the field", async () => {
+  // v0.108.0 answered this with "try a top-8 bracket". The owner reversed the unit on 2026-08-08:
+  // time is a boundary, games are the measure, and "we try to break everyone possible".
+  const env = boot(16);
   await burnBootstrap(env);
   const token = await staff(env);
+  seedPool(env, 16, 8, 1000);
 
-  // One court and a long slot, so the full field cannot possibly fit the window.
   const p = await preview(env, token, { courts: 1, slot_minutes: 25, minutes_available: 60 });
   assert.equal(p.status, 200);
+  assert.equal(p.data.meets_minimum, true, "the games floor is met even though the clock is not");
   assert.equal(p.data.fits, false, "this shape must genuinely overrun or the test proves nothing");
-  assert.ok(p.data.needs_minutes > 60);
-  assert.match(p.data.suggestion, /top-8/i, "the owner's answer for the short case is top 8");
-  assert.match(p.data.suggestion, /\d+ minutes/, "a suggestion with no number cannot be acted on");
+  assert.match(p.data.suggestion, /minutes past the window/i, "the overrun is still reported");
+  assert.ok(!/top.?8/i.test(p.data.suggestion),
+    "cutting the field is never volunteered — the owner breaks everyone possible");
 });
-
-test("a top-8 draw that still overruns is told so, rather than recommended to itself", async () => {
-  const env = boot(24);
-  await burnBootstrap(env);
-  const token = await staff(env);
-
-  const p = await preview(env, token, { courts: 1, slot_minutes: 30, minutes_available: 20, a_size: 8 });
-  assert.equal(p.data.fits, false);
-  assert.match(p.data.suggestion, /already a top-8|even a top-8/i,
-    "recommending top 8 to a top-8 bracket is advice that cannot be followed");
-});
-
 test("league-wide is the default: no division is stamped unless one is asked for", async () => {
   // Owner: "Generally, 1 bracket across the league." The split is the exception, so the default
   // path must not quietly scope to a division.
@@ -384,4 +401,158 @@ test("NC-5: preview requires staff — an anonymous caller gets no answer", asyn
   await burnBootstrap(env);
   const anon = await preview(env, undefined, { courts: 2 });
   assert.ok(anon.status === 401 || anon.status === 403, `expected a refusal, got ${anon.status}`);
+});
+
+/* ============ v0.109.0 · GAMES, not minutes (owner, 2026-08-08) ============
+
+   The owner reversed v0.108.0's core unit in one clause: "however do not use time as the core unit
+   of measure." The measure is GAMES PER TEAM.
+
+   The model, verbatim: "We aim at roughly 8 games x 25 pts in pool play before cutting anyone. If
+   they receive less than that, for example 6 or 7, then everyone needs to break to meet the game
+   minimum (8 games) that the first bracket games should fulfill. Bracket games usually are 1 to 25
+   in normal scenarios, sometimes they are 2 to 21 depending on how we break them. Game matches
+   (best of 3) are considered 2.25 (since there's a 25% chance of it going to 3 games)."
+
+   So the bracket's job, when pool play came up short, is to TOP TEAMS UP to the floor — which is
+   why "break everyone" is the answer and cutting to a top 8 is not. Time is a boundary (7–8 hours,
+   6 with fewer teams), never the unit.
+
+   THE FLOOR ALREADY EXISTED AND MUST NOT BE RE-DECLARED. `formats.js` exports
+   MIN_GAMES_PER_TEAM = 8 and the pool generator already refuses a round count that cannot give
+   every team an equal number. A second 8 in this file would be a second definition of the owner's
+   rule, free to drift. These tests assert the imported constant, not a literal. */
+import { MIN_GAMES_PER_TEAM } from "../src/formats.js";
+import { BEST_OF_3_GAMES, guaranteedGames } from "../src/brackets.js";
+
+test("the games floor has ONE definition and it is the one formats.js already owned", () => {
+  assert.equal(MIN_GAMES_PER_TEAM, 8, "the owner's floor is 8 games");
+  // If brackets.js ever hard-codes its own 8, this is the test that should have caught it.
+  const src = readFileSync(new URL("../src/brackets.js", import.meta.url), "utf8");
+  assert.ok(/MIN_GAMES_PER_TEAM/.test(src), "brackets.js must import the floor, never restate it");
+});
+
+test("a best-of-3 match counts 2.25 games — the owner's number, not a rounded one", () => {
+  assert.equal(BEST_OF_3_GAMES, 2.25);
+  // 25% of best-of-3 matches go to a third game: 2 + 0.25. Rounding to 2 loses exactly the
+  // quantity that decides whether a 6-game pool reaches the floor.
+  assert.equal(guaranteedGames(6, true, 3), 8.25, "6 pool + a best-of-3 first round clears 8");
+  assert.equal(guaranteedGames(6, true, 1), 7, "6 pool + one single game does NOT clear 8");
+  assert.equal(guaranteedGames(7, true, 1), 8, "7 pool + one single game lands exactly on 8");
+  assert.equal(guaranteedGames(6, false, 3), 6, "a team that does not break gets nothing from the bracket");
+});
+
+test("preview leads with games per team, and counts real pool games from the table", async () => {
+  const env = boot(10);
+  await burnBootstrap(env);
+  const token = await staff(env);
+
+  // Six pool games each, written as real rows so the count is measured, not asserted into being.
+  let mid = 500;
+  for (let round = 1; round <= 6; round++) {
+    for (let t = 1; t <= 10; t += 2) {
+      env.DB.exec(
+        "INSERT INTO matches (id, org_id, event_id, stage, round, court, team_a_id, team_b_id, points_to, cap, game_number) VALUES " +
+        `(${mid++},1,1,'pool',${round},${(t + 1) / 2},${t},${t + 1},25,27,1)`
+      );
+    }
+  }
+  const check = env.DB.query("SELECT id FROM matches WHERE stage='pool' AND deleted_at IS NULL");
+  assert.equal(check.length, 30, "the pool fixture must land or the count below proves nothing");
+
+  const p = await preview(env, token, { courts: 3 });
+  assert.equal(p.status, 200);
+  assert.equal(p.data.pool_games_per_team.min, 6, "each team played six pool games");
+  assert.equal(p.data.target_games, MIN_GAMES_PER_TEAM);
+});
+
+test("six pool games and everyone breaking is still short unless the first round is best of 3", async () => {
+  const env = boot(8);
+  await burnBootstrap(env);
+  const token = await staff(env);
+  let mid = 600;
+  for (let round = 1; round <= 6; round++) {
+    for (let t = 1; t <= 8; t += 2) {
+      env.DB.exec(
+        "INSERT INTO matches (id, org_id, event_id, stage, round, court, team_a_id, team_b_id, points_to, cap, game_number) VALUES " +
+        `(${mid++},1,1,'pool',${round},${(t + 1) / 2},${t},${t + 1},25,27,1)`
+      );
+    }
+  }
+
+  const single = await preview(env, token, { courts: 2 });
+  assert.equal(single.data.guaranteed_games, 7, "6 pool + 1 bracket game is 7");
+  assert.equal(single.data.meets_minimum, false);
+  assert.match(single.data.suggestion, /best of 3|best-of-3/i,
+    "the owner's fix for a short pool is a best-of-3 first round, not cutting the field");
+
+  const bo3 = await preview(env, token, { courts: 2, best_of: 3 });
+  assert.equal(bo3.data.guaranteed_games, 8.25);
+  assert.equal(bo3.data.meets_minimum, true);
+});
+
+test("cutting the field is never the suggestion when teams are short of the floor", async () => {
+  // "we try to break everyone possible to give them as many games as possible." A top-8 suggestion
+  // here would take games AWAY from exactly the teams that do not have enough.
+  const env = boot(16);
+  await burnBootstrap(env);
+  const token = await staff(env);
+  let mid = 700;
+  for (let round = 1; round <= 5; round++) {
+    for (let t = 1; t <= 16; t += 2) {
+      env.DB.exec(
+        "INSERT INTO matches (id, org_id, event_id, stage, round, court, team_a_id, team_b_id, points_to, cap, game_number) VALUES " +
+        `(${mid++},1,1,'pool',${round},${(t + 1) / 2},${t},${t + 1},25,27,1)`
+      );
+    }
+  }
+  const p = await preview(env, token, { courts: 4, a_size: 8, include_rest: false });
+  assert.equal(p.data.everyone_breaks, false, "this fixture deliberately cuts the field");
+  assert.equal(p.data.meets_minimum, false);
+  assert.match(p.data.suggestion, /break everyone|everyone breaks|all \d+ teams/i,
+    "the fix for a short field is to break everyone, never to cut it further");
+  assert.ok(!/top.?8/i.test(p.data.suggestion),
+    "recommending a top 8 to teams short of the floor is the opposite of the owner's rule");
+});
+
+test("time is reported as a boundary, never as the verdict", async () => {
+  const env = boot(8);
+  await burnBootstrap(env);
+  const token = await staff(env);
+  const p = await preview(env, token, { courts: 2, slot_minutes: 20, minutes_available: 30 });
+  assert.equal(p.status, 200);
+  // The bracket cannot fit 30 minutes, but the verdict field is about GAMES, not the clock.
+  assert.equal(typeof p.data.meets_minimum, "boolean");
+  assert.ok("guaranteed_games" in p.data, "games is the unit the answer is expressed in");
+  assert.ok(p.data.needs_minutes > 30, "the time boundary is still reported");
+});
+
+/* ===================== N-6 · brackets come out of pool play ===================== */
+
+test("a bracket not seeded by pool play says so — the two look identical otherwise", async () => {
+  // Owner, 2026-08-08: "Please ensure brackets are scored by pool play, that is the whole point of
+  // pool play." The fallback is not removed — a bracket-only event needs it — but it must announce
+  // itself, because a bracket seeded from entry order is indistinguishable from a real finish.
+  const env = boot(8);
+  await burnBootstrap(env);
+  const token = await staff(env);
+
+  const cold = await preview(env, token, { courts: 2 });
+  assert.equal(cold.data.seeded_by, "entry seed");
+  assert.match(cold.data.seed_warning, /not pool play/i, "an unearned seeding must be named");
+
+  // Now score a real finish and the warning must clear — otherwise it is decoration that always
+  // fires, which is the same as never firing.
+  for (let i = 1; i <= 8; i++) {
+    env.DB.exec(
+      "INSERT INTO standings (org_id, event_id, team_id, wins, losses, rank) VALUES " +
+      `(1,1,${i},${i},${8 - i},${9 - i})`
+    );
+  }
+  const check = env.DB.query("SELECT team_id FROM standings WHERE event_id = 1");
+  assert.equal(check.length, 8, "MUTATION DID NOT LAND — the standings were not written");
+
+  const warm = await preview(env, token, { courts: 2 });
+  assert.equal(warm.data.seeded_by, "pool finish");
+  assert.equal(warm.data.seed_warning, null, "a bracket that DID come out of pool play must not nag");
 });

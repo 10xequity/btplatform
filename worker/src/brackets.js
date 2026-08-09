@@ -30,6 +30,30 @@
 import { bracketOrder } from "./scheduler.js";
 import { personName, CAPTAIN_JOIN, CAPTAIN_COLS } from "./names.js"; // v0.74.0 — one name rule
 import { courtsFor, allocate, slotsFrom, conflicts } from "./courts.js"; // v0.78.0 — fixed ranges, real times
+import { MIN_GAMES_PER_TEAM } from "./formats.js"; // v0.109.0 — ONE definition of the owner's floor
+
+/**
+ * A best-of-3 match is worth 2.25 games. Owner, 2026-08-08: "Game matches (best of 3) are
+ * considered 2.25 (since there's a 25% chance of it going to 3 games)."
+ *
+ * The quarter is not a rounding artefact and must not be rounded away — it is exactly the quantity
+ * that decides whether a six-game pool reaches the eight-game floor. 6 + 2.25 clears it; 6 + 2 does
+ * not, and 6 + 1 is not close.
+ */
+export const BEST_OF_3_GAMES = 2.25;
+
+/**
+ * The games a team is GUARANTEED, which is the number the owner's rule is about.
+ *
+ * Guaranteed, not expected: a bracket's winner plays every round, but the team that loses its first
+ * match plays exactly one. The floor has to hold for that team, so this counts one bracket match —
+ * and only if the team is in a bracket at all. A team left out of the draw gets nothing, which is
+ * the whole reason "break everyone" is the answer to a short pool rather than "cut to a top 8".
+ */
+export function guaranteedGames(poolGames, everyoneBreaks, bestOf) {
+  const perMatch = Number(bestOf) === 3 ? BEST_OF_3_GAMES : 1;
+  return poolGames + (everyoneBreaks ? perMatch : 0);
+}
 
 /* ---------------- pure engine ---------------- */
 
@@ -360,14 +384,41 @@ export async function previewBracketFor(env, ctx, eventId, b = {}) {
   const needsMinutes = slotMinutes ? waves * slotMinutes : null;
   const haveMinutes = Number(b.minutes_available) > 0 ? Number(b.minutes_available) : null;
 
+  /* THE UNIT IS GAMES. Owner, 2026-08-08: "do not use time as the core unit of measure."
+     `bracketed` is the set actually drawn — a team outside it plays no bracket game at all, so
+     "everyone breaks" is a property of the draw, not of the intent. */
+  const bracketed = plan.plans.reduce((n, p) => n + p.g.ids.length, 0);
+  const everyoneBreaks = bracketed >= plan.seeds.ids.length;
+  const bestOf = Number(b.best_of) === 3 ? 3 : 1;
+  const pool = await poolGamesPerTeam(env, ctx, eventId);
+  const guaranteed = guaranteedGames(pool.min, everyoneBreaks, bestOf);
+
   const out = {
     ok: true,
     event: ev.name,
     teams: plan.seeds.ids.length,
     seeded_by: plan.seeds.source,
+    /* N-6, owner 2026-08-08: "Please ensure brackets are scored by pool play, that is the whole
+       point of pool play." `seedOrder` falls back to entry seed when nothing has been scored, which
+       a bracket-only event legitimately needs — so the fallback stays, and it says so instead.
+       A bracket seeded from entry order LOOKS identical to one seeded from a real finish; the only
+       thing that can tell a director which they are holding is this line. */
+    seed_warning: plan.seeds.source === "pool finish" ? null
+      : `Seeded by ${plan.seeds.source}, not pool play. Score pool play first if this bracket is meant to come out of it.`,
     courts: plan.courts,
     games,
     waves,
+    // --- the answer, in games ---
+    pool_games_per_team: pool,
+    teams_in_bracket: bracketed,
+    everyone_breaks: everyoneBreaks,
+    bracket_best_of: bestOf,
+    bracket_games_per_team: bestOf === 3 ? BEST_OF_3_GAMES : 1,
+    guaranteed_games: guaranteed,
+    target_games: MIN_GAMES_PER_TEAM,
+    meets_minimum: guaranteed >= MIN_GAMES_PER_TEAM,
+    games_short: Math.max(0, MIN_GAMES_PER_TEAM - guaranteed),
+    // --- the boundary, in minutes: reported, never the verdict ---
     slot_minutes: slotMinutes,
     needs_minutes: needsMinutes,
     minutes_available: haveMinutes,
@@ -380,39 +431,80 @@ export async function previewBracketFor(env, ctx, eventId, b = {}) {
   if (needsMinutes !== null && haveMinutes !== null) {
     out.fits = needsMinutes <= haveMinutes;
     out.spare_minutes = haveMinutes - needsMinutes;
-    out.suggestion = out.fits
-      // Spare time goes back into pool play, because that is where "everyone gets enough games"
-      // lives. Only offered when a whole extra wave fits — half a wave is not a round of anything.
-      ? (out.spare_minutes >= slotMinutes
-        ? `About ${out.spare_minutes} spare minutes — roughly ${Math.floor(out.spare_minutes / slotMinutes)} more round${Math.floor(out.spare_minutes / slotMinutes) === 1 ? "" : "s"} of pool play if you want to double up.`
-        : "It fits, with no time to spare.")
-      : await shortSuggestion(env, ctx, eventId, ev, b, slotMinutes, haveMinutes, needsMinutes);
   }
+  out.suggestion = gamesSuggestion(out, slotMinutes);
   return out;
 }
 
 /**
- * What to cut when the draw overruns. Owner, 2026-08-08, asked which knob gives: "top 8".
+ * What to say, in games.
  *
- * So this does not offer a menu — it re-runs the plan at a top-8 A bracket and reports what that
- * actually costs, because a suggestion with no number attached is a suggestion a director cannot
- * act on at the scorer's table. If top 8 is already the shape, or still overruns, it says so rather
- * than recommending something that would not help.
+ * Owner, 2026-08-08: "We aim at roughly 8 games x 25 pts in pool play before cutting anyone. If they
+ * receive less than that, for example 6 or 7, then everyone needs to break to meet the game minimum
+ * (8 games) that the first bracket games should fulfill" — and "we try to break everyone possible to
+ * give them as many games as possible."
+ *
+ * SO A SHORT FIELD IS NEVER TOLD TO CUT ITSELF. The two levers that ADD games are breaking everyone
+ * and playing the first round best-of-3, and they are offered in that order because breaking
+ * everyone helps the teams who have the fewest games while best-of-3 helps everyone equally.
+ * Trimming to a top 8 takes games away from precisely the teams below the floor, so it is not
+ * offered here at all — it belongs to the time boundary, and the time boundary is not the verdict.
+ *
+ * NOTE ON BEST-OF-3: the generator writes ONE match per bracket node. Running a round as best-of-3
+ * is something the director does at the scorer's table, which is why this says "run" rather than
+ * implying the software will schedule three rows. Auto-scheduling it is not built.
  */
-async function shortSuggestion(env, ctx, eventId, ev, b, slotMinutes, haveMinutes, needsMinutes) {
-  const over = needsMinutes - haveMinutes;
-  if (Number(b.a_size) === 8) {
-    return `About ${over} minutes over, and this is already a top-8 bracket — shorten the games or start earlier.`;
+function gamesSuggestion(out, slotMinutes) {
+  if (!out.meets_minimum) {
+    const have = `${out.pool_games_per_team.min} pool game${out.pool_games_per_team.min === 1 ? "" : "s"} each`;
+    if (!out.everyone_breaks) {
+      const left = out.teams - out.teams_in_bracket;
+      return `${have}, and ${left} team${left === 1 ? " is" : "s are"} not in the draw — break everyone (all ${out.teams}) and the first bracket game takes them to ${guaranteedGames(out.pool_games_per_team.min, true, out.bracket_best_of)}.`;
+    }
+    if (out.bracket_best_of !== 3) {
+      const bo3 = guaranteedGames(out.pool_games_per_team.min, true, 3);
+      return `${have} plus one bracket game is ${out.guaranteed_games} — short of ${out.target_games}. Run the first round best of 3 (counts ${BEST_OF_3_GAMES}) and everyone reaches ${bo3}.`;
+    }
+    return `${have} plus a best-of-3 first round is ${out.guaranteed_games} — still ${out.games_short} short of ${out.target_games}. Another round of pool play is the only thing that closes it.`;
   }
-  const alt = { ...b, a_size: 8, include_rest: false };
-  const plan = await planFor(env, ctx, ev, alt);
-  if (!plan.ok) return `About ${over} minutes over. Try a smaller bracket.`;
-  const altWaves = await wavesFor(env, ctx, eventId, plan, alt);
-  const altMinutes = altWaves * slotMinutes;
-  return altMinutes <= haveMinutes
-    ? `About ${over} minutes over. A top-8 bracket is ${plan.plans[0].tree.matches.length} games in ${altWaves} rounds — about ${altMinutes} minutes — and pool play keeps everyone else on the court.`
-    : `About ${over} minutes over, and even a top-8 bracket needs about ${altMinutes} minutes — shorten the games or start earlier.`;
+
+  const met = `Everyone gets ${out.guaranteed_games} games — the floor is ${out.target_games}.`;
+  // Spare clock buys MORE POOL PLAY, which is where the games are. Only when a whole wave fits.
+  if (out.fits && slotMinutes && out.spare_minutes >= slotMinutes) {
+    const extra = Math.floor(out.spare_minutes / slotMinutes);
+    return `${met} About ${out.spare_minutes} spare minutes — room for roughly ${extra} more round${extra === 1 ? "" : "s"} of pool play.`;
+  }
+  if (out.fits === false) {
+    return `${met} It runs about ${out.needs_minutes - out.minutes_available} minutes past the window, so start earlier or shorten the games.`;
+  }
+  return met;
 }
+
+/**
+ * Pool games played per team, counted from the rows rather than inferred from the format.
+ *
+ * A bracket game is not a pool game, so `bracket_id IS NULL` is the whole predicate — `stage` is the
+ * coarse legacy label and a bracket row carries 'quarter'/'semi'/'final', but the older generator
+ * wrote 'pool' onto rows it later bracketed, so stage alone would miscount.
+ *
+ * MIN is what matters. The floor is a promise to the worst-off team, and pools are not always even.
+ */
+async function poolGamesPerTeam(env, ctx, eventId) {
+  const rows = (await env.DB.prepare(
+    `SELECT t.id AS team, COUNT(m.id) AS n
+       FROM teams t
+       LEFT JOIN matches m
+         ON m.org_id = t.org_id AND m.event_id = t.event_id
+        AND m.bracket_id IS NULL AND m.deleted_at IS NULL
+        AND (m.team_a_id = t.id OR m.team_b_id = t.id)
+      WHERE t.org_id=?1 AND t.event_id=?2 AND t.deleted_at IS NULL
+      GROUP BY t.id`
+  ).bind(ctx.orgId, eventId).all()).results || [];
+  if (!rows.length) return { min: 0, max: 0 };
+  const counts = rows.map((r) => Number(r.n) || 0);
+  return { min: Math.min(...counts), max: Math.max(...counts) };
+}
+
 
 /**
  * The wave count for a plan.
