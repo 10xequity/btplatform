@@ -393,7 +393,7 @@ export default {
         const session = await currentSession(request, env);
         res = session ? await listOrgs(env) : json({ error: "Sign in first." }, 401);
       } else if (url.pathname === "/api/health") {
-        res = json({ ok: true, version: "v0.113.0" });
+        res = json({ ok: true, version: "v0.114.0" });
       } else if (url.pathname === "/api/webhooks/square" && request.method === "POST") {
         res = await membershipWebhook(request, env); // verifies signature; forwards payment.* to squareWebhook
       } else if (url.pathname === "/api/public/org-brand" && request.method === "GET") {
@@ -677,7 +677,10 @@ async function me(request, env) {
   const session = await currentSession(request, env);
   if (!session) return json({ error: "Not signed in." }, 401);
   const user = await env.DB.prepare(
-    "SELECT id, email, display_name, totp_enabled FROM users WHERE id = ?1 AND deleted_at IS NULL"
+    // `totp_enabled` was carried here and read by nothing (measured across web/ and worker/test/).
+    // Dead data in a response is where the next reader's wrong belief comes from — and this column
+    // produced exactly that on the admin Users screen. The real factor is counted below.
+    "SELECT id, email, display_name FROM users WHERE id = ?1 AND deleted_at IS NULL"
   ).bind(session.user_id).first();
   const roles = (await env.DB.prepare(
     "SELECT org_id, role FROM user_org_roles WHERE user_id = ?1 AND deleted_at IS NULL"

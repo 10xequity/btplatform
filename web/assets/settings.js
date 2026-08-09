@@ -209,9 +209,9 @@
         : "None yet \u2014 add this device to sign in with Face ID / fingerprint.";
       listEl.innerHTML = items.map(k => `
         <div class="settings-row">
-          <div class="grow"><div class="k">${esc(k.nickname || k.device || "Passkey")}</div>
+          <div class="grow"><div class="k">${esc(k.device_label || "Passkey")}</div>
             <div class="v">Added ${esc(k.created_at || "")}</div></div>
-          <button class="btn ghost" data-remove="${esc(k.id)}">Remove</button>
+          <button class="btn ghost" data-remove="${esc(k.credential_id)}">Remove</button>
         </div>`).join("");
       listEl.querySelectorAll("[data-remove]").forEach(b => b.addEventListener("click", async () => {
         if (!confirm("Remove this passkey? You can always sign in with the email link.")) return;

@@ -219,10 +219,15 @@
     const wrap = document.getElementById("rolesWrap");
     if (!r.ok) { wrap.innerHTML = `<div class="empty">${esc(r.data.error || "Admin role required to view this.")}</div>`; return; }
     const users = r.data.users || [];
-    wrap.innerHTML = `<table class="tbl"><thead><tr><th>User</th><th>2FA</th><th>Roles</th><th></th></tr></thead><tbody>
+    // The column used to read `totp_enabled`, which nothing in the worker ever writes — so it read
+    // "Off" for everyone, forever, and looked like a two-factor setting that was merely switched
+    // off. Passkeys are the factor this product actually has, and a registered count is a real fact.
+    wrap.innerHTML = `<table class="tbl"><thead><tr><th>User</th><th>Passkey</th><th>Roles</th><th></th></tr></thead><tbody>
       ${users.map(u => `<tr>
         <td>${esc(u.display_name || u.email)}${u.display_name ? `<div class="help-text">${esc(u.email)}</div>` : ""}</td>
-        <td>${u.totp_enabled ? "On" : '<span class="help-text">Off</span>'}</td>
+        <td>${u.passkeys > 0
+          ? `${u.passkeys} device${u.passkeys === 1 ? "" : "s"}`
+          : '<span class="help-text">None</span>'}</td>
         <td>${u.roles.length ? u.roles.map(ro =>
             `<span class="chip ${ro.role === "admin" ? "role-admin" : ""}">${esc(orgName(ro.org_id))}: ${ro.role}</span>`).join(" ")
           : '<span class="help-text">No role (public)</span>'}</td>

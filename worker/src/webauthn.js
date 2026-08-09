@@ -178,11 +178,21 @@ async function list(env, ctx) {
 async function remove(request, env, ctx) {
   if (!ctx.session) return H.json({ error: "Sign in first." }, 401);
   const { credential_id } = await safeJson(request);
-  await env.DB.prepare(
+  const done = await env.DB.prepare(
     "UPDATE webauthn_credentials SET deleted_at=datetime('now') WHERE user_id=?1 AND credential_id=?2"
   ).bind(ctx.userId, credential_id || "").run();
+
+  /* REPORT WHAT ACTUALLY HAPPENED (v0.114.0). This returned {ok:true} and wrote a `passkey.remove`
+     audit row unconditionally — including when the UPDATE matched nothing, which is exactly what
+     the settings screen was causing by sending an empty id for every device. So the button looked
+     like it worked, the passkey stayed enrolled, and THE AUDIT LOG RECORDED A REMOVAL THAT NEVER
+     HAPPENED. A security log exists to be believed; one that records events which did not occur is
+     worse than no log, because it is trusted. The audit now follows the row count, not the request. */
+  if (!done.meta.changes) {
+    return H.json({ error: "That passkey is not on this account — nothing was removed." }, 404);
+  }
   await H.audit(env, ctx, "passkey.remove", "webauthn_credentials", (credential_id || "").slice(0, 12), {});
-  return H.json({ ok: true });
+  return H.json({ ok: true, removed: done.meta.changes });
 }
 
 /* ---------- challenges ---------- */

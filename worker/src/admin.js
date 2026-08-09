@@ -98,7 +98,16 @@ async function listUsers(env, ctx) {
   if (!myOrgs.length) return json({ users: [], admin_org_ids: [] });
   const ph = myOrgs.map((_, i) => `?${i + 1}`).join(",");
   const users = (await env.DB.prepare(
-    `SELECT DISTINCT u.id, u.email, u.display_name, u.totp_enabled, u.created_at
+    /* PASSKEYS, NOT A PHANTOM 2FA FLAG (v0.114.0). This selected `u.totp_enabled`, which migration
+       0001 created and which — measured across the whole worker — is written NOWHERE. The Users
+       screen therefore rendered a "2FA" column that could only ever read "Off", for every user,
+       forever, and an admin reading it reasonably concluded two-factor existed and was merely
+       switched off. TOTP was planned and then REPLACED by passkeys (index.js and webauthn.js say so
+       in their headers); the plan was dropped and the column outlived it.
+       `webauthn_credentials` is a table real rows land in, so this number is connected to something. */
+    `SELECT DISTINCT u.id, u.email, u.display_name, u.created_at,
+            (SELECT COUNT(*) FROM webauthn_credentials c
+              WHERE c.user_id = u.id AND c.deleted_at IS NULL) AS passkeys
        FROM users u
        JOIN user_org_roles r ON r.user_id = u.id AND r.deleted_at IS NULL
       WHERE r.org_id IN (${ph}) AND u.deleted_at IS NULL
