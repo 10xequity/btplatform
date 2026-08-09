@@ -1,5 +1,17 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.116.0 — 2026-08-09
+
+**The impatient-human release (owner request 2026-08-09): the back button un-broken, and the double-click absorbed.**
+
+- **Admin "Back" button fixed** — it rendered enormous, wrapping and clipping its own label, on every admin page. The injected button carried a class (`bt-back`) that no stylesheet defined, so its icon fell back to the browser's default SVG size (~300×150px). It now rides the house `.btn ghost sm` style with a 16px icon.
+- **Double-click on a FREE event no longer registers twice.** Free registrations complete instantly as `comped`, and the duplicate guard only looked for in-progress statuses — so an impatient second click wrote a second full registration (two teams, two waivers). A completed registration now blocks a re-submit with the same team name; the same captain registering a genuinely second team (different name) still passes.
+- **New guard file `human_chaos.test.mjs` (9 tests)** — the human who clicks everything twice: double registration (one row, and both legitimate-second-team controls), a sign-in link clicked twice (second refused), a styled-class guard relating every class `admin-nav.js` injects to a real CSS rule (the exact defect class of the broken back button), back-navigation integrity (same-origin guard + dashboard fallback at both `history.back()` sites), and in-flight button disabling on the three member write flows. Every guard ships a negative control that mutates the real input.
+- **The "Can't reach the server" error stops blaming your wifi** (admin surface). A fetch failure can be our fault as easily as your connection; the message now says so. The 14 sibling copies are queued (roadmap §-1h M-2 item 7).
+- **`touch-action: manipulation` on controls** — a double-tap on a button is now two clicks, not a zoom gesture.
+- **Roadmap §-1h M-4** — the member-landing motion pass, planned with values (once-per-session card stagger, skeleton crossfade, badge pop, dismiss collapse; nothing ambient, reduced-motion honoured). Docs only; nothing animated yet.
+
+
 ## v0.115.0 — 2026-08-09
 
 - Auto-recorded by CI on deploy. `/api/health` reported `v0.115.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.

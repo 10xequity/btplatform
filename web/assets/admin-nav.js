@@ -137,6 +137,12 @@
     html[data-nav="min"] .bt-collapse svg { transform: rotate(180deg); }
     html[data-nav="min"] .bt-collapse .txt { display: none; }
     .bt-backbar-admin { margin: 0 0 12px; }
+    /* v0.116.0: .bt-back rides .btn.ghost.sm; these two rules are the parts .btn cannot know —
+       icon/label alignment and the icon's SIZE. A viewBox-only SVG with no width falls back to
+       the replaced-element default (~300×150px), which is the owner's "back buttons too big,
+       text wrapping and clipping" report rendered literally. human_chaos.test.mjs guards both. */
+    .bt-back { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+    .bt-back svg { width: 16px; height: 16px; flex: none; }
     /* v0.11.0: side-edge collapse handle (fixed → immune to the rail's own scroll/clip) */
     .bt-edge { position: fixed; top: 50vh; left: calc(var(--bt-rail-w, 216px) - 13px); transform: translateY(-50%);
       width: 26px; height: 56px; display: grid; place-items: center; cursor: pointer;
@@ -339,7 +345,7 @@
       const sameOrigin = document.referrer && document.referrer.startsWith(location.origin);
       const bar = document.createElement("div");
       bar.className = "bt-backbar-admin";
-      bar.innerHTML = `<button class="bt-back" type="button">${ICONS.back}<span>Back</span></button>`;
+      bar.innerHTML = `<button class="btn ghost sm bt-back" type="button">${ICONS.back}<span>Back</span></button>`;
       bar.querySelector("button").addEventListener("click", () => {
         if (history.length > 1 && sameOrigin) history.back(); else location.href = "admin.html";
       });
@@ -403,7 +409,11 @@
       return { ok: resp.ok, status: resp.status,
                data: isCsv ? await resp.text() : await resp.json().catch(() => ({})) };
     } catch (e) {
-      return { ok: false, status: 0, data: { error: "Can't reach the server. Check your connection and hard-refresh (Ctrl+F5)." } };
+      /* v0.116.0: fetch only THROWS at the network/CORS layer — which can be OUR fault (a header,
+         a cert, a dead deploy) just as easily as the user's connection. The old text blamed the
+         user's wifi unconditionally and sent the one person who could report a real bug looking
+         in the wrong place (the v0.115.0 CORS outage read as "check your connection" for a day). */
+      return { ok: false, status: 0, data: { error: "Couldn't reach the server. It may be a problem on our side — try again in a moment; if it keeps happening, hard-refresh (Ctrl+F5) and check your connection." } };
     }
   }
 
@@ -744,7 +754,7 @@
       if (window.BT_STATUS || document.getElementById("bt-status-js")) return;
       var s = document.createElement("script");
       s.id = "bt-status-js";
-      s.src = "assets/build-status.js?v=0.115.0";
+      s.src = "assets/build-status.js?v=0.116.0";
       s.async = false;
       document.head.appendChild(s);
     } catch (e) { /* indicators are never load-blocking */ }

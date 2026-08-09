@@ -186,6 +186,12 @@ html, body {
    inputs on schedule + admin pages. Tokens' --font now applies everywhere. */
 input, select, textarea, button { font: inherit; color: inherit; }
 
+/* v0.116.0 (web-design-guidelines pass): a double-tap on a control must be two CLICKS, not a
+   zoom gesture — the impatient tapper was zooming the page instead of pressing the button twice
+   (and the server-side dedup exists to absorb the second press). `manipulation` keeps pan and
+   pinch; only double-tap-to-zoom on the control itself is dropped. textarea is left alone. */
+button, .btn, .tab, .nav-item, a[href], input, select { touch-action: manipulation; }
+
 /* Sign-in role switch (Member / Manager) */
 .login-tabs { display: flex; gap: 6px; margin: 4px 0 10px; }
 .login-tab { flex: 1; min-height: 44px; font-weight: 600; background: transparent;

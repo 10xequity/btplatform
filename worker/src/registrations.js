@@ -278,15 +278,26 @@ async function submitRegistration(request, env, eventId) {
     return json({ error: gate.error, event_full: true, waitlist_available: !wtoken }, 409);
   }
 
-  // Idempotency: an open registration for this email+event returns its existing checkout link.
+  // Idempotency, two distinct cases (v0.116.0 widened the second):
+  //  - An OPEN registration for this email+event returns its existing checkout link, whatever
+  //    the team name — the person is mid-flow and gets their own link back.
+  //  - A COMPLETED one ('paid'/'comped') blocks a re-submit only when the TEAM NAME matches:
+  //    free events complete instantly as 'comped', so before this branch existed a double-click
+  //    on a slow connection wrote two full registrations (two teams, two waivers). The name is
+  //    the key because the same captain registering a SECOND team is legitimate and must pass.
   const existing = await env.DB.prepare(
     `SELECT r.id, r.status, r.checkout_url FROM registrations r JOIN contacts c ON c.id=r.contact_id
-     WHERE r.event_id=?1 AND c.email=?2 AND r.status IN ('pending','email-sent','cash-pending') AND r.deleted_at IS NULL`
-  ).bind(eventId, email).first();
+     LEFT JOIN teams t ON t.id=r.team_id
+     WHERE r.event_id=?1 AND c.email=?2 AND r.deleted_at IS NULL
+       AND (r.status IN ('pending','email-sent','cash-pending')
+            OR (r.status IN ('paid','comped') AND lower(t.name)=lower(?3)))`
+  ).bind(eventId, email, String(b.team_name).trim()).first();
   if (existing) {
+    const done = existing.status === "paid" || existing.status === "comped";
     return json({ ok: true, duplicate: true, registration_id: existing.id, status: existing.status,
       checkout_url: existing.checkout_url || null,
-      message: "You already have a registration in progress for this event." });
+      message: done ? "You're already registered for this event — see you there!"
+                    : "You already have a registration in progress for this event." });
   }
 
   // Contact (find-or-create per org)
