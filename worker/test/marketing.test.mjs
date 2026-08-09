@@ -13,6 +13,7 @@ import {
   buildSegmentWhere, mergeVars, complianceFooter, dedupeRecipients,
   normalizeChannel, mergeVarsText, dedupeSmsRecipients,
 } from "../src/marketing.js";
+import { statementFrom } from "../testkit/route-extract.mjs"; // v0.111.0 §-1c D-17b — regions, not distances
 
 const here = dirname(fileURLToPath(import.meta.url));
 const mktSrc = readFileSync(join(here, "../src/marketing.js"), "utf8");
@@ -163,7 +164,7 @@ test("TCPA base where: SMS recipients come from sms_opt_in, never the email unsu
 
 test("cron sweep routes by channel — an SMS campaign must never drain through the email worker", () => {
   const start = mktSrc.indexOf("export async function campaignQueueSweep");
-  const block = mktSrc.slice(start, start + 900);
+  const block = statementFrom(mktSrc, start); // D-17b: was slice(start, start + 900)
   assert.match(block, /channel === "sms"/);
   assert.match(block, /processSmsCampaignBatch/);
   assert.match(block, /processCampaignBatch/);

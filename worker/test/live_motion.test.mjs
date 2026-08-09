@@ -37,6 +37,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { statementFrom } from "../testkit/route-extract.mjs"; // v0.111.0 §-1c D-17b — regions, not distances
 
 const HTML = readFileSync(new URL("../../web/live.html", import.meta.url), "utf8");
 const PAGE = readFileSync(new URL("../../web/assets/live.js", import.meta.url), "utf8");
@@ -120,7 +121,10 @@ export function reducedMotionCovers(css) {
   const covered = { transition: false, animation: false };
   const at = css.indexOf("prefers-reduced-motion");
   if (at === -1) return covered;
-  const body = css.slice(at, at + 400);
+  // D-17b: was `css.slice(at, at + 400)`. The at-rule is a brace block, and `statementFrom` matches
+  // braces in CSS exactly as it does in JS — so a reduced-motion block that grows past 400
+  // characters is no longer silently half-read.
+  const body = statementFrom(css, at);
   covered.transition = /transition\s*:\s*none|transition-duration\s*:/.test(body);
   covered.animation = /animation\s*:\s*none|animation-duration\s*:/.test(body);
   return covered;

@@ -21,6 +21,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { functionBodyAfter } from "../testkit/route-extract.mjs"; // v0.111.0 §-1c D-17b — regions, not distances
 
 const JS = readFileSync(new URL("../../web/assets/admin-divisions.js", import.meta.url), "utf8");
 const HTML = readFileSync(new URL("../../web/admin-divisions.html", import.meta.url), "utf8");
@@ -174,6 +175,12 @@ test("the downloaded file is named after the team", () => {
 test("the QR module data is unchanged by adding the PNG path", () => {
   // png() and svg() must read the same modules; a second encoder would eventually disagree with the
   // first and only one of them would be the one anybody scanned.
-  assert.match(QRJS, /function png\([\s\S]{0,400}?const \{ modules: m, size \} = modules\(text\);/);
-  assert.match(QRJS, /function svg\([\s\S]{0,200}?const \{ modules: m, size \} = modules\(text\);/);
+  // D-17b: were 400- and 200-character windows between a signature and a line inside the body.
+  // Brace-matched now, and each anchor is asserted unique first — an index that matches twice
+  // measures the wrong function silently, which is worse than failing.
+  for (const fn of ["function png(", "function svg("]) {
+    assert.equal(QRJS.split(fn).length - 1, 1, `${fn} must occur exactly once to be anchored on`);
+    assert.match(functionBodyAfter(QRJS, fn), /const \{ modules: m, size \} = modules\(text\);/,
+      `${fn} must read its modules from modules(text)`);
+  }
 });

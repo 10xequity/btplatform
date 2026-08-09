@@ -16,6 +16,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import worker from "../src/index.js";
 import { createD1 } from "../testkit/d1-memory.mjs";
+import { statementFrom } from "../testkit/route-extract.mjs"; // v0.111.0 §-1c D-17b — regions, not distances
 
 const SCHEMA = readFileSync(new URL("../testkit/journey-schema.sql", import.meta.url), "utf8");
 const PAGE = readFileSync(new URL("../../web/assets/live.js", import.meta.url), "utf8");
@@ -236,7 +237,13 @@ test("it says when it last updated, and says so louder when it fails", () => {
 
 test("a failed refresh keeps the last good board on screen", () => {
   // Replacing live scores with an error message is the wrong trade on venue wifi.
-  assert.match(PAGE, /if \(!r\.ok\) \{[\s\S]{0,400}?return;\s*\}/);
+  // D-17b: was a 400-character window looking for a `return;` inside the branch. The branch is a
+  // real brace block, so it is matched as one — the invariant is "the failure path returns early",
+  // not "the return happens within four hundred characters of the test".
+  const failAt = PAGE.indexOf("if (!r.ok) {");
+  assert.ok(failAt > 0, "the refresh has no failure branch at all");
+  assert.match(statementFrom(PAGE, failAt), /return;/,
+    "a failed refresh must return early and leave the last good board on screen");
   assert.ok(!/lvNow"\)\.innerHTML = ""/.test(PAGE), "a blip must not blank the board");
 });
 

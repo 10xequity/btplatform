@@ -11,6 +11,7 @@ import worker from "../src/index.js";
 import { createD1 } from "../testkit/d1-memory.mjs";
 import { passStatus, normalizePassInput, monthKey, guestPassName, PASS_USED_SQL } from "../src/passes.js";
 import { computePay, hoursBetween, pickRate, normalizeRateInput, PAY_BASES, MAX_RATE_CENTS } from "../src/staff_pay.js";
+import { templateTailsAfter } from "../testkit/route-extract.mjs"; // v0.111.0 §-1c D-17b — regions, not distances
 
 const PASSES_SRC = readFileSync(new URL("../src/passes.js", import.meta.url), "utf8");
 const PAY_SRC = readFileSync(new URL("../src/staff_pay.js", import.meta.url), "utf8");
@@ -205,10 +206,13 @@ test("every SQL statement in both modules is org-scoped (F-11)", () => {
 
 test("every PASS_SELECT call site adds the org scope the fragment omits", () => {
   // The fragment is safe only if nobody ever uses it bare. Check the users, not the tool.
-  const uses = [...stripJs(PASSES_SRC).matchAll(/\$\{PASS_SELECT\}([\s\S]{0,220})/g)].map((m) => m[1]);
+  /* D-17b: was a 220-character tail plus a 120-character gap to the org_id — two distances stacked.
+     The real region is THE REST OF THE QUERY, and a query ends at its closing backtick. A call site
+     whose WHERE clause happens to sit 130 characters in is no longer read as unscoped. */
+  const uses = templateTailsAfter(stripJs(PASSES_SRC), "${PASS_SELECT}");
   assert.ok(uses.length >= 3, `expected >=3 PASS_SELECT call sites, saw ${uses.length} — an empty scan is no guard`);
   for (const tail of uses) {
-    assert.match(tail, /WHERE[\s\S]{0,120}?p\.org_id\s*=\s*\?/,
+    assert.match(tail, /WHERE[\s\S]*?p\.org_id\s*=\s*\?/,
       `a PASS_SELECT call site did not scope by p.org_id: …${tail.replace(/\s+/g, " ").slice(0, 90)}`);
   }
 });
@@ -216,7 +220,7 @@ test("every PASS_SELECT call site adds the org scope the fragment omits", () => 
 test("NC-5: the call-site scope guard can fail", () => {
   const mutated = stripJs(PASSES_SRC).replace(/WHERE p\.org_id=\?1/g, "WHERE 1=1");
   assert.notEqual(mutated, stripJs(PASSES_SRC), "mutation did not land — NC is vacuous");
-  const uses = [...mutated.matchAll(/\$\{PASS_SELECT\}([\s\S]{0,220})/g)].map((m) => m[1]);
+  const uses = templateTailsAfter(mutated, "${PASS_SELECT}");
   assert.ok(uses.some((t) => !/p\.org_id\s*=\s*\?/.test(t)),
     "with the scope stripped the guard must see at least one unscoped call site");
 });

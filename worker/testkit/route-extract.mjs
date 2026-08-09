@@ -178,3 +178,65 @@ export function handlerGateKind(t, name) {
   if (kinds.includes("staff")) return "staff";
   return null;
 }
+
+/* ==================== REGION HELPERS (v1.1, v0.111.0 — §-1c D-17b) ====================
+   Added for the marker sweep. D-17b has been recorded SIX times, and every instance was an
+   assertion that pinned a DISTANCE — "these two things sit within N characters" — where it meant to
+   pin a REGION: this function's body, this branch, this statement, this template literal.
+
+   A distance is a spelling. `blankComments` preserves comment LENGTH precisely so offsets stay
+   true, which also means one added line of explanation can push a target past a window and redden a
+   file that satisfies the invariant completely. That is instance five, exactly.
+
+   Each of these returns TEXT or null, takes source text rather than a filename, and is bounded by a
+   SYNTACTIC delimiter — a matched brace, a statement terminator, a closing backtick. None of them
+   can be knocked out of alignment by a comment. */
+
+/**
+ * For EVERY occurrence of `needle`, the text from it to the end of the template literal it sits in.
+ *
+ * The use case is a SQL fragment interpolated into several queries: the thing that must be checked
+ * is the rest of each query, and the rest of a query ends at the closing backtick, not at some
+ * number of characters that happened to be long enough when the guard was written.
+ */
+export function templateTailsAfter(t, needle) {
+  const out = [];
+  let i = 0;
+  while ((i = t.indexOf(needle, i)) >= 0) {
+    const start = i + needle.length;
+    const end = t.indexOf("`", start);
+    out.push(end < 0 ? t.slice(start) : t.slice(start, end));
+    i = start;
+  }
+  return out;
+}
+
+/**
+ * A function's BODY, anchored on its signature, skipping the parameter list.
+ *
+ * WHY THIS IS NOT `statementFrom` AND NOT `functionRanges`. Both find a body by taking the next `{`
+ * after the signature — and a default parameter puts a `{` there first. `function png(text, opts = {})`
+ * hands them `{}` as the block, so they return the signature and stop. v0.111.0's marker sweep hit
+ * this immediately: `statementFrom` returned `function png(text, opts = {}` and the assertion failed
+ * against a body that satisfied it completely.
+ *
+ * So the parameter list is walked with paren depth FIRST, and only then is the opening brace taken.
+ *
+ * `functionRanges` still carries the original behaviour on purpose — it is consumed by the admin
+ * gating and authorization guards, and changing a primitive those depend on is its own unit with its
+ * own verification. The limitation is recorded as §-1c D-20 rather than patched in passing.
+ */
+export function functionBodyAfter(t, signature) {
+  const at = t.indexOf(signature);
+  if (at < 0) return null;
+  let i = t.indexOf("(", at);
+  if (i < 0) return null;
+  let depth = 0;
+  for (; i < t.length; i++) {
+    if (t[i] === "(") depth++;
+    else if (t[i] === ")") { depth--; if (depth === 0) { i++; break; } }
+  }
+  const brace = t.indexOf("{", i);
+  if (brace < 0) return null;
+  return t.slice(brace, blockEnd(t, brace));
+}

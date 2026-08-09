@@ -20,6 +20,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { isLive, muteKeyValid, normalizeSubBody, CATEGORIES } from "../src/announcements.js";
+import { statementFrom } from "../testkit/route-extract.mjs"; // v0.111.0 §-1c D-17b — regions, not distances
 
 const SRC = readFileSync(new URL("../src/announcements.js", import.meta.url), "utf8");
 const INDEX = readFileSync(new URL("../src/index.js", import.meta.url), "utf8");
@@ -120,7 +121,11 @@ test("index.js mounts the module: dispatch table + wire call + public brand rout
     "dispatch table must call announcementsRoutes — an import line alone is built-but-uncalled (failure class 1)");
   assert.ok(INDEX.includes("wireAnnouncements(wiredHelpers)"),
     "wireAnnouncements(helpers) must be called or every helper is undefined at first request");
-  assert.ok(/url\.pathname === "\/api\/public\/org-brand"[\s\S]{0,400}?publicOrgBrand\(env, url\)/.test(INDEX),
+  // D-17b: was a 400-character window between the pathname test and the handler call. The branch
+  // is brace-matched now, so a comment added inside it cannot push the call out of range.
+  const brandAt = INDEX.indexOf('url.pathname === "/api/public/org-brand"');
+  assert.ok(brandAt > 0, "the org-brand branch is missing entirely");
+  assert.ok(statementFrom(INDEX, brandAt).includes("publicOrgBrand(env, url)"),
     "org-brand must be mounted as its own pre-ctx branch (the icsFeed precedent)");
   const brandIdx = INDEX.indexOf('"/api/public/org-brand"');
   const ctxIdx = INDEX.indexOf("const ctx = await buildCtx(request, env);");
@@ -131,7 +136,17 @@ test("index.js mounts the module: dispatch table + wire call + public brand rout
 /* ============================ 4. owner rule 1 in force (grep the decision, not the doc) ============================ */
 
 test("the mute route refuses kind='cta' and the feed never filters ctas through mutes", () => {
-  assert.ok(/kind === "cta"[\s\S]{0,120}?can't be hidden/.test(SRC),
+  /* D-17b: was a 120-character window. The region is now the STATEMENT, bounded by its terminator.
+     THE ANCHOR IS ASSERTED UNAMBIGUOUS FIRST, AND THAT IS NOT DECORATION — the first draft of this
+     fix anchored on `kind === "cta"`, which occurs FOUR times in announcements.js, and `indexOf`
+     returned the feed's `live.filter((r) => r.kind === "cta")` on line 134 instead of the mute
+     route's refusal on line 222. The old regex was immune because a regex SCANS; an index does not.
+     `target.kind` is the mute route's own spelling and is unique — and the count check is what says
+     so out loud if that ever stops being true. */
+  const ANCHOR = 'target.kind === "cta"';
+  assert.equal(SRC.split(ANCHOR).length - 1, 1,
+    `${ANCHOR} must occur exactly once, or indexOf below is measuring the wrong statement`);
+  assert.match(statementFrom(SRC, SRC.indexOf(ANCHOR)), /can't be hidden/,
     "the cta refusal must exist in the mute route (decision recorded ≠ decision in force, failure class 2)");
   assert.ok(/const ctas = live\.filter\(\(r\) => r\.kind === "cta"\);/.test(SRC),
     "ctas must be selected WITHOUT a mutedItems/mutedCategories filter — pinned means pinned");
@@ -163,7 +178,8 @@ test("NC-2: widening the org-brand SELECT by one column is caught", () => {
 test("NC-3: stripping the cta refusal from the mute route is caught", () => {
   const mutated = SRC.replace(`if (target.kind === "cta") return json({ error: "This announcement is from your organization and can't be hidden." }, 403);`, "");
   assert.notEqual(mutated, SRC, "the refusal line must exist to be strippable — mutate the exact subject line");
-  assert.equal(/kind === "cta"[\s\S]{0,120}?can't be hidden/.test(mutated), false,
+  const ncAt = mutated.indexOf('target.kind === "cta"');
+  assert.equal(ncAt >= 0 && /can't be hidden/.test(statementFrom(mutated, ncAt)), false,
     "with the refusal stripped, the rule-in-force check must fail");
 });
 

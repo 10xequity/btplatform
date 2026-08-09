@@ -41,7 +41,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import worker from "../src/index.js";
 import { createD1 } from "../testkit/d1-memory.mjs";
-import { blankComments } from "../testkit/route-extract.mjs";
+import { blankComments, statementFrom } from "../testkit/route-extract.mjs"; // statementFrom: v0.111.0 D-17b
 
 /* ═══════════════════ PART 1 — the login card (web/assets/app.js) ═══════════════════ */
 
@@ -117,7 +117,7 @@ test("F-3: the login card brands from /api/public/org-brand, never from /api/org
     "the login card does not consume the per-org brand endpoint at all");
   const start = t.indexOf("async function applyLoginBrand");
   assert.ok(start >= 0, "applyLoginBrand is missing — the swap has nowhere to live");
-  const body = t.slice(start, start + 1600);
+  const body = statementFrom(t, start); // D-17b: was slice(start, start + 1600)
   assert.ok(!body.includes(ORGS_ENDPOINT),
     "the login brand path reaches for /api/orgs, which enumerates EVERY active org to serve one " +
     "card. /api/public/org-brand answers for exactly one and is cached — and S-1b gates the other.");
@@ -146,7 +146,7 @@ test("F-3: the lockup reserves its box — the logo carries explicit width and h
 test("F-3: the brand path fails closed at every step", () => {
   const t = blankComments(readApp());
   const start = t.indexOf("async function applyLoginBrand");
-  const body = t.slice(start, start + 1600);
+  const body = statementFrom(t, start); // D-17b: was slice(start, start + 1600)
   assert.match(body, /if \(!r\.ok\) return/, "a non-200 must leave the default brand in place");
   assert.match(body, /catch \(e\) \{ return/, "an offline fetch must leave the default brand in place");
   assert.match(body, /display_name/, "the swap must not run on a payload with no name");
