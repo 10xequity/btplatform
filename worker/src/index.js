@@ -203,7 +203,7 @@ import { facilityRoutes, wireFacility } from "./facility.js";
 import { securityRoutes, wireSecurity } from "./security.js";
 import { memberPortalRoutes, wireMemberPortal } from "./member_portal.js";
 import { marketingRoutes, wireMarketing, campaignQueueSweep } from "./marketing.js";
-import { messagesRoutes, wireMessages } from "./messages.js";
+import { messagesRoutes, wireMessages, overFlood } from "./messages.js";
 import { posRoutes, wirePos } from "./pos.js";
 import { waitlistRoutes, wireWaitlists, waitlistSweep } from "./waitlists.js";
 import { pushRoutes, wirePush, pushPruneSweep } from "./push.js"; // v0.20.0 PWA web push
@@ -233,6 +233,14 @@ import { liveRoutes, wireLive } from "./live.js"; // v0.73.0 public live board (
 import { waiverReminderSweep, waiverExpirySweep, sendEmail, escapeHtml } from "./registrations.js";
 
 const MAGIC_LINK_TTL_MIN = 15;
+/* §-1i S-3b (v0.117.0): the flood band on sign-in links, per TARGET EMAIL — messages.js's
+   guard shape (COUNT in window → overFlood → 429), not a new invention. The short window is
+   DERIVED from MAGIC_LINK_TTL_MIN (you never need a 6th link while the 5th is still valid);
+   the day band catches an attacker pacing one request per window. Guarded in sendLoginLink
+   itself so rescue-link and family invites are bounded through the same door —
+   auth_rate_limit.test.mjs fails a route-level version by construction. */
+const LINKS_PER_WINDOW = 5;
+const LINKS_PER_DAY = 20;
 const SESSION_TTL_DAYS = 30;
 
 /**
@@ -393,7 +401,7 @@ export default {
         const session = await currentSession(request, env);
         res = session ? await listOrgs(env) : json({ error: "Sign in first." }, 401);
       } else if (url.pathname === "/api/health") {
-        res = json({ ok: true, version: "v0.116.0" });
+        res = json({ ok: true, version: "v0.117.0" });
       } else if (url.pathname === "/api/webhooks/square" && request.method === "POST") {
         res = await membershipWebhook(request, env); // verifies signature; forwards payment.* to squareWebhook
       } else if (url.pathname === "/api/public/org-brand" && request.method === "GET") {
@@ -579,6 +587,19 @@ async function requestLink(request, env) {
 
 /** Shared: create + (sandbox: return / email mode: send) a magic sign-in link. */
 async function sendLoginLink(env, email) {
+  // S-3b flood band. One human sentence, identical whether the address has an account or
+  // not — a distinguishable 429 would be the user-enumeration oracle requestLink avoids.
+  const addr = email.toLowerCase();
+  const recent = await env.DB.prepare(
+    "SELECT COUNT(*) AS n FROM magic_links WHERE email = ?1 AND created_at >= datetime('now', ?2)"
+  ).bind(addr, `-${MAGIC_LINK_TTL_MIN} minutes`).first();
+  const today = await env.DB.prepare(
+    "SELECT COUNT(*) AS n FROM magic_links WHERE email = ?1 AND created_at >= datetime('now','-1 day')"
+  ).bind(addr).first();
+  if (overFlood(recent.n, LINKS_PER_WINDOW) || overFlood(today.n, LINKS_PER_DAY)) {
+    return json({ error: "Several sign-in links were just requested for this address. Wait a few minutes and use the newest link you have — it still works." }, 429);
+  }
+
   const token = randomToken();
   const tokenHash = await sha256(token);
   const expires = new Date(Date.now() + MAGIC_LINK_TTL_MIN * 60_000).toISOString();

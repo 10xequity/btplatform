@@ -118,6 +118,11 @@ async function rescueLink(request, env, ctx) {
   if (!user) return H.json({ error: "No account with that email. Check the Members list for the address on file." }, 404);
   const res = await H.sendLoginLink(env, email); // sandbox: returns dev_link on-screen; Brevo: emails it
   const data = await res.json().catch(() => ({}));
+  /* v0.117.0 (S-3b): a non-OK from sendLoginLink — the flood 429, or the Brevo 502 — must
+     SURFACE. The old re-wrap answered { ok: true, note: "a link was emailed" } around a body
+     that contained no link at all: success reported, nothing achieved, and the admin walks
+     away believing the member is rescued. No audit row either — no link was issued. */
+  if (!res.ok) return H.json(data, res.status);
   await H.audit(env, ctx, "security.rescue_link", "users", user.id, { email });
   return H.json({ ok: true, ...data, note: data.dev_link
     ? "Sandbox mode — hand this one-time link to the member (expires in 15 minutes)."

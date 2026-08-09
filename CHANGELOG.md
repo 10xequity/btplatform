@@ -1,5 +1,14 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.117.0 — 2026-08-09
+
+**S-3b — the one unauthenticated write, bounded. And the rescue that reported success it did not achieve.**
+
+- **Sign-in link requests are now rate-limited per address**: 5 per 15-minute window (the link's own lifetime — you never need a 6th while the 5th still works) and 20 per day. `POST /api/auth/request-link` was the only route an anonymous caller could make write: every call inserted a `magic_links` row, and the day `BREVO_API_KEY` is set every call would also email an arbitrary third-party address. The guard copies `messages.js`'s existing flood shape (count-in-window → `overFlood` → 429 with a human sentence) rather than inventing a new one, and lives **inside `sendLoginLink`** so the staff rescue-link and family-invite doors are bounded through the same check.
+- **The refusal writes nothing, the window clears, and the 429 is byte-identical for existing and non-existing accounts** — the rate limit does not become the user-enumeration oracle the login flow was built to avoid. All five properties are pinned in the new `auth_rate_limit.test.mjs`.
+- **Fixed en route: `rescue-link` masked failures as success.** It re-wrapped whatever `sendLoginLink` returned as `ok: true` with "a sign-in link was emailed to the member" — including the new flood 429 and the pre-existing Brevo 502, cases where **no link was created at all**. The admin walked away believing the member was rescued. Non-OK results now surface with their real status, and no audit row claims a rescue that never happened.
+- Suite 1547/1547 (1542 + 5, exactly the new file's tests). 99 test files. No migration, no schema change.
+
 ## v0.116.0 — 2026-08-09
 
 **The impatient-human release (owner request 2026-08-09): the back button un-broken, and the double-click absorbed.**
