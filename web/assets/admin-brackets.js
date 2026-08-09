@@ -150,10 +150,10 @@
     picking = { matchId, side: sideKey };
     const list = (data.bench || []);
     $("bPickList").innerHTML = list.map((t) => `<li>
-      <button class="btn ghost br-pick" type="button" data-pick="${t.id}">
+      <button class="btn ghost" type="button" data-pick="${t.id}">
         ${esc(t.name)} <span class="br-from">${esc([t.pool, t.rank ? `${t.rank}${ord(t.rank)}` : null, t.captain].filter(Boolean).join(" · "))}</span>
       </button></li>`).join("") +
-      `<li><button class="btn ghost br-pick" type="button" data-pick="">Leave empty</button></li>` +
+      `<li><button class="btn ghost" type="button" data-pick="">Leave empty</button></li>` +
       `<li id="bPickNone" class="help-text" style="padding:10px 4px" hidden></li>`;
     $("bPick").hidden = false;
     $("bPickFilter").value = "";
