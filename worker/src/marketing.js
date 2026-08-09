@@ -727,7 +727,13 @@ async function unsubscribe(env, url) {
     `<title>Boomtown Athletics</title><body style="font-family:system-ui;background:#0B0B0D;color:#F2F0EA;` +
     `display:grid;place-items:center;min-height:100dvh;margin:0"><div style="text-align:center;padding:24px">` +
     `<h1 style="font-size:20px">${escapeHtml(msg)}</h1><p style="color:#A8A49A">Boomtown Athletics</p></div>`,
-    { headers: { "content-type": "text/html; charset=utf-8" } }
+    /* v0.118.0 (S-3c): this page styles itself with inline style attributes, which die under
+       the egress-wide default-src 'none' — so it owns its CSP, the way uploads.js owns its own.
+       The egress applies headers set-if-absent and leaves this one alone. */
+    { headers: {
+      "content-type": "text/html; charset=utf-8",
+      "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'",
+    } }
   );
   if (!id || !token) return page("That unsubscribe link is incomplete.");
   const contact = await env.DB.prepare(

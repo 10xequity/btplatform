@@ -1,5 +1,9 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.118.0 — 2026-08-09
+
+S-3c closed — five security headers on every response the worker returns. Content-Security-Policy, X-Content-Type-Options, X-Frame-Options, Referrer-Policy and Strict-Transport-Security are applied at the fetch egress — the same choke point that merges CORS — not inside json(), because json() never sees the avatar bytes, the CSV exports, the ICS feeds, the SMS TwiML or marketing's unsubscribe page (the only HTML the worker serves). Set-if-absent: uploads.js keeps its sandboxed CSP, calendar.js keeps its own headers, and the unsubscribe page now owns a CSP that keeps its inline styles alive (style-src 'unsafe-inline'). The dimension not touched is pinned in the same commit: an origin outside ALLOWED_ORIGINS still receives zero allow-origin headers. Guard: security_headers.test.mjs — 5 tests, every one seen failing against the unfixed worker first, including an egress-placement test that fails a json()-level implementation by construction. Page-side (GitHub Pages) headers remain unsettable from the worker; a meta-tag CSP for the HTML app is a separate decision, deliberately not bolted on.
+
 ## v0.117.0 — 2026-08-09
 
 **S-3b — the one unauthenticated write, bounded. And the rescue that reported success it did not achieve.**

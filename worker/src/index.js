@@ -366,7 +366,10 @@ export default {
     const origin = request.headers.get("Origin") || "";
     const cors = corsHeaders(origin, env);
 
-    if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
+    if (request.method === "OPTIONS") {
+      // The earliest exit — it returns before the router and is the easiest one to forget.
+      return applySecurityHeaders(new Response(null, { status: 204, headers: cors }));
+    }
 
     try {
       let res;
@@ -401,7 +404,7 @@ export default {
         const session = await currentSession(request, env);
         res = session ? await listOrgs(env) : json({ error: "Sign in first." }, 401);
       } else if (url.pathname === "/api/health") {
-        res = json({ ok: true, version: "v0.117.0" });
+        res = json({ ok: true, version: "v0.118.0" });
       } else if (url.pathname === "/api/webhooks/square" && request.method === "POST") {
         res = await membershipWebhook(request, env); // verifies signature; forwards payment.* to squareWebhook
       } else if (url.pathname === "/api/public/org-brand" && request.method === "GET") {
@@ -503,12 +506,12 @@ export default {
         res = json({ error: "Not found" }, 404);
       }
       for (const [k, v] of Object.entries(cors)) res.headers.set(k, v);
-      return res;
+      return applySecurityHeaders(res);
     } catch (err) {
       console.error(err);
       const res = json({ error: "Server error" }, 500);
       for (const [k, v] of Object.entries(cors)) res.headers.set(k, v);
-      return res;
+      return applySecurityHeaders(res);
     }
   },
 
@@ -801,6 +804,38 @@ function corsHeaders(origin, env) {
   };
   if (allowed.includes(origin)) h["Access-Control-Allow-Origin"] = origin;
   return h;
+}
+
+/* v0.118.0 — §-1i S-3c. Five security headers on EVERY response this worker returns.
+
+   THE PLACEMENT IS THE CONTROL: these are applied at the fetch egress — the same choke point
+   that merges CORS — not inside json(), because json() never sees the avatar bytes, the three
+   CSV exports, the ICS feeds, the SMS TwiML, or marketing's unsubscribe page (the only HTML
+   this worker serves, and therefore the surface that needs CSP most). A json()-level version
+   would report the API armoured while exactly those paths went out bare.
+
+   SET-IF-ABSENT: a module that sets its own header keeps it. uploads.js serves user-uploaded
+   bytes under a deliberately different CSP (sandboxed, img/style allowances for viewing);
+   marketing's page needs style-src for its inline styles. Overwriting either here would break
+   a control that is already right. security_headers.test.mjs asserts both directions.
+
+   The CSP is an API posture (default-src 'none') — nothing this worker returns should load
+   subresources or run script when a browser renders it directly. GitHub Pages serves the app's
+   HTML; its headers are not settable from here, and a page-side <meta> CSP is a separate,
+   deliberate decision — not bolted on with this change. */
+const SECURITY_HEADERS = {
+  "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
+  "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "DENY",
+  "Referrer-Policy": "no-referrer",
+  "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+};
+
+function applySecurityHeaders(res) {
+  for (const [k, v] of Object.entries(SECURITY_HEADERS)) {
+    if (!res.headers.has(k)) res.headers.set(k, v);
+  }
+  return res;
 }
 
 /**
