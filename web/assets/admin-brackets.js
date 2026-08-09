@@ -258,12 +258,17 @@
     /* GAMES PER TEAM LEADS. Owner, 2026-08-08: "do not use time as the core unit of measure." The
        clock is still shown — the day has to end — but it comes after the number the decision is
        actually made on, and it is never the verdict. */
+    /* Both ends of the band, because the owner's rule has two: a floor of 8 games and a ceiling of
+       16 ("more than 16 become physically unplayable"). Showing only the guaranteed number hides
+       the team that goes all the way, which is the team the ceiling is about. */
     const bits = [
-      `${d.guaranteed_games} games each (floor ${d.target_games})`,
+      `${d.guaranteed_games}–${d.max_games} games each (floor ${d.target_games}, ceiling ${d.max_games_ceiling})`,
       `${d.pool_games_per_team.min} from pool`,
       `${d.teams} teams · ${d.games} bracket game${d.games === 1 ? "" : "s"} · ${d.waves} round${d.waves === 1 ? "" : "s"} on ${d.courts} court${d.courts === 1 ? "" : "s"}`,
     ];
-    if (d.needs_minutes) bits.push(`about ${d.needs_minutes} min`);
+    // Derived from the template (20 min a match, 23.75 for a best-of-3), not from a typed guess.
+    if (d.estimated_minutes) bits.push(`about ${Math.round(d.estimated_minutes)} min of bracket`);
+    if (d.needs_minutes && d.minutes_available) bits.push(`window ${d.minutes_available} min`);
     $("bFit").textContent = bits.join(" · ") + (d.suggestion ? " — " + d.suggestion : ".");
     $("bFit").dataset.short = d.meets_minimum ? "" : "1";
     $("bSeedWarn").textContent = d.seed_warning || "";

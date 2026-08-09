@@ -54,10 +54,7 @@ was about, which is its own lesson and is in the table below.
 | `2026-08-03_spec_roster-sheet_v1_0.md` | v1.0 | 2026-08-03 | Importing the team roster spreadsheet. Blocked on a working link from the owner. |
 | `2026-07-31_looker-template_v1_1.md` | v1.1 | 2026-07-31 | Building or changing the revenue CSV export. v1_0 **deleted 2026-08-04** with the owner's OK — the duplicate `CLAUDE.md` file hygiene forbids. |
 | `2026-07-31_a2p-registration-checklist_v1_0.md` | v1.0 | 2026-07-31 | Only if A2P 10DLC unfreezes. **Twilio/A2P is frozen by the owner**; the SMS code exists and stays dormant. |
-| `2026-07-23_usecase-analysis-nav_v1.0.md` | v1.0 | 2026-07-23 | A navigation/IA question against the original use-case analysis. |
-| `2026-07-24_module-recommendations_v1_0.md` | v1.0 | 2026-07-24 | Tracing an R/D/X roadmap item back to its origin — cited by roadmap §0. |
-| `2026-07-24_ux-polish-roadmap_v1_0.md` | v1.0 | 2026-07-24 | Tracing a UX-polish roadmap item back to its origin — cited by roadmap §0. |
-| `2026-07-21_feature-addendum_v0.1.md` · `2026-07-21_setup-guide_v0.1.md` | v0.1 | 2026-07-21 | Rarely. Earliest-session material, kept because nothing supersedes them by name. Candidates for the next archive pass. |
+| ~~five v0.1-era docs~~ | — | 2026-07-21 → 2026-07-24 | **DELETED 2026-08-08 with the owner's explicit OK** (iteration 32): `2026-07-23_usecase-analysis-nav_v1.0.md`, `2026-07-24_module-recommendations_v1_0.md`, `2026-07-24_ux-polish-roadmap_v1_0.md`, `2026-07-21_feature-addendum_v0.1.md`, `2026-07-21_setup-guide_v0.1.md`. All five pre-dated the roadmap that now governs and were superseded by it. **Their historical citations in `CHANGELOG.md`, `LOOP.md` and `docs/archive/` were left intact on purpose** — those are dated records of what was true at the time, and rewriting them would be falsifying history rather than tidying it. Roadmap §0's provenance citations are annotated in place. |
 | `2026-08-01_demo_admin-shell_v4_0.html` | v4.0 | 2026-08-01 | Working the SPA shell. Open it in a browser and toggle the theme — it is the target model, not a mockup to copy verbatim. |
 
 ## 3. Archive — never read during a normal build

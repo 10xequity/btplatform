@@ -145,3 +145,28 @@ test("NC: the games-first guard fails if the line reverts to minutes-first", () 
   assert.notEqual(broken, JS, "MUTATION DID NOT LAND — the field name was not found");
   assert.ok(!/guaranteed_games/.test(broken), "with games gone the ordering test above must fail");
 });
+
+/* ============ v0.110.0 · the standard template on screen (owner, 2026-08-08) ============
+   "the max games players are playing are approximately 12-16. More than 16 become physically
+   unplayable." A rule with two ends must SHOW both ends — a line that reports only the guaranteed
+   number hides the team the ceiling is actually about, which is the team that keeps winning. */
+
+test("the line shows BOTH ends of the band — the floor and the ceiling", () => {
+  const body = bodyOf(JS, "async function estimate(");
+  assert.ok(body, "the estimate function must exist");
+  assert.ok(/max_games\b/.test(body), "the winner's game count must be shown, not just the guaranteed one");
+  assert.ok(/max_games_ceiling/.test(body), "and the ceiling it is measured against");
+  assert.ok(/target_games/.test(body), "the floor stays too — the rule has two ends");
+});
+
+test("minutes are the template's, not a typed guess", () => {
+  const body = bodyOf(JS, "async function estimate(");
+  assert.ok(/estimated_minutes/.test(body),
+    "the clock comes from the same template that counts the games (20 a match, 23.75 best-of-3)");
+});
+
+test("NC: the band guard fails if the ceiling is dropped from the line", () => {
+  const broken = JS.replace(/max_games_ceiling/g, "zzz_gone");
+  assert.notEqual(broken, JS, "MUTATION DID NOT LAND — the field name was not found");
+  assert.ok(!/max_games_ceiling/.test(broken), "with the ceiling gone the test above must fail");
+});

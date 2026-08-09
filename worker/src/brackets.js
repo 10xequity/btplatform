@@ -55,6 +55,65 @@ export function guaranteedGames(poolGames, everyoneBreaks, bestOf) {
   return poolGames + (everyoneBreaks ? perMatch : 0);
 }
 
+/* ==================== THE STANDARD TOURNAMENT TEMPLATE ====================
+   Owner, 2026-08-08, verbatim: "generally in a standard tournament template - we would aim to run 8
+   games in pool play, break everyone then best of 3 matches quarters to finals. Usually though, we
+   have 9-10 ROUNDS (not games) so we hit the 8 but ten due to time, we do 1 game quater finals to 25,
+   then 2 mathes best of 3 for semi and finals. This way the max games players are playing are
+   approximately 12-16. More than 16 become physically unplayable."
+
+   ROUNDS ARE NOT GAMES, and the owner said so explicitly. Nine or ten ROUNDS give eight GAMES each,
+   because a bye is a round in which a team does not play. `formats.js` has always computed
+   gamesPerTeam as 2CR/N rather than R; this comment exists so the distinction survives into the
+   wording of anything built on top. */
+
+/** Sixteen games is the wall. A planner that knows only a floor will happily recommend past it. */
+export const MAX_GAMES_PER_TEAM = 16;
+
+/** Owner, 2026-08-08: "each match taking 20 minutes, Each 15 pt takes 15 minutes (3rd game)." */
+export const MINUTES_PER_MATCH = 20;
+export const MINUTES_THIRD_GAME = 15;
+
+/**
+ * Best-of-3 from this bracket round DOWN to the final. `bracket_round` counts backwards (1 = final,
+ * 2 = semi, 3 = quarter), so 2 means "semi and final are best-of-3, quarters and earlier are one
+ * game to 25" — which is the owner's template stated exactly, with no arithmetic in between.
+ */
+export const BEST_OF_3_FROM_ROUND = 2;
+
+/** Games a team plays in one match of the given round, under the template. */
+export function gamesForRound(round, bestOfFrom = BEST_OF_3_FROM_ROUND) {
+  return round <= bestOfFrom ? BEST_OF_3_GAMES : 1;
+}
+
+/**
+ * Expected minutes for one match of the given round.
+ *
+ * DERIVED FROM THE SAME ASSUMPTION AS THE GAME COUNT, ON PURPOSE. A best-of-3 is two games plus a
+ * third a quarter of the time — that quarter is why a match counts 2.25 games, and it is the same
+ * quarter here: 20 + 0.25 x 15 = 23.75. A separate minutes constant would let the two halves of the
+ * same estimate drift apart and start contradicting each other on the same screen.
+ */
+export function minutesForRound(round, bestOfFrom = BEST_OF_3_FROM_ROUND) {
+  const thirdGameChance = BEST_OF_3_GAMES - 2;
+  return round <= bestOfFrom
+    ? MINUTES_PER_MATCH + thirdGameChance * MINUTES_THIRD_GAME
+    : MINUTES_PER_MATCH;
+}
+
+/**
+ * What a bracket of the given DEPTH costs a team in games.
+ *
+ * `guaranteed` is the first round played — the team knocked out immediately. `max` is the team that
+ * wins it, summing every round down to the final. For the owner's worked example (8 pool games, an
+ * eight-team bracket) that is 8 + 1 + 2.25 + 2.25 = 13.5, inside the stated 12-16 band.
+ */
+export function bracketGames(depth, bestOfFrom = BEST_OF_3_FROM_ROUND) {
+  let max = 0;
+  for (let r = depth; r >= 1; r--) max += gamesForRound(r, bestOfFrom);
+  return { guaranteed: gamesForRound(depth, bestOfFrom), max };
+}
+
 /* ---------------- pure engine ---------------- */
 
 /** 1 = final, 2 = semi, 3 = quarter, 4+ = earlier. `stage` has no legal value past 'quarter'. */
@@ -377,7 +436,8 @@ export async function previewBracketFor(env, ctx, eventId, b = {}) {
   const plan = await planFor(env, ctx, ev, b);
   if (!plan.ok) return plan;
 
-  const waves = await wavesFor(env, ctx, eventId, plan, b);
+  const alloc = await wavesFor(env, ctx, eventId, plan, b);
+  const waves = alloc.slots;
   const games = plan.plans.reduce((n, p) => n + p.tree.matches.length, 0);
 
   const slotMinutes = Number(b.slot_minutes) > 0 ? Number(b.slot_minutes) : null;
@@ -392,6 +452,10 @@ export async function previewBracketFor(env, ctx, eventId, b = {}) {
   const bestOf = Number(b.best_of) === 3 ? 3 : 1;
   const pool = await poolGamesPerTeam(env, ctx, eventId);
   const guaranteed = guaranteedGames(pool.min, everyoneBreaks, bestOf);
+  /* The DEEPEST bracket is what a winner actually walks through, and it is the A bracket whenever
+     one exists — a BB bracket is shallower, so taking the max across plans would understate nothing
+     but taking the first would understate a split field. */
+  const deepest = bracketGames(Math.max(0, ...plan.plans.map((p) => p.tree.depth)));
 
   const out = {
     ok: true,
@@ -418,6 +482,11 @@ export async function previewBracketFor(env, ctx, eventId, b = {}) {
     target_games: MIN_GAMES_PER_TEAM,
     meets_minimum: guaranteed >= MIN_GAMES_PER_TEAM,
     games_short: Math.max(0, MIN_GAMES_PER_TEAM - guaranteed),
+    // --- the ceiling, which matters as much as the floor (owner: >16 is physically unplayable) ---
+    max_games: pool.max + (everyoneBreaks || bracketed > 0 ? deepest.max : 0),
+    max_games_ceiling: MAX_GAMES_PER_TEAM,
+    over_ceiling: pool.max + (everyoneBreaks || bracketed > 0 ? deepest.max : 0) > MAX_GAMES_PER_TEAM,
+    estimated_minutes: bracketMinutes(alloc, BEST_OF_3_FROM_ROUND),
     // --- the boundary, in minutes: reported, never the verdict ---
     slot_minutes: slotMinutes,
     needs_minutes: needsMinutes,
@@ -455,6 +524,12 @@ export async function previewBracketFor(env, ctx, eventId, b = {}) {
  * implying the software will schedule three rows. Auto-scheduling it is not built.
  */
 function gamesSuggestion(out, slotMinutes) {
+  /* THE CEILING OUTRANKS EVERYTHING ELSE. Owner, 2026-08-08: "More than 16 become physically
+     unplayable." Telling a director their field is one game short while the winner is on for
+     eighteen would be advice that makes the day worse — so this is checked before the floor. */
+  if (out.over_ceiling) {
+    return `The team that wins would play about ${out.max_games} games — past the ${out.max_games_ceiling} that is physically playable. Cut a round of pool play, or make the semi and final single games.`;
+  }
   if (!out.meets_minimum) {
     const have = `${out.pool_games_per_team.min} pool game${out.pool_games_per_team.min === 1 ? "" : "s"} each`;
     if (!out.everyone_breaks) {
@@ -531,7 +606,23 @@ async function wavesFor(env, ctx, eventId, plan, b) {
       courts: courtsFor(row, divisions.get(row.division_id), plan.courts),
     };
   }));
-  return alloc.slots;
+  return alloc;
+}
+
+/**
+ * Expected wall-clock for the bracket, from the template rather than from a typed slot length.
+ *
+ * A wave is one set of simultaneous games, so its length is the LONGEST match in it — a semi-final
+ * best-of-3 sharing a wave with a quarter-final single game does not finish when the quarter does.
+ */
+function bracketMinutes(alloc, bestOfFrom) {
+  const perWave = new Map();
+  for (const a of alloc.assignments) {
+    perWave.set(a.wave, Math.max(perWave.get(a.wave) ?? 0, minutesForRound(a.round, bestOfFrom)));
+  }
+  let total = 0;
+  for (const m of perWave.values()) total += m;
+  return total;
 }
 
 /**

@@ -556,3 +556,119 @@ test("a bracket not seeded by pool play says so — the two look identical other
   assert.equal(warm.data.seeded_by, "pool finish");
   assert.equal(warm.data.seed_warning, null, "a bracket that DID come out of pool play must not nag");
 });
+
+/* ============ v0.110.0 · THE STANDARD TOURNAMENT TEMPLATE (owner, 2026-08-08) ============
+
+   Verbatim: "generally in a standard tournament template - we would aim to run 8 games in pool play,
+   break everyone then best of 3 matches quarters to finals. Usually though, we have 9-10 ROUNDS (not
+   games) so we hit the 8 but ten due to time, we do 1 game quater finals to 25, then 2 mathes best of
+   3 for semi and finals. This way the max games players are playing are approximately 12-16. More
+   than 16 become physically unplayable."
+
+   And the time model: "This is just an estimate with each match taking 20 minutes, Each 15 pt takes
+   15 minutes (3rd game of a match)."
+
+   FOUR THINGS THIS ADDS, AND ONE IT CORRECTS.
+
+   1. ROUNDS ARE NOT GAMES. Nine or ten rounds yield eight games each, because byes are rounds in
+      which a team does not play. `formats.js` has always known this — gamesPerTeam is 2CR/N, not R.
+      The owner's sentence is the reason the distinction has to survive into this module's wording.
+
+   2. THE BRACKET IS NOT ONE FORMAT. Quarters and earlier are ONE game to 25; semi and final are
+      best-of-3. `bracket_round` already counts backwards from the final (1 = final, 2 = semi,
+      3 = quarter), so "best-of-3 from round 2 down" states the template exactly.
+
+   3. THERE IS A CEILING, NOT ONLY A FLOOR. Sixteen games is "physically unplayable" — a real
+      constraint that no previous session had. A planner with only a floor happily recommends more.
+
+   4. TIME IS DERIVED, NOT TYPED. 20 minutes a match, plus 15 for the third game which happens a
+      quarter of the time. That is where 2.25 came from, and it makes a best-of-3 match 23.75 minutes
+      of expected clock — so the same template drives games AND minutes and they cannot disagree. */
+import {
+  MAX_GAMES_PER_TEAM, MINUTES_PER_MATCH, MINUTES_THIRD_GAME, BEST_OF_3_FROM_ROUND,
+  gamesForRound, minutesForRound, bracketGames,
+} from "../src/brackets.js";
+
+test("the template: quarters are one game, semi and final are best of 3", () => {
+  assert.equal(BEST_OF_3_FROM_ROUND, 2, "round 1 is the final and round 2 the semi");
+  assert.equal(gamesForRound(1), BEST_OF_3_GAMES, "final is best of 3");
+  assert.equal(gamesForRound(2), BEST_OF_3_GAMES, "semi is best of 3");
+  assert.equal(gamesForRound(3), 1, "quarter-final is ONE game to 25 — the owner's time concession");
+  assert.equal(gamesForRound(4), 1, "and everything earlier than the quarters likewise");
+});
+
+test("the owner's own worked example lands between 12 and 16 games", () => {
+  // 8 pool games, break everyone, an 8-team bracket: quarters (1) + semi (2.25) + final (2.25).
+  const b = bracketGames(3);
+  assert.equal(b.guaranteed, 1, "a team knocked out in the quarters plays one bracket game");
+  assert.equal(b.max, 5.5, "a team that goes all the way plays 1 + 2.25 + 2.25");
+  assert.equal(8 + b.max, 13.5, "which is inside the owner's stated 12-16 band");
+  assert.ok(8 + b.max <= MAX_GAMES_PER_TEAM, "and under the ceiling");
+});
+
+test("sixteen games is the ceiling — a planner with only a floor recommends the unplayable", () => {
+  assert.equal(MAX_GAMES_PER_TEAM, 16, "owner: more than 16 becomes physically unplayable");
+  // Ten pool games into a 16-team bracket: 10 + (1 + 1 + 2.25 + 2.25) = 16.5, over the line.
+  const deep = bracketGames(4);
+  assert.equal(deep.max, 6.5, "round of 16 and quarters are single games, semi and final best of 3");
+  assert.ok(10 + deep.max > MAX_GAMES_PER_TEAM, "this shape must genuinely exceed the ceiling");
+});
+
+test("time is DERIVED from the same template that counts the games", () => {
+  assert.equal(MINUTES_PER_MATCH, 20);
+  assert.equal(MINUTES_THIRD_GAME, 15);
+  assert.equal(minutesForRound(3), 20, "a single game to 25 is one 20-minute match");
+  // 2 games + a 25% chance of a third: 20 + 0.25 x 15. The same quarter that makes a match 2.25 games.
+  assert.equal(minutesForRound(2), 23.75, "a best-of-3 costs 20 plus a quarter of 15");
+  assert.equal(minutesForRound(1), 23.75);
+});
+
+test("the 2.25 and the 23.75 come from ONE assumption, so they cannot drift apart", () => {
+  // If someone changes the third-game probability, both numbers must move together. Deriving the
+  // minutes from a separate constant is exactly how a planner starts contradicting itself.
+  const thirdGameChance = BEST_OF_3_GAMES - 2;
+  assert.equal(thirdGameChance, 0.25);
+  assert.equal(minutesForRound(1), MINUTES_PER_MATCH + thirdGameChance * MINUTES_THIRD_GAME);
+});
+
+test("preview reports the ceiling as well as the floor, and estimates minutes from the template", async () => {
+  const env = boot(8);
+  await burnBootstrap(env);
+  const token = await staff(env);
+  seedPool(env, 8, 8, 2000);
+
+  const p = await preview(env, token, { courts: 2 });
+  assert.equal(p.status, 200);
+  assert.equal(p.data.pool_games_per_team.min, 8);
+  assert.equal(p.data.meets_minimum, true);
+  assert.equal(p.data.max_games, 13.5, "the winner plays 8 + 1 + 2.25 + 2.25");
+  assert.equal(p.data.max_games_ceiling, MAX_GAMES_PER_TEAM);
+  assert.equal(p.data.over_ceiling, false);
+  assert.ok(p.data.estimated_minutes > 0, "minutes are derived without anyone typing a slot length");
+});
+
+test("a field that would exceed 16 games is told so — the ceiling is a real refusal to recommend", async () => {
+  const env = boot(16);
+  await burnBootstrap(env);
+  const token = await staff(env);
+  seedPool(env, 16, 11, 3000);   // eleven pool games each, deliberately deep
+
+  const p = await preview(env, token, { courts: 4 });
+  assert.equal(p.data.pool_games_per_team.min, 11);
+  assert.ok(p.data.max_games > MAX_GAMES_PER_TEAM, "this fixture must genuinely exceed the ceiling");
+  assert.equal(p.data.over_ceiling, true);
+  assert.match(p.data.suggestion, /16|unplayable|too many games/i,
+    "the ceiling must be said out loud, not merely computed");
+});
+
+test("NC-6: the ceiling warning does not fire on a normal day", async () => {
+  // An assertion that always fires is the same as one that never fires. The standard template must
+  // come back clean, or the test above proves nothing.
+  const env = boot(8);
+  await burnBootstrap(env);
+  const token = await staff(env);
+  seedPool(env, 8, 8, 4000);
+  const p = await preview(env, token, { courts: 2 });
+  assert.equal(p.data.over_ceiling, false, "the owner's own standard template must not warn");
+  assert.ok(!/unplayable/i.test(p.data.suggestion), "and must not mention the ceiling at all");
+});
