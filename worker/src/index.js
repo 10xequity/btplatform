@@ -393,7 +393,7 @@ export default {
         const session = await currentSession(request, env);
         res = session ? await listOrgs(env) : json({ error: "Sign in first." }, 401);
       } else if (url.pathname === "/api/health") {
-        res = json({ ok: true, version: "v0.114.0" });
+        res = json({ ok: true, version: "v0.115.0" });
       } else if (url.pathname === "/api/webhooks/square" && request.method === "POST") {
         res = await membershipWebhook(request, env); // verifies signature; forwards payment.* to squareWebhook
       } else if (url.pathname === "/api/public/org-brand" && request.method === "GET") {
@@ -763,7 +763,17 @@ async function sendBrevoEmail(env, to, link, orgId = null) {
 function corsHeaders(origin, env) {
   const allowed = (env.ALLOWED_ORIGINS || "").split(",").map((s) => s.trim()).filter(Boolean);
   const h = {
-    "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+    /* EVERY METHOD THE ROUTER ACCEPTS MUST BE ADVERTISED HERE (v0.115.0). This read
+       "GET,POST,OPTIONS" while the worker routed 45 handlers on PATCH, PUT and DELETE across more
+       than twenty modules. A cross-origin DELETE is preflighted; the browser read this header, did
+       not find DELETE, and refused the request LOCALLY — so `api()`'s catch fired and told the
+       owner "Can't reach the server. Check your connection", which was false in every particular.
+       Every Delete button and most Edit actions in the product were dead in a real browser.
+
+       No test could see it by exercising routes: the suite calls the worker directly and never
+       performs a preflight. `cors_methods.test.mjs` therefore EXTRACTS the routed methods from the
+       modules and asserts this string covers them, so the two can never drift apart again. */
+    "Access-Control-Allow-Methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Org-Id",
     "Access-Control-Allow-Credentials": "true",
     "Vary": "Origin",
