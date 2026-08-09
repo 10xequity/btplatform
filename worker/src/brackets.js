@@ -200,6 +200,38 @@ export function winnerOf(scoreA, scoreB) {
   return scoreA > scoreB ? "a" : "b";
 }
 
+/** Games that win a match. Best-of-3 is first to two; anything else is the legacy single game. */
+export function gamesNeeded(bestOf) {
+  return Number(bestOf) === 3 ? 2 : 1;
+}
+
+/**
+ * Who won a MATCH, given every game row of one bracket node.
+ *
+ * BY GAMES, NEVER BY POINTS. A team can lose two close games and win one blowout, so a winner
+ * derived from point totals promotes the wrong team in exactly the match that matters most. Ties
+ * and unplayed games count for nobody, for the same reason `winnerOf` refuses them: an equal score
+ * means unfinished or mis-typed, and guessing puts the wrong team in the final.
+ *
+ * Returns null while the match is undecided — including 1-1, which is not a draw, it is a match
+ * with a game still to play.
+ */
+export function matchWinnerOf(games, bestOf) {
+  const need = gamesNeeded(bestOf);
+  let a = 0, b = 0;
+  // FIRST TO `need`, decided IN GAME ORDER — not a tally of everything on the table. A match that
+  // reached 2-0 is over, so a third game scored into it by mistake cannot change the winner, and a
+  // legacy single-game node cannot be re-decided by rows that arrive later.
+  for (const gm of games) {
+    const side = winnerOf(gm.score_a, gm.score_b);
+    if (side === "a") a++;
+    else if (side === "b") b++;
+    if (a >= need) return "a";
+    if (b >= need) return "b";
+  }
+  return null;
+}
+
 /**
  * Given the bracket's matches (each {round, slot, team_a_id, team_b_id, score_a, score_b}), work out
  * what every later-round slot SHOULD hold. Returns only the slots whose current occupant is wrong.
@@ -208,14 +240,41 @@ export function winnerOf(scoreA, scoreB) {
  * real thing. Highest round first, so a winner can move two rounds in one pass.
  */
 export function pendingAdvances(matches) {
-  const byKey = new Map(matches.map((m) => [`${m.bracket_round}:${m.bracket_slot}`, m]));
+  /* A NODE IS A SET OF GAMES, NOT A ROW (v0.112.0). Before best-of-3 existed every node held one
+     row, so keying by round:slot and iterating rows were the same thing. They are not any more: a
+     semi-final holds up to three rows at identical coordinates, and the old loop produced ONE
+     ADVANCE PER GAME — promoting game one's winner, then overwriting it with game two's. Not a
+     crash; a bracket that quietly puts the wrong team in the final on a day nobody can re-play.
+
+     So games are grouped by node first, and the winner is decided across the group. The node's
+     games all share the same two teams, so the first row carries the identity of the whole match. */
+  const nodes = new Map();                      // "round:slot" -> game rows, in game order
+  for (const m of matches) {
+    const key = `${m.bracket_round}:${m.bracket_slot}`;
+    if (!nodes.has(key)) nodes.set(key, []);
+    nodes.get(key).push(m);
+  }
+  for (const games of nodes.values()) {
+    games.sort((x, y) => (x.game_number || 1) - (y.game_number || 1));
+  }
+  const byKey = new Map([...nodes].map(([k, games]) => [k, games[0]]));
   const rounds = [...new Set(matches.map((m) => m.bracket_round))].sort((a, b) => b - a);
   const changes = [];
 
   for (const r of rounds) {
     if (r <= 1) continue;
-    for (const m of matches.filter((x) => x.bracket_round === r)) {
-      const side = winnerOf(m.score_a, m.score_b);
+    for (const [key, games] of nodes) {
+      const m = games[0];
+      if (m.bracket_round !== r) continue;
+      void key;
+      /* THE NODE'S FORMAT COMES FROM THE ROWS PRESENT, NOT FROM THE TEMPLATE, AND THAT CHOICE IS
+         LOAD-BEARING. Defaulting a semi-final to the template's best-of-3 would demand two game
+         wins from every bracket already live in D1 — all of which hold ONE row per node — so every
+         one of them would stop advancing the moment this shipped. Counting rows instead is exact:
+         the writer lays down two rows for a best-of-3 (games one and two are always played) and one
+         for a single game, so a multi-row node IS a best-of-3 and a single-row node IS best-of-1.
+         No migration, no column that can disagree with the rows beside it. */
+      const side = matchWinnerOf(games, games.length > 1 ? 3 : 1);
       if (!side) continue;
       const teamId = side === "a" ? m.team_a_id : m.team_b_id;
       if (!teamId) continue;
