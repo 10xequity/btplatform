@@ -247,7 +247,21 @@ input, select, textarea, button { font: inherit; color: inherit; }
   /* The figure being read across a court is the score. Give it room. */
   .score-big, .match-cell .score { font-size: 30px; }
 
-  /* Never let a phone-width layout force a sideways scroll. */
+  /* A WIDE ADMIN TABLE SCROLLS ITSELF INSTEAD OF SQUASHING (§-1h M-1).
+     `.tbl` is width:100%, and a width-100% table cannot overflow — it compresses. The seven-column
+     revenue report ends up at roughly 55px a column here, and the money columns are the ones that
+     lose. `display: block` makes the table a block box whose table content lays out in an anonymous
+     table wider than the box, so the box scrolls; `nowrap` stops headers wrapping into slivers,
+     which is what forces that real width. The sliced column at the screen edge IS the affordance —
+     a thumb learns there is more to the right because it can see there is.
+
+     NOT the card pattern above. Hiding `thead` works for a score row of self-describing cells and
+     would turn a financial table into a stack of unattributable numbers. Labels would then need
+     `data-label` on every cell in twelve renderers, which is the cost this shared rule avoids. */
+  .tbl { display: block; width: auto; max-width: 100%; overflow-x: auto; white-space: nowrap; }
+
+  /* Never let a phone-width layout force a sideways scroll. The rule above adds an INNER scroller;
+     the page itself still does not move, which is the distinction that keeps both correct. */
   body { overflow-x: hidden; }
 }
 
