@@ -312,6 +312,11 @@
       ? list.map((e) => `<option value="${e.id}">${esc(e.name)}</option>`).join("")
       : `<option value="">No events yet</option>`;
     eventId = list.length ? list[0].id : null;
+    // T2-5 (v0.121.0): honour event context handed over from Tournament Ops' break-to-bracket
+    // link (the admin-waitlists ?event= idiom) — landing on the FIRST event instead of the one
+    // just broken is the T2-10 class. An id outside the list falls back to the first event.
+    const pre = new URLSearchParams(location.search).get("event");
+    if (pre && list.some((e) => String(e.id) === pre)) { eventId = +pre; $("bEvent").value = pre; }
     if (!eventId) return BT_ADMIN.orgEmptyState("bTrees", "events"); // v0.89.0 Block B3: an empty org is not a broken module
     load();
     estimate();

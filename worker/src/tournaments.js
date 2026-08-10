@@ -7,7 +7,7 @@
  * Reads: published events are public; drafts require staff.
  */
 import {
-  FORMAT_TEMPLATES, feasibility, generatePairings, scheduleMatches, computeStandings, buildBracket,
+  FORMAT_TEMPLATES, feasibility, generatePairings, scheduleMatches, computeStandings,
 } from "./scheduler.js";
 import { autoClaimForEvent, releaseAutoClaims } from "./facility.js";
 import { advanceBracketFor } from "./brackets.js"; // v0.67.0 — brackets.js imports only scheduler.js, no cycle
@@ -37,9 +37,10 @@ export async function tournamentRoutes(request, env, url, ctx) {
   if ((match = p.match(/^\/api\/events\/(\d+)\/standings$/)) && m === "GET") {
     return getStandings(env, +match[1]);
   }
-  if ((match = p.match(/^\/api\/events\/(\d+)\/bracket$/)) && m === "POST") {
-    return createBracket(request, env, ctx, +match[1]);
-  }
+  // v0.121.0 (T2-5): the legacy POST /api/events/:id/bracket route is REMOVED, not orphaned.
+  // It wrote only first-round games and skipped byes; the modern engine at
+  // /api/admin/events/:id/brackets (brackets.js) owns generation, and bracket_rewire.test.mjs
+  // asserts this door answers 404 so the two paths can never drift back apart.
   if ((match = p.match(/^\/api\/matches\/(\d+)$/)) && m === "PATCH") {
     return patchMatch(request, env, ctx, +match[1]);
   }
@@ -333,41 +334,6 @@ async function getStandings(env, eventId) {
      WHERE s.event_id=?1 AND s.deleted_at IS NULL ORDER BY s.rank`
   ).bind(eventId).all()).results;
   return json({ standings: rows });
-}
-
-async function createBracket(request, env, ctx, eventId) {
-  const ev = await env.DB.prepare("SELECT * FROM events WHERE id=?1 AND deleted_at IS NULL").bind(eventId).first();
-  if (!ev) return json({ error: "Event not found." }, 404);
-  const deny = await requireStaff(env, ctx, ev.org_id);
-  if (deny) return deny;
-  const { aSize = 8, includeRest = true } = await request.json().catch(() => ({}));
-  const st = (await env.DB.prepare(
-    "SELECT team_id AS team, rank FROM standings WHERE event_id=?1 AND deleted_at IS NULL ORDER BY rank"
-  ).bind(eventId).all()).results;
-  if (st.length < 2) return json({ error: "Standings are empty — score pool play first." }, 400);
-  const brackets = buildBracket(st, { aSize, includeRest });
-  const poolRounds = await env.DB.prepare(
-    "SELECT MAX(round) AS r FROM matches WHERE event_id=?1 AND deleted_at IS NULL"
-  ).bind(eventId).first();
-  let round = (poolRounds.r || 0) + 1;
-  for (const br of brackets) {
-    const ins = await env.DB.prepare(
-      "INSERT INTO brackets (org_id, event_id, name, split_rule, config_json) VALUES (?1,?2,?3,?4,?5)"
-    ).bind(ev.org_id, eventId, br.name, `top${aSize}`, JSON.stringify({ bestOfSemisFinals: [21, 21, 15] })).run();
-    let court = 1;
-    for (const m of br.matches) {
-      if (m.teamA == null || m.teamB == null) continue; // byes advance silently
-      await env.DB.prepare(
-        `INSERT INTO matches (org_id, event_id, pool_id, stage, round, court, team_a_id, team_b_id, points_to, cap, game_number)
-         VALUES (?1,?2,NULL,?3,?4,?5,?6,?7,?8,?9,1)`
-      ).bind(ev.org_id, eventId, m.stage, round, court++, m.teamA, m.teamB,
-             m.bestOf === 3 ? 21 : 21, 23).run();
-      if (court > (ev.court_count || 4)) { court = 1; round++; }
-    }
-    round++;
-  }
-  await audit(env, ctx, "bracket.create", "brackets", eventId, { aSize, includeRest });
-  return json({ ok: true, brackets: brackets.map((b) => ({ name: b.name, teams: b.teams.length })) });
 }
 
 /* ---------- shared helpers (injected by index.js via ctx) ---------- */

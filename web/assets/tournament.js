@@ -303,9 +303,13 @@
   }
 
   $("bracketBtn").onclick = async () => {
-    const r = await api(`/api/events/${currentEvent.id}/bracket`, { method: "POST", body: JSON.stringify({ aSize: +$("aSize").value }) });
+    // T2-5 (v0.121.0): this POSTed the legacy /api/events/:id/bracket, which wrote only the first
+    // round and skipped byes — "breaking does nothing" was the owner reading that result honestly.
+    // The modern engine (preview / advance / slot / forfeit, division court ranges) owns brackets;
+    // the body key is a_size — the engine ignores unknown keys, so the old aSize silently defaulted.
+    const r = await api(`/api/admin/events/${currentEvent.id}/brackets`, { method: "POST", body: JSON.stringify({ a_size: +$("aSize").value }) });
     $("warningsBox").innerHTML = r.ok
-      ? `<div class="notice">Brackets created: ${r.data.brackets.map((b) => `${b.name} (${b.teams})`).join(", ")}. Semis & finals are best-of-3 (21-21-15).</div>`
+      ? `<div class="notice">${(r.data.summary || []).join(" · ")} &#8212; <a href="admin-brackets.html?event=${currentEvent.id}">open the bracket board</a> to run it.</div>`
       : `<div class="warn-banner">${r.data.error || "Bracket failed."}</div>`;
   };
 
