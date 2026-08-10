@@ -131,6 +131,101 @@ export function feedsInto(bracketRound, slot) {
 }
 
 /**
+ * T2-5 (v0.124.0) — ROUND ONE MUST NOT REPEAT POOL PLAY.
+ *
+ * Owner: "aim to have the system have opponents be from separate pools but still in bracket.
+ * Example in 2 pools of 4 teams, #1 A plays #4 B."
+ *
+ * `buildTree` pairs SEED NUMBERS (1vN, 2vN-1 …) and never sees a team, so the only lever on who
+ * meets whom is the ORDER of the id list handed to it. Ranking straight down the pool finish puts
+ * a pool's best and worst at opposite ends of that list — which is exactly where standard seeding
+ * pairs them, so the naive order maximises rematches instead of avoiding them.
+ *
+ * The fix is a round-robin deal: take each pool's next-best team in turn (A1, B1, C1, A2, B2, …).
+ * Standard seeding then pairs position i with position n+1-i, which land in different pools
+ * whenever the arithmetic allows it.
+ *
+ * TWO INVARIANTS THIS MUST NOT BREAK, both pinned in cross_pool_seeding.test.mjs:
+ *  - It is a TOTAL mapping. Every team in, exactly once out. A reorder that quietly dropped a team
+ *    would satisfy "no same-pool pair" trivially, which is how such a bug would hide.
+ *  - Within a pool, finishing order survives. A team that finished below a poolmate is never
+ *    seeded above it — the deal takes them in rank order, so this holds by construction.
+ *
+ * NO-OP WITHOUT POOLS. One pool, or none, returns the input untouched: every bracket already drawn
+ * came out of the rank order, and reordering them on the next regenerate would silently redraw a
+ * live day's schedule.
+ */
+export function crossPoolOrder(ids, poolOf) {
+  if (!Array.isArray(ids) || ids.length < 3) return Array.isArray(ids) ? [...ids] : [];
+
+  // Buckets in finishing order, so each pool's own ranking is preserved as we draw from it.
+  const buckets = new Map();
+  for (const id of ids) {
+    const key = poolOf(id);
+    if (key === null || key === undefined) return [...ids];   // unpooled event — leave it alone
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key).push(id);
+  }
+  if (buckets.size < 2) return [...ids];                      // single pool — nothing to separate
+
+  const n = ids.length;
+  const size = 2 ** Math.ceil(Math.log2(n));
+  const byeCount = size - n;
+
+  // THE TOP SEEDS KEEP THEIR PLACE. Seeds 1..byeCount are exactly the ones buildTree gives a bye,
+  // and a bye is earned by finishing well — reshuffling those to chase a pairing would take a
+  // reward away from the teams that played best. Only the seeds that actually PLAY round one are
+  // arranged, which is also the only place the owner's rule has anything to say.
+  const out = ids.slice(0, byeCount);
+  const remaining = new Map();
+  for (const [k, list] of buckets) {
+    const rest = list.filter((id) => !out.includes(id));
+    if (rest.length) remaining.set(k, rest);
+  }
+
+  // TWO STEPS, AND THE ORDER OF THEM IS THE WHOLE TRICK.
+  //
+  // Step 1 decides which POOL sits at each seed position — never which team. Round-one pairs are
+  // (i, size+1-i) for i > size-n, so colouring the two ends of each pair with different pools is
+  // what the owner's rule actually asks for.
+  //
+  // Step 2 then fills the positions in ASCENDING order, taking each pool's next-best team. Because
+  // better positions are always filled first, a team can never be seeded above a poolmate who
+  // finished ahead of it — the rank invariant holds by construction rather than by care.
+  const quota = new Map([...remaining].map(([k, v]) => [k, v.length]));
+  const poolAt = new Map();
+  const pickPool = (exclude) => {
+    let best = null;
+    for (const [k, left] of quota) {
+      if (left <= 0 || k === exclude) continue;
+      if (best === null || left > quota.get(best)) best = k;   // fullest pool first; ties keep finish order
+    }
+    return best;
+  };
+  for (let hi = size - n + 1; hi <= size / 2; hi++) {
+    const lo = size + 1 - hi;
+    const a = pickPool(null);
+    if (a === null) break;
+    quota.set(a, quota.get(a) - 1);
+    poolAt.set(hi, a);
+    // EXCLUDE the pool just used. Without this the fullest pool is chosen twice and the pair is a
+    // rematch — the exact defect this function exists to prevent.
+    const b = pickPool(a) ?? pickPool(null);
+    if (b === null) break;
+    quota.set(b, quota.get(b) - 1);
+    poolAt.set(lo, b);
+  }
+
+  for (let i = byeCount + 1; i <= n; i++) {
+    const key = poolAt.get(i) ?? [...remaining.keys()].find((k) => remaining.get(k).length);
+    const list = remaining.get(key);
+    out.push(list.shift());
+    if (!list.length) remaining.delete(key);
+  }
+  return out;
+}
+
+/**
  * Build a single-elimination tree for `n` teams given in seed order (1 = best).
  *
  * Returns every match that will actually be PLAYED. Bye matches are not returned at all — a bye is
@@ -375,8 +470,10 @@ export function wireBrackets(h) { ({ json, requireStaff, audit } = h); }
 
 /** Read the seed order for an event: explicit list, else pool standings, else the teams' own seeds. */
 async function seedOrder(env, ctx, eventId, explicit) {
+  // pool_id rides along for T2-5's cross-pool round one (v0.124.0). It is read here, with the
+  // teams, so there is ONE place that knows which pool a team came out of.
   const teams = (await env.DB.prepare(
-    `SELECT id, name, seed FROM teams WHERE org_id=?1 AND event_id=?2 AND deleted_at IS NULL`
+    `SELECT id, name, seed, pool_id FROM teams WHERE org_id=?1 AND event_id=?2 AND deleted_at IS NULL`
   ).bind(ctx.orgId, eventId).all()).results || [];
   const known = new Map(teams.map((t) => [t.id, t]));
 
@@ -396,6 +493,7 @@ async function seedOrder(env, ctx, eventId, explicit) {
       const who = twice.map((id) => known.get(id).name).join(", ");
       return { error: `${who} ${twice.length === 1 ? "is" : "are"} in that list more than once — a team can only hold one seed.` };
     }
+    // A hand-picked order is a decision already made — never rearranged.
     return { source: "chosen by hand", ids: picked, names: known };
   }
 
@@ -440,10 +538,20 @@ async function planFor(env, ctx, ev, b) {
   // the teams that finished tenth — one bracket means half the field plays once and goes home.
   const aSize = Number(b.a_size) > 0 ? Math.min(Number(b.a_size), seeds.ids.length) : seeds.ids.length;
   const includeRest = b.include_rest !== false;
-  const groups = [{ name: "A", ids: seeds.ids.slice(0, aSize) }];
+  /* T2-5 (v0.124.0) — the rearrangement happens HERE, after the split and never before it.
+     The split is by FINISH ("top X into A"), so reordering first would change WHO makes the A
+     bracket, not merely who they meet. Each group is then arranged so round one does not repeat
+     pool play — within the group, and within each pool's own finishing order.
+     A hand-picked seed list is left exactly as the director wrote it. */
+  const arrange = (list) =>
+    seeds.source === "chosen by hand"
+      ? list
+      : crossPoolOrder(list, (id) => (seeds.names.get(id) || {}).pool_id ?? null);
+
+  const groups = [{ name: "A", ids: arrange(seeds.ids.slice(0, aSize)) }];
   if (includeRest && seeds.ids.length > aSize) {
     const rest = seeds.ids.slice(aSize);
-    if (rest.length >= 2) groups.push({ name: "BB", ids: rest });
+    if (rest.length >= 2) groups.push({ name: "BB", ids: arrange(rest) });
   }
 
   const pointsTo = Number(b.points_to) > 0 ? Number(b.points_to) : 25;
