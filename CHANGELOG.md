@@ -1,5 +1,66 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.126.0 — 2026-08-10
+
+**Stale sub requests and community games drop off the boards, the feed and the home card.**
+
+Owner 2026-08-10: *"For the sub finder and game finder — please ensure that after the event expires
+the event drops out of the announcements and list."*
+
+**MEASURED FIRST, AND IT WAS WORSE THAN REPORTED.** Five member-facing queries selected
+`status='open'` with **no time predicate at all** — and `subs.js` orders by
+`COALESCE(needed_at, created_at) ASC`, oldest first, so an expired request was not merely still
+present, it was **the first thing a member saw**. The owner's word "announcements" was literal:
+`announcements.js` runs its own copies of both queries, so a fix applied only to `subs.js` and
+`lfg.js` would have left the home feed stale and the complaint half-answered.
+
+**ONE RULE, ONE DEFINITION.** `notPastSql(col)` is exported from `subs.js` — the leaf module
+`lfg.js` and `announcements.js` already import for the shared volleyball vocabulary, so no new
+module and no cycle. Five copies of a predicate is five chances for the sixth surface to be written
+without it, and a test asserts all five call sites reach for the helper rather than restating the
+SQL. It interpolates a column name, so it **fails closed** on anything that is not a bare
+identifier — and the test that proves it caught a real hole: `String(null)` is `"null"`, which
+passes an identifier check and emits `date(null)` — always NULL, therefore always "not past",
+therefore **the filter silently disables itself**. `typeof` is now checked first.
+
+**DAY GRANULARITY IS A DECISION, NOT LAZINESS.** `needed_at` is frequently date-only
+(`normalizeRequest` makes the time optional), and `datetime('2026-08-10') < datetime('now')` is true
+from one second past midnight — which would hide a request on the morning of the day it is needed.
+`date(x) < date('now')` keeps it all day and drops it the next.
+
+**THE FORMATS WERE VERIFIED AGAINST THE REAL ENGINE, NOT ASSUMED.** The two writers disagree: the
+browser sends `new Date(v).toISOString()` (`web/assets/lfg.js:206`) while the seeder writes
+`datetime('now','+6 days')`. Live D1 was asked directly — `date()` resolves the ISO-with-Z,
+space-form, `T`-short and date-only shapes alike, and returns **NULL** for junk. NULL comparisons
+are never true, so anything unparseable **stays visible**: the filter fails open, which is the only
+safe direction for a hide.
+
+**THE EXITS WERE ENUMERATED BEFORE ANYTHING WAS REMOVED, AND BOTH BOARDS HAD ONE.**
+`web/assets/lfg.js:112` is the **only** trigger for "Report a no-show", and it renders from
+`/api/lfg/listings` on a card that is `mine && past` — filtering own rows there would have made
+`report-no-show` unreachable, growing the D-4 uncalled baseline and killing the no-show
+accountability feature in silence. The same shape sits on the sub board: both caps count
+`status='open'` with no date filter and refuse with *"Cancel one before posting another"*, so hiding
+a member's own stale rows would make the product's own instruction impossible to follow. **The rule
+is therefore one sentence: a stale row leaves the boards, but never leaves its own author's view.**
+Every removal ships beside the presence test that proves its exit survived, and a further test pins
+that the caps still count those rows — the fact that makes the exits necessary.
+
+The two anonymous/non-actionable surfaces (`/api/lfg/opportunities`, the `/api/home/feed`
+categories) filter unconditionally: no actions, so no exit to preserve.
+
+**Found while writing the guard, and it settles the house style:** the feed's `events` category has
+**always** filtered `starts_at >= datetime('now')` (`announcements.js:145`). Dropping past items was
+already the convention on that very screen; subs and community were the two categories that never
+got it.
+
+**Guard — `worker/test/stale_listings.test.mjs`, 14 tests, 6 of 12 seen failing before the fix.**
+Two of the corrections went into the CODE rather than the test: the `null` hole above, and the
+call-site count, which read 2 for `subs.js` because the file also DEFINES the helper — the same
+declaration-versus-call-site distinction `gateCallsIn` exists for. A pre-fix test asserts the
+fixture's "past" rows are genuinely past by the engine's own reckoning, so the file cannot go
+vacuous. No migration. Suite 1610 → **1624**; 107 → **108** files.
+
 ## v0.125.0 — 2026-08-10
 
 **§-1j T2-8 — the pool board's waiting area, and the four things the owner asked it to do.**

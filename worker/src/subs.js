@@ -35,6 +35,37 @@ export function wireSubs(helpers) {
   ({ json, contactForSession, audit, isStaff, requireStaff, sendEmail, escapeHtml } = helpers);
 }
 
+/**
+ * "This has not already happened" — the ONE definition, shared by every board that offers a
+ * dated opportunity (owner 2026-08-10: "after the event expires the event drops out of the
+ * announcements and list"). `lfg.js` and `announcements.js` already import this module for the
+ * shared volleyball vocabulary, so the rule lives here rather than in a copy per surface — five
+ * copies of a predicate is five chances for the sixth surface to be written without it.
+ *
+ * DAY granularity, deliberately. `needed_at` is frequently date-only (`normalizeRequest` makes the
+ * time optional), and `datetime('2026-08-10') < datetime('now')` is true from one second past
+ * midnight — which would hide a request on the morning of the day it is needed.
+ *
+ * It fails OPEN. `date()` returns NULL for anything SQLite cannot parse, and a NULL comparison is
+ * never true, so a row whose date is absent or unreadable STAYS VISIBLE. The two writers disagree
+ * about format — the browser sends `new Date(v).toISOString()` while the seeder writes
+ * `datetime('now','+6 days')` — and both were verified against the real engine to resolve, but a
+ * hide that guesses is worse than a board that shows one row too many.
+ */
+export function notPastSql(col) {
+  // The column name is interpolated, so it may only ever be a literal from a call site. Anything
+  // that is not a bare identifier (optionally alias-qualified) is refused rather than escaped —
+  // this must never become a path a request value can reach.
+  // `typeof` first: String(null) is "null", which passes an identifier test and emits `date(null)`
+  // — always NULL, therefore always "not past", therefore the filter silently does nothing. A
+  // predicate that disables itself on a caller's typo is worse than one that throws.
+  if (typeof col !== "string"
+      || !/^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?$/.test(col)) {
+    throw new Error("notPastSql: column must be a literal identifier");
+  }
+  return `(date(${col}) IS NULL OR date(${col}) >= date('now'))`;
+}
+
 /** Flood guard: open requests one member may hold per org. */
 export const OPEN_REQUESTS_MAX = 5;
 /** Hard ceiling on notified signups per new request. */
@@ -199,7 +230,12 @@ export async function subsRoutes(request, env, url, ctx) {
     return json({ ok: true, message: "You're off the sub list. Rejoin any time." });
   }
 
-  /* ---------------- member: browse open requests ---------------- */
+  /* ---------------- member: browse open requests ----------------
+     A request whose day has passed leaves the board — but NEVER leaves its own author's view.
+     `myOpenRequestCount` counts every open row with no date filter, and the refusal at
+     OPEN_REQUESTS_MAX reads "Cancel one before posting another"; hide a member's own stale
+     requests from them and that instruction names something they cannot reach. The exception is
+     what keeps the cap's own sentence true, and it is asserted in stale_listings.test.mjs. */
   if (p === "/api/subs/requests" && m === "GET") {
     const me = await contactForSession(env, ctx);
     if (!me) return json({ error: "Sign in first." }, 401);
@@ -211,6 +247,7 @@ export async function subsRoutes(request, env, url, ctx) {
          JOIN contacts c ON c.id = r.requested_by_contact_id
          LEFT JOIN events e ON e.id = r.event_id AND e.deleted_at IS NULL
         WHERE r.org_id = ?1 AND r.status = 'open' AND r.deleted_at IS NULL
+          AND (r.requested_by_contact_id = ?2 OR ${notPastSql("r.needed_at")})
         ORDER BY COALESCE(r.needed_at, r.created_at) ASC LIMIT 100`
     ).bind(ctx.orgId, me.id).all()).results || [];
     return json({

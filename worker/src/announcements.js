@@ -39,7 +39,7 @@
  * Pure (unit-tested): isLive · muteKeyValid · normalizeSubBody · CATEGORIES
  */
 
-import { SKILLS } from "./subs.js"; // shared volleyball vocab (0026)
+import { SKILLS, notPastSql } from "./subs.js"; // shared volleyball vocab (0026) + one staleness rule
 
 let json, contactForSession, audit, isStaff, requireStaff;
 export function wireAnnouncements(helpers) {
@@ -175,6 +175,7 @@ export async function announcementsRoutes(request, env, url, ctx) {
         `SELECT r.id, r.needed_at, r.skill_level, r.game_type, e.name AS event_name
            FROM sub_requests r LEFT JOIN events e ON e.id = r.event_id AND e.deleted_at IS NULL
           WHERE r.org_id = ?1 AND r.status = 'open' AND r.deleted_at IS NULL
+            AND ${notPastSql("r.needed_at")}
           ORDER BY COALESCE(r.needed_at, r.created_at) ASC LIMIT ${FEED_CAP}`
       ).bind(ctx.orgId).all()).results || [];
     }
@@ -183,6 +184,7 @@ export async function announcementsRoutes(request, env, url, ctx) {
       categories.community = (await env.DB.prepare(
         `SELECT id, kind, team_name, skill_level, game_type, play_at FROM lfg_listings
           WHERE org_id = ?1 AND status = 'open' AND deleted_at IS NULL
+            AND ${notPastSql("play_at")}
           ORDER BY created_at DESC LIMIT ${FEED_CAP}`
       ).bind(ctx.orgId).all()).results || [];
     }

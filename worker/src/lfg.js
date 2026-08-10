@@ -41,7 +41,7 @@
  */
 
 import { isMinor, displayName, contactWithDob } from "./family.js"; // one age gate, one name rule
-import { SKILLS, GENDERS, GAME_TYPES } from "./subs.js";            // shared volleyball vocab (0026)
+import { SKILLS, GENDERS, GAME_TYPES, notPastSql } from "./subs.js"; // shared volleyball vocab (0026) + one staleness rule
 
 let json, contactForSession, audit, isStaff, requireStaff;
 export function wireLfg(helpers) {
@@ -228,7 +228,13 @@ export async function lfgRoutes(request, env, url, ctx) {
 
 async function listListings(env, ctx, url, contact) {
   const kind = url.searchParams.get("kind");
-  const where = KINDS.includes(kind) ? "AND l.kind = ?2" : "";
+  // ?2 is now always the viewer, so the optional kind filter moves to ?3.
+  const where = KINDS.includes(kind) ? "AND l.kind = ?3" : "";
+  // A game whose day has passed leaves the board — but NEVER leaves its own poster's view.
+  // `web/assets/lfg.js:112` renders "Report a no-show" only for a listing that is `mine && past`,
+  // from THIS payload, and it is the only trigger in the client. Filtering own rows out here would
+  // make `report-no-show` unreachable and kill the no-show accountability feature silently. The
+  // poster also needs to see the post to close it, because OPEN_LISTINGS_MAX counts it.
   const stmt = env.DB.prepare(
     `SELECT l.*, c.full_name AS poster_name,
             (SELECT COUNT(*) FROM lfg_members mm
@@ -236,10 +242,13 @@ async function listListings(env, ctx, url, contact) {
                 AND mm.status='committed' AND mm.deleted_at IS NULL) AS committed
        FROM lfg_listings l
        JOIN contacts c ON c.id = l.created_by_contact_id AND c.deleted_at IS NULL
-      WHERE l.org_id = ?1 AND l.status = 'open' AND l.deleted_at IS NULL ${where}
+      WHERE l.org_id = ?1 AND l.status = 'open' AND l.deleted_at IS NULL
+        AND (l.created_by_contact_id = ?2 OR ${notPastSql("l.play_at")}) ${where}
       ORDER BY l.created_at DESC LIMIT 100`
   );
-  const rows = (KINDS.includes(kind) ? await stmt.bind(ctx.orgId, kind).all() : await stmt.bind(ctx.orgId).all()).results || [];
+  const rows = (KINDS.includes(kind)
+    ? await stmt.bind(ctx.orgId, contact.id, kind).all()
+    : await stmt.bind(ctx.orgId, contact.id).all()).results || [];
 
   // roster + chips for the listings shown
   const ids = rows.map(r => r.id);
@@ -282,6 +291,7 @@ async function opportunities(env, ctx) {
             l.created_at, c.full_name AS poster_name
        FROM lfg_listings l JOIN contacts c ON c.id = l.created_by_contact_id AND c.deleted_at IS NULL
       WHERE l.org_id = ?1 AND l.status='open' AND l.deleted_at IS NULL
+        AND ${notPastSql("l.play_at")}
       ORDER BY l.created_at DESC LIMIT 24`
   ).bind(ctx.orgId).all()).results || [];
   return json({
