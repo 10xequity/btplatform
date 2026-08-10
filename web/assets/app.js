@@ -122,7 +122,7 @@
     if (nameEl) nameEl.textContent = brand.display_name;
     const img = document.getElementById("loginBrandLogo");
     if (img && brand.logo_url) {
-      img.onerror = () => { img.src = "assets/logo-boom-icon-512.png?v=0.122.0"; }; // fail closed on 404
+      img.onerror = () => { img.src = "assets/logo-boom-icon-512.png?v=0.123.0"; }; // fail closed on 404
       img.src = brand.logo_url;
     }
   }
@@ -137,7 +137,7 @@
        The logo carries explicit width/height so it reserves its box before it loads, and the name
        fills sideways into a fixed-width card, so the swap changes no height. */
     const brandSlot = org
-      ? `<div class="login-brand"><img id="loginBrandLogo" src="assets/logo-boom-icon-512.png?v=0.122.0" alt="" width="36" height="36" /><span id="loginBrandName"></span></div>`
+      ? `<div class="login-brand"><img id="loginBrandLogo" src="assets/logo-boom-icon-512.png?v=0.123.0" alt="" width="36" height="36" /><span id="loginBrandName"></span></div>`
       : "";
     render(`
       <div class="login-wrap">
@@ -235,15 +235,11 @@
         <p style="margin:0;color:var(--text-muted)">Signed in as ${esc(meData.user.email)} \u00b7 <span class="role-pill">${esc(role)}</span></p>
         <div class="grid">
           ${card("schedule.html", "Schedule", "Every upcoming tournament, league night, and event.", "Live")}
-          ${staff
-            ? card("tournament.html", "Tournaments", "Formats, auto-scheduler, live scoring, standings, brackets.", "Live")
-            : card("schedule.html?type=tournament", "Tournaments", "Standings, schedules, and results.", "Live")}
+          ${card("schedule.html?type=tournament", "Tournaments", "Standings, schedules, and results.", "Live")}
           ${card("leagues.html", "Leagues", "League nights, weekly schedules, and season standings.", "Live")}
           ${card("profile.html", "My Profile", "Photo, results r\u00e9sum\u00e9, family accounts, reminders.", "Live")}
-          ${staff ? card("admin-users.html", "Member Management", "Members, roles, and admin access.", "Live") : ""}
-          ${staff ? card("admin-registrations.html", "Registrations", "Sign-ups, Square payments, unpaid reminders.", "Live") : ""}
           ${card("settings.html", "Settings", "Sign-in \u0026 security, passkeys, appearance, reminders.", "Live")}
-          ${staff ? card("settings.html#system", "Foundation", "Database, sign-in, roles, and org switching.", "Live") : ""}
+          ${staff ? card("admin.html", "Control Center", "Events, registrations, members, reports — the admin side.", "Live") : ""}
         </div>`);
     }
   }

@@ -360,3 +360,52 @@ test("NC-A5: the deliberate 'View as member' navigation is NOT caught (scope con
   assert.equal(guardBouncesVerdict(adminNavSrc).hrefs, 0,
     "...and it must sit OUTSIDE guard(), or the scope of this rule is wrong");
 });
+
+/* ---------- D-22 (v0.123.0): the v2.15 rule reached only the file that already obeyed it ----------
+   memberNavVerdict above scans site-nav.js, which was cleaned in v2.15/v0.101.0. But `app.js`
+   paints the OTHER member surface — the signed-in card grid on index.html — and it predates that
+   cleanup (v0.6.0, 2026-07-23), so it was never in scope. It offered staff FOUR admin
+   destinations: tournament.html, admin-users.html, admin-registrations.html and a Foundation
+   card. The suite was green over the owner's tester-round complaint that "the menu buttons lead
+   into admin pages, not membership views", because the rule was enforced on the obedient file.
+
+   THE RULE IS THE ONE THE OWNER ALREADY SETTLED, not a new one: the member shell offers exactly
+   ONE way to the Control Center. site-nav.js satisfies it with the header #btHdrAdmin link;
+   index.html has no such header (app.js owns a reduced one — header_shell's documented
+   exception), so its single sanctioned exit is ONE admin.html card. Removing the cards without
+   leaving that exit would strand an admin on the member front door with no route to admin at
+   all — the exits must be enumerated before anything is taken away. */
+const cardHrefs = (src) => [...stripJs(src).matchAll(/card\("([^"]+)"/g)].map((m) => m[1]);
+const memberCardVerdict = (src) => cardHrefs(src).filter(isAdminSurface).filter((h) => h !== "admin.html");
+
+test("D-22: the member CARD GRID offers no admin destination either — the rule reaches app.js now", () => {
+  const src = read("assets/app.js");
+  assert.ok(cardHrefs(src).length >= 5, `card href extraction collapsed (${cardHrefs(src).length}) — idiom drift, not a clean scan`);
+  assert.deepEqual(memberCardVerdict(src), [],
+    "an admin destination is on the member front door; the one way to the Control Center is the single admin.html card");
+});
+
+test("D-22: ...and that single sanctioned exit EXISTS, so removing the cards did not strand admins", () => {
+  const src = read("assets/app.js");
+  assert.ok(cardHrefs(src).includes("admin.html"),
+    "index.html has no header Admin link (app.js owns a reduced header), so this card is the ONLY route " +
+    "from the member front door to the Control Center — deleting it is a navigation lockout");
+  assert.match(stripJs(src), /staff\s*\?\s*card\("admin\.html"/,
+    "the Control Center card must be staff-gated — a member has no business being offered it");
+});
+
+test("NC-D22a: putting one admin destination back into the card grid FAILS the verdict", () => {
+  const src = read("assets/app.js");
+  const mutated = src.replace('card("leagues.html"', 'card("admin-users.html", "Member Management", "x", "Live")}\n          ${card("leagues.html"');
+  assert.notEqual(mutated, src, "mutation did not land — NC is vacuous");
+  assert.deepEqual(memberCardVerdict(mutated), ["admin-users.html"],
+    "the verdict must catch an admin href put back into the member card grid");
+});
+
+test("NC-D22b: tournament.html in the card grid is caught too (it loads admin-nav.js)", () => {
+  const src = read("assets/app.js");
+  const mutated = src.replace('card("leagues.html"', 'card("tournament.html", "Tournaments", "x", "Live")}\n          ${card("leagues.html"');
+  assert.notEqual(mutated, src, "mutation did not land — NC is vacuous");
+  assert.deepEqual(memberCardVerdict(mutated), ["tournament.html"],
+    "tournament.html must count as an admin surface in the card grid, exactly as it does in the nav");
+});
