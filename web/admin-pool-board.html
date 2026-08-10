@@ -12,9 +12,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Pool board — Boomtown Athletics</title>
   <script>/* Pre-paint state — collapse + theme (uiux-review §4/§6.4, v0.52.0): read the bt_nav cookie and the saved theme BEFORE the first stylesheet so the rail state AND the theme are right on frame one — no post-paint snap of either. admin-nav.js writes the cookie on rail toggle and bt_theme on theme toggle; the localStorage bt_nav fallback migrates pre-v0.51 sessions. */(function(){try{var m=document.cookie.match(/(?:^|; )bt_nav=([^;]*)/);var v=m?m[1]:((window.localStorage&&localStorage.getItem("bt_nav_collapsed")==="1")?"min":"");if(v==="min")document.documentElement.dataset.nav="min";var t=(window.localStorage&&localStorage.getItem("bt_theme"))||(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.dataset.theme=t;}catch(e){}})();</script>
-  <link rel="stylesheet" href="assets/tokens.css?v=0.124.0" />
-  <link rel="stylesheet" href="assets/app.css?v=0.124.0" />
-  <link rel="stylesheet" href="assets/admin.css?v=0.124.0" />
+  <link rel="stylesheet" href="assets/tokens.css?v=0.125.0" />
+  <link rel="stylesheet" href="assets/app.css?v=0.125.0" />
+  <link rel="stylesheet" href="assets/admin.css?v=0.125.0" />
   <style>
     .mf-head { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; margin-bottom: 12px; }
     .mf-head p { max-width: 74ch; }
@@ -59,7 +59,8 @@
     /* The note the owner asked to see on the tile. Wraps rather than truncating — a note that is
        cut off at "asked to finish by" is worse than no note. */
     /* The captain sits above the note: it is who to find, where the note is what to remember. */
-    .pb-cap { font-size: 10px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pb-cap { font-size: 10px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis;
+      white-space: nowrap; flex: 1 1 auto; min-width: 0; }
     .pb-note { font-size: 11px; color: var(--text-muted); line-height: 1.35; white-space: normal; }
     .pb-notebtn { justify-self: start; font: inherit; font-size: 10px; padding: 4px 6px; min-height: 28px;
       background: transparent; color: var(--text-muted); border: 1px dashed var(--border);
@@ -73,12 +74,69 @@
     .pb-add:hover, .pb-add.over { border-color: var(--accent); color: var(--text); border-style: solid; }
     .pb-add:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 
+    /* THE WAITING AREA (T2-8). It shipped as a sticky strip with an unbounded wrapping list, so a
+       board with thirty unplaced teams grew the strip over the pools a director was trying to drag
+       onto — every byte of the markup correct, the cascade wrong. The ceiling goes on the LIST:
+       bounding the list bounds the section that contains it, so the sticky strip stays a strip no
+       matter how many teams are waiting. Phones were never affected (the sticky is dropped under
+       700px further down), which is why this reads as a desktop and tablet fix. */
     .pb-workspace { background: var(--surface); border: 1px solid var(--border);
       border-radius: var(--radius-card, 10px); padding: 12px; margin-top: 8px;
       position: sticky; bottom: 0; }
-    .pb-worklist { flex-direction: row; flex-wrap: wrap; }
+    .pb-worklist { flex-direction: row; flex-wrap: wrap; max-height: 32vh; overflow-y: auto;
+      overscroll-behavior: contain; padding-right: 2px; }
     .pb-worklist .pb-tile { width: 196px; }
+    /* The owner asked for "fixed size OR collapsable" and both are right at different moments: a
+       ceiling while dealing teams out, nothing at all while dragging the last few into place. */
+    .pb-workspace[data-collapsed="1"] .pb-worklist { display: none; }
     .pb-empty { font-size: 12px; color: var(--text-muted); list-style: none; }
+
+    /* HORIZONTAL vs VERTICAL. Two arrangements of one board, not two boards. Bottom is the strip
+       above. Side makes the bench a grid TRACK beside the pools, where it cannot overlap them at
+       all — a column has no z-order argument with its neighbour. The two names live in exactly one
+       place, PB_VIEWS in the page script; this stylesheet and the buttons are asserted to be the
+       same set, because a value styled on one side of that line and not the other is the defect
+       this repo has now paid for three times. */
+    .pb-boardcol { min-width: 0; }
+    .pb-split[data-view="bottom"] { display: block; }
+    .pb-split[data-view="side"] { display: grid; grid-template-columns: minmax(0, 1fr) 268px;
+      gap: 16px; align-items: start; }
+    .pb-split[data-view="side"] .pb-workspace { margin-top: 0; position: sticky; top: 12px; bottom: auto; }
+    .pb-split[data-view="side"] .pb-worklist { flex-direction: column; flex-wrap: nowrap;
+      max-height: calc(100vh - 210px); }
+    .pb-split[data-view="side"] .pb-worklist .pb-tile { width: 100%; }
+
+    /* The bench's own controls. They sit in its heading row rather than the page header: sorting
+       and collapsing act on this list, and a control that acts on one region belongs beside it. */
+    /* Scoped to the waiting area: .pb-div-h is baseline-aligned for the division headings, which is
+       right for text and wrong beside 44px controls. admin-kotc.html borrows .pb-div-h too, so the
+       override is scoped rather than applied to the class. */
+    .pb-workspace .pb-div-h { align-items: center; flex-wrap: wrap; }
+    .pb-tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-left: auto; }
+    .pb-tools label { font-size: 11px; font-weight: 400; color: var(--text-muted);
+      text-transform: uppercase; letter-spacing: .04em; }
+    .pb-tools select { font: inherit; font-size: 13px; padding: 6px 8px; min-height: 44px;
+      background: var(--surface-2); color: var(--text); border: 1px solid var(--border);
+      border-radius: var(--radius-control, 8px); }
+    .pb-seg { display: inline-flex; border: 1px solid var(--border);
+      border-radius: var(--radius-control, 8px); overflow: hidden; }
+    .pb-seg button { font: inherit; font-size: 12px; font-weight: 700; min-height: 44px;
+      padding: 0 12px; background: transparent; color: var(--text-muted); border: 0; cursor: pointer; }
+    .pb-seg button[aria-pressed="true"] { background: var(--surface-2); color: var(--text); }
+    .pb-seg button:focus-visible, .pb-collapse:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
+    .pb-collapse { font: inherit; font-size: 12px; font-weight: 700; min-height: 44px; padding: 0 12px;
+      background: transparent; color: var(--text-muted); border: 1px solid var(--border);
+      border-radius: var(--radius-control, 8px); cursor: pointer; }
+
+    /* The team number leads the name because that is the order a director reads it in — number
+       first off the sheet, then the name to confirm. Tabular figures so a column of them lines up. */
+    .pb-num { display: inline-block; min-width: 2.1em; margin-right: 6px; padding: 0 4px;
+      border-radius: 4px; background: var(--surface); color: var(--text-muted);
+      font-size: 11px; font-variant-numeric: tabular-nums; text-align: center; }
+    .pb-meta { display: flex; gap: 6px; align-items: center; min-width: 0; }
+    .pb-level { flex: 0 0 auto; font-size: 10px; font-weight: 700; letter-spacing: .03em;
+      padding: 1px 6px; border-radius: 999px; border: 1px solid var(--border);
+      background: var(--surface); color: var(--text-muted); white-space: nowrap; }
 
     /* SUGGESTIONS. The board's own furniture, one register quieter — the SAME surface, border and
        radius as .pb-pool, borrowed exactly, so this reads as part of the board rather than a second
@@ -107,11 +165,22 @@
        for itself — so it animates, and only the ring does. */
     .pb-tile.pb-hi { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
 
+    /* The side column only works if the pools still have room beside it. Under 900px they do not,
+       so the board falls back to the strip whatever the button says — the preference is remembered
+       rather than obeyed into a layout nobody can drag on. */
+    @media (max-width: 900px) {
+      .pb-split[data-view="side"] { display: block; }
+      .pb-split[data-view="side"] .pb-workspace { margin-top: 8px; position: sticky; top: auto; bottom: 0; }
+      .pb-split[data-view="side"] .pb-worklist { flex-direction: row; flex-wrap: wrap; max-height: 32vh; }
+      .pb-split[data-view="side"] .pb-worklist .pb-tile { width: 196px; }
+    }
     @media (max-width: 700px) {
       /* The waiting area stops being sticky on a phone: it would eat most of the screen. */
       .pb-workspace { position: static; }
+      .pb-split[data-view="side"] .pb-workspace { position: static; }
       .pb-pool { width: 178px; }
       .pb-worklist .pb-tile { width: 100%; }
+      .pb-split[data-view="side"] .pb-worklist .pb-tile { width: 100%; }
     }
     @media (prefers-reduced-motion: no-preference) {
       /* A director meets this panel a few times per board, not hundreds — so it may animate, gently
@@ -125,13 +194,22 @@
       .pb-sug-item:nth-child(5) { animation-delay: 160ms; }
       .pb-sug-item:nth-child(6) { animation-delay: 200ms; }
       @keyframes pbSugIn { to { opacity: 1; transform: translateY(0); } }
+      /* Press feedback only. The LIST is deliberately not animated when it re-sorts: a director
+         re-sorts to find a team faster, and tiles sliding under a cursor that is about to drag one
+         is the animation working against the task. Colour and press, nothing that moves layout. */
+      .pb-seg button, .pb-collapse { transition: transform 160ms cubic-bezier(0.23, 1, 0.32, 1),
+        background-color 160ms cubic-bezier(0.23, 1, 0.32, 1), color 160ms cubic-bezier(0.23, 1, 0.32, 1); }
+      .pb-seg button:active, .pb-collapse:active { transform: scale(0.97); }
+    }
+    @media (hover: hover) and (pointer: fine) {
+      .pb-seg button:hover, .pb-collapse:hover { color: var(--text); }
     }
     @media (prefers-reduced-motion: reduce) { .pb-tile { transition: none; } }
   </style>
 </head>
 <body>
     <header class="header chrome-glass no-print">
-    <a class="wordmark" href="admin.html" style="text-decoration:none;color:inherit"><img class="brand-logo" src="assets/logo-boom-icon-512.png?v=0.124.0" alt="" width="22" height="22" />Boomtown <span>Athletics</span></a>
+    <a class="wordmark" href="admin.html" style="text-decoration:none;color:inherit"><img class="brand-logo" src="assets/logo-boom-icon-512.png?v=0.125.0" alt="" width="22" height="22" />Boomtown <span>Athletics</span></a>
     <div class="spacer"></div>
     <select id="orgSwitcher" class="org-switcher" aria-label="Switch organization"></select>
     <a id="btHdrMail" class="btn ghost hdr-mail" href="admin-messages.html" aria-label="Messages">✉</a>
@@ -215,7 +293,7 @@
       <div class="mf-head">
         <div>
           <h1>Pool board</h1>
-          <p class="muted">Drag teams into pools. Drop on a <b>+</b> to start a new pool; a pool with nobody in it disappears when you save. Teams you drag out go back to the waiting area at the bottom. Nothing is written until you press Save.</p>
+          <p class="muted">Drag teams into pools. Drop on a <b>+</b> to start a new pool; a pool with nobody in it disappears when you save. Teams you drag out go back to the waiting area, which you can sort, move to the side or hide. Nothing is written until you press Save.</p>
         </div>
         <div class="mf-row" style="margin:0">
           <label class="mf-inline">Event
@@ -229,26 +307,51 @@
 
       <p class="mf-note" id="pbHint" role="status" aria-live="polite">Tip: click a tile and press Enter to pick it up, then use the arrow keys — no mouse needed.</p>
 
-      <div id="pbBoard" class="pb-board"></div>
+      <!-- The split holds the pools and the waiting area TOGETHER, because the orientation the
+           owner asked for is a RELATIONSHIP between them, not a property of either one. It has
+           exactly two children so the side view's grid can auto-place them into its two tracks;
+           the suggestions panel rides in the board column, where it belongs. `data-view` is
+           written by the page script from PB_VIEWS and is the only thing the layout keys off. -->
+      <div id="pbSplit" class="pb-split" data-view="bottom">
+        <div class="pb-boardcol">
+          <div id="pbBoard" class="pb-board"></div>
 
-      <!-- Seeding suggestions (v0.95.0, W-D). Static markup outside #pbBoard on purpose: render()
-           rewrites that node's innerHTML wholesale, and fail()/orgEmptyState() replace it entirely,
-           so a panel living inside it would be destroyed by both. Hidden until the server sends
-           something — an empty suggestions panel is worse than no panel. -->
-      <section id="pbSug" class="pb-sug" hidden aria-labelledby="pbSugH">
-        <h2 class="pb-div-h pb-sug-h" id="pbSugH">Suggestions</h2>
-        <p class="pb-sug-lead">Ideas from past results. Nothing here changes the board — move a team yourself, or dismiss the idea.</p>
-        <ul id="pbSugList" class="pb-sug-list"></ul>
-      </section>
+          <!-- Seeding suggestions (v0.95.0, W-D). Static markup outside #pbBoard on purpose:
+               render() rewrites that node's innerHTML wholesale, and fail()/orgEmptyState()
+               replace it entirely, so a panel living inside it would be destroyed by both. Hidden
+               until the server sends something — an empty suggestions panel is worse than none. -->
+          <section id="pbSug" class="pb-sug" hidden aria-labelledby="pbSugH">
+            <h2 class="pb-div-h pb-sug-h" id="pbSugH">Suggestions</h2>
+            <p class="pb-sug-lead">Ideas from past results. Nothing here changes the board — move a team yourself, or dismiss the idea.</p>
+            <ul id="pbSugList" class="pb-sug-list"></ul>
+          </section>
+        </div>
 
-      <section class="pb-workspace" aria-labelledby="pbWorkH">
-        <h2 class="pb-div-h" id="pbWorkH">Waiting to be placed <span class="pb-courts" id="pbCount"></span></h2>
-        <ul id="pbWork" class="pb-list pb-worklist"></ul>
-      </section>
+        <section class="pb-workspace" id="pbWorkspace" aria-labelledby="pbWorkH">
+          <h2 class="pb-div-h" id="pbWorkH">Waiting to be placed <span class="pb-courts" id="pbCount"></span>
+            <span class="pb-tools">
+              <label for="pbSort">Sort</label>
+              <select id="pbSort">
+                <option value="board">Board order</option>
+                <option value="name">Team name</option>
+                <option value="level">Level</option>
+                <option value="captain">Captain</option>
+                <option value="seed">Seed</option>
+              </select>
+              <span class="pb-seg" role="group" aria-label="Where the waiting area sits">
+                <button type="button" id="pbViewBottom" data-pbview="bottom" aria-pressed="true">Bottom</button>
+                <button type="button" id="pbViewSide" data-pbview="side" aria-pressed="false">Side</button>
+              </span>
+              <button type="button" class="pb-collapse" id="pbCollapse" aria-expanded="true" aria-controls="pbWork">Hide</button>
+            </span>
+          </h2>
+          <ul id="pbWork" class="pb-list pb-worklist"></ul>
+        </section>
+      </div>
     </main>
   </div>
-  <script src="assets/config.js?v=0.124.0"></script>
-  <script src="assets/admin-nav.js?v=0.124.0"></script>
-  <script src="assets/admin-pool-board.js?v=0.124.0"></script>
+  <script src="assets/config.js?v=0.125.0"></script>
+  <script src="assets/admin-nav.js?v=0.125.0"></script>
+  <script src="assets/admin-pool-board.js?v=0.125.0"></script>
 </body>
 </html>

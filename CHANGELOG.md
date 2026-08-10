@@ -1,5 +1,68 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.125.0 — 2026-08-10
+
+**§-1j T2-8 — the pool board's waiting area, and the four things the owner asked it to do.**
+
+Owner: *"Pool board works but the teams list does not scroll and it overlaps the pool drag area when
+you have several teams. This needs to be fixed size or collapsable but makes it hard to drag. The
+teams should pull or have their team level they registered with as well. There needs to be a sort
+button for teams either by level, team name, captain name, etc. Add a horizontal view vs vertical
+view."* Plus, this session: *"add team numbers on the teams in addition to captain names based on
+assignments to double check."*
+
+**The overlap was a CASCADE defect and no markup test could ever have seen it.** `.pb-workspace`
+shipped as `position: sticky; bottom: 0` with a list that wrapped unbounded, so thirty unplaced
+teams became thirty rows of overlay across the pools a director was trying to drag onto. Every byte
+of the markup was correct. The ceiling now goes on the LIST (`max-height` + `overflow-y: auto`),
+because bounding the list bounds the section that holds it — the sticky strip stays a strip at any
+team count. Phones were never affected (the sticky is dropped under 700px), so this was always a
+desktop and tablet fix. A **Hide** control gives the owner's other stated option outright.
+
+**Horizontal vs vertical.** The pools and the waiting area now sit inside one `#pbSplit`, because
+the orientation is a relationship between them rather than a property of either. `bottom` is the
+strip; `side` makes the bench a grid TRACK beside the pools, where it cannot overlap them at all —
+a column has no z-order argument with its neighbour. Under 900px the side view falls back to the
+strip: the preference is remembered, not obeyed into a layout nobody can drag on. The two names
+live in exactly one place (`PB_VIEWS`), and the guard asserts the script, the buttons and the
+stylesheet are the same set — the defect class this repo has now paid for three times.
+
+**The registered level reaches the board.** `teams.level` has existed since the first schema and
+`loadBoard` never selected it, so no amount of client work could have shown it.
+
+**The team number is the interesting one, because every obvious source for it was wrong.** `seed` is
+NULL for every registered team — only the sandbox seeder writes one, so a `#seed` badge would be
+blank on every real board. `board_order` is rewritten to the team's index WITHIN ITS POOL on every
+save, so a number derived from it changes the moment the board is saved, which is the one thing a
+checking number must never do. `id` is stable but global (90001). So `board_no` is the team's rank
+by `id` within the event — registration order, the order the director's own export is already in.
+Soft-deleted teams are counted but not returned, so a withdrawal leaves a **gap** rather than
+renumbering everyone below it, exactly as scratching a name off a paper list does. All three
+properties are asserted, the stability one against a save that provably rewrote `board_order`.
+
+**Sorting** groups the bench by team name, level, captain or seed, and is a VIEW change: it never
+marks the board unsaved, because the workspace order is not part of what Save writes. Sorting by
+level GROUPS by the registered label and does not rank it — the labels are free text out of the
+registration form (`BB/A`, `A/AA`, `Open`) and no stored ordering for them exists; inventing one
+here would be a skill ranking nobody agreed to.
+
+**Guard — `worker/test/pool_board_bench.test.mjs`, 19 tests, seen failing 14-of-16 before the fix.**
+Three kinds of evidence for three kinds of claim: route tests for level and the number, a CSS
+assertion for the overlap (with an NC that restores v0.124.0's unbounded state byte-for-byte), and
+an executable test for sorting that rebuilds the shipped `sortTeams` from its own bytes with
+`functionBodyAfter` + `new Function` — a text scan for the word "sort" would pass over a comparator
+that returns 0, which is exactly what its NC builds. Expectations are properties derived from the
+fixture (non-decreasing, a permutation, blanks last), never a hand-written target order, and one
+test asserts the fixture is unsorted on every key so none of the others can be vacuous.
+
+**Two guard assertions were wrong and were corrected rather than the code.** One demanded the view
+buttons' ids appear in the page script; they are addressed by `data-pbview` on purpose (one loop, no
+id list to drift), so the guard was pinning a spelling — D-17b's lesson. The other tried to regex
+across an `aria-label` built from a template literal containing its own double quotes.
+
+The new controls are wired ONCE at boot and a positional test keeps them out of `wire()`, which
+stacks handlers on every render (§-1c D-6). No migration. Suite 1591 → **1610**; 106 → **107** files.
+
 ## v0.124.0 — 2026-08-10
 
 Tester round 2, item 5's remaining half — round one no longer repeats pool play. The owner's rule: "aim to have the system have opponents be from separate pools but still in bracket. Example in 2 pools of 4 teams, #1 A plays #4 B." The bracket builder pairs seed numbers (1 v N, 2 v N-1), so who meets whom is decided entirely by the order of the seed list — and that list came straight off the event-wide pool finish, which puts a pool's best and worst at opposite ends, exactly where standard seeding pairs them. Teams that had just played each other in pool play met again in the first bracket game. The seed list is now arranged so paired positions come from different pools wherever the arithmetic allows, applied AFTER the top-X-into-A split so the split still goes by finish, and skipped entirely for a hand-picked seed order. Three invariants ride with it, each pinned: the teams that earned byes keep them (byes go to the top finishers, untouched), each pool's own finishing order is preserved so nobody is seeded above a poolmate who beat them, and the arrangement is a total mapping — every team in, exactly once out, because a reordering that silently dropped a team would satisfy "no rematch" trivially. Events with one pool or no pool assignment are returned untouched, so every bracket already drawn stays as it was. The guard measures against a DERIVED floor rather than a hoped-for zero: byes are taken by the best finishers, so equal pool sizes do not mean equal representation in round one, and some rematches are pigeonhole arithmetic rather than defects.

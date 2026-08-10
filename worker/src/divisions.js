@@ -679,8 +679,22 @@ async function loadBoard(env, ctx, eventId) {
       WHERE org_id=?1 AND event_id=?2 AND deleted_at IS NULL ORDER BY sort_order, id`
   ).bind(ctx.orgId, eventId).all()).results || [];
 
+  // `board_no` is the team NUMBER a director reads off a tile to check an assignment against a
+  // printed list, and every obvious candidate for it is wrong:
+  //   · `seed` is NULL for every registered team — only the sandbox seeder ever writes one, so a
+  //     "#seed" badge would be blank on every real board. Empty and broken look identical.
+  //   · `board_order` is rewritten to the team's index WITHIN ITS POOL on every save (:586), so a
+  //     number derived from it changes the moment the board is saved — the one thing a checking
+  //     number must never do.
+  //   · `id` is stable but global (90001), which is not a number anybody reads aloud.
+  // So it is the team's rank by `id` within the event — registration order, which is the order the
+  // director's own registration export is already in. Soft-deleted teams are COUNTED but not
+  // returned, so a withdrawal leaves a gap instead of renumbering everyone below it, exactly as
+  // scratching a name off a paper list does.
   const teams = (await env.DB.prepare(
-    `SELECT t.id, t.name, t.pool_id, t.division_id, t.note, t.board_order, t.seed,
+    `SELECT t.id, t.name, t.pool_id, t.division_id, t.note, t.board_order, t.seed, t.level,
+            (SELECT COUNT(*) FROM teams x
+              WHERE x.org_id=t.org_id AND x.event_id=t.event_id AND x.id<=t.id) AS board_no,
             COALESCE(s.wins,0) AS wins, COALESCE(s.losses,0) AS losses,
             ${CAPTAIN_COLS}
        FROM teams t

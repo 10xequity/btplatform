@@ -41,6 +41,62 @@
   let workspace = [];
   let dismissed = new Set(); // suggestion ids this director has waved away, for this event
 
+  /* ---------- the waiting area's own view state (T2-8) ----------
+     None of this is board arrangement, so none of it may mark the board dirty and none of it is
+     ever sent to the server: `save()` writes `pools` and nothing else, and the workspace's order
+     was never persisted in the first place. These are a director's preferences, so they live in
+     localStorage and survive the next event. */
+  const PB_VIEWS = ["bottom", "side"];   // the ONE list; the stylesheet and the buttons match it
+  let view = "bottom";
+  let sortKey = "board";
+  let collapsed = false;
+
+  /** Order the waiting area. Pure, and deliberately closed over nothing — it is the one piece of
+      this file a test can execute directly, and a comparator that reaches outside itself cannot be
+      reasoned about from anywhere.
+
+      Sorting by LEVEL groups teams by the label they registered with; it does not rank them. The
+      labels are free text out of the registration form ("BB/A", "A/AA", "Open"), and there is no
+      stored ordering for them — inventing one here would be a skill ranking nobody agreed to. What
+      a director needs from this button is all the BB/A teams together, which grouping gives. */
+  function sortTeams(list, key) {
+    const out = list.slice();
+    if (key === "board") return out;
+    const pick = {
+      name: (t) => String(t.name || ""),
+      level: (t) => String(t.level || ""),
+      captain: (t) => String(t.captain || ""),
+      seed: (t) => (t.seed == null ? "" : String(t.seed).padStart(6, "0")),
+    }[key];
+    if (!pick) return out;
+    out.sort((a, b) => {
+      const av = pick(a), bv = pick(b);
+      // A team with no captain, no level or no seed sorts LAST rather than first: a blank at the
+      // top of the list is the first thing read and the least useful thing to read.
+      if (!av && !bv) return 0;
+      if (!av) return 1;
+      if (!bv) return -1;
+      return av.localeCompare(bv, undefined, { numeric: true, sensitivity: "base" }) || 0;
+    });
+    return out;
+  }
+
+  /** Write the view state onto the DOM. One function so the attribute, the pressed states and the
+      collapse label can never disagree about what is currently true. */
+  function paintView() {
+    const split = $("pbSplit");
+    if (split) split.dataset.view = view;
+    for (const b of document.querySelectorAll("[data-pbview]")) {
+      b.setAttribute("aria-pressed", String(b.dataset.pbview === view));
+    }
+    const ws = $("pbWorkspace"), btn = $("pbCollapse");
+    if (ws) ws.dataset.collapsed = collapsed ? "1" : "0";
+    if (btn) {
+      btn.textContent = collapsed ? "Show" : "Hide";
+      btn.setAttribute("aria-expanded", String(!collapsed));
+    }
+  }
+
   function ingest(data) {
     board = data;
     zones = [];
@@ -146,10 +202,22 @@
 
   function tile(t) {
     const record = (t.wins || t.losses) ? `<span class="pb-rec">${t.wins}-${t.losses}</span>` : "";
+    // The number leads the name, because that is the order a director reads it in: number off the
+    // sheet, name to confirm. It is the team's registration rank, computed server-side, and it is
+    // stable across saves and withdrawals — see loadBoard's note on why seed and board_order are
+    // both the wrong number for this job.
+    const num = t.board_no ? `<span class="pb-num">${esc(String(t.board_no))}</span>` : "";
+    // Level and captain share a row: together they are "who is this", where the note below is
+    // "what to remember". The accessible name appends both rather than prefixing them, because
+    // the team name has to stay the first thing a screen reader says.
+    const meta = (t.level || t.captain) ? `<span class="pb-meta">
+        ${t.level ? `<span class="pb-level">${esc(t.level)}</span>` : ""}
+        ${t.captain ? `<span class="pb-cap">${esc(t.captain)}</span>` : ""}
+      </span>` : "";
     return `<li class="pb-tile" draggable="true" tabindex="0" data-team="${t.id}"
-        aria-label="${esc(t.name)}${t.captain ? ", captain " + esc(t.captain) : ""}${t.note ? ", note: " + esc(t.note) : ""}. Press Enter to pick up.">
-      <span class="pb-name">${esc(t.name)}</span>${record}
-      ${t.captain ? `<span class="pb-cap">${esc(t.captain)}</span>` : ""}
+        aria-label="${esc(t.name)}${t.board_no ? ", team " + esc(String(t.board_no)) : ""}${t.level ? ", level " + esc(t.level) : ""}${t.captain ? ", captain " + esc(t.captain) : ""}${t.note ? ", note: " + esc(t.note) : ""}. Press Enter to pick up.">
+      <span class="pb-name">${num}${esc(t.name)}</span>${record}
+      ${meta}
       ${t.note ? `<span class="pb-note">${esc(t.note)}</span>` : ""}
       <button class="pb-notebtn" type="button" data-note="${t.id}"
         aria-label="${t.note ? "Edit" : "Add"} note for ${esc(t.name)}">${t.note ? "✎" : "+ note"}</button>
@@ -194,7 +262,9 @@
         <div class="pb-pools">${zones.filter((z) => z.divisionId === null).map(zoneHtml).join("")}</div>
       </section>` : "");
 
-    $("pbWork").innerHTML = workspace.map(tile).join("")
+    // Sorted for DISPLAY only. `workspace` keeps the server's order, so switching back to "Board
+    // order" is a real return rather than an approximation of one.
+    $("pbWork").innerHTML = sortTeams(workspace, sortKey).map(tile).join("")
       || `<li class="pb-empty">Everyone is placed. Drag a tile back here to take them out of a pool.</li>`;
     $("pbCount").textContent = `${workspace.length} waiting`;
     $("pbSave").disabled = !dirty;
@@ -386,6 +456,34 @@
       dismissed.add(hide.dataset.sughide);
       renderSuggestions();
     });
+    /* The waiting area's controls (T2-8). Wired HERE, at boot, and never inside wire() — wire()
+       runs at the end of every render and stacks handlers on nodes it does not recreate (§-1c
+       D-6), so a listener added there would fire once per render by the twentieth drag. These four
+       nodes are static markup, so one listener each is correct and sufficient. */
+    try {
+      const savedView = localStorage.getItem("bt_pb_view");
+      if (PB_VIEWS.includes(savedView)) view = savedView;
+      const savedSort = localStorage.getItem("bt_pb_sort");
+      if (savedSort) { sortKey = savedSort; $("pbSort").value = savedSort; }
+    } catch (e) { /* a browser with storage denied still gets a working board */ }
+    paintView();
+
+    $("pbSort").addEventListener("change", () => {
+      // A view change, not an arrangement change: it must not mark the board unsaved, because the
+      // workspace's order is not part of what Save writes.
+      sortKey = $("pbSort").value;
+      try { localStorage.setItem("bt_pb_sort", sortKey); } catch (e) {}
+      render();
+    });
+    for (const b of document.querySelectorAll("[data-pbview]")) {
+      b.addEventListener("click", () => {
+        view = b.dataset.pbview;
+        try { localStorage.setItem("bt_pb_view", view); } catch (e) {}
+        paintView();
+      });
+    }
+    $("pbCollapse").addEventListener("click", () => { collapsed = !collapsed; paintView(); });
+
     $("pbSave").addEventListener("click", save);
     $("pbReload").addEventListener("click", () => {
       if (dirty && !window.confirm("Discard unsaved changes and reload?")) return;
