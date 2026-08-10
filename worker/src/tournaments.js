@@ -11,6 +11,7 @@ import {
 } from "./scheduler.js";
 import { autoClaimForEvent, releaseAutoClaims } from "./facility.js";
 import { advanceBracketFor } from "./brackets.js"; // v0.67.0 — brackets.js imports only scheduler.js, no cycle
+import { personName, CAPTAIN_JOIN, CAPTAIN_COLS } from "./names.js"; // T2-3 — one captain shape, one place
 
 export async function tournamentRoutes(request, env, url, ctx) {
   const p = url.pathname;
@@ -107,11 +108,26 @@ async function patchEvent(request, env, ctx, id) {
   return json({ ok: true });
 }
 
+/* T2-3 (v0.122.0): the captain rides along so a director can tell two similar team names apart.
+   THIS ROUTE CARRIES NO STAFF GATE, so the captain's own visibility decides how their name reads
+   — `personName` returns it in full only when they chose 'public', and "First L." otherwise.
+   Reading the member's setting rather than the caller's convenience is the whole rule;
+   scheduler_ux.test.mjs flips the setting and asserts the output follows it. */
 async function listTeams(env, eventId) {
   const rows = (await env.DB.prepare(
-    "SELECT id, name, level, gender_division, seed FROM teams WHERE event_id=?1 AND deleted_at IS NULL ORDER BY id"
+    `SELECT t.id, t.name, t.level, t.gender_division, t.seed, ${CAPTAIN_COLS}
+       FROM teams t ${CAPTAIN_JOIN}
+      WHERE t.event_id=?1 AND t.deleted_at IS NULL ORDER BY t.id`
   ).bind(eventId).all()).results;
-  return json({ teams: rows });
+  return json({ teams: rows.map(withCaptain) });
+}
+
+/** One shape for every ungated team feed, so two screens cannot disagree about a captain. */
+function withCaptain(t) {
+  return {
+    id: t.id, name: t.name, level: t.level, gender_division: t.gender_division, seed: t.seed,
+    captain: personName(t.captain_name, { visibility: t.captain_visibility }),
+  };
 }
 
 async function addTeams(request, env, ctx, eventId) {
@@ -190,9 +206,10 @@ async function getSchedule(env, ctx, eventId) {
      FROM matches m WHERE m.event_id=?1 AND m.deleted_at IS NULL ORDER BY m.stage, m.round, m.court`
   ).bind(eventId).all()).results;
   const teams = (await env.DB.prepare(
-    "SELECT id, name, seed FROM teams WHERE event_id=?1 AND deleted_at IS NULL"
+    `SELECT t.id, t.name, t.level, t.gender_division, t.seed, ${CAPTAIN_COLS}
+       FROM teams t ${CAPTAIN_JOIN} WHERE t.event_id=?1 AND t.deleted_at IS NULL`
   ).bind(eventId).all()).results;
-  return json({ event: ev, matches: rows, teams, warnings: rescheduleWarnings(rows) });
+  return json({ event: ev, matches: rows, teams: teams.map(withCaptain), warnings: rescheduleWarnings(rows) });
 }
 
 function rescheduleWarnings(rows) {

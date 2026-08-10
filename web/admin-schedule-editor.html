@@ -11,9 +11,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Schedule editor — Boomtown Athletics</title>
   <script>/* Pre-paint state — collapse + theme (uiux-review §4/§6.4, v0.52.0): read the bt_nav cookie and the saved theme BEFORE the first stylesheet so the rail state AND the theme are right on frame one — no post-paint snap of either. admin-nav.js writes the cookie on rail toggle and bt_theme on theme toggle; the localStorage bt_nav fallback migrates pre-v0.51 sessions. */(function(){try{var m=document.cookie.match(/(?:^|; )bt_nav=([^;]*)/);var v=m?m[1]:((window.localStorage&&localStorage.getItem("bt_nav_collapsed")==="1")?"min":"");if(v==="min")document.documentElement.dataset.nav="min";var t=(window.localStorage&&localStorage.getItem("bt_theme"))||(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.dataset.theme=t;}catch(e){}})();</script>
-  <link rel="stylesheet" href="assets/tokens.css?v=0.121.0" />
-  <link rel="stylesheet" href="assets/app.css?v=0.121.0" />
-  <link rel="stylesheet" href="assets/admin.css?v=0.121.0" />
+  <link rel="stylesheet" href="assets/tokens.css?v=0.122.0" />
+  <link rel="stylesheet" href="assets/app.css?v=0.122.0" />
+  <link rel="stylesheet" href="assets/admin.css?v=0.122.0" />
   <style>
     .mf-head { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; margin-bottom: 12px; }
     .mf-head p { max-width: 68ch; }
@@ -44,7 +44,13 @@
     .ed-ref, .ed-score { grid-column: 1 / -1; font-size: 10px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
     .ed-side, .ed-score { font-variant-numeric: tabular-nums; }
 
-    .ed-side-panel, .ed-side { background: var(--surface); border: 1px solid var(--border);
+    /* v0.122.0 (T2-1d): .ed-side appeared here too — ONE NAME DOING TWO UNRELATED JOBS. The
+       tile's team-name SPANS carry .ed-side, so this panel's padding, border and sticky position
+       landed inside every 62px match tile, and the mobile order:-1 below applied to both spans
+       of a 3-column grid, pushing the "v" separator to the end. That is the owner's "the names
+       are unreadable" — the grid already scrolled. The aside owns .ed-side-panel; the spans keep
+       the text rules above. scheduler_ux.test.mjs pins the separation in both directions. */
+    .ed-side-panel { background: var(--surface); border: 1px solid var(--border);
       border-radius: var(--radius-card, 10px); padding: 12px; position: sticky; top: 12px; }
     .ed-report, .ed-byes { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.5; }
     .ed-byes { color: var(--text-muted); font-size: 12px; max-height: 220px; overflow-y: auto; }
@@ -53,7 +59,7 @@
     /* A two-column editor does not fit a phone. The panel moves above the grid, which scrolls. */
     @media (max-width: 900px) {
       .ed-layout { grid-template-columns: 1fr; }
-      .ed-side { position: static; order: -1; }
+      .ed-side-panel { position: static; order: -1; }
     }
     @media (max-width: 430px) {
       .ed-slot { min-width: 128px; height: 70px; }
@@ -63,7 +69,7 @@
 </head>
 <body>
     <header class="header chrome-glass no-print">
-    <a class="wordmark" href="admin.html" style="text-decoration:none;color:inherit"><img class="brand-logo" src="assets/logo-boom-icon-512.png?v=0.121.0" alt="" width="22" height="22" />Boomtown <span>Athletics</span></a>
+    <a class="wordmark" href="admin.html" style="text-decoration:none;color:inherit"><img class="brand-logo" src="assets/logo-boom-icon-512.png?v=0.122.0" alt="" width="22" height="22" />Boomtown <span>Athletics</span></a>
     <div class="spacer"></div>
     <select id="orgSwitcher" class="org-switcher" aria-label="Switch organization"></select>
     <a id="btHdrMail" class="btn ghost hdr-mail" href="admin-messages.html" aria-label="Messages">✉</a>
@@ -164,7 +170,7 @@
           <p class="empty" id="sEmpty" hidden>This event has no schedule yet. Generate one from the tournament page first.</p>
         </section>
 
-        <aside class="ed-side" aria-label="Fairness">
+        <aside class="ed-side-panel" aria-label="Fairness">
           <h2 class="mf-sub">How fair is it?</h2>
           <ul id="sReport" class="ed-report"></ul>
           <div id="sDelta" class="ed-delta" role="status" aria-live="polite"></div>
@@ -174,8 +180,8 @@
       </div>
     </main>
   </div>
-  <script src="assets/config.js?v=0.121.0"></script>
-  <script src="assets/admin-nav.js?v=0.121.0"></script>
-  <script src="assets/admin-schedule-editor.js?v=0.121.0"></script>
+  <script src="assets/config.js?v=0.122.0"></script>
+  <script src="assets/admin-nav.js?v=0.122.0"></script>
+  <script src="assets/admin-schedule-editor.js?v=0.122.0"></script>
 </body>
 </html>

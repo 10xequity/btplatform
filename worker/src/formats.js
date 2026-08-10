@@ -33,6 +33,7 @@
  * DETERMINISTIC. No Math.random anywhere — the same inputs always produce the same schedule, so a
  * director who regenerates does not get a different answer, and the tests are stable.
  */
+import { personName, CAPTAIN_JOIN, CAPTAIN_COLS } from "./names.js";
 
 /* ============================ arithmetic ============================ */
 
@@ -550,10 +551,18 @@ async function loadSchedule(env, ctx, eventId) {
   ).bind(eventId, ctx.orgId).first();
   if (!ev) return { error: "That event doesn't exist.", status: 404 };
 
-  const teams = (await env.DB.prepare(
-    `SELECT id, name FROM teams WHERE org_id=?1 AND event_id=?2 AND deleted_at IS NULL
-      ORDER BY COALESCE(seed, 9999), id`
+  // T2-3 (v0.122.0): the captain rides along — "sometimes team names make it very hard to
+  // determine who the captain is". CAPTAIN_JOIN expects `teams` aliased as `t`, which this query
+  // did not have. This route is requireStaff-gated, so the captain is named in FULL; the ungated
+  // feeds in tournaments.js must honour the member's own visibility instead.
+  const teamRows = (await env.DB.prepare(
+    `SELECT t.id, t.name, ${CAPTAIN_COLS} FROM teams t ${CAPTAIN_JOIN}
+      WHERE t.org_id=?1 AND t.event_id=?2 AND t.deleted_at IS NULL
+      ORDER BY COALESCE(t.seed, 9999), t.id`
   ).bind(ctx.orgId, eventId).all()).results || [];
+  const teams = teamRows.map((t) => ({
+    id: t.id, name: t.name, captain: personName(t.captain_name, { full: true }),
+  }));
 
   const rows = (await env.DB.prepare(
     `SELECT id, round, court, team_a_id, team_b_id, ref_team_id, score_a, score_b, points_to, cap

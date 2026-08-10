@@ -21,7 +21,9 @@
     return;
   }
   let bearer = sessionStorage.getItem("bt_token") || null;
-  let currentEvent = null, teams = [], teamName = {}, matches = [], formats = {};
+  let currentEvent = null, teams = [], teamName = {}, teamCaptain = {}, matches = [], formats = {};
+  /** "Net Assets — Ava S." where a captain is known; the bare name otherwise (T2-3). */
+  const teamLabel = (id) => teamName[id] + (teamCaptain[id] ? ` — ${teamCaptain[id]}` : "");
 
   /* theme + org (same behavior as index) */
   /* v0.52.0: theme is single-source now — pre-paint via the shared <head> snippet, toggle in admin-nav.js v2.19. */
@@ -192,6 +194,9 @@
     ]);
     teams = tms.data.teams || [];
     teamName = Object.fromEntries(teams.map((t) => [t.id, t.name]));
+    // T2-3: the captain, for the moments where two team names look alike. Kept OUT of the dense
+    // grid cell and put where a director is actually identifying a team under time pressure.
+    teamCaptain = Object.fromEntries(teams.map((t) => [t.id, t.captain || ""]));
     $("teamCount").textContent = teams.length ? `(${teams.length})` : "";
     if (teams.length) $("plTeams").value = teams.length; // W-C: the field count is the default, not a retype
     matches = (sched.data.matches || []).filter((m) => m.stage === "pool");
@@ -252,7 +257,7 @@
   function matchCell(m) {
     const scored = m.score_a != null;
     return `<div class="match-cell${scored ? " scored" : ""}" data-id="${m.id}" role="button" tabindex="0"
-      aria-label="${teamName[m.team_a_id]} versus ${teamName[m.team_b_id]}${scored ? `, ${m.score_a} to ${m.score_b}` : ", tap to score"}">
+      aria-label="${teamLabel(m.team_a_id)} versus ${teamLabel(m.team_b_id)}${scored ? `, ${m.score_a} to ${m.score_b}` : ", tap to score"}">
       <span class="vs">${teamName[m.team_a_id] || "?"} <span class="muted">vs</span> ${teamName[m.team_b_id] || "?"}</span>
       ${scored ? `<span class="score">${m.score_a}–${m.score_b}</span>` : ""}
       ${m.ref_team_id ? `<span class="ref">ref: ${teamName[m.ref_team_id] || ""}</span>` : ""}
@@ -265,17 +270,23 @@
     const sheet = $("scoreSheet");
     sheet.hidden = false;
     sheet.classList.add("open");
-    const diffs = Array.from({ length: Math.min(m.points_to, 15) }, (_, i) => i + 1);
+    // T2-4b (v0.122.0): the chips used to STOP at 15 (Math.min(points_to, 15)) while the server
+    // has never had a cap — so a 21-0 game could not be recorded at all. Chips stay for the common
+    // margins (the two-tap path is the whole point of this sheet); the numeric box carries the
+    // rest, bounded by points_to. Same shape the league dialog already ships.
+    const diffs = Array.from({ length: Math.min(m.points_to, 10) }, (_, i) => i + 1);
     sheet.innerHTML = `
       <h4>Who won? <span class="muted">(to ${m.points_to}, cap ${m.cap})</span></h4>
       <div class="tap-row">
-        <button class="btn" data-w="a">${teamName[m.team_a_id]}</button>
-        <button class="btn" data-w="b">${teamName[m.team_b_id]}</button>
+        <button class="btn" data-w="a">${teamLabel(m.team_a_id)}</button>
+        <button class="btn" data-w="b">${teamLabel(m.team_b_id)}</button>
         <button class="btn ghost" data-w="x">Cancel</button>
       </div>
       <div id="diffRow" hidden>
         <h4>Won by…</h4>
-        <div class="tap-row">${diffs.map((d) => `<button class="diff-chip" data-d="${d}">${d}</button>`).join("")}</div>
+        <div class="tap-row">${diffs.map((d) => `<button class="diff-chip" data-d="${d}">${d}</button>`).join("")}
+          <input id="diffCustom" type="number" min="1" max="${m.points_to}" placeholder="More"
+                 style="width:84px;min-height:44px" aria-label="Point difference" /></div>
       </div>`;
     let winner = null;
     sheet.querySelectorAll("[data-w]").forEach((b) => (b.onclick = () => {
@@ -283,11 +294,16 @@
       winner = b.dataset.w;
       sheet.querySelector("#diffRow").hidden = false;   // tap 1 done
     }));
-    sheet.querySelectorAll("[data-d]").forEach((b) => (b.onclick = async () => {  // tap 2
-      await api(`/api/matches/${matchId}/score`, { method: "POST", body: JSON.stringify({ winner, diff: +b.dataset.d }) });
+    const send = async (diff) => {
+      await api(`/api/matches/${matchId}/score`, { method: "POST", body: JSON.stringify({ winner, diff }) });
       closeSheet();
       refreshAll();
-    }));
+    };
+    sheet.querySelectorAll("[data-d]").forEach((b) => (b.onclick = () => winner && send(+b.dataset.d)));  // tap 2
+    sheet.querySelector("#diffCustom").addEventListener("change", (e) => {
+      const d = +e.target.value;
+      if (winner && d >= 1) send(d);
+    });
     function closeSheet() { sheet.hidden = true; sheet.classList.remove("open"); }
     document.addEventListener("keydown", function esc(e) { if (e.key === "Escape") { closeSheet(); document.removeEventListener("keydown", esc); } });
   }
