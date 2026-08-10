@@ -14,9 +14,14 @@
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   let all = [];
 
-  /* Same fetch convention as app.js/profile.js: cookie session + X-Org-Id header. */
+  /* v0.120.0 (T2-13): this wrapper claimed to share app.js/profile.js's convention while never
+     attaching the bearer token those files send — so every signed-in visit 401'd and the sub
+     finder showed its sign-in card to signed-in members. token_convention.test.mjs now holds the
+     rule for the whole corpus: credentials + X-Org-Id means Authorization too. */
   async function api(path, opts) {
     const headers = Object.assign({ "Content-Type": "application/json" }, (opts || {}).headers || {});
+    const t = sessionStorage.getItem("bt_token");
+    if (t) headers["Authorization"] = "Bearer " + t;
     const orgId = localStorage.getItem("bt_org");
     if (orgId) headers["X-Org-Id"] = orgId;
     const resp = await fetch(API + path, Object.assign({}, opts, { headers, credentials: "include" }));
@@ -97,7 +102,15 @@
       me = await api("/api/subs/me");
     } catch (e) { subsEl.innerHTML = ""; return; }
     if (me && me.error) {
-      subsEl.innerHTML = `<div class="sub-card"><div class="sub-title">Sub finder</div>
+      // Two different truths behind one 401: no session at all, or a session whose account has
+      // no member profile in this org. A "Sign in" button for the second is a dead-end loop —
+      // they ARE signed in — and an error that misdiagnoses is worse than none (v0.115.0).
+      const signedIn = !!sessionStorage.getItem("bt_token");
+      subsEl.innerHTML = signedIn
+        ? `<div class="sub-card"><div class="sub-title">Sub finder</div>
+        <p class="lg-meta" style="margin:6px 0 10px">Your sign-in isn't linked to a member profile in this
+        organization yet, so the sub list can't include you. Ask your organizer to add you as a member.</p></div>`
+        : `<div class="sub-card"><div class="sub-title">Sub finder</div>
         <p class="lg-meta" style="margin:6px 0 10px">Short a player, or want to get called when a team needs one?
         Sign in to join the sub list and see open requests.</p>
         <a class="btn" href="index.html" style="text-decoration:none">Sign in</a></div>`;

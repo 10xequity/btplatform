@@ -339,3 +339,32 @@ test("wipe only ever touches the test range", async () => {
   assert.equal(env.DB.one("SELECT COUNT(*) AS n FROM teams WHERE id=7").n, 1, "a real team was deleted");
   env.DB.close();
 });
+
+test("the community boards are stocked — the tester round's 'not working' was these tables at zero (T2-14)", async () => {
+  const { env } = await seeded();
+  // Row presence per board, so empty can never again impersonate broken.
+  for (const [table, min] of [["member_profiles", 10], ["sub_signups", 4], ["sub_requests", 3], ["lfg_listings", 5], ["lfg_members", 2]]) {
+    const n = env.DB.one(`SELECT COUNT(*) AS n FROM ${table}`).n;
+    assert.ok(n >= min, `${table} holds ${n} rows — the fixture left a board the owner tests on empty`);
+  }
+  // The library's public tier through the REAL route, signed out — at least one profile must be
+  // findable by an anonymous visitor, or the Player Library still looks dead before sign-in.
+  const pub = await call(env, "GET", "/api/library/search");
+  assert.equal(pub.status, 200, JSON.stringify(pub.data));
+  assert.ok((pub.data.players || []).length >= 1, "anonymous library search found nobody — seed public-visibility ADULT profiles (the library's 18+ gate hides birthdate-less rows)");
+  // The fixture carries one deliberate minor so the library's 18+ gate has something to hide.
+  assert.ok(!(pub.data.players || []).some((p) => /MINOR/.test(p.bio || "")),
+    "the seeded minor surfaced in an anonymous library search — the 18+ gate is not holding");
+
+  // NC (blast-radius, mutation asserted): wiping clears every community table, so the second
+  // generate press cannot collide (the A6 class).
+  const before = env.DB.one("SELECT COUNT(*) AS n FROM lfg_listings").n;
+  assert.ok(before > 0, "mutation baseline missing — nothing to wipe");
+  const { WIPE_SQL } = await import("../src/sandbox.js");
+  for (const s of WIPE_SQL) env.DB.exec(s);
+  for (const table of ["member_profiles", "sub_signups", "sub_requests", "lfg_listings", "lfg_members"]) {
+    assert.equal(env.DB.one(`SELECT COUNT(*) AS n FROM ${table}`).n, 0,
+      `${table} survived the wipe — the second generate press will collide and roll back`);
+  }
+  env.DB.close();
+});
