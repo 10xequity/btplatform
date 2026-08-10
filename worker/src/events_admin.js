@@ -135,8 +135,26 @@ async function duplicateEvent(request, env, ctx, eventId) {
   const bag = cleanEventBag(ev);
   bag.name = b.name || `${ev.name} (copy)`;
   const id = await insertEvent(env, ctx.orgId, bag, b.starts_at || ev.starts_at, null, null, "draft");
-  await audit(env, ctx, "event.duplicated", "event", id, { from: eventId });
-  return json({ ok: true, id });
+
+  // The LIVE division structure rides along (v0.127.0). For the owner's stated use case — "set up
+  // next season from this one" — the divisions ARE the configuration: Open/A/BB, their order,
+  // their court ranges. Until now the copy took only the events row, so every season began by
+  // retyping them. The boundary stays absolute in the other direction: teams, registrations,
+  // matches and standings are a SEASON, never configuration, and none of them is read here —
+  // a duplicate that brought registrations along would re-register a whole field in one press.
+  const divs = (await env.DB.prepare(
+    `SELECT name, rank, court_from, court_to, target_bracket_size, notes FROM divisions
+      WHERE org_id=?1 AND event_id=?2 AND deleted_at IS NULL ORDER BY rank, id`
+  ).bind(ctx.orgId, eventId).all()).results || [];
+  for (const d of divs) {
+    await env.DB.prepare(
+      `INSERT INTO divisions (org_id, event_id, name, rank, court_from, court_to, target_bracket_size, notes)
+       VALUES (?1,?2,?3,?4,?5,?6,?7,?8)`
+    ).bind(ctx.orgId, id, d.name, d.rank, d.court_from, d.court_to, d.target_bracket_size, d.notes).run();
+  }
+
+  await audit(env, ctx, "event.duplicated", "event", id, { from: eventId, divisions: divs.length });
+  return json({ ok: true, id, divisions: divs.length });
 }
 
 /* ---------- recurring ---------- */

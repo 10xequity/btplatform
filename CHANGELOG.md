@@ -1,5 +1,53 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.127.0 — 2026-08-10
+
+**Duplicating an event now carries its divisions — the genuinely missing half of a feature that
+already existed. And the proposals section is corrected, because my verification greps were broken.**
+
+**THE CORRECTION COMES FIRST, BECAUSE THE OWNER APPROVED PROPOSALS ON BAD MEASUREMENTS.** §-1n
+(v1.24) claimed five features "verified unbuilt" on greps of the worker. The greps used `\|` inside
+`grep -E`, which matches a **literal backslash-pipe** — so every multi-alternative pattern searched
+for a string that cannot occur, returned nothing, and "no matches" was read as "not built."
+**Measured properly (§-1c D-26): FOUR of the five proposals describe features that already exist.**
+
+- **P-A duplicate an event — BUILT AND WIRED.** `POST /api/events/:id/duplicate`
+  (`events_admin.js:130`) and a Duplicate button on the event screen (`admin-event.js:107`), plus a
+  whole `event_templates` system beside it.
+- **P-B waitlist auto-promote — BUILT.** `offerNext` with a TTL and a sweep; the registration flow's
+  own copy says "we'll offer you the next open spot."
+- **P-D seasons/series — BUILT.** `createRecurring` (weekly/biweekly/monthly), series edit-forward
+  and cancel-forward, wired into the event screen ("Part of a recurring series").
+- **P-C cancel-and-notify — HALF BUILT.** The Cancel button exists and flips status; **nobody is
+  told.** No notification or email path touches either cancel site. That half is real and is queued.
+- **P-E the day sheet — genuinely unbuilt.** The only proposal of the five that stands as written.
+
+**WHAT SHIPPED: the real gap inside P-A.** The copy took the events ROW only (`cleanEventBag`
+iterates `EVENT_FIELDS`), so a league duplicated for next season arrived with **no divisions** — and
+for the owner's stated use case, the divisions ARE the configuration: Open/A/BB, their order, their
+court ranges. `duplicateEvent` now copies the source's **live** divisions onto the new draft
+(name, rank, court range, target bracket size, notes — new rows, never shared ones), reports the
+count in its response, and records it in the audit row. **The boundary stays absolute the other
+way:** teams, registrations, matches and standings are a season, never configuration, and the guard
+pins all four at zero on the copy — a duplicate that brought registrations along would re-register
+a whole field in one press.
+
+**Guard — `worker/test/event_duplicate.test.mjs`, 7 tests, the FIRST route-level coverage the
+feature has ever had; the three division assertions were watched failing against the shipped code.**
+One assertion was wrong and was corrected rather than the code: the first draft invented an
+`audit_log.payload_json` column instead of reading the schema (`detail_json`) — a name guessed is a
+name wrong.
+
+**Known residual, recorded not chased:** `EVENT_FIELDS` omits `ends_at`, so a copy keeps its start
+and loses its end. Minor for the next-season case (dates are retyped anyway); noted for the next
+touch of `events_admin.js`.
+
+**Route-reachability blind spot noted:** the D-4 guard scans `/api/admin/*` shapes only;
+`/api/events/:id/duplicate` and its siblings live outside that prefix, so built-but-uncalled at
+THAT shape is invisible to the ratchet. Recorded in D-26's row.
+
+No migration. Suite 1624 → **1631**; 108 → **109** files.
+
 ## v0.126.0 — 2026-08-10
 
 **Stale sub requests and community games drop off the boards, the feed and the home card.**
