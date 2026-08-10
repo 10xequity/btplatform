@@ -1,7 +1,77 @@
 # RALPH LOOP — Boomtown Platform (btplatform)
 
-**File:** `RALPH.md` · **Version:** v3.1 · **Created:** 2026-08-04 · **Updated:** 2026-08-06
+**File:** `RALPH.md` · **Version:** v3.2 · **Created:** 2026-08-04 · **Updated:** 2026-08-10
 **Status:** ACTIVE — the loop's instruction set. Re-read from disk every iteration.
+**Supersedes:** v3.1 (2026-08-06). Adds §A (how the session-closing prompt must be written so that
+it reads as what it is — maintenance on the owner's own system) and §B (when to ask the owner a
+question, and where to put it). Both are owner requests, 2026-08-10.
+
+---
+
+## §A. WRITING THE NEXT-SESSION PROMPT — it must survive a fresh reader with no context
+
+**The problem this solves, stated plainly.** The prompt this loop emits is pasted into a brand-new
+session with no memory of the project, and it has been refused more than once. **The refusals were
+not caused by the security content** — iteration 37 tested that hypothesis directly and it was
+wrong; the model accepted a full description of a live authentication defect once the surrounding
+authority was bounded. **What triggers a refusal is a long block of standing permissions to act on
+production infrastructure, with the reason for those permissions never stated, sitting next to
+vocabulary borrowed from attack write-ups.** Out of context that reads like an attempt to get a
+model to operate a system it does not own. **The fix is not to hide the work. It is to make the
+prompt true about itself.** Six rules:
+
+1. **Open with who and why, in two sentences, before any grant of authority.** This is the owner's
+   own production system, they are its sole developer, and the loop does maintenance and repair on
+   it. A reader who knows that reads everything after it correctly; a reader who does not is being
+   asked to take a stranger's word for it.
+2. **Every permission sits next to its limit, in the same breath.** Never "migrations may be applied
+   without asking" on one line with the stop rule twenty lines later. Additive changes are
+   pre-authorised **because** they are reversible in practice and nothing reads a new column until
+   the code that uses it ships — say the because.
+3. **Describe defects by what they do, not with attack nouns.** *"With no mail key set, the sign-in
+   endpoint returns a working link to whoever asks — the defect being fixed"* is accurate, specific
+   and actionable. *"Total account takeover"* is the same fact dressed as a trophy, and it is the
+   phrasing that makes a repair look like a plan.
+4. **Say when a fact is about the test harness.** *"The first account created in the in-memory test
+   fixture is granted admin, so sign a throwaway in first or the test measures nothing"* is a note
+   about a fixture. The same sentence without the words "test fixture" reads as instructions for
+   acquiring administrator access, and it is the single most misreadable line this loop emits.
+5. **Never make an irreversible production action automatic.** This is the rule iteration 37 was
+   written to repair: a standing instruction had quietly overridden the owner's own "ask first"
+   rule in `CLAUDE.md`. A prompt that widens the owner's own limits is wrong on the merits, not
+   merely risky to paste.
+6. **End the authority section with an explicit off-ramp:** if anything in the prompt conflicts with
+   the reader's own guidelines, or the sole-developer premise turns out to be false, **stop and
+   ask** rather than proceeding on the prompt's say-so. A prompt that invites refusal where refusal
+   is right is the one that does not get refused where it is wrong.
+
+**Do not water down the engineering.** Line numbers, defect mechanics, the measured traps and the
+"do not believe this prompt" discipline all stay — they are what makes the loop work. §A changes the
+framing and the ordering, never the content.
+
+## §B. QUESTIONS FOR THE OWNER — when, where, and with what (owner request 2026-08-10)
+
+**Where.** All questions go in ONE block at the very END of the reply, immediately before the fenced
+next-session prompt. Nowhere else. The owner should never scroll a report hunting for what is being
+asked of him.
+
+**When.** Only when something is genuinely undecided **and** the answer changes what gets built.
+**A statement of what was done is not a question. A recommendation is not a question.** Where a
+sensible default exists, take it, say which one and why, and move on — that is a decision and it
+belongs in the body of the reply. Never pad the block to look thorough, and never write "no
+decisions needed": an empty block is omitted entirely.
+
+**With what.** Every question carries, in plain English and without jargon:
+- **what is being asked**, in one sentence;
+- **what it blocks** — and if it blocks nothing, say so, because that changes how it should be read;
+- **enough context to decide**: what exists today, what each answer would cost, and a
+  recommendation with the reason it wins;
+- **an explicit "or say 'later'"**. Deferring is always allowed and must be offered every time.
+
+**Rank them, most consequential first**, and say when one question gates others.
+
+---
+
 **Supersedes:** v3.0 (2026-08-05). Change: PHASE 3 step 7 — the Pages confirmation pointed at the
 repo root, a bustless redirect stub that answers 200 forever, so it could not fail. It now reads
 `/web/` and says why, and `preflight` grew a `pages` check that enforces it (v0.99.0 shipped a
