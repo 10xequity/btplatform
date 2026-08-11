@@ -75,7 +75,11 @@
 
 /* ---------- calendar ---------- */
 .cal-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
-.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); border: 1px solid var(--border);
+/* WF-1a (v0.133.0): the header row sizes to itself; the six week rows share the rest EQUALLY.
+   Content can no longer stretch one week past the others — the JS cap (CAL_DAY_CAP + "+N more")
+   bounds what a cell can hold, and this rule is what makes the rows even. */
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr);
+  grid-template-rows: auto repeat(6, 1fr); border: 1px solid var(--border);
   border-radius: var(--radius-card); overflow: hidden; background: var(--border); gap: 1px; }
 .cal-dow { background: var(--surface); padding: 6px 8px; font-size: 12px; color: var(--text-muted);
   text-transform: uppercase; letter-spacing: .05em; }
@@ -94,6 +98,19 @@
 .cal-ev:hover { background: color-mix(in srgb, var(--primary) 26%, var(--surface)); }
 .cal-ev.cancelled { text-decoration: line-through; opacity: .55; }
 .cal-ev[draggable="true"]:active { cursor: grabbing; }
+/* WF-1a: the cap's opener. Matches the tile density on purpose — a 44px control inside a 96px
+   day cell would displace the tiles it summarizes; the modal it opens carries the full targets. */
+.cal-more { display: block; width: 100%; border: 0; background: transparent; text-align: left;
+  font: inherit; font-size: 12px; font-weight: 700; color: var(--text-muted);
+  padding: 3px 6px; margin-top: 4px; border-radius: 6px; cursor: pointer;
+  transition: background-color 120ms var(--ease-out), color 120ms var(--ease-out); }
+.cal-more:hover { background: color-mix(in srgb, var(--primary) 16%, var(--surface)); color: var(--text); }
+/* WF-1a: the day modal's rows — where the hidden events land, at full target size. */
+.day-ev-row { display: flex; align-items: center; gap: 10px; padding: 8px 0;
+  border-bottom: 1px solid var(--border); }
+.day-ev-row:last-of-type { border-bottom: 0; }
+.day-ev-row .day-ev-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.day-ev-row .day-ev-time { color: var(--text-muted); font-size: 13px; }
 
 /* ---------- template palette ---------- */
 .palette { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0 16px; }

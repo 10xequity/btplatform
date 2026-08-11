@@ -11,14 +11,23 @@
 
   /* ---------- state ---------- */
   let events = [], templates = [], views = [];
+  // WF-1b: renderViews/viewModal read this since v0.4.0 and NOTHING on the page defined it —
+  // the Views tab died on a silent ReferenceError. Declared alone so the guard can see it.
+  let orgs = [];
   let calCursor = new Date(); calCursor.setDate(1);
   const selected = new Set();
 
   async function loadAll() {
-    const [ev, tp, vw] = await Promise.all([api("/api/events"), api("/api/admin/templates"), api("/api/schedule/views")]);
+    // WF-1b (v0.133.0): renderViews/viewModal have read `orgs` since v0.4.0, and no script on this
+    // page ever defined it (admin-nav's copy is closure-scoped) — every loadAll ended in a silent
+    // ReferenceError and the Views & Embed tab rendered empty. The page fetches its own list now.
+    const [ev, tp, vw, og] = await Promise.all([
+      api("/api/events"), api("/api/admin/templates"), api("/api/schedule/views"), api("/api/orgs"),
+    ]);
     events = ev.data.events || [];
     templates = tp.data.templates || [];
     views = vw.data.views || [];
+    orgs = og.data.orgs || [];
     renderPalette(); renderCalendar(); renderList(); renderViews();
   }
 
@@ -57,6 +66,39 @@
 
   function ymd(d) { return d.toISOString().slice(0, 10); }
 
+  /* WF-1a (v0.133.0): a day shows at most this many tiles. Before the cap, a busy day stacked
+     every event and stretched its whole grid row — busy weeks towered over empty ones. The
+     overflow stays reachable: "+N more" opens the day modal, which lists everything. */
+  const CAL_DAY_CAP = 3;
+
+  /** One day cell. Pure on its inputs so the guard executes it as shipped bytes. */
+  function dayCellHtml(ds, dayNum, classes, dayEvents) {
+    const shown = dayEvents.slice(0, CAL_DAY_CAP);
+    const hidden = dayEvents.length - shown.length;
+    return `<div class="cal-day${classes}" data-date="${ds}">
+        <div class="dnum">${dayNum}</div>
+        ${shown.map(e => `<a class="cal-ev ${e.status}" draggable="true" data-ev="${e.id}"
+            href="admin-event.html?id=${e.id}" title="${esc(e.name)} — click to manage, drag to reschedule">${esc(e.name)}</a>`).join("")}
+        ${hidden > 0 ? `<button type="button" class="cal-more" data-more="${ds}" aria-label="Show all ${dayEvents.length} events on this day">+${hidden} more</button>` : ""}
+      </div>`;
+  }
+
+  /** The whole day, when the cap hid some of it — every event, with its manage link. */
+  function dayModal(ds) {
+    const dayEvents = events.filter(e => e.starts_at && e.starts_at.slice(0, 10) === ds);
+    const when = new Date(ds + "T12:00");
+    openModal(`
+      <h2>${isNaN(when) ? esc(ds) : when.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}</h2>
+      ${dayEvents.map(e => `<div class="day-ev-row">
+        <span class="chip ${e.status}">${e.status.replace("_", " ")}</span>
+        <span class="day-ev-name">${esc(e.name)}</span>
+        <span class="day-ev-time">${(e.starts_at || "").slice(11, 16)}</span>
+        <a class="btn ghost" href="admin-event.html?id=${e.id}">Manage →</a>
+      </div>`).join("")}
+      <div class="actions"><button class="btn ghost" id="dm_close">Close</button></div>`);
+    document.getElementById("dm_close").addEventListener("click", closeModal);
+  }
+
   function renderCalendar() {
     const grid = document.getElementById("calGrid");
     const y = calCursor.getFullYear(), mo = calCursor.getMonth();
@@ -70,16 +112,17 @@
       const d = new Date(start); d.setDate(start.getDate() + i);
       const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
       const dayEvents = events.filter(e => e.starts_at && e.starts_at.slice(0, 10) === ds);
-      html += `<div class="cal-day${d.getMonth() !== mo ? " other" : ""}${ds === todayStr ? " today" : ""}" data-date="${ds}">
-        <div class="dnum">${d.getDate()}</div>
-        ${dayEvents.map(e => `<a class="cal-ev ${e.status}" draggable="true" data-ev="${e.id}"
-            href="admin-event.html?id=${e.id}" title="${esc(e.name)} — click to manage, drag to reschedule">${esc(e.name)}</a>`).join("")}
-      </div>`;
+      const classes = `${d.getMonth() !== mo ? " other" : ""}${ds === todayStr ? " today" : ""}`;
+      html += dayCellHtml(ds, d.getDate(), classes, dayEvents);
     }
     grid.innerHTML = html;
 
     grid.querySelectorAll(".cal-ev").forEach(el => el.addEventListener("dragstart", e => {
       e.dataTransfer.setData("text/plain", JSON.stringify({ kind: "event", id: el.dataset.ev }));
+    }));
+    grid.querySelectorAll("[data-more]").forEach(btn => btn.addEventListener("click", e => {
+      e.stopPropagation();
+      dayModal(btn.dataset.more);
     }));
     grid.querySelectorAll(".cal-day").forEach(day => {
       day.addEventListener("dragover", e => { e.preventDefault(); day.classList.add("drop-ok"); });

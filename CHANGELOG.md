@@ -1,5 +1,16 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.133.0 — 2026-08-11
+
+**WF-1 — the Events & Programs page (owner brief 2026-08-11 item 1; roadmap §-1p, §-0 B23).** Two defects on one page, both measured before building:
+
+- **The calendar has even rows now.** A day cell shows at most `CAL_DAY_CAP` (3) event tiles; a busier day gets an honest **"+N more"** button that opens the whole day in a modal — every event with its status, time and Manage link, at full target size. `admin.css` pins the grid to `grid-template-rows: auto repeat(6, 1fr)`, so the six week rows share the height equally and a busy week can no longer tower over an empty one. Visible tiles stay draggable (reschedule-by-drag survives the cap).
+- **The Views & Embed tab is alive again.** `renderViews()`/`viewModal()` have read a global `orgs` since v0.4.0, and **no script on the page ever defined it** — admin-nav's copy is closure-scoped — so every `loadAll()` ended in a silent `ReferenceError` after the calendar and list had painted, and the Views table rendered empty. As old as the v0.52.0 consolidation, invisible because the page looked alive. The page now declares `orgs` and fetches `/api/orgs` alongside its other three loads.
+
+**Also this session, recorded in the roadmap (v1.31, §-1p): the owner's full 8-item brief, measured item by item** — WF-1 (this release) · WF-2 bracket board strands (11 live matchless bracket rows verified on production, mechanism identified: non-atomic generation + cleanup keyed on matches) · WF-3 pool-board division pivot (extends T2-8's existing `data-view` mechanism) · WF-4 registrations × waivers (the sweep, predicate, dedupe and keyless honesty already exist; the gap is the list surface + on-demand send) · WF-5 the per-event manager hub (items 2+5+6+7 — a program with a design moment first, queued B27).
+
+7 new tests in `events_calendar.test.mjs` (all 7 seen failing pre-fix after the negative control was strengthened); suite 1694 → 1701. No migration.
+
 ## v0.132.0 — 2026-08-11
 
 **SG-1 — the drop-in sheet (roadmap §-1o; the SignUpGenius replacement's core).** An event of type training/event now has a PUBLIC sign-up sheet at `sheet.html?event=N`: capacity, live count, who's coming, one-tap sign-up for a signed-in member, name+email for a guest.
