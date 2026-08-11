@@ -1,6 +1,16 @@
 /**
  * Boomtown Platform — Registration + Square + Captain-scoring routes
- * Version: v1.9 · Date: 2026-08-05 · Modules 4 + 8 · Ships in: v0.92.0
+ * Version: v2.0 · Date: 2026-08-11 · Modules 4 + 8 · Ships in: v0.132.0
+ *
+ * v2.0 (2026-08-11, v0.132.0): SG-1 — THE DROP-IN SHEET (roadmap §-1o; owner "sheets first").
+ *   Two PUBLIC routes, living HERE because this module owns registration and contact writes:
+ *     GET  /api/events/:id/sheet    → capacity, live count, who is coming ("First L." via
+ *                                     personName, standards §8; nameless rows are "Guest")
+ *     POST /api/events/:id/signup   → individual sign-up: one-tap for a session, name+email
+ *                                     for a guest; free → 'comped', priced → the existing
+ *                                     Square link path; team_id and waiver_id stay NULL
+ *   The count, the list and the capacity gate all read ACTIVE_REG_STATUSES (now exported by
+ *   waitlists.js) — one judgement of "taken". Guarded by signup_sheet.test.mjs.
  *
  * v1.9 (2026-08-05, v0.92.0): W-A — THE ROSTER A REGISTRATION CREATES IS FINALLY VISIBLE AND
  *   EDITABLE (roadmap §-1b; owner 2026-08-05: "the loading of teams and names is not linked
@@ -94,7 +104,8 @@
  */
 import { refreshStandings } from "./tournaments.js";
 import { advanceBracketFor } from "./brackets.js"; // v0.67.0 — no cycle: brackets.js imports only scheduler.js
-import { waitlistGate, markClaimed, offerNext, activeRegistrationCount, computeIsFull } from "./waitlists.js";
+import { waitlistGate, markClaimed, offerNext, activeRegistrationCount, computeIsFull, ACTIVE_REG_STATUSES } from "./waitlists.js";
+import { personName } from "./names.js"; // v0.132.0 SG-1 — names.js imports nothing, no cycle
 import { pinFor, currentVersion } from "./waivers.js"; // v1.4 — one-way import, no cycle
 import { effectiveTierFor, applyTierDiscount } from "./tiers.js"; // v0.30.0 F-6 — tiers.js imports nothing, no cycle
 import { senderIdentity } from "./orgs.js"; // v0.31.0 F-13 — orgs.js imports nothing, no cycle
@@ -120,6 +131,8 @@ export async function registrationRoutes(request, env, url, ctx) {
 
   if ((match = p.match(/^\/api\/events\/(\d+)\/form$/)) && m === "GET") return eventForm(env, +match[1]);
   if ((match = p.match(/^\/api\/events\/(\d+)\/register$/)) && m === "POST") return submitRegistration(request, env, +match[1]);
+  if ((match = p.match(/^\/api\/events\/(\d+)\/sheet$/)) && m === "GET") return eventSheet(env, ctx, +match[1]);
+  if ((match = p.match(/^\/api\/events\/(\d+)\/signup$/)) && m === "POST") return sheetSignup(request, env, ctx, +match[1]);
   if ((match = p.match(/^\/api\/events\/(\d+)\/registrations$/)) && m === "GET") return listRegistrations(request, env, ctx, +match[1], url);
   if ((match = p.match(/^\/api\/registrations\/(\d+)\/remind$/)) && m === "POST") return remind(env, ctx, +match[1]);
   if ((match = p.match(/^\/api\/registrations\/(\d+)\/mark-paid$/)) && m === "POST") return markPaid(env, ctx, +match[1]);
@@ -464,6 +477,187 @@ async function createSquareLink(env, ev, itemName, amountCents, regId, idemKey) 
     console.error("Square fetch failed", e);
     return { error: "Square unreachable" };
   }
+}
+
+/* ================= public: the drop-in sheet (§-1o SG-1, v0.132.0) ================= */
+
+/** Sheets exist for drop-in shapes only; league/tournament registration is a team with a waiver. */
+const SHEET_TYPES = ["training", "event"];
+
+async function loadSheetEvent(env, eventId) {
+  const ev = await loadEvent(env, eventId);
+  if (!ev || !SHEET_TYPES.includes(ev.type) || !["published", "in_progress"].includes(ev.status)) return null;
+  return ev;
+}
+
+/**
+ * The PUBLIC sheet: capacity, live count, who is coming. A no-login surface, so standards §8
+ * governs every field — names arrive already reduced to "First L." (personName; a member who
+ * chose public visibility keeps their full name), a nameless row is "Guest" (never an email
+ * local part), and the payload carries no email, phone or contact id at all. The count and the
+ * list read the SAME predicate the registration flow enforces (ACTIVE_REG_STATUSES /
+ * activeRegistrationCount / computeIsFull) — one judgement of "taken", not two.
+ */
+async function eventSheet(env, ctx, eventId) {
+  const ev = await loadSheetEvent(env, eventId);
+  if (!ev) return json({ error: "This event doesn't have a public sign-up sheet." }, 404);
+  const spotsTaken = await activeRegistrationCount(env, eventId);
+  const rows = (await env.DB.prepare(
+    `SELECT c.full_name AS full_name, mp.visibility AS visibility
+       FROM registrations r
+       LEFT JOIN contacts c ON c.id = r.contact_id
+       LEFT JOIN member_profiles mp ON mp.contact_id = c.id AND mp.org_id = r.org_id AND mp.deleted_at IS NULL
+      WHERE r.event_id = ?1 AND r.deleted_at IS NULL AND r.status IN ${ACTIVE_REG_STATUSES}
+      ORDER BY r.created_at, r.id`
+  ).bind(eventId).all()).results;
+  const attendees = rows.map((r) => personName(r.full_name, { visibility: r.visibility }) || "Guest");
+  const payload = {
+    event: {
+      id: ev.id, name: ev.name, org_name: ev.org_name, type: ev.type,
+      starts_at: ev.starts_at, ends_at: ev.ends_at, location: ev.location,
+      price_cents: ev.price_cents || 0,
+      capacity: ev.capacity || null,
+      spots_taken: spotsTaken,
+      is_full: computeIsFull(ev.capacity, spotsTaken),
+    },
+    attendees,
+  };
+  if (ctx && ctx.userId) {
+    // Only ever a boolean about the CALLER — the sheet stays anonymous for everyone else.
+    const mine = await env.DB.prepare(
+      `SELECT 1 AS x FROM registrations r
+         JOIN contacts c ON c.id = r.contact_id
+         JOIN users u ON lower(u.email) = lower(c.email)
+        WHERE r.event_id = ?1 AND u.id = ?2 AND r.deleted_at IS NULL AND r.status IN ${ACTIVE_REG_STATUSES}`
+    ).bind(eventId, ctx.userId).first();
+    payload.viewer = { signed_up: !!mine };
+  }
+  return json(payload);
+}
+
+/**
+ * Individual sign-up: one tap for a signed-in member, name+email for a guest. The row it writes
+ * IS a registration (team_id and waiver_id NULL — both nullable since migration 0001), so the
+ * count, the staff list, cancel-and-notify and the waitlist all see it with no new plumbing.
+ *
+ * Decisions this route encodes, each deliberate:
+ *  · A session OWNS the identity — the email always comes from the account, so signing somebody
+ *    else up is not expressible (a body email is ignored, like /api/me ignores foreign ids).
+ *  · The name for a signed-in caller is their own record (contact name, else account display
+ *    name); a typed name is only used when both are absent (need_name), so the sheet never
+ *    becomes a side-door writer of someone's stored name — fill-if-empty only, in both branches.
+ *  · D-13: junk email is NO address — refuse 400, store nothing. Honeypot + a per-event flood
+ *    band follow the signup-widget idiom (publicSignup in marketing.js).
+ *  · No DOB and no waiver here: same exposure class as the public waitlist join (name+email),
+ *    and the check-in door gate (WAIVER_LIVE_PREDICATE) remains the waiver enforcement point.
+ *  · Free completes as 'comped'; priced runs the EXISTING payment flow (tier discount written to
+ *    the row, Square link or honest sandbox message) — never a silent free registration.
+ */
+async function sheetSignup(request, env, ctx, eventId) {
+  const ev = await loadSheetEvent(env, eventId);
+  if (!ev) return json({ error: "This event doesn't have a public sign-up sheet." }, 404);
+  const b = await request.json().catch(() => ({}));
+  if (b.hp) return json({ ok: true, message: "You're on the list!" }); // honeypot: bots see success, nothing is stored
+
+  let email = null, sessionUser = null;
+  if (ctx && ctx.userId) {
+    sessionUser = await env.DB.prepare(
+      "SELECT id, email, display_name FROM users WHERE id=?1 AND deleted_at IS NULL"
+    ).bind(ctx.userId).first();
+    if (!sessionUser) return json({ error: "Not signed in." }, 401);
+    email = String(sessionUser.email).trim().toLowerCase();
+  } else {
+    email = String(b.email || "").trim().toLowerCase();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return json({ error: "Enter a valid email address." }, 400);
+  }
+  const bodyName = String(b.name || "").trim().slice(0, 120);
+  if (!sessionUser && !bodyName) {
+    return json({ error: "Your name is required — it's how the organizer knows who's coming." }, 400);
+  }
+
+  // Flood band (publicSignup idiom): cap sign-ups per event per window, before any write.
+  const recent = await env.DB.prepare(
+    "SELECT COUNT(*) AS n FROM registrations WHERE event_id=?1 AND created_at >= datetime('now','-10 minutes')"
+  ).bind(eventId).first();
+  if (recent.n >= 30) return json({ error: "Too many sign-ups right now — try again in a few minutes." }, 429);
+
+  // Duplicate BEFORE capacity: a double tap on a full sheet means "you're on it", not "it's full".
+  const existing = await env.DB.prepare(
+    `SELECT r.id, r.status, r.checkout_url FROM registrations r JOIN contacts c ON c.id = r.contact_id
+      WHERE r.event_id=?1 AND lower(c.email)=?2 AND r.deleted_at IS NULL AND r.status IN ${ACTIVE_REG_STATUSES}`
+  ).bind(eventId, email).first();
+  if (existing) {
+    return json({ ok: true, duplicate: true, registration_id: existing.id, status: existing.status,
+      checkout_url: existing.checkout_url || null,
+      message: existing.checkout_url && canRemind(existing.status)
+        ? "You're already signed up — finish payment with your link."
+        : "You're already on this sheet — see you there!" });
+  }
+
+  let contact = await env.DB.prepare(
+    "SELECT id, full_name FROM contacts WHERE org_id=?1 AND lower(email)=?2 AND deleted_at IS NULL"
+  ).bind(ev.org_id, email).first();
+  const name = sessionUser
+    ? ((contact && contact.full_name) || String(sessionUser.display_name || "").trim() || bodyName || null)
+    : bodyName;
+  if (!name) {
+    return json({ error: "Add your name so the organizer knows who's coming.", need_name: true }, 400);
+  }
+  if (!contact) {
+    const ins = await env.DB.prepare(
+      "INSERT INTO contacts (org_id, email, full_name) VALUES (?1,?2,?3)"
+    ).bind(ev.org_id, email, name).run();
+    contact = { id: ins.meta.last_row_id, full_name: name };
+  } else if (!contact.full_name) {
+    await env.DB.prepare(
+      "UPDATE contacts SET full_name=?1, updated_at=datetime('now') WHERE id=?2"
+    ).bind(name, contact.id).run();
+  }
+
+  // F-6: the same two pricing calls the registration flow runs; the figure quoted is the figure written.
+  const listPrice = ev.price_cents || 0;
+  const tier = await effectiveTierFor(env, ev.org_id, contact.id);
+  const price = applyTierDiscount(listPrice, (tier && tier.discount_bps) || 0);
+  const status = price === 0 ? "comped" : "pending";
+  const method = price === 0 ? "comp" : "square";
+
+  // F-5: capacity re-checked INSIDE the atomic INSERT, against the same statuses the count reads.
+  const rIns = await env.DB.prepare(
+    `INSERT INTO registrations (org_id, event_id, contact_id, status, payment_method, price_cents)
+     SELECT ?1,?2,?3,?4,?5,?6
+      WHERE (SELECT capacity FROM events WHERE id = ?2) IS NULL
+         OR (SELECT capacity FROM events WHERE id = ?2) <= 0
+         OR (SELECT COUNT(*) FROM registrations
+              WHERE event_id = ?2 AND deleted_at IS NULL AND status IN ${ACTIVE_REG_STATUSES})
+            < (SELECT capacity FROM events WHERE id = ?2)`
+  ).bind(ev.org_id, eventId, contact.id, status, method, price).run();
+  if (!rIns.meta || rIns.meta.changes === 0) {
+    return json({
+      error: "This session is full. Join the waitlist and we'll email you if a spot opens.",
+      event_full: true, waitlist_available: true,
+    }, 409);
+  }
+  const regId = rIns.meta.last_row_id;
+  await audit(env, { orgId: ev.org_id, userId: (ctx && ctx.userId) || null }, "registration.create",
+    "registrations", regId, { event: eventId, method, via: "sheet" });
+
+  if (status === "comped") {
+    return json({ ok: true, registration_id: regId, status,
+      message: listPrice === 0
+        ? "You're on the list — this session is free. See you on the court!"
+        : "You're on the list — your membership covers this one. See you on the court!" });
+  }
+  const link = await createSquareLink(env, ev, `${ev.name} — ${name}`, price, regId);
+  if (link.error) {
+    return json({ ok: true, registration_id: regId, status: "pending", mode: "sandbox",
+      message: "You're signed up! Online payment isn't connected yet — the organizer will send a payment link.",
+      detail: link.error });
+  }
+  await env.DB.prepare(
+    "UPDATE registrations SET square_order_id=?1, checkout_url=?2, updated_at=datetime('now') WHERE id=?3"
+  ).bind(link.order_id, link.url, regId).run();
+  return json({ ok: true, registration_id: regId, status: "pending", checkout_url: link.url,
+    message: "You're signed up! Complete payment to lock in your spot." });
 }
 
 /* ================= Square webhook ================= */

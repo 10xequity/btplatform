@@ -109,6 +109,7 @@
     "profile.html":             { s: "live" },
     "membership.html":          { s: "beta", n: "Square is in SANDBOX. You can walk the whole join-a-plan flow; no real card is charged and no real membership starts." },
     "register.html":            { s: "beta", n: "Registration, teammates, waiver and Square checkout all work (SANDBOX). Promo codes cannot be entered at checkout yet — they are admin-applied only." },
+    "sheet.html":               { s: "beta", n: "The public sign-up sheet for drop-in sessions: live count, who's coming (first name + initial), one-tap sign-up when signed in, name + email for a guest. Free sessions complete instantly; priced ones go to Square (SANDBOX). Cancel-if-under-threshold is not built yet — the sheet shows the count, the organizer makes the call." },
     "checkin.html":             { s: "live" },
     "score.html":               { s: "live" },
     "kotc.html":                { s: "beta", n: "King and Queen of the Court, from a player's own link — no sign-in. Whoever opens it first types the net's scores; anyone opening it after that is shown what was entered and asked yes or no, and \"no\" becomes an edit that asks everyone else to look again. If you only remember your own points for the round, type that one number and we work out the rest of the net where the numbers allow it. The director's board that seats the nets is now built too — see Court board." },

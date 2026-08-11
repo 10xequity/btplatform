@@ -36,7 +36,12 @@
     loadKotc();
   }
 
-  function regLink() { return location.origin + location.pathname.replace(/[^/]*$/, "") + "register.html?event=" + id; }
+  // v0.132.0 SG-1: the link staff copy and advertise. Drop-in types (training/event) get the
+  // public sheet — the SignUpGenius-replacement URL; team types keep the registration form.
+  function regLink() {
+    const page = (ev.type === "training" || ev.type === "event") ? "sheet.html?event=" : "register.html?event=";
+    return location.origin + location.pathname.replace(/[^/]*$/, "") + page + id;
+  }
 
   function render() {
     const s = ev.starts_at || "";

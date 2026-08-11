@@ -1,5 +1,20 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.132.0 — 2026-08-11
+
+**SG-1 — the drop-in sheet (roadmap §-1o; the SignUpGenius replacement's core).** An event of type training/event now has a PUBLIC sign-up sheet at `sheet.html?event=N`: capacity, live count, who's coming, one-tap sign-up for a signed-in member, name+email for a guest.
+
+- **Two public routes in registrations.js** (it owns registration and contact writes): `GET /api/events/:id/sheet` and `POST /api/events/:id/signup`. A sheet sign-up IS a registration (`team_id`/`waiver_id` NULL — nullable since migration 0001), so the count, the staff Registrations screen, cancel-and-notify and the waitlist all see it with no new plumbing.
+- **Standards §8 on a no-login surface:** names render "First L." via `personName` (full name only when the member chose public visibility); a nameless row is "Guest", never an email local part; the payload carries no email, phone or contact id — pinned by a recursive walker that is positive-controlled against the staff list payload.
+- **One judgement of "taken":** the count, the attendee list and the atomic capacity INSERT all read `ACTIVE_REG_STATUSES`, now exported from waitlists.js — no third hand-rolled copy.
+- **Free vs priced (§-1m Q5 rider):** free completes as `comped`; priced runs the existing Square link path (tier discount written to the row) — never a silent free registration. Cash stays a register.html capability.
+- **Guest hygiene (D-13 + widget idiom):** junk email is refused with nothing stored; dedupe by lowercased email; a sheet sign-up never clobbers a stored contact name (fill-if-empty only); honeypot pretends success; a per-event flood band answers 429.
+- **A session owns the identity:** the one-tap takes the email from the account — signing somebody else up is not expressible; `need_name` asks for a name only when the account and contact carry none.
+- **The advertised links fork by type:** the schedule page CTAs and the admin event screen's copyable public link point drop-in types at the sheet; team types keep register.html.
+- **Deliberately not here:** no DOB/age gate (same exposure class as the public waitlist join; the 18+ gate is LFG/subs-only), no waiver signature (the check-in door gate owns waivers), no cancel-under-threshold (that is SG-2 — the sheet shows the count honestly).
+
+19 new tests in `signup_sheet.test.mjs` (18 seen failing pre-fix); suite 1675 → 1694. Member-page ratchets consciously bumped 16 → 17 for sheet.html (generated from register.html's bytes). No migration.
+
 ## v0.131.0 — 2026-08-11
 
 **B3 — the bracket reads like a tournament sheet: seed numbers on the tiles, real connecting

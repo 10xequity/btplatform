@@ -268,8 +268,10 @@ test("the 16 canonical member pages carry the complete member header, byte-ident
   // — the closest precedent again, and already inside this ratchet — rather than written by hand.
   // That is the intended way to add a member page, and the reason this ratchet exists is that it is
   // cheaper to be forced into it than to be caught by it.
+  // 16 → 17 in v0.132.0 for sheet.html, the public drop-in sheet (SG-1) — generated from
+  // register.html's bytes, the closest precedent: also a no-login public page with the full header.
   const canon = htmlPages().filter((f) => isMemberCanonPage(f, read(f)));
-  assert.equal(canon.length, 16, `expected exactly 16 canonical member pages, saw ${canon.length}: ${canon.join(", ")}`);
+  assert.equal(canon.length, 17, `expected exactly 17 canonical member pages, saw ${canon.length}: ${canon.join(", ")}`);
   const headers = new Map();
   for (const f of canon) {
     const v = memberHeaderVerdict(read(f));

@@ -29,7 +29,9 @@ export function wireWaitlists(helpers) {
 }
 
 const OFFER_TTL_HOURS_DEFAULT = 48;
-const ACTIVE_REG_STATUSES = "('pending','email-sent','paid','cash-pending','comped')";
+// Exported since v0.132.0: SG-1's sheet SQL interpolates this instead of hand-rolling a third
+// copy of "what counts as taken" — the drift the drop-in count hazard names.
+export const ACTIVE_REG_STATUSES = "('pending','email-sent','paid','cash-pending','comped')";
 
 /* ============================ pure helpers (unit-tested) ============================ */
 

@@ -100,7 +100,9 @@ test("static btHdrMail on admin-nav pages AND the 15 canonical member pages — 
   // 14 → 15 in v0.85.0 (kotc.html, the KOTC player link — a no-login token page like score.html).
   // 15 → 16 in v0.86.0 (kotc-live.html, the public KOTC standings — generated from kotc.html's bytes,
   // so it arrived carrying the static ✉ rather than needing it added).
-  assert.equal(memberPages, 16, `guard floor: expected exactly 16 canonical member pages, saw ${memberPages}`);
+  // 16 → 17 in v0.132.0 (sheet.html, the public drop-in sheet — generated from register.html's
+  // bytes, so it arrived carrying the static ✉ and the hidden Admin link).
+  assert.equal(memberPages, 17, `guard floor: expected exactly 17 canonical member pages, saw ${memberPages}`);
   assert.deepEqual(missing, [], `pages missing the static ✉: ${missing.join(", ")}`);
   assert.deepEqual(extras, [], `static ✉ on excluded pages (index/chromeless): ${extras.join(", ")}`);
 });
