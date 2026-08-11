@@ -1,5 +1,50 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.130.0 — 2026-08-11
+
+**B2 / K-11(ii) — a member sets their own display name. And re-measuring the premise found the
+record wrong one level deeper: the column was unwritable for EVERYONE, not just for members.**
+
+K-11 recorded two halves: (i) "an admin can fix his name today, no release required" and (ii) "a
+member cannot set their own." **Half (i) was FALSE.** A positive-controlled grep for `UPDATE users`
+matches nothing in the worker — the sole hit is a planted sabotage string inside a test —
+and `admin.js addUser` sets `display_name` only when it INSERTS a brand-new user, silently
+discarding it for an existing one while returning ok (**recorded as D-27**, the
+success-it-did-not-achieve family: an admin types a correction, reads ok, nothing changed). So
+`users.display_name` has had NO writer for existing accounts since the column was born, and the
+owner's `vvisuth` was fixable by no path at all. **This release ships the first one.**
+
+**`PATCH /api/me`** — session-gated beside `GET /api/me`, and the session IS the target: the
+handler never reads an id from the body, which makes "rename someone else" **structurally
+impossible rather than merely refused** (pinned: a body carrying another user's id changes only the
+caller's row, and the other row is asserted unmoved). Whitespace clears to **NULL, never an empty
+string** — `""` is truthy enough to blank every `(display_name || email)` greeting fallback. Junk
+is refused wholesale (wrong type, over 80 chars, missing key) writing nothing. Audited with before
+and after.
+
+**The D-18 decision, taken and pinned:** editing the display name **never touches
+`contacts.full_name`**. The display name is account presentation — greetings, what a passkey
+registers under; `full_name` is the identity spine two resolvers already disagree about (D-18),
+and members already edit it on the Profile page (`profiles.js update()` — found in the same
+re-measurement: self-service NAME editing partially existed, for the contact identity).
+
+**UI:** the Settings Account card gains a Display-name row (input + Save, seeded from `/api/me`,
+honest save copy: "Saved — greetings will call you X" / "cleared, so greetings use the front of
+your email"). Wired inside `render()` like every row on that page — render rebuilds `#app`
+wholesale, so listeners cannot stack (the D-6 shape does not apply here, and the comment says why).
+
+**Guard — `display_name.test.mjs`, 9 tests, 7 seen failing pre-fix.** The two green-before-fix are
+deliberate: the D-18 pin (meaningful only post-fix, kept because it exercises the real route), and
+**the D-27 PIN — a test asserting `addUser` still silently discards the name for existing users,
+green today by design, with instructions in its own text that the D-27 fix must REWRITE it** (the
+catalogued pin-the-absent-control pattern).
+
+**Also recorded, not chased (D-20):** `settings.js:69` carries a literal org email
+(`admin@boomtownvb.com`) in member-facing copy — an F-40/standards-§8 violation as old as the page
+(**D-28**).
+
+No migration. Suite 1653 → **1662**; 111 → **112** files.
+
 ## v0.129.0 — 2026-08-10
 
 **B16 — cancelling an event now TELLS the people registered for it.** P-C's genuinely missing half

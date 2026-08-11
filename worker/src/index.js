@@ -381,6 +381,8 @@ export default {
         res = await logout(request, env);
       } else if (url.pathname === "/api/me" && request.method === "GET") {
         res = await me(request, env);
+      } else if (url.pathname === "/api/me" && request.method === "PATCH") {
+        res = await updateOwnDisplayName(request, env);
       } else if (url.pathname === "/api/auth/act-as" && request.method === "POST") {
         /* v0.107.0 (§-1f F-1) — enter or leave "acting as a member".
            GATED ON A SESSION, NEVER ON A ROLE, and it sits here beside /api/me rather than in the
@@ -404,7 +406,7 @@ export default {
         const session = await currentSession(request, env);
         res = session ? await listOrgs(env) : json({ error: "Sign in first." }, 401);
       } else if (url.pathname === "/api/health") {
-        res = json({ ok: true, version: "v0.129.0" });
+        res = json({ ok: true, version: "v0.130.0" });
       } else if (url.pathname === "/api/webhooks/square" && request.method === "POST") {
         res = await membershipWebhook(request, env); // verifies signature; forwards payment.* to squareWebhook
       } else if (url.pathname === "/api/public/org-brand" && request.method === "GET") {
@@ -713,6 +715,35 @@ async function me(request, env) {
     "SELECT COUNT(*) AS n FROM webauthn_credentials WHERE user_id = ?1 AND deleted_at IS NULL"
   ).bind(session.user_id).first();
   return json({ user, roles, passkeys: passkeys.n });
+}
+
+/* B2 / K-11(ii), v0.130.0 — a member sets their OWN display name. This is the FIRST writer of
+   users.display_name for an existing account: re-measuring K-11 found that addUser sets the name
+   only when it INSERTS a new user and silently discards it otherwise (§-1c D-27), so the column
+   had been unwritable for everyone since it was born. Session-gated beside /api/me, and the
+   session IS the target — no id is ever read from the body, which is what makes "rename someone
+   else" structurally impossible rather than merely refused. D-18 boundary, decided here and
+   pinned by the guard: this never touches contacts.full_name — the display name is account
+   presentation (greetings, what a passkey registers under); full_name is the identity spine two
+   resolvers already disagree about, and members already edit it on the Profile page. */
+async function updateOwnDisplayName(request, env) {
+  const session = await currentSession(request, env);
+  if (!session) return json({ error: "Sign in first." }, 401);
+  const b = await request.json().catch(() => ({}));
+  if (typeof b.display_name !== "string") return json({ error: "Send your display name as text." }, 400);
+  if (b.display_name.length > 80) return json({ error: "Keep your display name under 80 characters." }, 400);
+  const next = b.display_name.trim() || null; // whitespace clears to NULL, never an empty string —
+                                              // "" is truthy enough to blank every (name || email) fallback
+  const before = await env.DB.prepare(
+    "SELECT display_name FROM users WHERE id = ?1 AND deleted_at IS NULL"
+  ).bind(session.user_id).first();
+  if (!before) return json({ error: "Sign in first." }, 401);
+  await env.DB.prepare(
+    "UPDATE users SET display_name = ?1, updated_at = datetime('now') WHERE id = ?2 AND deleted_at IS NULL"
+  ).bind(next, session.user_id).run();
+  await audit(env, null, session.user_id, "user.display_name.update", "user", session.user_id,
+    { before: before.display_name, after: next });
+  return json({ ok: true, display_name: next });
 }
 
 async function listOrgs(env) {

@@ -60,6 +60,24 @@
           <div class="grow"><div class="k">Name</div><div class="v">${esc(name) || "Not set yet"}</div></div>
           <a class="btn ghost" href="profile.html" style="text-decoration:none">Edit on Profile</a>
         </div>
+        <!-- B2 (v0.130.0): the ACCOUNT display name — what greetings use and what a passkey is
+             registered under. Distinct from the profile name above on purpose (D-18): this one
+             never touches your member profile. Until this row existed, nothing could set it for
+             an existing account and greetings fell back to the front of your email. -->
+        <div class="settings-row">
+          <div class="grow">
+            <div class="k"><label for="dnInput">Display name</label></div>
+            <div class="v" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:4px">
+              <input id="dnInput" type="text" maxlength="80" autocomplete="nickname"
+                     placeholder="How greetings address you"
+                     style="font:inherit;min-height:44px;padding:8px 12px;background:var(--surface-2);color:var(--text);border:1px solid var(--border);border-radius:8px;flex:1 1 200px" />
+              <button class="btn" id="dnSave" type="button" disabled>Save</button>
+            </div>
+            <div class="v" id="dnSaid" role="status" aria-live="polite"
+                 style="color:var(--text-muted);font-size:13px;min-height:1.3em;margin-top:4px">
+              Leave it empty and we'll use the front of your email.</div>
+          </div>
+        </div>
         <div class="settings-row">
           <div class="grow"><div class="k">Profile photo</div><div class="v">Crop &amp; upload a new photo on your profile.</div></div>
           <a class="btn ghost" href="profile.html" style="text-decoration:none">Change photo</a>
@@ -219,5 +237,29 @@
         catch (e) { alert("Couldn't remove it. Try again."); }
       }));
     }
+
+    /* display name (B2, v0.130.0). PATCH /api/me writes the SESSION's own user — the server never
+       reads an id from the body. Wired inside render like every other row here: render rebuilds
+       #app wholesale, so these nodes are fresh each time and listeners cannot stack. */
+    const dnInput = document.getElementById("dnInput");
+    const dnSave = document.getElementById("dnSave");
+    const dnSaid = document.getElementById("dnSaid");
+    const dnStart = me.user.display_name || "";
+    dnInput.value = dnStart;
+    dnInput.addEventListener("input", () => {
+      dnSave.disabled = dnInput.value.trim() === dnStart.trim();
+    });
+    dnSave.addEventListener("click", async () => {
+      dnSave.disabled = true;
+      const r = await api("/api/me", { method: "PATCH", body: JSON.stringify({ display_name: dnInput.value }) });
+      if (!r.ok) {
+        dnSaid.textContent = r.data.error || "Couldn't save that. Try again.";
+        dnSave.disabled = false;
+        return;
+      }
+      dnSaid.textContent = r.data.display_name
+        ? `Saved — greetings will call you ${r.data.display_name}.`
+        : "Saved — cleared, so greetings use the front of your email.";
+    });
   }
 })();
