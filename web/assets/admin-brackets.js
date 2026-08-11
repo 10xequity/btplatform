@@ -45,6 +45,23 @@
   };
   const ord = (n) => (n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] || "th");
 
+  /* K-2 (v0.131.0). Pure and closure-free on purpose — the guard executes these exact bytes.
+     poolTag: a short tag from the END of a real pool name ("Pool A" → A, "Open BB" → BB) and NULL
+     when nothing honest is derivable — a guessed letter on a bracket sheet misdirects a whole
+     court. seedChip: the owner's two forms — "#1 A" when the pool tag exists, "#3" when it does
+     not — and NOTHING when the team has no stamped seed, because an empty chip is a claim about
+     data we do not have. */
+  function poolTag(name) {
+    if (!name) return null;
+    const m = String(name).trim().match(/(?:^|\s)([A-Z]{1,2}|\d{1,2})$/);
+    return m ? m[1] : null;
+  }
+  function seedChip(seed, pool) {
+    if (!seed) return "";
+    const tag = poolTag(pool);
+    return '<span class="br-seed">#' + seed + (tag ? " " + tag : "") + "</span>";
+  }
+
   function side(mt, which) {
     const name = which === "a" ? mt.team_a : mt.team_b;
     const id = which === "a" ? mt.team_a_id : mt.team_b_id;
@@ -54,12 +71,13 @@
     const pool = which === "a" ? mt.pool_a : mt.pool_b;
     const rank = which === "a" ? mt.rank_a : mt.rank_b;
     const cap = which === "a" ? mt.captain_a : mt.captain_b;
+    const seed = which === "a" ? mt.seed_a : mt.seed_b;
     return `<button class="br-side${won ? " won" : ""}${name ? "" : " tbd"}"
         type="button" data-slot="${mt.id}:${which}"
-        aria-label="${name ? esc(name) : esc(waiting || "empty")}. Choose a different team for this slot."
+        aria-label="${name ? esc(name) : esc(waiting || "empty")}${seed ? ", seed " + seed : ""}. Choose a different team for this slot."
         ${id ? `draggable="true" data-drag="${id}"` : ""}>
       <span class="br-line">
-        <span class="br-name">${name ? esc(name) : esc(waiting || "To be decided")}</span>
+        <span class="br-name">${seedChip(seed, pool)}${name ? esc(name) : esc(waiting || "To be decided")}</span>
         <span class="br-score">${score === null || score === undefined ? "" : score}</span>
       </span>
       ${origin(pool, rank, cap)}
@@ -68,7 +86,11 @@
 
   function matchCard(mt) {
     const done = !!mt.winner;
-    return `<li class="br-match"${done ? ' data-done="1"' : ""} data-match="${mt.id}">
+    // K-4: "live" is defined from what the data can truthfully say. Score entry is one POST of the
+    // final result, so an in-progress state does not exist — READY (both slots filled, unscored)
+    // is the honest green dot: this game can be on a court right now.
+    const ready = !done && !!mt.team_a_id && !!mt.team_b_id;
+    return `<li class="br-match"${done ? ' data-done="1"' : ""}${ready ? ' data-ready="1"' : ""} data-match="${mt.id}">
       <span class="br-court">Ct ${mt.court}</span>
       ${side(mt, "a")}
       ${side(mt, "b")}
@@ -91,8 +113,47 @@
     return `<section class="br-tree" aria-labelledby="brH${br.id}">
       <h2 class="mf-sub" id="brH${br.id}">${esc(br.name)} bracket</h2>
       ${champ}
-      <div class="br-scroll">${rounds}</div>
+      <div class="br-scroll">
+        <svg class="br-links" aria-hidden="true"></svg>
+        ${rounds}</div>
     </section>`;
+  }
+
+  /* K-3 (v0.131.0): the connecting lines a printed bracket has. Drawn AFTER layout by measuring
+     the real tiles (getBoundingClientRect) into one absolutely-positioned svg per tree — measured,
+     never computed from assumed heights, because the first long team name or forfeit row changes a
+     tile's height and hardcoded geometry would draw lines through the tiles. Each match links to
+     the match in the NEXT column whose slot is ceil(slot/2) — the same feeding rule buildTree
+     uses. The svg is pointer-transparent so the slot editor's clicks pass through. */
+  function drawConnectors() {
+    document.querySelectorAll(".br-tree").forEach((tree) => {
+      const svg = tree.querySelector(".br-links");
+      const scroll = tree.querySelector(".br-scroll");
+      if (!svg || !scroll) return;
+      const rounds = [...tree.querySelectorAll(".br-round")];
+      svg.setAttribute("width", scroll.scrollWidth);
+      svg.setAttribute("height", scroll.scrollHeight);
+      const base = scroll.getBoundingClientRect();
+      const seg = [];
+      for (let c = 0; c < rounds.length - 1; c++) {
+        const from = [...rounds[c].querySelectorAll(".br-match")];
+        const to = [...rounds[c + 1].querySelectorAll(".br-match")];
+        from.forEach((el, i) => {
+          const next = to[Math.floor(i / 2)];
+          if (!next) return;
+          const a = el.getBoundingClientRect(), b2 = next.getBoundingClientRect();
+          const x1 = a.right - base.left + scroll.scrollLeft;
+          const y1 = a.top + a.height / 2 - base.top + scroll.scrollTop;
+          const x2 = b2.left - base.left + scroll.scrollLeft;
+          const y2 = b2.top + b2.height / 2 - base.top + scroll.scrollTop;
+          const mid = x1 + (x2 - x1) / 2;
+          seg.push(`M ${x1} ${y1} H ${mid} V ${y2} H ${x2}`);
+        });
+      }
+      svg.innerHTML = seg.length
+        ? `<path d="${seg.join(" ")}" fill="none" stroke="var(--border)" stroke-width="1.5"/>`
+        : "";
+    });
   }
 
   function benchHtml() {
@@ -115,6 +176,7 @@
     $("bTrees").innerHTML = list.map(treeHtml).join("");
     $("bBench").innerHTML = benchHtml();
     wire();
+    drawConnectors(); // after the tiles exist in layout — the lines are measured, not assumed
   }
 
   /* ---------- editing a slot ---------- */
@@ -323,6 +385,13 @@
   }
 
   document.addEventListener("DOMContentLoaded", () => {
+    // ONE resize listener, wired at boot and never inside wire() — wire() runs per render and
+    // stacks handlers on nodes it does not recreate (§-1c D-6). window is never recreated.
+    let rafId = null;
+    window.addEventListener("resize", () => {
+      if (rafId) cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(drawConnectors);
+    });
     $("bEvent").addEventListener("change", () => { eventId = Number($("bEvent").value); load(); estimate(); });
     // Every control that changes the shape of the draw also changes how long it takes.
     ["bASize", "bPoints", "bCourts", "bSlot", "bHave"].forEach((id) =>

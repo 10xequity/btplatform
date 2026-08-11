@@ -1,5 +1,55 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.131.0 — 2026-08-11
+
+**B3 — the bracket reads like a tournament sheet: seed numbers on the tiles, real connecting
+lines, and a live dot.** K-2 + K-3 + K-4 as one release, one screen — plus the owner's five
+marketplace questionnaire answers recorded and two new asks measured (roadmap v1.29).
+
+**K-2 required a server change, and the v0.125.0 lesson is why.** The seed order existed only IN
+MEMORY while `generateBracketFor` built the tree — `teams.seed` is read as the entry-seed fallback
+but no real path wrote it, so a tile rendering it would have shown numbers in every fixture and
+nothing on any real event. **Generation now STAMPS each bracketed team's seed** (1..n per group, A
+and BB restarting; regeneration restamps; the slot editor never touches it — a dragged team keeps
+its seed because "the #6 upset the #1" is how brackets talk, and a walk-on subbed into a slot
+honestly has NO chip). The payload carries `seed_a`/`seed_b`, and the tile chip renders the owner's
+two forms: **`#1 A`** when a pool tag derives from the real pool name, **`#3`** when it does not —
+never an invented letter. The guard's pair property is DERIVED, not declared: for a full field,
+round-one seeds sum to n+1, asserted from the same inputs the tree used.
+
+**K-3 — connecting lines.** `.br-line` turned out to be the score row INSIDE a tile (a selector's
+name is not its behaviour); the tree had no connectors at all. Now: one absolutely-positioned,
+pointer-transparent SVG per tree, drawn by MEASURING the real tiles (`getBoundingClientRect`) —
+never computed from assumed heights, because one long team name changes a tile's height and
+hardcoded geometry draws lines through tiles. Later rounds centre against the column feeding them,
+elbows join match → next-round slot by the same ceil(slot/2) rule `buildTree` uses. Redrawn on
+render and on resize — the resize listener wired ONCE at boot, never in `wire()` (D-6).
+
+**K-4 — the live dot, defined from what the data can truthfully say.** Score entry is one POST of
+the final result, so "in progress" is not a stored state; the honest green dot is **READY** — both
+slots filled, unscored: this game can be on a court right now. The done marker migrates from the
+3px coloured side-tab — **D-10's recorded cliché, on this exact line of this exact page** — to the
+same dot idiom (muted dot). The pulse is opacity-only, 2.4s, and lives entirely inside a
+`prefers-reduced-motion: no-preference` block; with reduced motion set the dot simply stays solid.
+
+**Guard — `bracket_tiles.test.mjs`, 13 tests, 11 seen failing pre-fix.** Three test drafts were
+wrong and the code was right: the "round one" index read the wrong end of the rounds array (the
+Final's TBD slots), the seedChip executor forgot the function composes with `poolTag`, and a slot
+"swap" set a side to its own opponent — which the server rightly refused as "a team can't play
+itself." One fixture correction: `include_rest` defaults TRUE (the owner's "a tenth-place team
+still plays" rule), so keeping a genuine walk-on needs the explicit false.
+
+**Questionnaire recorded (§-1m):** partner = configured organizations + free-text pending APPROVAL
+(the project's first approval workflow — design with SG-3's per-account toggles, one mechanism) ·
+partner events on the separate marketplace page only · staff-edited now, self-service maybe later ·
+backlinks point at the outside registration · **sheets first, page later**. Two riders measured
+before recording: **K-14** events-list sort tabs (the `.tab` mechanism already exists on
+`schedule.js:21`) and **K-15** Square catalog items for priced events (**the catalog-write
+machinery already exists** — `memberships.js:86-100` creates Catalog objects via `sq()`; the gap is
+event ITEMs, correct naming, and the per-organization credential question, which is owner config).
+
+No migration. Suite 1662 → **1675**; 112 → **113** files.
+
 ## v0.130.0 — 2026-08-11
 
 **B2 / K-11(ii) — a member sets their own display name. And re-measuring the premise found the

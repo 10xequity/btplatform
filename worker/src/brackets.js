@@ -841,6 +841,21 @@ export async function generateBracketFor(env, ctx, eventId, b = {}) {
       WHERE org_id=?1 AND event_id=?2 AND bracket_id IS NULL AND deleted_at IS NULL`
   ).bind(ctx.orgId, eventId).first();
 
+  // K-2 (v0.131.0): STAMP the seed the generator actually used. Until now the seed order lived
+  // only in memory while the tree was built — `teams.seed` is read as the entry-seed FALLBACK but
+  // no real path ever wrote it, so a tile rendering it would have shown numbers in every fixture
+  // and nothing on any real event (the v0.125.0 trap, dodged at design time). 1..n PER GROUP —
+  // a tile's number means "within its bracket" — regeneration restamps (this runs after the
+  // replace-clearing), and the slot editor never touches it: a dragged team keeps its seed,
+  // because "the #6 upset the #1" is how brackets talk.
+  for (const p of plans) {
+    for (let i = 0; i < p.g.ids.length; i++) {
+      await env.DB.prepare(
+        "UPDATE teams SET seed=?1, updated_at=datetime('now') WHERE id=?2 AND org_id=?3 AND event_id=?4 AND deleted_at IS NULL"
+      ).bind(i + 1, p.g.ids[i], ctx.orgId, eventId).run();
+    }
+  }
+
   const built = [];
   for (const p of plans) {
     const ins = await env.DB.prepare(
@@ -1257,6 +1272,7 @@ async function loadBrackets(env, ctx, eventId) {
     `SELECT m.id, m.bracket_id, m.bracket_round, m.bracket_slot, m.round, m.court,
             m.team_a_id, m.team_b_id, m.score_a, m.score_b, m.points_to,
             ta.name AS team_a, tb.name AS team_b,
+            ta.seed AS seed_a, tb.seed AS seed_b,
             pa.name AS pool_a, pb.name AS pool_b,
             sa.rank AS rank_a, sb.rank AS rank_b,
             capa.full_name AS captain_a, capb.full_name AS captain_b
@@ -1292,6 +1308,8 @@ async function loadBrackets(env, ctx, eventId) {
             // Where each team came from, for the substitution decision.
             pool_a: x.pool_a, pool_b: x.pool_b,
             rank_a: x.rank_a, rank_b: x.rank_b,
+            // The seed the generator stamped (K-2) — "as seeded", surviving drags on purpose.
+            seed_a: x.seed_a, seed_b: x.seed_b,
             // Staff surface, so the captain is named in full — this is who gets found on a court.
             captain_a: personName(x.captain_a, { full: true }),
             captain_b: personName(x.captain_b, { full: true }),

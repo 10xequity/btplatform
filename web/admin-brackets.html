@@ -18,9 +18,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Brackets — Boomtown Athletics</title>
   <script>/* Pre-paint state — collapse + theme (uiux-review §4/§6.4, v0.52.0): read the bt_nav cookie and the saved theme BEFORE the first stylesheet so the rail state AND the theme are right on frame one — no post-paint snap of either. admin-nav.js writes the cookie on rail toggle and bt_theme on theme toggle; the localStorage bt_nav fallback migrates pre-v0.51 sessions. */(function(){try{var m=document.cookie.match(/(?:^|; )bt_nav=([^;]*)/);var v=m?m[1]:((window.localStorage&&localStorage.getItem("bt_nav_collapsed")==="1")?"min":"");if(v==="min")document.documentElement.dataset.nav="min";var t=(window.localStorage&&localStorage.getItem("bt_theme"))||(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.dataset.theme=t;}catch(e){}})();</script>
-  <link rel="stylesheet" href="assets/tokens.css?v=0.130.0" />
-  <link rel="stylesheet" href="assets/app.css?v=0.130.0" />
-  <link rel="stylesheet" href="assets/admin.css?v=0.130.0" />
+  <link rel="stylesheet" href="assets/tokens.css?v=0.131.0" />
+  <link rel="stylesheet" href="assets/app.css?v=0.131.0" />
+  <link rel="stylesheet" href="assets/admin.css?v=0.131.0" />
   <style>
     .mf-head { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; margin-bottom: 12px; }
     .mf-head p { max-width: 68ch; }
@@ -37,16 +37,39 @@
 
     .br-tree { margin-bottom: 24px; }
     .br-champ { font-size: 15px; font-weight: 700; color: var(--emphasis); margin: 4px 0 10px; }
-    /* A bracket is wider than a phone and always will be. Scroll it rather than crush it. */
-    .br-scroll { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 8px; align-items: flex-start; }
-    .br-round { flex: 0 0 auto; min-width: 190px; }
+    /* A bracket is wider than a phone and always will be. Scroll it rather than crush it.
+       position:relative anchors the connector svg (K-3) — the lines live in the SAME scroll
+       coordinate space as the tiles, so scrolling moves them together. */
+    .br-scroll { display: flex; gap: 28px; overflow-x: auto; padding-bottom: 8px; align-items: flex-start;
+      position: relative; }
+    /* K-3: the connecting lines a printed bracket has. Absolute, sized to the scroll content by
+       the drawing code, and pointer-transparent — a line that eats clicks kills the slot editor. */
+    .br-links { position: absolute; top: 0; left: 0; pointer-events: none; }
+    .br-round { flex: 0 0 auto; min-width: 190px; position: relative; }
     .br-round-h { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); margin: 0 0 6px; }
-    .br-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+    /* Later rounds centre their fewer games against the column feeding them, the way a printed
+       sheet does — which is also what makes the connector elbows read as elbows. */
+    .br-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px;
+      justify-content: space-around; min-height: 100%; }
+    .br-round:not(:first-child) .br-list { justify-content: space-around; }
 
     .br-match { position: relative; background: var(--surface); border: 1px solid var(--border);
-      border-radius: var(--radius-control, 8px); padding: 6px 8px; display: grid; gap: 2px; }
-    .br-match[data-done="1"] { border-left: 3px solid var(--positive); }
+      border-radius: var(--radius-control, 8px); padding: 6px 8px 6px 16px; display: grid; gap: 2px; }
+    /* K-4 + D-10: state is the DOT idiom, not a coloured side-tab — this page carried the exact
+       3px cliché D-10 records, and it is gone. Green dot = READY (both teams known, unscored: this
+       game can be on a court right now — "in progress" is not a stored state, so ready is the
+       honest "live"). Muted dot = done. Both dots are companions to text (the score and the bold
+       winner line), never the only signal. */
+    .br-match::before { content: ""; position: absolute; left: 6px; top: 12px; width: 6px; height: 6px;
+      border-radius: 50%; background: transparent; }
+    .br-match[data-ready="1"]::before { content: ""; background: var(--positive); }
+    .br-match[data-done="1"]::before { content: ""; background: var(--text-muted); opacity: .5; }
     .br-court { position: absolute; top: 4px; right: 6px; font-size: 10px; color: var(--text-muted); }
+    /* K-2: the seed as the generator stamped it — "#1 A" when the pool tag derives, "#3" when not. */
+    .br-seed { display: inline-block; margin-right: 6px; padding: 0 4px; border-radius: 4px;
+      background: var(--surface-2); color: var(--text-muted); font-size: 10px; font-weight: 700;
+      font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .br-side.won .br-seed { color: var(--emphasis); }
     .br-side { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; }
     .br-side.won .br-name, .br-side.won .br-score { font-weight: 700; color: var(--emphasis); }
     .br-side.tbd .br-name { color: var(--text-muted); font-style: italic; font-size: 12px; }
@@ -110,11 +133,20 @@
       .br-round { min-width: 165px; }
       .br-bench-tile { width: 100%; }
     }
+    @media (prefers-reduced-motion: no-preference) {
+      /* The ready dot breathes, gently — the owner asked for a "glowing" live marker, and on a
+         screen a director stares at all day the honest version is a slow opacity swell on a 6px
+         dot, not a glow. Opacity only (off the main thread), 2.4s so it reads as alive rather
+         than urgent, and ONLY inside this block: with reduced motion set, the dot simply stays
+         solid — colour and the score text already carry the state. */
+      .br-match[data-ready="1"]::before { animation: brPulse 2.4s ease-in-out infinite; }
+      @keyframes brPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+    }
   </style>
 </head>
 <body>
     <header class="header chrome-glass no-print">
-    <a class="wordmark" href="admin.html" style="text-decoration:none;color:inherit"><img class="brand-logo" src="assets/logo-boom-icon-512.png?v=0.130.0" alt="" width="22" height="22" />Boomtown <span>Athletics</span></a>
+    <a class="wordmark" href="admin.html" style="text-decoration:none;color:inherit"><img class="brand-logo" src="assets/logo-boom-icon-512.png?v=0.131.0" alt="" width="22" height="22" />Boomtown <span>Athletics</span></a>
     <div class="spacer"></div>
     <select id="orgSwitcher" class="org-switcher" aria-label="Switch organization"></select>
     <a id="btHdrMail" class="btn ghost hdr-mail" href="admin-messages.html" aria-label="Messages">✉</a>
@@ -262,8 +294,8 @@
       </div>
     </main>
   </div>
-  <script src="assets/config.js?v=0.130.0"></script>
-  <script src="assets/admin-nav.js?v=0.130.0"></script>
-  <script src="assets/admin-brackets.js?v=0.130.0"></script>
+  <script src="assets/config.js?v=0.131.0"></script>
+  <script src="assets/admin-nav.js?v=0.131.0"></script>
+  <script src="assets/admin-brackets.js?v=0.131.0"></script>
 </body>
 </html>
