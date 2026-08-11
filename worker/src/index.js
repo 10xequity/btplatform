@@ -404,7 +404,7 @@ export default {
         const session = await currentSession(request, env);
         res = session ? await listOrgs(env) : json({ error: "Sign in first." }, 401);
       } else if (url.pathname === "/api/health") {
-        res = json({ ok: true, version: "v0.127.0" });
+        res = json({ ok: true, version: "v0.128.0" });
       } else if (url.pathname === "/api/webhooks/square" && request.method === "POST") {
         res = await membershipWebhook(request, env); // verifies signature; forwards payment.* to squareWebhook
       } else if (url.pathname === "/api/public/org-brand" && request.method === "GET") {
@@ -718,8 +718,17 @@ async function me(request, env) {
 async function listOrgs(env) {
   const orgs = (await env.DB.prepare(
     // F-11 (v0.30.0): the switcher offered all ten. Migration 0021 was invisible until this line.
-    "SELECT id, name, slug, logo_url, brand_json FROM orgs WHERE active = 1 AND deleted_at IS NULL ORDER BY id"
+    // v0.128.0 (P-1): modules_off rides along because the admin rail filters itself from THIS
+    // payload — the one fetch admin-nav.js already makes. It is navigation config, never
+    // permission (org_modules.test.mjs pins that a hidden module's routes answer unchanged), so
+    // exposing it to any signed-in session reveals nothing a menu would not.
+    "SELECT id, name, slug, logo_url, brand_json, modules_off_json FROM orgs WHERE active = 1 AND deleted_at IS NULL ORDER BY id"
   ).all()).results;
+  for (const o of orgs) {
+    try { o.modules_off = JSON.parse(o.modules_off_json || "[]"); } catch { o.modules_off = []; }
+    delete o.modules_off_json;
+    if (!Array.isArray(o.modules_off)) o.modules_off = [];
+  }
   return json({ orgs });
 }
 

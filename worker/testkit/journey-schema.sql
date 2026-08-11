@@ -43,7 +43,7 @@ CREATE TABLE orgs (
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),
   deleted_at TEXT
-, mailing_address TEXT, timezone TEXT NOT NULL DEFAULT 'America/Denver', website TEXT, admin_email TEXT, phone TEXT, address_line1 TEXT, address_line2 TEXT, city TEXT, state TEXT, postal_code TEXT, is_owned INTEGER NOT NULL DEFAULT 0, active INTEGER NOT NULL DEFAULT 1, legal_entity TEXT, rules_url TEXT, deactivated_at TEXT, legal_entity_verified INTEGER NOT NULL DEFAULT 0, legal_entity_short TEXT, payments_parent_org_id INTEGER REFERENCES orgs(id));
+, mailing_address TEXT, timezone TEXT NOT NULL DEFAULT 'America/Denver', website TEXT, admin_email TEXT, phone TEXT, address_line1 TEXT, address_line2 TEXT, city TEXT, state TEXT, postal_code TEXT, is_owned INTEGER NOT NULL DEFAULT 0, active INTEGER NOT NULL DEFAULT 1, legal_entity TEXT, rules_url TEXT, deactivated_at TEXT, legal_entity_verified INTEGER NOT NULL DEFAULT 0, legal_entity_short TEXT, payments_parent_org_id INTEGER REFERENCES orgs(id), modules_off_json TEXT);
 
 CREATE TABLE users (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

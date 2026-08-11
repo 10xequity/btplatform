@@ -221,6 +221,52 @@ export async function orgRoutes(request, env, url, ctx) {
     });
   }
 
+  /* ---------- module visibility (v0.128.0, roadmap §-1l P-1) ----------
+     Which modules this org HIDES from its admin menu, as a slug array. A VIEW filter, never a
+     permission: nothing anywhere reads this for authorization, and org_modules.test.mjs asserts a
+     hidden module's routes answer exactly as before. The server stores an opaque sanitized list
+     and keeps NO registry of its own — web/assets/admin-nav.js's BT_MODULES is the single
+     semantic source, so the meaning of a key cannot drift between two copies. Separate from the
+     profile PUT because that flow is per-field text rules and this is one atomic list. */
+
+  if (p === "/api/admin/org/modules" && m === "GET") {
+    const deny = await H.requireStaff(env, ctx); if (deny) return deny;
+    const row = await env.DB.prepare(
+      "SELECT modules_off_json FROM orgs WHERE id = ?1 AND deleted_at IS NULL"
+    ).bind(ctx.orgId).first();
+    if (!row) return H.json({ error: "Organization not found." }, 404);
+    let off = [];
+    try { off = JSON.parse(row.modules_off_json || "[]"); } catch { off = []; }
+    return H.json({ off: Array.isArray(off) ? off : [] });
+  }
+
+  if (p === "/api/admin/org/modules" && m === "PUT") {
+    const deny = await H.requireStaff(env, ctx); if (deny) return deny;
+    const body = await request.json().catch(() => ({}));
+    // Refused wholesale, never coerced: a config write that silently drops half its input is a
+    // control reporting success it did not achieve. Slugs only, bounded count and length.
+    if (!Array.isArray(body.off)) return H.json({ error: "Send the hidden modules as a list." }, 400);
+    if (body.off.length > 32) return H.json({ error: "That's more modules than exist." }, 400);
+    const off = [];
+    for (const k of body.off) {
+      if (typeof k !== "string" || !/^[a-z][a-z0-9_-]{0,31}$/.test(k)) {
+        return H.json({ error: "Module keys are short lowercase slugs." }, 400);
+      }
+      if (!off.includes(k)) off.push(k);
+    }
+    const before = await env.DB.prepare(
+      "SELECT modules_off_json FROM orgs WHERE id = ?1 AND deleted_at IS NULL"
+    ).bind(ctx.orgId).first();
+    if (!before) return H.json({ error: "Organization not found." }, 404);
+    await env.DB.prepare(
+      "UPDATE orgs SET modules_off_json = ?2, updated_at = datetime('now') WHERE id = ?1 AND deleted_at IS NULL"
+    ).bind(ctx.orgId, JSON.stringify(off)).run();
+    await H.audit(env, ctx, "org.modules.update", "orgs", ctx.orgId, {
+      before: before.modules_off_json || "[]", after: JSON.stringify(off),
+    });
+    return H.json({ ok: true, off });
+  }
+
   /* ---------- legal entity verification ----------
      Separate endpoint on purpose. This asserts that a human opened the Colorado SOS business
      search and read the registration back. Standards §7.3: a claim about the world needs a typed

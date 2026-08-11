@@ -145,7 +145,7 @@ test("pad produces the 4-digit form used in filenames and the ledger", () => {
   assert.equal(pad(2026), "2026");
 });
 
-test("the real db/migrations directory parses cleanly and reports 0043", () => {
+test("the real db/migrations directory parses cleanly and reports 0044", () => {
   // This number is a deliberate ratchet, not a nuisance: it reddens on every new migration and
   // makes whoever added one confirm the scanner still reads the whole directory. Bump it in the
   // same commit as the migration, AFTER the ledger row exists in live D1 (v0.60.0 → 0036;
@@ -157,10 +157,13 @@ test("the real db/migrations directory parses cleanly and reports 0043", () => {
   // schema_migrations` came back with it. It earned it a third time on 2026-08-08: migration 0043
   // (sessions.acting_role) went in, this line went red on the next full run, and it moved only
   // after live D1 answered MAX(id)=43, COUNT(*)=43, MAX(version)='0043' and sqlite_master showed
-  // the column present on `sessions`.)
+  // the column present on `sessions`. Fourth time 2026-08-10: migration 0044 (orgs.modules_off_json,
+  // P-1) — moved only after live D1 answered MAX(id)=44, COUNT(*)=44, MAX(version)='0044' and
+  // pragma_table_info('orgs') showed the column, with every row NULL: default-ON, deploy changes
+  // no screen.)
   const { highest, files, unparseable } = scanMigrations(DEFAULT_DIR);
   assert.deepEqual(unparseable, [], `unparseable migration filenames: ${unparseable.join(", ")}`);
-  assert.equal(highest, 43);
+  assert.equal(highest, 44);
   assert.ok(files >= 20, `expected at least 20 .sql files, saw ${files}`);
 });
 

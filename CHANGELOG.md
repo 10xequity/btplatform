@@ -1,5 +1,48 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.128.0 — 2026-08-10
+
+**P-1 — each organization's admin menu now shows only the modules it uses.** Roadmap §-1l, §-0 B1,
+and the answer to the owner's "replicating the system 3 times" complaint delivered as a VIEW filter
+rather than the authorization rewrite the literal proposal would have been.
+
+**Migration 0044** (`orgs.modules_off_json`) — applied to live D1 and read back before this ships:
+MAX(id)=44, COUNT=44, MAX(version)='0044', column present, **every row NULL — so the deploy itself
+changes no screen.** Storing the OFF list is the design: NULL hides nothing, and a module added to
+the registry later appears everywhere without anyone re-saving.
+
+**ONE REGISTRY.** `window.BT_MODULES` lives in `admin-nav.js` — the file every admin page already
+loads — with 14 module keys mapping to rail pages. The org-settings screen renders its checkboxes
+from that same object and carries NO list of its own; the server stores an opaque sanitized slug
+array and keeps no registry at all. One list, two consumers, zero copies. **The registry is also the
+intended substrate for the owner's 2026-08-10 events brief** (per-ACCOUNT module toggles for a
+non-staff operator like Cathy): keys, not pages, are the stored vocabulary, so the same keys can
+later hang off a user grant as well as an org row.
+
+**The three properties, pinned by `org_modules.test.mjs` (13 tests, 12 seen failing pre-fix):**
+1. **A view filter, never a permission.** Hiding "marketing" and then calling a marketing route
+   answers byte-identically for staff and member alike — asserted before/after on the real route.
+2. **Never a lockout.** The registry structurally cannot name admin.html, admin-org-settings.html,
+   settings.html, admin-security.html, admin-users.html or admin-events.html, and the org-settings
+   rail link is pinned PRESENT — the way back is asserted by presence, not implied by omission.
+3. **Default ON.** NULL column, empty list, and unknown keys all hide nothing — the filter fails
+   open to a fuller menu, never an emptier one.
+
+**The decision logic runs as shipped bytes:** `pagesToHide` is extracted with `functionBodyAfter`
+and executed — the multi-owner rule (the schedule editor belongs to leagues AND tournaments and
+hides only when both are off) is exactly what a text scan would vacuously bless. The rail filter
+REMOVES nodes rather than setting `[hidden]`, because author CSS on `.nav-item` defeats the hidden
+attribute — the v0.119.0 lesson, applied at design time.
+
+Sanitation refuses wholesale (non-array, >32 entries, non-slug strings → 400, nothing written) —
+a config write that silently drops half its input is a control reporting success it did not
+achieve. Every change is audited (`org.modules.update`, before/after).
+
+The schema ratchet reddened on the new migration and was moved to 0044 only after the live
+read-back — the fourth time it has earned its keep, recorded in its own comment.
+
+Suite 1631 → **1644**; 109 → **110** files. Migration ledger **0043 → 0044**.
+
 ## v0.127.0 — 2026-08-10
 
 **Duplicating an event now carries its divisions — the genuinely missing half of a feature that

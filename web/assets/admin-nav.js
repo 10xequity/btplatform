@@ -96,6 +96,76 @@
 (function () {
   const API = (window.BT_CONFIG && window.BT_CONFIG.apiBase) || "";
 
+  /* ---------- module registry (v0.128.0, roadmap §-1l P-1) ----------
+     THE ONE SOURCE. The org-settings screen renders its checkboxes from this same object
+     (window.BT_MODULES — every admin page loads this file, so it is always there first), and the
+     server deliberately keeps NO copy: it stores an opaque slug list, and only this registry says
+     what a slug means. Two consumers, one list, zero drift (D-22's lesson at design time).
+
+     WHAT MAY NEVER APPEAR HERE, and org_modules.test.mjs enforces it: admin.html (the front
+     door), admin-org-settings.html (the switch that turns modules back on — hiding it is a
+     lockout), settings.html, admin-security.html, admin-users.html (members are the substrate of
+     everything), admin-events.html (every league and tournament is created there). Hiding is a
+     VIEW decision; every route stays gated exactly as before.
+
+     A page may belong to TWO modules (the schedule editor serves leagues and tournaments alike);
+     it hides only when EVERY owner is off. Keys are the contract with the database — renaming one
+     orphans every org that saved it, so keys are forever even if labels change. This registry is
+     also the intended substrate for per-ACCOUNT module toggles (the owner's 2026-08-10 events
+     brief), which is why keys, not pages, are the stored vocabulary. */
+  window.BT_MODULES = [
+    { key: "registrations", label: "Registrations & Check-in", pages: ["admin-registrations.html", "admin-waitlists.html", "admin-checkin.html"] },
+    { key: "tryouts",       label: "Tryouts & Squads",         pages: ["admin-tryouts.html", "admin-squads.html"] },
+    { key: "facility",      label: "Facility Calendar",        pages: ["admin-facility.html"] },
+    { key: "tournaments",   label: "Tournaments",              pages: ["tournament.html", "admin-brackets.html", "admin-divisions.html", "admin-pool-board.html", "admin-score-links.html", "admin-schedule-editor.html"] },
+    { key: "leagues",       label: "Leagues",                  pages: ["admin-league.html", "admin-schedule-editor.html"] },
+    { key: "kotc",          label: "Court Board (KOTC)",       pages: ["admin-kotc.html"] },
+    { key: "reports",       label: "Sales & Reports",          pages: ["admin-reports.html"] },
+    { key: "pos",           label: "Point of Sale",            pages: ["admin-pos.html"] },
+    { key: "memberships",   label: "Memberships & Passes",     pages: ["admin-plans.html", "admin-tiers.html", "admin-member-fields.html", "admin-passes.html"] },
+    { key: "staffpay",      label: "Staff Pay",                pages: ["admin-staff-pay.html"] },
+    { key: "announcements", label: "Announcements",            pages: ["admin-announcements.html"] },
+    { key: "marketing",     label: "Marketing, Email & SMS",   pages: ["admin-marketing.html", "admin-sms.html", "admin-messages.html"] },
+    { key: "waivers",       label: "Waivers",                  pages: ["admin-waivers.html"] },
+    { key: "library",       label: "Documents, Help & Files",  pages: ["admin-documents.html", "admin-faq.html", "admin-uploads.html"] },
+  ];
+
+  /** Pages to remove for a given off-list. Pure — the guard executes these exact bytes. A page
+      with two owners survives until EVERY owner is off; unknown keys own nothing and hide
+      nothing, so stale config fails open to a fuller menu, never an emptier one. */
+  function pagesToHide(registry, off) {
+    const offSet = new Set(Array.isArray(off) ? off : []);
+    const out = [];
+    for (const mod of registry) {
+      if (!offSet.has(mod.key)) continue;
+      for (const page of mod.pages) {
+        const owners = registry.filter((m2) => m2.pages.includes(page));
+        if (owners.every((m2) => offSet.has(m2.key)) && !out.includes(page)) out.push(page);
+      }
+    }
+    return out;
+  }
+
+  /** Remove the rail links for this org's hidden modules, and any group left empty. DOM REMOVAL,
+      never the hidden attribute — [hidden] loses to any author display rule and .nav-item carries
+      one (the v0.119.0 overlay class, learned on eleven elements across nine pages). Removal has
+      no cascade to argue with, and a reload restores everything, because this is a view filter
+      over static markup, not state. */
+  function applyModuleFilter(ctx) {
+    const active = (ctx && ctx.orgs || []).find((o) => Number(o.id) === Number(ctx.current));
+    const off = active && active.modules_off;
+    if (!off || !off.length) return;
+    const gone = new Set(pagesToHide(window.BT_MODULES, off));
+    if (!gone.size) return;
+    document.querySelectorAll(".sidebar .nav-item[href]").forEach((a) => {
+      const page = (a.getAttribute("href") || "").split("#")[0];
+      if (gone.has(page)) a.remove();
+    });
+    document.querySelectorAll(".sidebar .nav-group").forEach((g) => {
+      if (!g.querySelector(".nav-item")) g.remove();
+    });
+  }
+
   /* ---------- icons (stroke=currentColor) ---------- */
   const I = (d) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
   const ICONS = {
@@ -674,6 +744,11 @@
     });
   })();
 
+  // P-1 (v0.128.0): once the role-filtered org list resolves, trim the rail to the ACTIVE org's
+  // modules. Rides the fetch the switcher already made — no extra request, and a failure to
+  // resolve leaves the full rail (fail open: a fuller menu, never an emptier one).
+  orgsReady.then(applyModuleFilter).catch(() => {});
+
   /* v2.22 (Block B2): the header wordmark names the ACTIVE org. The static markup ships the
      app brand so the header paints complete on frame one; once the role-filtered list resolves,
      the text becomes the org being acted in — "which org am I in?" is answered top-left on
@@ -754,7 +829,7 @@
       if (window.BT_STATUS || document.getElementById("bt-status-js")) return;
       var s = document.createElement("script");
       s.id = "bt-status-js";
-      s.src = "assets/build-status.js?v=0.127.0";
+      s.src = "assets/build-status.js?v=0.128.0";
       s.async = false;
       document.head.appendChild(s);
     } catch (e) { /* indicators are never load-blocking */ }

@@ -259,6 +259,45 @@
     };
   }
 
+  /* ---------------- modules on the admin menu (v0.128.0, P-1) ----------------
+     Rendered from window.BT_MODULES — admin-nav.js loads before this file on every admin page and
+     is the ONE registry; this screen deliberately carries no module→pages list of its own
+     (org_modules.test.mjs pins that). Checked = shown. The server stores only the OFF list, so a
+     module added to the registry later is shown everywhere without anyone re-saving. */
+
+  async function loadModules() {
+    const grid = $("modulesGrid"), saveBtn = $("modulesSave"), said = $("modulesSaid");
+    if (!grid || !window.BT_MODULES) return;
+    const r = await api("/api/admin/org/modules");
+    if (!r.ok) { grid.textContent = "Couldn't load the module list."; return; }
+    let saved = new Set(r.data.off || []);
+
+    grid.innerHTML = window.BT_MODULES.map((mod) => `
+      <label class="og-module">
+        <input type="checkbox" data-mod="${esc(mod.key)}" ${saved.has(mod.key) ? "" : "checked"} />
+        <span>${esc(mod.label)}</span>
+      </label>`).join("");
+
+    const currentOff = () => Array.from(grid.querySelectorAll("[data-mod]"))
+      .filter((c) => !c.checked).map((c) => c.dataset.mod);
+    const dirty = () => {
+      const now = currentOff();
+      return now.length !== saved.size || now.some((k) => !saved.has(k));
+    };
+    grid.addEventListener("change", () => {
+      saveBtn.disabled = !dirty();
+      said.textContent = dirty() ? "Unsaved changes" : "";
+    });
+    saveBtn.addEventListener("click", async () => {
+      const off = currentOff();
+      const put = await api("/api/admin/org/modules", { method: "PUT", body: JSON.stringify({ off }) });
+      if (!put.ok) { said.textContent = put.data.error || "Couldn't save."; return; }
+      saved = new Set(put.data.off || []);
+      saveBtn.disabled = true;
+      said.textContent = "Saved. Menus update on the next page load.";
+    });
+  }
+
   /* ---------------- boot ---------------- */
 
   async function load() {
@@ -269,6 +308,7 @@
 
   try {
     await load();
+    await loadModules();
     await loadAllOrgs();
   } catch (e) {
     fail("Couldn't load this page. Reload to try again.");
