@@ -1,6 +1,12 @@
 /**
  * Boomtown Platform — Playable brackets
- * File: worker/src/brackets.js · Version: v1.0 · Date: 2026-08-03 · Ships in: v0.66.0
+ * File: worker/src/brackets.js · Version: v1.1 · Date: 2026-08-11 · Ships in: v0.66.0 · v1.1 in v0.134.0
+ *
+ * v1.1 (2026-08-11, v0.134.0): WF-2 — only ACTIVE brackets reach the board, and generation
+ *   self-heals its own debris. Bracket rows are INSERTed before their matches with no
+ *   transaction, so a failed attempt strands live matchless rows (production carried 11);
+ *   loadBrackets now requires live matches, and generateBracketFor soft-deletes matchless rows
+ *   on its write path (a refused 409 stays write-free). Guarded by bracket_active.test.mjs.
  *
  * WHAT WAS ALREADY HERE, AND WHY IT WASN'T ENOUGH. `scheduler.buildBracket` seeded a first round
  * and `tournaments.createBracket` wrote those games into `matches`. Semis and finals were never
@@ -836,6 +842,19 @@ export async function generateBracketFor(env, ctx, eventId, b = {}) {
     ).bind(ctx.orgId, eventId).run();
   }
 
+  // WF-2 (v0.134.0): self-heal generation debris. The bracket INSERTs below run BEFORE the match
+  // writes with no transaction, so an attempt that dies between the two strands live matchless
+  // rows — and the replace-cleanup above is keyed on MATCHES, so it never fired for them
+  // (production carried eleven; event 90006 held ten, five failed A/BB pairs). Sweep them here,
+  // on the write path only — a refused generation (409, above) stays write-free; loadBrackets
+  // keeps lingering strands off the board until a real write heals them.
+  await env.DB.prepare(
+    `UPDATE brackets SET deleted_at=datetime('now')
+      WHERE org_id=?1 AND event_id=?2 AND deleted_at IS NULL
+        AND NOT EXISTS (SELECT 1 FROM matches m
+                        WHERE m.bracket_id = brackets.id AND m.deleted_at IS NULL)`
+  ).bind(ctx.orgId, eventId).run();
+
   const poolMax = await env.DB.prepare(
     `SELECT COALESCE(MAX(round), 0) AS r FROM matches
       WHERE org_id=?1 AND event_id=?2 AND bracket_id IS NULL AND deleted_at IS NULL`
@@ -1259,9 +1278,17 @@ async function loadBrackets(env, ctx, eventId) {
   ).bind(eventId, ctx.orgId).first();
   if (!ev) return { error: "That event doesn't exist.", status: 404 };
 
+  // WF-2 (v0.134.0): only trees that HAVE live matches are brackets — a live row with none is
+  // generation debris (rows are INSERTed before matches, no transaction), and rendering it gave
+  // the owner a board full of empty trees. This can never hide a real bracket: planFor validates
+  // every tree before anything is written and buildTree refuses n < 2, so a legitimate generation
+  // always writes matches for every row it inserts. The empty state + Generate button remain the
+  // way in when nothing survives the filter.
   const brs = (await env.DB.prepare(
-    `SELECT id, name, split_rule, config_json FROM brackets
-      WHERE org_id=?1 AND event_id=?2 AND deleted_at IS NULL ORDER BY id`
+    `SELECT id, name, split_rule, config_json FROM brackets b
+      WHERE org_id=?1 AND event_id=?2 AND deleted_at IS NULL
+        AND EXISTS (SELECT 1 FROM matches m WHERE m.bracket_id = b.id AND m.deleted_at IS NULL)
+      ORDER BY id`
   ).bind(ctx.orgId, eventId).all()).results || [];
 
   // The pool a team came out of travels with it. Owner 2026-08-03: "Please list the pool they were

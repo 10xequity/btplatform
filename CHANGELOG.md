@@ -1,5 +1,16 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.134.0 — 2026-08-11
+
+**WF-2 — the bracket board shows only ACTIVE brackets (owner brief 2026-08-11 item 3; roadmap §-1p, §-0 B24).** Production carried **eleven live matchless bracket rows rendering as empty trees** (event 90006 held ten — five failed A/BB generation pairs; 90003 one). The mechanism was read from the code, not guessed: `generateBracketFor` INSERTs bracket rows BEFORE writing matches with no transaction, and its replace-cleanup fires only when live MATCHES exist — so a failed attempt strands its rows and every later attempt skips the cleanup.
+
+- **`loadBrackets` now returns only trees that have live matches.** This can never hide a real bracket: `planFor` validates every tree before anything is written and `buildTree` refuses fewer than two teams, so a legitimate generation always writes matches for every row it inserts. When nothing survives the filter, the page's empty state and Generate button remain the way in — pinned.
+- **Generation self-heals its own debris**: live-but-matchless bracket rows for the event are soft-deleted (never hard-deleted) on the write path, before new rows are inserted. A refused generation (409, bracket exists, no `replace`) stays write-free — lingering strands stay off the board via the filter until a real write heals them. **The 11 production strands heal themselves the next time the owner generates on those events — no manual database surgery was done or needed.**
+
+**Also this session, recorded (roadmap v1.33, §-1p WF-6 / §-0 B28):** the owner's print rider measured — three print surfaces exist (tournament pool sheet, league weeks, score cards); the pool sheet already ships CSV; the league page ships "Copy as text" and score-links ships per-team PNG save (send-it-yourself affordances); direct email exists on none and **absorbs B10 (T2-2/K-6)** with its keyless-honesty constraint.
+
+5 new tests in `bracket_active.test.mjs` (3 seen failing pre-fix; the two greens are deliberate pins over pre-existing contracts, each with its own control); suite 1701 → 1706. No migration.
+
 ## v0.133.0 — 2026-08-11
 
 **WF-1 — the Events & Programs page (owner brief 2026-08-11 item 1; roadmap §-1p, §-0 B23).** Two defects on one page, both measured before building:
