@@ -119,7 +119,8 @@
     if (sc) sc.addEventListener("click", async () => {
       if (!confirm("Cancel this event AND all future events in the series?")) return;
       const r = await api(`/api/admin/series/${ev.series_id}?from_event_id=${id}`, { method: "DELETE" });
-      alert(r.ok ? `Cancelled ${r.data.cancelled} events.` : (r.data.error || "Failed."));
+      const nn = r.ok && r.data.cancelled_notice ? ` ${r.data.cancelled_notice.notified} registered member(s) notified in-app. ${r.data.cancelled_notice.note}` : "";
+      alert(r.ok ? `Cancelled ${r.data.cancelled} events.${nn}` : (r.data.error || "Failed."));
       load();
     });
   }
@@ -144,6 +145,12 @@
   async function setStatus(status) {
     const r = await api("/api/events/" + id, { method: "PATCH", body: JSON.stringify({ status }) });
     if (!r.ok) alert(r.data.error || "Couldn't change status.");
+    // B16 (v0.129.0): cancelling now tells the registered people, and the director sees what
+    // actually happened — including, honestly, that nothing was emailed when no mail key is set.
+    else if (r.data.cancelled_notice) {
+      const n = r.data.cancelled_notice;
+      alert(`Cancelled. ${n.notified} registered member${n.notified === 1 ? "" : "s"} notified in-app. ${n.note}`);
+    }
     load();
   }
 

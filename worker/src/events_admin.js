@@ -17,8 +17,68 @@
  *   GET    /api/admin/programs / POST / DELETE  → program folders for grouping events
  */
 
-let json, audit, requireStaff;
-export function wireEventsAdmin(h) { ({ json, audit, requireStaff } = h); }
+let json, audit, requireStaff, sendEmail, escapeHtml;
+export function wireEventsAdmin(h) { ({ json, audit, requireStaff, sendEmail, escapeHtml } = h); }
+
+/* The registration statuses that mean "this person is coming" — read from the schema's CHECK
+   constraint, not guessed. A registration the member already cancelled hears nothing. */
+const ACTIVE_REG = "('pending','email-sent','paid','cash-pending','comped')";
+
+/**
+ * Tell an event's active registrants something happened. First caller: cancellation (§-0 B16).
+ * Deliberately shaped as the substrate for the owner's 2026-08-10 requirement that an event
+ * screen can "contact and email the participants with information or news" — the recipient
+ * selection is the reusable part, the cancellation copy is just this caller's message.
+ *
+ * Always writes in-app notification rows (the inbox needs no mail key). Emails only when
+ * BREVO_API_KEY exists AND the contact has an address — and the returned note SAYS what did not
+ * happen, because a control that reports success it did not achieve is this project's
+ * most-paid-for defect. One notification per member per event: two teams, one message.
+ */
+export async function notifyEventCancelled(env, ctx, eventIds, orgId = ctx.orgId) {
+  const out = { notified: 0, with_email: 0, emailed: 0, note: "" };
+  const ids = (eventIds || []).map(Number).filter(Boolean);
+  if (!ids.length) { out.note = "No events needed notifications."; return out; }
+
+  const ph = ids.map((_, i) => `?${i + 2}`).join(",");
+  const rows = (await env.DB.prepare(
+    `SELECT DISTINCT r.event_id, r.contact_id, c.email, c.full_name, e.name AS event_name
+       FROM registrations r
+       JOIN contacts c ON c.id = r.contact_id AND c.deleted_at IS NULL
+       JOIN events e   ON e.id = r.event_id
+      WHERE r.org_id = ?1 AND r.event_id IN (${ph}) AND r.deleted_at IS NULL
+        AND r.status IN ${ACTIVE_REG}`
+  ).bind(orgId, ...ids).all()).results || [];
+
+  for (const r of rows) {
+    await env.DB.prepare(
+      `INSERT INTO notifications (org_id, kind, target, contact_id, title, body, link, payload_json, sent_at)
+       VALUES (?1,'event_cancelled','member',?2,?3,?4,'home.html',?5,datetime('now'))`
+    ).bind(orgId, r.contact_id, `Cancelled: ${r.event_name}`,
+      `${r.event_name} has been cancelled. Sorry for the change of plans — any follow-up from the organizers will land here.`,
+      JSON.stringify({ event_id: r.event_id })).run();
+    out.notified++;
+    if (r.email) {
+      out.with_email++;
+      if (env.BREVO_API_KEY) {
+        const first = String(r.full_name || "").split(/\s+/)[0] || "there";
+        const ok = await sendEmail(env, r.email, `Cancelled: ${r.event_name}`,
+          `<p>Hi ${escapeHtml(first)},</p><p>${escapeHtml(r.event_name)} has been cancelled. Sorry for the change of plans.</p>`,
+          orgId);
+        if (ok) out.emailed++;
+      }
+    }
+  }
+
+  out.note = env.BREVO_API_KEY
+    ? `Emailed ${out.emailed} of ${out.with_email} member(s) with an address.`
+    : (out.with_email
+      ? `${out.with_email} member(s) have an email address, but no mail key is set — nothing was emailed. Everyone still sees this in their member inbox.`
+      : "No email addresses on file — members will see this in their member inbox.");
+  await audit(env, ctx, "event.cancel_notified", "events", ids[0],
+    { events: ids, notified: out.notified, with_email: out.with_email, emailed: out.emailed });
+  return out;
+}
 
 const TYPES = ["tournament", "league", "training", "event", "court_rental"];
 const STATUSES = ["draft", "published", "in_progress", "completed", "cancelled"];
@@ -216,12 +276,19 @@ async function cancelSeries(env, ctx, seriesId, url) {
   const gate = await requireStaff(env, ctx); if (gate) return gate;
   const from = await loadOrgEvent(env, ctx, Number(url.searchParams.get("from_event_id")));
   if (!from || from.series_id !== seriesId) return json({ error: "That event isn't part of this series (or not in this org)." }, 404);
+  // Capture who is actually TRANSITIONING before the write — an instance already cancelled must
+  // not have its registrants re-notified by a second sweep of the same series (B16).
+  const affected = ((await env.DB.prepare(
+    `SELECT id FROM events
+      WHERE series_id=?1 AND org_id=?2 AND starts_at>=?3 AND deleted_at IS NULL AND status != 'cancelled'`
+  ).bind(seriesId, ctx.orgId, from.starts_at).all()).results || []).map((e) => e.id);
   const r = await env.DB.prepare(
     `UPDATE events SET status='cancelled', updated_at=datetime('now')
      WHERE series_id=?1 AND org_id=?2 AND starts_at>=?3 AND deleted_at IS NULL`
   ).bind(seriesId, ctx.orgId, from.starts_at).run();
+  const notice = await notifyEventCancelled(env, ctx, affected);
   await audit(env, ctx, "series.cancelled", "event", from.id, { series_id: seriesId });
-  return json({ ok: true, cancelled: r.meta.changes });
+  return json({ ok: true, cancelled: r.meta.changes, cancelled_notice: notice });
 }
 
 /* ---------- bulk ---------- */
@@ -259,14 +326,24 @@ async function bulkEdit(request, env, ctx) {
   if (f.location != null) { vals.push(f.location); sets.push(`location=?${vals.length}`); }
   if (f.program_id !== undefined) { vals.push(f.program_id || null); sets.push(`program_id=?${vals.length}`); }
   if (!sets.length) return json({ error: "Nothing to update. Bulk edit supports status, price, location, program." }, 400);
+  // B16: when this bulk sets status to cancelled, only the events TRANSITIONING into it get their
+  // registrants notified — one already cancelled in the batch stays silent (a re-save is not news).
+  let toNotify = [];
+  if (f.status === "cancelled") {
+    const ph = ids.map((_, i) => `?${i + 2}`).join(",");
+    toNotify = ((await env.DB.prepare(
+      `SELECT id FROM events WHERE org_id=?1 AND id IN (${ph}) AND deleted_at IS NULL AND status != 'cancelled'`
+    ).bind(ctx.orgId, ...ids).all()).results || []).map((e) => e.id);
+  }
   const idPh = ids.map((_, i) => `?${vals.length + i + 2}`).join(",");
   vals.push(ctx.orgId, ...ids);
   const r = await env.DB.prepare(
     `UPDATE events SET ${sets.join(",")}, updated_at=datetime('now')
      WHERE org_id=?${sets.length + 1} AND id IN (${idPh}) AND deleted_at IS NULL`
   ).bind(...vals).run();
+  const notice = toNotify.length ? await notifyEventCancelled(env, ctx, toNotify) : undefined;
   await audit(env, ctx, "events.bulk_edited", "event", ids[0], { count: ids.length, fields: Object.keys(f) });
-  return json({ ok: true, updated: r.meta.changes });
+  return json({ ok: true, updated: r.meta.changes, cancelled_notice: notice });
 }
 
 /* ---------- registrations CSV ---------- */

@@ -1,5 +1,48 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.129.0 — 2026-08-10
+
+**B16 — cancelling an event now TELLS the people registered for it.** P-C's genuinely missing half
+(the Cancel button, series-cancel and the bulk editor all flipped `status='cancelled'` and notified
+nobody — the people who paid found out at the door), and the exact workflow the owner's
+correspondent lives: cancel a session when not enough people sign up.
+
+**THE EGRESS WAS ENUMERATED AND THE PROMPT'S "TWO SITES" WAS WRONG — THERE ARE THREE** writers of
+`status='cancelled'`: `patchEvent` (the UI's Cancel button, `tournaments.js`), `cancelSeries`, and
+`bulkEdit` with a status field (`events_admin.js`). All three now call ONE helper.
+
+**`notifyEventCancelled` is deliberately the substrate for the owner's 2026-08-10 requirement** that
+an event screen can *"contact and email the participants with information or news"* — the recipient
+selection (active registrants of an event, one message per member) is the reusable part; the
+cancellation copy is just this first caller's message.
+
+**The rules, each pinned by `event_cancel_notify.test.mjs` (9 tests, 7 seen failing pre-fix):**
+- **Active registrants only**, statuses read from the schema's CHECK constraint, never guessed — a
+  registration the member already cancelled hears nothing, and the NC flips that real row to prove
+  the filter reads the data.
+- **Transition only** — re-saving an already-cancelled event notifies nobody twice, including an
+  already-cancelled event inside a bulk batch, and a series instance cancelled before the sweep.
+- **One notification per member per event** — two teams, one message (DISTINCT at the query).
+- **Honest about email.** In-app notification rows always (the inbox needs no mail key); email only
+  where `BREVO_API_KEY` exists AND the contact has an address. With no key — which is production's
+  state today — the response and the director's alert say plainly: *"N member(s) have an email
+  address, but no mail key is set — nothing was emailed. Everyone still sees this in their member
+  inbox."* `with_email` pins the would-email logic keyless; the actual Brevo send stays untested
+  like every other `sendEmail` caller, by the suite's keyless design.
+- **Audited from ONE place** (`event.cancel_notified` with events/notified/with_email/emailed), and
+  a refused member call notifies nobody.
+
+`sendEmail`/`escapeHtml` reach `events_admin.js` by injection (`wireEventsAdmin({ ...wiredHelpers,
+sendEmail, escapeHtml })` — the waitlists precedent, no cycle); `tournaments.js` imports the helper
+from `events_admin.js`, which imports nothing. The `index.js` diff is exactly two lines: that wire
+line and the version bump.
+
+**Owner answers recorded this session (roadmap §-1o):** Cathy's role sees **full contact details**
+(emails and phone numbers), and her event screen must be able to **message/email the participants**
+— which is this helper's second caller, queued with SG-5.
+
+No migration. Suite 1644 → **1653**; 110 → **111** files.
+
 ## v0.128.0 — 2026-08-10
 
 **P-1 — each organization's admin menu now shows only the modules it uses.** Roadmap §-1l, §-0 B1,

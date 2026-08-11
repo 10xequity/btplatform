@@ -12,6 +12,7 @@ import {
 import { autoClaimForEvent, releaseAutoClaims } from "./facility.js";
 import { advanceBracketFor } from "./brackets.js"; // v0.67.0 — brackets.js imports only scheduler.js, no cycle
 import { personName, CAPTAIN_JOIN, CAPTAIN_COLS } from "./names.js"; // T2-3 — one captain shape, one place
+import { notifyEventCancelled } from "./events_admin.js"; // B16 — one recipient rule for all three cancel writers; events_admin imports nothing, no cycle
 
 export async function tournamentRoutes(request, env, url, ctx) {
   const p = url.pathname;
@@ -93,7 +94,7 @@ async function getEvent(env, ctx, id) {
 }
 
 async function patchEvent(request, env, ctx, id) {
-  const ev = await env.DB.prepare("SELECT org_id FROM events WHERE id=?1 AND deleted_at IS NULL").bind(id).first();
+  const ev = await env.DB.prepare("SELECT org_id, status FROM events WHERE id=?1 AND deleted_at IS NULL").bind(id).first();
   if (!ev) return json({ error: "Event not found." }, 404);
   const deny = await requireStaff(env, ctx, ev.org_id);
   if (deny) return deny;
@@ -105,6 +106,13 @@ async function patchEvent(request, env, ctx, id) {
   vals.push(id);
   await env.DB.prepare(`UPDATE events SET ${sets.join(",")}, updated_at=datetime('now') WHERE id=?${vals.length}`).bind(...vals).run();
   await audit(env, ctx, "event.update", "events", id, b);
+  // B16 (v0.129.0): cancelling is the one status change the registered people must HEAR about,
+  // and only on the TRANSITION — re-saving an already-cancelled event is not news. The event's
+  // own org scopes the recipients (this route gates on ev.org_id, which may not be ctx.orgId).
+  if (b.status === "cancelled" && ev.status !== "cancelled") {
+    const notice = await notifyEventCancelled(env, ctx, [id], ev.org_id);
+    return json({ ok: true, cancelled_notice: notice });
+  }
   return json({ ok: true });
 }
 

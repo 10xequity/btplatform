@@ -273,7 +273,7 @@ wire(wiredHelpers);
 wireRegistrations(wiredHelpers);
 wireAdmin(wiredHelpers);
 wireSchedule(wiredHelpers);
-wireEventsAdmin(wiredHelpers);
+wireEventsAdmin({ ...wiredHelpers, sendEmail, escapeHtml }); // B16 — sendEmail injected, waitlists precedent, no cycle
 wireProfiles(wiredHelpers);
 wireWebauthn(wiredHelpers);
 wireLeagues(wiredHelpers);
@@ -404,7 +404,7 @@ export default {
         const session = await currentSession(request, env);
         res = session ? await listOrgs(env) : json({ error: "Sign in first." }, 401);
       } else if (url.pathname === "/api/health") {
-        res = json({ ok: true, version: "v0.128.0" });
+        res = json({ ok: true, version: "v0.129.0" });
       } else if (url.pathname === "/api/webhooks/square" && request.method === "POST") {
         res = await membershipWebhook(request, env); // verifies signature; forwards payment.* to squareWebhook
       } else if (url.pathname === "/api/public/org-brand" && request.method === "GET") {
