@@ -11,6 +11,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { csvCell, buildRevenueCsv, REVENUE_CSV_HEADERS, buildCrossOrgRevenueCsv, CROSS_ORG_REVENUE_CSV_HEADERS } from "../src/reports.js";
+import { blankComments, functionBodyAfter } from "../testkit/route-extract.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const reportsSrc = readFileSync(join(here, "../src/reports.js"), "utf8");
@@ -152,4 +153,53 @@ test("NEGATIVE CONTROL: reading a client org inside the block is caught", () => 
 
 test("delivery gate greps the call site, not the name (§6.5): revenue-all route dispatches", () => {
   assert.ok(/if \(p === "\/api\/admin\/reports\/revenue-all\.csv" && m === "GET"\) return revenueAllCsv\(env, ctx\);/.test(reportsSrc));
+});
+
+/* ──────────── WF-5 H-3: the all-events financial overview (v0.141.0) ────────────
+   The owner's item 6: "Registrations should have all the events and registrations listed for easy
+   access and financial review." The unit was queued as "add a JSON sibling of the revenue SELECT —
+   one query, two renderers." RE-MEASURING FOUND THAT ALREADY BUILT AND NEVER PINNED: the SELECT
+   lives in sales() behind GET /api/admin/reports/sales, and revenueCsv calls that function and
+   renders its JSON as CSV (its own comment says "Same source of truth as sales()"). So H-3 added
+   no route and no query. It pins the property instead — an unpinned true thing is one refactor
+   away from being a false one — and spends the unit on the screen the owner asked for. */
+
+test("H-3: the revenue CSV renders the SALES payload — one query, two renderers", () => {
+  const csvFn = functionBodyAfter(reportsSrc, "async function revenueCsv(");
+  assert.ok(csvFn, "revenueCsv is gone or is no longer a plain function declaration");
+  assert.match(csvFn, /await sales\(env, ctx\)/,
+    "revenueCsv stopped calling sales() — the CSV and the screen would answer 'what did this event take' from two different queries");
+  assert.equal(/FROM events/.test(csvFn), false,
+    "revenueCsv grew its own SELECT — the second spelling this pin exists to prevent");
+});
+
+test("H-3 NEGATIVE CONTROL: a re-inlined SELECT inside revenueCsv is caught", () => {
+  const csvFn = functionBodyAfter(reportsSrc, "async function revenueCsv(");
+  const mutated = csvFn.replace(/await sales\(env, ctx\)/, "await env.DB.prepare('SELECT 1 FROM events').all()");
+  assert.notEqual(mutated, csvFn, "the mutation found no sales() call to replace");
+  assert.equal(/await sales\(env, ctx\)/.test(mutated), false, "the call detector cannot fail");
+  assert.ok(/FROM events/.test(mutated), "the second-SELECT detector cannot fail");
+});
+
+test("H-3: sales() still produces every column the overview renders", () => {
+  const salesFn = functionBodyAfter(reportsSrc, "async function sales(");
+  assert.ok(salesFn, "sales() is gone or is no longer a plain function declaration");
+  // Read the aliases the shipped SELECT actually produces, rather than listing them from a design.
+  for (const col of ["event_id", "AS event", "e.type", "e.starts_at", "AS program", "card_cents", "cash_cents", "AS registrations"]) {
+    assert.ok(salesFn.includes(col), `sales() no longer produces ${col}, which the overview depends on`);
+  }
+  assert.match(salesFn, /total_cents: \(r\.card_cents \|\| 0\) \+ \(r\.cash_cents \|\| 0\)/,
+    "the total is no longer card + cash — the overview's Total would disagree with the CSV's");
+});
+
+test("H-3: the overview lives on the REGISTRATIONS surface, reads the existing route, and opens the hub", () => {
+  const REG_JS = blankComments(readFileSync(join(here, "../../web/assets/admin-registrations.js"), "utf8"));
+  assert.match(REG_JS, /\/api\/admin\/reports\/sales/,
+    "the overview does not read the existing sales route — that would be a second source for one set of numbers");
+  assert.match(REG_JS, /admin-manager\.html\?event=/,
+    "the overview has no way into the event it lists — item 6 asks for easy ACCESS, not another report");
+  assert.match(REG_JS, /BT_ADMIN\.money/,
+    "money is formatted by a second implementation — BT_ADMIN.money is the one");
+  // The per-event mode is what the hub embeds as its Registrations tab; it must survive untouched.
+  assert.match(REG_JS, /fromUrl/, "the ?event= preselect the hub depends on is gone");
 });

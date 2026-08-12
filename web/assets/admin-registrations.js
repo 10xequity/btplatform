@@ -45,7 +45,14 @@
     const events = r.data.events || [];
     $("eventSelect").innerHTML = `<option value="">— choose event —</option>` +
       events.map((e) => `<option value="${e.id}">${esc(e.name)}</option>`).join("");
-    $("eventSelect").onchange = () => { eventId = $("eventSelect").value || null; $("scoreLinksCard").hidden = true; loadRegs(); };
+    $("eventSelect").onchange = () => {
+      eventId = $("eventSelect").value || null;
+      $("scoreLinksCard").hidden = true;
+      // H-3: the status filters belong to one event's list. Clearing the picker returns to the
+      // all-events overview rather than leaving an empty table behind.
+      $("regFilters").hidden = !eventId;
+      eventId ? loadRegs() : loadOverview();
+    };
     // WF-5 H-1 (v0.139.0): the manager hub points this page at ONE event via ?event=N. ADDITIVE
     // on purpose — with no ?event= the page behaves exactly as it did from the rail, which is what
     // makes the hub reversible and what lets this page keep its own way in. An id that is not in
@@ -54,10 +61,70 @@
     if (fromUrl && events.some((e) => e.id === fromUrl)) {
       $("eventSelect").value = String(fromUrl);
       eventId = String(fromUrl);
+      $("regFilters").hidden = false;   // H-3: an event is chosen, so its status filters apply
       loadRegs();
     } else {
-      $("regTable").innerHTML = "<p>Pick an event above.</p>";
+      // WF-5 H-3 (v0.141.0): this used to say "Pick an event above." The owner's item 6 asks for
+      // the opposite — "all the events and registrations listed for easy access and financial
+      // review" — so the no-event state IS the all-events overview now. Choosing an event still
+      // switches to that event's list, and the hub always passes ?event=, so its Registrations tab
+      // is unaffected.
+      loadOverview();
     }
+  }
+
+  /* ---------- WF-5 H-3: the all-events financial overview ----------
+     NO NEW ROUTE AND NO NEW QUERY. `GET /api/admin/reports/sales` already returns per_event with
+     exactly these columns, and `revenueCsv` already renders that same payload as the CSV — the
+     "one query, two renderers" this unit was queued to build turned out to be built already
+     (reports_export.test.mjs now pins it, because an unpinned true thing is one refactor from
+     being false). This screen is the third renderer of the same numbers, never a second source.
+
+     It is a MODE of this page rather than a new page: the rail's Registrations entry should land
+     on it, per item 6, and a new page would need a rail slot beside the one that already means
+     "registrations". The mode is chosen by the ?event= parameter the hub already passes. */
+  async function loadOverview() {
+    $("regTable").innerHTML = "<p>Loading…</p>";
+    const r = await api("/api/admin/reports/sales");
+    if (!r.ok) { $("regTable").innerHTML = `<p>${esc(r.data.error || "Couldn't load the events.")}</p>`; return; }
+    const rows = r.data.per_event || [];
+    if (!rows.length) {
+      $("regTable").innerHTML = "<p>No events yet. Create one on Events &amp; Programs and it will appear here.</p>";
+      return;
+    }
+    const money = window.BT_ADMIN.money;          // ONE money formatter, not a second one
+    const totals = rows.reduce((a, e) => ({
+      regs: a.regs + (e.registrations || 0),
+      card: a.card + (e.card_cents || 0),
+      cash: a.cash + (e.cash_cents || 0),
+      total: a.total + (e.total_cents || 0),
+    }), { regs: 0, card: 0, cash: 0, total: 0 });
+
+    $("regTable").innerHTML = `<table class="regs"><thead><tr>
+        <th>Event</th><th>Date</th><th>Type</th><th>Program</th>
+        <th>Registered</th><th>Paid (card)</th><th>Paid (cash)</th><th>Total</th><th></th>
+      </tr></thead><tbody>` +
+      rows.map((e) => `<tr>
+        <td>${esc(e.event)}</td>
+        <td>${e.starts_at ? esc(String(e.starts_at).slice(0, 10)) : "—"}</td>
+        <td>${esc(e.type || "")}</td>
+        <td>${esc(e.program || "")}</td>
+        <td>${e.registrations || 0}</td>
+        <td>${money(e.card_cents || 0)}</td>
+        <td>${money(e.cash_cents || 0)}</td>
+        <td><strong>${money(e.total_cents || 0)}</strong></td>
+        <td><a class="btn ghost" href="admin-manager.html?event=${e.event_id}"
+               aria-label="Open the manager for ${esc(e.event)}">Manage →</a></td>
+      </tr>`).join("") +
+      `</tbody><tfoot><tr>
+        <td colspan="4"><strong>${rows.length} event${rows.length === 1 ? "" : "s"}</strong></td>
+        <td><strong>${totals.regs}</strong></td>
+        <td><strong>${money(totals.card)}</strong></td>
+        <td><strong>${money(totals.cash)}</strong></td>
+        <td><strong>${money(totals.total)}</strong></td>
+        <td></td>
+      </tr></tfoot></table>`;
+    say(`${rows.length} event${rows.length === 1 ? "" : "s"}. Choose one above to work its registrations.`);
   }
 
   /* ---------- registrations table ---------- */

@@ -1,5 +1,43 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.141.0 — 2026-08-12
+
+### WF-5 H-3 — the all-events financial overview, and a premise that was already true
+
+The owner's item 6: *"Registrations should have all the events and registrations listed for easy
+access and financial review."* **The unit was queued as "add a JSON sibling of the revenue SELECT —
+one query, two renderers." Re-measuring found that already built and never pinned.**
+
+- **The SELECT lives in `sales()`**, behind `GET /api/admin/reports/sales`, which already returns
+  `per_event` with event id, name, type, date, program, card cents, cash cents, registrations and
+  total. **`revenueCsv` already calls that function** and renders its JSON as the CSV — its own
+  comment says *"Same source of truth as sales()."* So H-3 added **no route and no query.**
+- **It pins the property instead**, because an unpinned true thing is one refactor from being a
+  false one: `revenueCsv` must call `sales()` and must not grow its own `FROM events`, with a
+  negative control that re-inlines a SELECT and proves both halves of the detector fire. The
+  column set is read from the shipped SELECT's own aliases rather than listed from a design.
+
+**What actually shipped is the screen.** The top-level Registrations page's no-event state used to
+say "Pick an event above." It is now the overview: **Event · Date · Type · Program · Registered ·
+Paid (card) · Paid (cash) · Total**, each row ending in **Manage →** which opens that event's
+manager hub, and a totals row across all of it.
+
+- **A MODE, not a new page.** The rail's Registrations entry should land on it (item 6), and a new
+  page would need a rail slot beside the one that already means "registrations". The mode is chosen
+  by the `?event=` parameter the hub already passes — so the hub's Registrations tab, which always
+  passes one, is untouched, and clearing the picker returns to the overview.
+- **Third renderer, one source.** The screen reads the same route the CSV does. Money is
+  `BT_ADMIN.money`, not a second formatter.
+- **The status filters now hide while the overview is showing** — with no event chosen they act on
+  nothing, and a control that does nothing is worse than one that is not there.
+
+**An existing guard caught a live defect in this change before it shipped:**
+`hidden_overlay.test.mjs` failed on `.filters`, which carries an author `display: flex` rule — so
+`hidden` would have painted the filters anyway. That is the v0.119.0 lesson (author CSS defeats
+`[hidden]`) and the fix is the `.br-pick[hidden]` precedent the guard's own negative control names.
+Four new tests; three of them **green pre-build by design**, because they pin a property that was
+already true — stated here rather than left to look like coverage that was never exercised.
+
 ## v0.140.0 — 2026-08-12
 
 ### WF-5 H-2 — the manager hub's remaining five tabs, and tab visibility by event type

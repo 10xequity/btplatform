@@ -1,5 +1,5 @@
 # Boomtown Athletics Platform
-**Version:** v0.140.0 · **Date:** 2026-08-12 · **Supersedes:** README @ v0.86.0 (2026-08-04)
+**Version:** v0.141.0 · **Date:** 2026-08-12 · **Supersedes:** README @ v0.86.0 (2026-08-04)
 
 > **v0.140.0 rewrite (owner instruction, 2026-08-12: "update readme").** The previous README claimed
 > to be current "through v0.86.0" while the build shipped **v0.140.0**, its module table actually
