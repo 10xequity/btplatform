@@ -48,6 +48,11 @@
      localStorage and survive the next event. */
   const PB_VIEWS = ["bottom", "side"];   // the ONE list; the stylesheet and the buttons match it
   let view = "bottom";
+  // WF-3 (v0.135.0): the divisions' own pivot, same discipline — one list, the owner's words.
+  // Horizontal = divisions as full-width bands; vertical = divisions side by side as columns.
+  // CSS-only: render() never reads divView, so no orientation can drop a division.
+  const PB_DIV_VIEWS = ["horizontal", "vertical"];
+  let divView = "horizontal";
   let sortKey = "board";
   let collapsed = false;
 
@@ -88,6 +93,11 @@
     if (split) split.dataset.view = view;
     for (const b of document.querySelectorAll("[data-pbview]")) {
       b.setAttribute("aria-pressed", String(b.dataset.pbview === view));
+    }
+    const boardEl = $("pbBoard");
+    if (boardEl) boardEl.dataset.divview = divView; // survives render()'s innerHTML rewrites
+    for (const b of document.querySelectorAll("[data-pbdivview]")) {
+      b.setAttribute("aria-pressed", String(b.dataset.pbdivview === divView));
     }
     const ws = $("pbWorkspace"), btn = $("pbCollapse");
     if (ws) ws.dataset.collapsed = collapsed ? "1" : "0";
@@ -463,6 +473,8 @@
     try {
       const savedView = localStorage.getItem("bt_pb_view");
       if (PB_VIEWS.includes(savedView)) view = savedView;
+      const savedDivView = localStorage.getItem("bt_pb_divview");
+      if (PB_DIV_VIEWS.includes(savedDivView)) divView = savedDivView; // validated — a poisoned value never becomes the layout
       const savedSort = localStorage.getItem("bt_pb_sort");
       if (savedSort) { sortKey = savedSort; $("pbSort").value = savedSort; }
     } catch (e) { /* a browser with storage denied still gets a working board */ }
@@ -479,6 +491,14 @@
       b.addEventListener("click", () => {
         view = b.dataset.pbview;
         try { localStorage.setItem("bt_pb_view", view); } catch (e) {}
+        paintView();
+      });
+    }
+    // WF-3: static markup, so boot wiring is correct and sufficient — like the pbview pair above.
+    for (const b of document.querySelectorAll("[data-pbdivview]")) {
+      b.addEventListener("click", () => {
+        divView = b.dataset.pbdivview;
+        try { localStorage.setItem("bt_pb_divview", divView); } catch (e) {}
         paintView();
       });
     }

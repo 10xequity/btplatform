@@ -1,5 +1,15 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.135.0 — 2026-08-12
+
+**WF-3 — the pool board's divisions pivot horizontal ↔ vertical (owner brief 2026-08-11 item 4; roadmap §-1p, §-0 B25).** A new segmented control sits above the board, in the owner's own words: **Horizontal** keeps today's layout — each division a full-width band with its pools flowing across; **Vertical** stands the divisions side by side as columns and stacks each division's pools, so a three-division day fits on one screen with no scrolling between divisions.
+
+- **Same discipline as the waiting-area toggle it mirrors (T2-8):** one list (`PB_DIV_VIEWS`), and the buttons, the stylesheet and the list are asserted to be the SAME SET — both values carry an explicit rule so the check stays real. The choice persists in the browser (`bt_pb_divview`), is validated on restore so a poisoned value never becomes the layout, never marks the board unsaved, and is wired at boot (never inside `wire()` — D-6).
+- **The pivot is CSS-only**: `render()` emits identical markup for both orientations, so a pivot that drops a division is structurally impossible — pinned by a guard that asserts `render()` never reads the view. Drag-and-drop and the keyboard path are untouched (both attach by element, not geometry). The new buttons live inside the existing `pb-seg` styling and inherit its press feedback and reduced-motion gates. D-24's borrowed classes (`.pb-div-h`, `.pb-courts`) are pinned unrenamed.
+- **A guard defect caught mid-unit, worth recording:** the first draft anchored on `"function render"`, which matches `renderSuggestions` first — the test interrogated the wrong function and reddened against correct code. The extraction helper now asserts its anchor is UNIQUE in the source before using it (`function name(` with the paren). Assert uniqueness before anchoring — this repo's oldest lesson, now enforced inside the harness itself.
+
+7 new tests in `pool_board_pivot.test.mjs` (6 seen failing pre-fix; the D-24 pin is deliberately green and carries its own rename control); suite 1706 → 1713. No migration.
+
 ## v0.134.0 — 2026-08-11
 
 **WF-2 — the bracket board shows only ACTIVE brackets (owner brief 2026-08-11 item 3; roadmap §-1p, §-0 B24).** Production carried **eleven live matchless bracket rows rendering as empty trees** (event 90006 held ten — five failed A/BB generation pairs; 90003 one). The mechanism was read from the code, not guessed: `generateBracketFor` INSERTs bracket rows BEFORE writing matches with no transaction, and its replace-cleanup fires only when live MATCHES exist — so a failed attempt strands its rows and every later attempt skips the cleanup.

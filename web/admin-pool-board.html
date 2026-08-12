@@ -12,9 +12,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Pool board — Boomtown Athletics</title>
   <script>/* Pre-paint state — collapse + theme (uiux-review §4/§6.4, v0.52.0): read the bt_nav cookie and the saved theme BEFORE the first stylesheet so the rail state AND the theme are right on frame one — no post-paint snap of either. admin-nav.js writes the cookie on rail toggle and bt_theme on theme toggle; the localStorage bt_nav fallback migrates pre-v0.51 sessions. */(function(){try{var m=document.cookie.match(/(?:^|; )bt_nav=([^;]*)/);var v=m?m[1]:((window.localStorage&&localStorage.getItem("bt_nav_collapsed")==="1")?"min":"");if(v==="min")document.documentElement.dataset.nav="min";var t=(window.localStorage&&localStorage.getItem("bt_theme"))||(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.dataset.theme=t;}catch(e){}})();</script>
-  <link rel="stylesheet" href="assets/tokens.css?v=0.134.0" />
-  <link rel="stylesheet" href="assets/app.css?v=0.134.0" />
-  <link rel="stylesheet" href="assets/admin.css?v=0.134.0" />
+  <link rel="stylesheet" href="assets/tokens.css?v=0.135.0" />
+  <link rel="stylesheet" href="assets/app.css?v=0.135.0" />
+  <link rel="stylesheet" href="assets/admin.css?v=0.135.0" />
   <style>
     .mf-head { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; margin-bottom: 12px; }
     .mf-head p { max-width: 74ch; }
@@ -105,6 +105,23 @@
     .pb-split[data-view="side"] .pb-worklist { flex-direction: column; flex-wrap: nowrap;
       max-height: calc(100vh - 210px); }
     .pb-split[data-view="side"] .pb-worklist .pb-tile { width: 100%; }
+
+    /* THE DIVISIONS' OWN PIVOT (WF-3, owner 2026-08-11 item 4). Same discipline as the split
+       above: the two names live in exactly one place, PB_DIV_VIEWS in the page script, and this
+       stylesheet and the buttons are asserted to be the same set. Horizontal is the original
+       layout — divisions as full-width bands, pools flowing across. Vertical stands the divisions
+       side by side as columns and stacks each division's pools, so a three-division day fits on
+       one screen with no scrolling between divisions. The pivot is CSS-ONLY — render() emits
+       identical markup for both, so no orientation can drop a division by construction. */
+    .pb-boardbar { display: flex; justify-content: flex-end; margin-bottom: 8px; }
+    .pb-board[data-divview="horizontal"] { display: block; }
+    .pb-board[data-divview="vertical"] { display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(232px, 1fr)); gap: 16px; align-items: start; }
+    .pb-board[data-divview="vertical"] .pb-div { margin-bottom: 0; }
+    .pb-board[data-divview="vertical"] .pb-pools { flex-direction: column; overflow-x: visible;
+      align-items: stretch; padding-bottom: 0; }
+    .pb-board[data-divview="vertical"] .pb-pool { width: auto; }
+    .pb-board[data-divview="vertical"] .pb-add { width: auto; min-height: 52px; }
 
     /* The bench's own controls. They sit in its heading row rather than the page header: sorting
        and collapsing act on this list, and a control that acts on one region belongs beside it. */
@@ -209,7 +226,7 @@
 </head>
 <body>
     <header class="header chrome-glass no-print">
-    <a class="wordmark" href="admin.html" style="text-decoration:none;color:inherit"><img class="brand-logo" src="assets/logo-boom-icon-512.png?v=0.134.0" alt="" width="22" height="22" />Boomtown <span>Athletics</span></a>
+    <a class="wordmark" href="admin.html" style="text-decoration:none;color:inherit"><img class="brand-logo" src="assets/logo-boom-icon-512.png?v=0.135.0" alt="" width="22" height="22" />Boomtown <span>Athletics</span></a>
     <div class="spacer"></div>
     <select id="orgSwitcher" class="org-switcher" aria-label="Switch organization"></select>
     <a id="btHdrMail" class="btn ghost hdr-mail" href="admin-messages.html" aria-label="Messages">✉</a>
@@ -314,7 +331,15 @@
            written by the page script from PB_VIEWS and is the only thing the layout keys off. -->
       <div id="pbSplit" class="pb-split" data-view="bottom">
         <div class="pb-boardcol">
-          <div id="pbBoard" class="pb-board"></div>
+          <!-- WF-3: the divisions' own pivot. Beside the region it acts on, like the waiting
+               area's controls; the buttons use the owner's words. Wired at boot, never in wire(). -->
+          <div class="pb-boardbar">
+            <span class="pb-seg" role="group" aria-label="How the divisions are laid out">
+              <button type="button" id="pbDivH" data-pbdivview="horizontal" aria-pressed="true">Horizontal</button>
+              <button type="button" id="pbDivV" data-pbdivview="vertical" aria-pressed="false">Vertical</button>
+            </span>
+          </div>
+          <div id="pbBoard" class="pb-board" data-divview="horizontal"></div>
 
           <!-- Seeding suggestions (v0.95.0, W-D). Static markup outside #pbBoard on purpose:
                render() rewrites that node's innerHTML wholesale, and fail()/orgEmptyState()
@@ -350,8 +375,8 @@
       </div>
     </main>
   </div>
-  <script src="assets/config.js?v=0.134.0"></script>
-  <script src="assets/admin-nav.js?v=0.134.0"></script>
-  <script src="assets/admin-pool-board.js?v=0.134.0"></script>
+  <script src="assets/config.js?v=0.135.0"></script>
+  <script src="assets/admin-nav.js?v=0.135.0"></script>
+  <script src="assets/admin-pool-board.js?v=0.135.0"></script>
 </body>
 </html>
