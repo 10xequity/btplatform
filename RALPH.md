@@ -70,6 +70,22 @@ decisions needed": an empty block is omitted entirely.
 
 **Rank them, most consequential first**, and say when one question gates others.
 
+**§B.1 — A PERMISSION IS NOT A QUESTION (owner instruction, 2026-08-12).** His words: *"These are
+not questions. these are permissions, please build if i ask you to build it instead of asking for
+permission. Please list design questions as questions rather than statements."* Three consequences,
+and iterations 64 and 65 violated all three:
+
+1. **If he has asked for something, build it.** "May I build the thing you asked for" is not a
+   question. An item on the queue with his name on it is authorised by being there.
+2. **Never re-ask something whose default you have already stated.** If the honest answer is
+   "proceed unless he objects" — then proceed, and report the decision in the body of the reply.
+   Iteration 65 asked twice about a payload field it had already said it would default to; that is
+   the exact pattern this rule kills.
+3. **A design question is phrased as a question and has more than one real answer.** *"Should the
+   Live tab keep polling while it is hidden, or stop until it is opened?"* is a question. *"I
+   recommend X"* is a decision and belongs in the body. **If the block cannot be written as
+   sentences ending in question marks, there is nothing to ask — omit it.**
+
 ---
 
 **Supersedes:** v3.0 (2026-08-05). Change: PHASE 3 step 7 — the Pages confirmation pointed at the
