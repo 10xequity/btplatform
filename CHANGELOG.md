@@ -1,5 +1,52 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.140.0 — 2026-08-12
+
+### WF-5 H-2 — the manager hub's remaining five tabs, and tab visibility by event type
+
+The tab row from the owner's item 7 is complete: **Registrations · Divisions & Pools · Scoring
+Links · Schedule editor · Scoring Edit · Live Scoring Board · Bracket**, each one the existing
+page in a chromeless same-origin iframe.
+
+- **"A tournament OR league management page" — his item 6 — is now literal.** The scoring surface
+  is not the same page for the two, so the **pane** carries the type rather than the tab: Pool play
+  (`tournament.html`) on a tournament, League weeks (`admin-league.html`) on a league. One tab, the
+  right screen behind it.
+- **Tab visibility by type, over the types the SCHEMA actually has.** A tournament and a league
+  show every tab; **a drop-in session or event (SG-1's sheet types) and a court rental show
+  Registrations only** — a sheet has no pools, no schedule, no scoring, no bracket. A tab that does
+  not apply is **absent, never greyed out**: a disabled tab is a question the operator cannot
+  answer. **The one deliberate exception is Bracket on a league** — WF-2 proved a filter that hides
+  everything can delete the only way back in, and `admin-brackets`' own empty state plus its
+  Generate panel IS that way in.
+- **The approved design named an event type that does not exist.** Its visibility table carried a
+  `tryout` row; `events.type` is CHECK-constrained to `tournament, league, training, event,
+  court_rental` and tryouts are their own module. The guard **derives the type list from the schema
+  and asserts the map matches it exactly**, which is what caught it — a hardcoded list would have
+  shipped a rule nobody could reach.
+
+**Two things moved, because H-2's Live tab is a MEMBER page.** `live.html` loads `app.css` and
+`site-nav.js` and has never loaded the admin shell, so H-1's arrangement could not reach it:
+
+- **The embed child moved from `admin-nav.js` to `config.js`** — the only script both shells load,
+  which is why `BT_SIGNUP_LINK` already lives there. A copy in `site-nav.js` would have been a
+  third implementation of one message.
+- **The `body.embed` rule set moved from `admin.css` to `app.css`**, which every page in `web/`
+  links, and grew the member rail's selector. Two rule sets for one concept is exactly what D-23
+  and D-24 cost this repo.
+
+Both pins moved with the code rather than being deleted, and NC-2 was rewritten to strip the rule
+from `app.css` — left pointed at `admin.css` it would have passed for the emptiest possible reason.
+
+**The `?event=` preselect reached its last three pages** (`admin-score-links`, `tournament`,
+`admin-league` — a league's id IS its event id, which the schedule-editor link has relied on since
+W-B). Additive as before: with no `?event=` every page behaves exactly as it does from the rail.
+
+**Guard:** `manager_hub.test.mjs` v2.0, four new tests. Three of my own drafts were wrong before the
+code was — a doubled escape, a control still aimed at the file the rule had left, and **a lazy
+`] }` anchor that stopped inside the first pane and reported the League Manager missing from a list
+containing it.** Ambiguous anchor, the fourth instance; bounded by the next tab's key instead.
+
 ## v0.139.0 — 2026-08-12
 
 ### WF-5 H-1 — the per-event manager hub: the shell and the first two tabs

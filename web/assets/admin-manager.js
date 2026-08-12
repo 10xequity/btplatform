@@ -40,14 +40,56 @@
       { key: "divisions", label: "Divisions", page: "admin-divisions.html" },
       { key: "pools", label: "Create Pools", page: "admin-pool-board.html" },
     ] },
-    { key: "scoring-links", label: "Scoring Links" },
-    { key: "schedule", label: "Schedule editor" },
-    { key: "scoring", label: "Scoring Edit" },
-    { key: "live", label: "Live Scoring Board" },
-    { key: "bracket", label: "Bracket" },
+    { key: "scoring-links", label: "Scoring Links", panes: [
+      { key: "links", label: "Scoring Links", page: "admin-score-links.html" },
+    ] },
+    { key: "schedule", label: "Schedule editor", panes: [
+      { key: "editor", label: "Schedule editor", page: "admin-schedule-editor.html" },
+    ] },
+    /* "a tournament OR league management page" — his item 6. The scoring surface is not the same
+       page for the two, so the PANE carries the type rather than the tab: pool play for a
+       tournament, the League Manager for a league. One tab, the right screen behind it. */
+    { key: "scoring", label: "Scoring Edit", panes: [
+      { key: "pools", label: "Pool play", page: "tournament.html", types: ["tournament"] },
+      { key: "weeks", label: "League weeks", page: "admin-league.html", types: ["league"] },
+    ] },
+    { key: "live", label: "Live Scoring Board", panes: [
+      { key: "board", label: "Live board", page: "live.html" },
+    ] },
+    { key: "bracket", label: "Bracket", panes: [
+      { key: "bracket", label: "Bracket", page: "admin-brackets.html" },
+    ] },
   ];
 
-  const READY = TABS.filter((t) => t.panes && t.panes.length);
+  /* WHICH TABS AN EVENT TYPE ACTUALLY NEEDS. The keys are the schema's own event types — the
+     CHECK constraint on events.type — and manager_hub.test.mjs DERIVES that list from the schema
+     and asserts this map matches it exactly. That check earned its keep immediately: the approved
+     design's visibility table carried a "tryout" row, and there is no tryout event TYPE (tryouts
+     are their own module). A row for a type nobody can create is a rule nobody ever reaches.
+
+     A tab that does not apply is ABSENT, never greyed out — a disabled tab is a question the
+     operator cannot answer. The one deliberate exception to "hide what is empty" is Bracket on a
+     league: WF-2 proved that a filter which hides everything can delete the only way back in, and
+     admin-brackets' own empty state plus its Generate panel IS that way in. So a league sees every
+     tab, and the pages themselves say when they have nothing yet. */
+  const TAB_TYPES = {
+    tournament:   ["registrations", "divisions", "scoring-links", "schedule", "scoring", "live", "bracket"],
+    league:       ["registrations", "divisions", "scoring-links", "schedule", "scoring", "live", "bracket"],
+    training:     ["registrations"],
+    event:        ["registrations"],
+    court_rental: ["registrations"],
+  };
+
+  /* Until the event loads we know no type, so nothing type-specific is rendered yet. */
+  let evType = null;
+
+  function visibleTabs() {
+    const allowed = TAB_TYPES[evType] || [];
+    return TABS
+      .filter((t) => t.panes && t.panes.length && allowed.includes(t.key))
+      .map((t) => ({ ...t, panes: t.panes.filter((p) => !p.types || p.types.includes(evType)) }))
+      .filter((t) => t.panes.length);
+  }
 
   /* Frames are created on first visit and KEPT. Revisiting a tab must not reload its page — that
      is the "do not reload" requirement, and it is also what makes the hub feel like one screen
@@ -60,7 +102,8 @@
   function readHash() {
     const raw = (location.hash || "").replace(/^#/, "");
     const [tabKey, paneKey] = raw.split("/");
-    const tab = READY.find((t) => t.key === tabKey) || READY[0];
+    const shown = visibleTabs();
+    const tab = shown.find((t) => t.key === tabKey) || shown[0];
     if (!tab) return null;
     const pane = tab.panes.find((p) => p.key === paneKey) || tab.panes[0];
     return { tab, pane };
@@ -120,14 +163,19 @@
     const r = await api(`/api/events/${eventId}`);
     if (!r.ok) return BT_ADMIN.loadFail("main", r, "events");
     const ev = r.data.event || r.data;
+    evType = ev.type || null;   // decides which tabs exist at all — set before the row renders
     $("mgrName").textContent = ev.name || "Event";
     $("mgrMeta").textContent = [ev.starts_at ? fmtDT(ev.starts_at) : "", ev.location || "", ev.type || ""]
       .filter(Boolean).join(" · ");
 
-    $("mgrTabs").innerHTML = READY.map((t) =>
+    $("mgrTabs").innerHTML = visibleTabs().map((t) =>
       `<button class="tab" role="tab" aria-selected="false" data-tab="${esc(t.key)}">${esc(t.label)}</button>`).join("");
     for (const b of $("mgrTabs").children) b.onclick = () => { location.hash = b.dataset.tab; };
 
+    if (!visibleTabs().length) {
+      $("mgrNote").textContent = `A ${ev.type || "event"} has no manager tabs yet — open it from Events & Programs instead.`;
+      return;
+    }
     window.addEventListener("hashchange", route);
     route();
   }

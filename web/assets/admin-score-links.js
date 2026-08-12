@@ -106,12 +106,19 @@
     $("lEvent").innerHTML = list.length
       ? list.map((e) => `<option value="${e.id}">${esc(e.name)}</option>`).join("")
       : `<option value="">No events yet</option>`;
+    // WF-5 H-2 (v0.140.0): the manager hub points this page at ONE event via ?event=N. ADDITIVE —
+    // with no ?event= the page behaves exactly as it did from the rail, which is what makes the hub
+    // reversible and keeps this page's own way in. An id this org cannot see is ignored, never
+    // forced: the picker is the org's own truth.
+    const fromUrl = Number(new URLSearchParams(location.search).get("event")) || 0;
     eventId = list.length ? list[0].id : null;
+    if (fromUrl && list.some((e) => e.id === fromUrl)) eventId = fromUrl;
     if (!eventId) return BT_ADMIN.orgEmptyState("lCards", "events"); // v0.89.0 Block B3: an empty org is not a broken module
     $("lEmpty").hidden = false;
   }
 
   document.addEventListener("DOMContentLoaded", () => {
+    $("lEvent").value = String(eventId || "");
     $("lEvent").addEventListener("change", () => {
       eventId = Number($("lEvent").value);
       $("lCards").innerHTML = "";

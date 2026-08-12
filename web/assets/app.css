@@ -292,3 +292,28 @@ button, .btn, .tab, .nav-item, a[href], input, select { touch-action: manipulati
   }
   .header { padding-top: max(0px, env(safe-area-inset-top)); }
 }
+
+/* v0.140.0 (§-1p WF-5 H-2) — CHROMELESS MODE, ONE RULE SET FOR EVERY PAGE IN THE APP.
+   The manager hub shows existing pages inside iframes, and a page that rendered its own rail and
+   header inside a tab would show the operator two of each.
+
+   H-1 put this in admin.css because every tab was then an admin page. H-2's Live Scoring Board tab
+   is live.html — a MEMBER page that loads app.css and site-nav.js and has never linked admin.css.
+   Rather than write a second rule set for the member shell (two definitions of one concept is
+   exactly what D-23 and D-24 cost this repo), the rule moved here: app.css is linked by every page
+   in web/. Both shells' chrome is named below — .sidebar is the admin rail, .site-nav the member
+   one — and config.js adds body.embed when it sees ?embed=1.
+
+   The rail and header are static markup in the pages themselves, which is what makes hiding them
+   a stylesheet's job at all. */
+body.embed .sidebar,
+body.embed .site-nav,
+body.embed .header,
+body.embed .bt-edge,
+body.embed .bt-backbar-admin { display: none !important; }
+body.embed .admin-layout,
+body.embed .site-layout { display: block; }
+body.embed .admin-main { padding: 12px 14px; }
+body.embed .wrap, body.embed main { padding-left: 14px; padding-right: 14px; }
+/* No page scrollbar inside a frame: the hub sizes the frame to the height the page reports. */
+body.embed { overflow-y: hidden; }

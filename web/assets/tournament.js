@@ -64,7 +64,13 @@
     $("eventSelect").onchange = () => $("eventSelect").value && openEvent(+$("eventSelect").value);
     // E3 (v0.91.0, audit §6.5): every other module opens on the first real event; this page used
     // to sit on the placeholder and look like it had loaded nothing. Same rule now, any count.
-    if (evs.length) { $("eventSelect").value = evs[0].id; openEvent(evs[0].id); }
+    // WF-5 H-2 (v0.140.0): the manager hub points this page at ONE event via ?event=N. ADDITIVE —
+    // with no ?event= the page behaves exactly as it did from the rail, which is what makes the hub
+    // reversible and keeps this page's own way in. An id this org cannot see is ignored, never
+    // forced: the picker is the org's own truth.
+    const fromUrl = Number(new URLSearchParams(location.search).get("event")) || 0;
+    const pick = (fromUrl && evs.some((e) => e.id === fromUrl)) ? fromUrl : (evs.length ? evs[0].id : 0);
+    if (pick) { $("eventSelect").value = pick; openEvent(pick); }
   }
 
   /* ---------- create event (≤10 clicks from template) ---------- */

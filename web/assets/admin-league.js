@@ -45,7 +45,14 @@
     sel.innerHTML = `<option value="">Choose league…</option>` + leagues.map(l =>
       `<option value="${l.id}">${esc(l.name)} · ${l.team_count} team${l.team_count === 1 ? "" : "s"} · wk ${l.weeks_played}</option>`).join("");
     sel.onchange = () => { leagueId = +sel.value || null; leagueId ? load() : ($("board").hidden = true); };
-    const live = leagues.find(l => l.status === "in_progress") || leagues[0];
+    // WF-5 H-2 (v0.140.0): the manager hub points this page at ONE event via ?event=N. ADDITIVE —
+    // with no ?event= the page behaves exactly as it did from the rail, which is what makes the hub
+    // reversible and keeps this page's own way in. An id this org cannot see is ignored, never
+    // forced: the picker is the org's own truth.
+    const fromUrl = Number(new URLSearchParams(location.search).get("event")) || 0;
+    // A league's id IS its event id (the schedule-editor link has passed it as ?event= since W-B).
+    const live = leagues.find(l => l.id === fromUrl)
+      || leagues.find(l => l.status === "in_progress") || leagues[0];
     if (live) { sel.value = live.id; leagueId = live.id; load(); }
   }
 

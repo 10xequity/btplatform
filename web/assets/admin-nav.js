@@ -458,41 +458,6 @@
   /* ---------- shared helpers ---------- */
   const bearer = () => sessionStorage.getItem("bt_token");
 
-  /* v2.23 (v0.139.0, §-1p WF-5 H-1) — THE CHILD HALF OF THE EMBED CONTRACT.
-     The manager hub shows each admin page inside a same-origin iframe. `?embed=1` puts the page in
-     chromeless mode (body.embed — the rule set lives once in admin.css, because the rail is static
-     markup in every admin page) and reports the page's height to the hub so the frame can size
-     itself to its content instead of scrolling inside a box.
-
-     THIS CONTRACT IS NOT NEW AND WAS NOT REDESIGNED: schedule.js has posted
-     {bt_widget_height, slug} to its parent since v0.4.0 and web/widget.js has been the parent
-     that listens and filters by slug. This is the same message. It is a second IMPLEMENTATION
-     rather than a shared file because widget.js is a drop-in <script> served to external customer
-     sites and cannot import from this repo — so manager_hub.test.mjs asserts the message key is
-     identical across all four files, which is the only place that judgement can live.
-
-     `slug` is echoed back untouched: two frames on one page must never resize each other. */
-  (function embedChild() {
-    const q = new URLSearchParams(location.search);
-    if (q.get("embed") !== "1") return;
-    const slug = q.get("slug") || "";
-    document.documentElement.classList.add("embed");   // before paint, for the pre-paint snippet's benefit
-    const mark = () => document.body && document.body.classList.add("embed");
-    mark();
-    document.addEventListener("DOMContentLoaded", mark);
-    const post = () => {
-      if (!window.parent || window.parent === window) return;
-      window.parent.postMessage({ bt_widget_height: document.documentElement.scrollHeight, slug }, "*");
-    };
-    document.addEventListener("DOMContentLoaded", () => {
-      post();
-      // These pages render after their own fetches, so one post at load would freeze the frame at
-      // its empty height. Observing the body covers every later render without any page knowing.
-      if (window.ResizeObserver && document.body) new ResizeObserver(post).observe(document.body);
-    });
-    window.addEventListener("load", post);
-  })();
-
   async function api(path, opts = {}) {
     const headers = Object.assign({ "content-type": "application/json" }, opts.headers || {});
     const t = bearer();
@@ -896,7 +861,7 @@
       if (window.BT_STATUS || document.getElementById("bt-status-js")) return;
       var s = document.createElement("script");
       s.id = "bt-status-js";
-      s.src = "assets/build-status.js?v=0.139.0";
+      s.src = "assets/build-status.js?v=0.140.0";
       s.async = false;
       document.head.appendChild(s);
     } catch (e) { /* indicators are never load-blocking */ }

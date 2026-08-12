@@ -1,6 +1,6 @@
 /**
- * Boomtown Platform — §-0 B27 / §-1p WF-5 H-1: the per-event manager hub, shell + first two tabs
- * File: worker/test/manager_hub.test.mjs · Version: v1.0 · Date: 2026-08-12 · Ships in: v0.139.0
+ * Boomtown Platform — §-0 B27 / §-1p WF-5: the per-event manager hub (H-1 shell + H-2 all tabs)
+ * File: worker/test/manager_hub.test.mjs · Version: v2.0 · Date: 2026-08-12 · Ships in: v0.140.0
  *
  * The owner, 2026-08-11 item 6/7: one manager page per event, with horizontal tabs across the top
  * that do NOT reload — Registrations (Waitlist a subsection) · Divisions & Create Pools · Scoring
@@ -19,9 +19,15 @@
  * killed that: `web/widget.js` is a drop-in <script> served to EXTERNAL sites (boomtownvb.com,
  * coloradoboom.com) and cannot import from this repo without adding a network request to a
  * customer's page. So the CONTRACT is shared and the implementations are two — the member/external
- * pair (schedule.js posts, widget.js listens) and the admin pair (admin-nav.js posts, the hub
+ * pair (schedule.js posts, widget.js listens) and the in-app pair (config.js posts, the hub
  * listens). **What keeps them from drifting is a test, not a file:** the message key is asserted
  * identical across all four, below. One judgement, pinned in the only place that can hold it.
+ *
+ * v2.0 (H-2): the remaining five tabs, and TAB VISIBILITY BY EVENT TYPE. Two things moved in this
+ * release and both pins moved with them — the embed child from admin-nav.js to config.js and the
+ * body.embed rule set from admin.css to app.css — because H-2's Live tab is live.html, a MEMBER
+ * page that loads neither of the admin files. A second copy for the member shell would have been a
+ * third implementation of one message and a second rule set for one concept (D-23/D-24's class).
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -36,6 +42,11 @@ const HUB_HTML = read("admin-manager.html");
 const HUB_JS = code("assets/admin-manager.js");
 const NAV_JS = code("assets/admin-nav.js");
 const ADMIN_CSS = read("assets/admin.css");
+const CONFIG_JS = code("assets/config.js");
+const SCHEMA = readFileSync(new URL("../testkit/journey-schema.sql", import.meta.url), "utf8");
+
+/** Every page the hub mounts as a tab pane, read from the shipped TABS list. */
+const PANE_PAGES = [...HUB_JS.matchAll(/page: "([a-z-]+.html)"/g)].map((m) => m[1]);
 
 /* ── the tab row is the owner's list, in the owner's order ── */
 
@@ -60,14 +71,18 @@ test("all seven tabs are declared in the owner's order, and only the built ones 
   // renderer filters on what is actually wired. Both halves asserted, or the filter is decoration.
   assert.match(HUB_JS, /\.filter\(\(?t\)? => t\.panes/,
     "the renderer must show only tabs that have panes — an unbuilt tab is absent, never a dead button");
+  // H-2 finished the row: every declared tab now has panes, so the filter above hides nothing
+  // today. It stays asserted because the NEXT unbuilt tab must be absent rather than dead.
   const built = [...HUB_JS.matchAll(/key:\s*"([^"]+)",\s*label:\s*"[^"]+",\s*panes:/g)].map((x) => x[1]);
-  assert.deepEqual(built, ["registrations", "divisions"], "H-1 ships exactly two tabs: Registrations and Divisions & Pools");
+  assert.deepEqual(built, t.map((x) => x.key), "every declared tab must be wired now that H-2 has shipped");
 });
 
 test("the sub-tabs are the owner's subsections: Waitlist under Registrations, Pools under Divisions", () => {
   const panes = [...HUB_JS.matchAll(/page:\s*"([a-z-]+\.html)"/g)].map((x) => x[1]);
   assert.deepEqual(panes,
-    ["admin-registrations.html", "admin-waitlists.html", "admin-divisions.html", "admin-pool-board.html"],
+    ["admin-registrations.html", "admin-waitlists.html", "admin-divisions.html", "admin-pool-board.html",
+     "admin-score-links.html", "admin-schedule-editor.html", "tournament.html", "admin-league.html",
+     "live.html", "admin-brackets.html"],
     "each pane is an EXISTING page — a tab whose content is a new implementation is the rewrite this design refuses");
 });
 
@@ -105,7 +120,11 @@ test("the embed message key is IDENTICAL across both parent/child pairs", () => 
   // The member/external pair predates this unit; the admin pair is new. They cannot share a file
   // (widget.js is served to customer sites) so they share a pinned constant instead.
   const KEY = "bt_widget_height";
-  for (const f of ["assets/schedule.js", "widget.js", "assets/admin-nav.js", "assets/admin-manager.js"]) {
+  // v0.140.0: the admin CHILD moved from admin-nav.js to config.js. H-2 added a MEMBER-side tab
+  // (live.html), which loads site-nav.js and not admin-nav.js — so a child living in the admin
+  // shell could never have reached it, and a second copy in site-nav.js would have been a third
+  // implementation of one message. config.js is the only script BOTH shells load. The pin follows.
+  for (const f of ["assets/schedule.js", "widget.js", "assets/config.js", "assets/admin-manager.js"]) {
     assert.ok(code(f).includes(KEY), `${f} does not speak the shared embed contract (${KEY})`);
   }
   // Both listeners must filter by slug, or two frames on one page fight over each other's height.
@@ -114,14 +133,26 @@ test("the embed message key is IDENTICAL across both parent/child pairs", () => 
   }
 });
 
-test("every admin page can go chromeless, from ONE rule set, because the rail is static markup", () => {
-  assert.match(NAV_JS, /embed/, "admin-nav.js never notices ?embed=1, so no admin page can be a tab");
-  assert.match(NAV_JS, /scrollHeight/, "the embedded child never reports its height — frames would stay at their default");
-  assert.match(ADMIN_CSS, /body\.embed[^{]*\{[^}]*display:\s*none/,
-    "admin.css has no body.embed rule — the rail and header would render inside every tab");
-  // ONE rule set: the pages themselves must not carry their own embed CSS.
-  for (const p of ["admin-registrations.html", "admin-waitlists.html", "admin-divisions.html", "admin-pool-board.html"]) {
-    assert.equal(/body\.embed/.test(read(p)), false, `${p} carries its own embed rule — that belongs in admin.css, once`);
+test("EVERY page can go chromeless, from ONE rule set in the stylesheet every page loads", () => {
+  // v0.140.0 REWRITE, not a deletion. H-1 put this in admin.css because every tab was an admin
+  // page. H-2's Live tab is live.html — a MEMBER page that loads app.css and site-nav.js and has
+  // never linked admin.css. Two rule sets for one concept is the defect this repo has paid for
+  // twice (D-23, D-24), so the rule moved to app.css, which every page in web/ links, and grew
+  // the member rail's selector. The child JS moved to config.js for the same reason.
+  const APP_CSS = read("assets/app.css");
+  assert.match(CONFIG_JS, /embed/, "config.js never notices ?embed=1, so no page can be a tab");
+  assert.match(CONFIG_JS, /scrollHeight/, "the embedded child never reports its height — frames would stay at their default");
+  assert.match(APP_CSS, /body\.embed[^{]*\{[^}]*display:\s*none/,
+    "app.css has no body.embed rule — every tab would render its own rail and header");
+  assert.match(APP_CSS, /body\.embed \.site-nav/,
+    "the member rail is not hidden in embed mode — the Live tab would show site-nav inside the frame");
+  assert.match(APP_CSS, /body\.embed \.sidebar/,
+    "the admin rail is not hidden in embed mode — every admin tab would show the rail twice");
+  // ONE rule set: no page and no other stylesheet may carry its own.
+  assert.equal(/body\.embed/.test(read("assets/admin.css")), false,
+    "admin.css kept a body.embed rule after the move — one definition, or the two drift");
+  for (const p of PANE_PAGES) {
+    assert.equal(/body.embed/.test(read(p)), false, `${p} carries its own embed rule — that belongs in app.css, once`);
   }
 });
 
@@ -142,6 +173,68 @@ test("the preselect is ADDITIVE — each tab page still works standalone from th
   }
 });
 
+/* ── H-2: tab visibility by event type ── */
+
+/** The event types the SCHEMA allows. DERIVED, never typed out — and deriving it is what caught
+ *  the design's own error: the approved visibility table carried a "tryout" row, and there is no
+ *  tryout event type. Tryouts are their own module (admin-tryouts.html), not a kind of event. A
+ *  hardcoded list here would have shipped a row nobody could ever reach. */
+function schemaTypes() {
+  const m = SCHEMA.match(/type TEXT NOT NULL CHECK \(type IN \(([^)]+)\)\)/);
+  assert.ok(m, "the events table's type constraint moved — this guard's floor came from it");
+  return m[1].split(",").map((x) => x.trim().replace(/'/g, "")).sort();
+}
+
+function typeMap() {
+  const m = HUB_JS.match(/const TAB_TYPES = \{([\s\S]*?)\n  \};/);
+  assert.ok(m, "admin-manager.js no longer declares TAB_TYPES — visibility must have ONE home");
+  return m[1];
+}
+
+const typeRow = (t) => {
+  const r = typeMap().match(new RegExp("^\\s*" + t + ":\\s*\\[([^\\]]*)\\]", "m"));
+  assert.ok(r, t + " has no row in TAB_TYPES");
+  return [...r[1].matchAll(/"([^"]+)"/g)].map((x) => x[1]);
+};
+
+test("the visibility map covers exactly the event types the SCHEMA allows — no invented type", () => {
+  const mapped = [...typeMap().matchAll(/^\s*([a-z_]+):/gm)].map((x) => x[1]).sort();
+  assert.deepEqual(mapped, schemaTypes(),
+    "the visibility map and the schema's type list disagree — a type with no row renders nothing, and an invented type is a row nobody reaches");
+});
+
+test("a drop-in sheet shows only what a drop-in has; a competition event shows the lot", () => {
+  // SG-1's drop-in types: a sheet needs no pools, no schedule, no scoring, no bracket.
+  assert.deepEqual(typeRow("training"), ["registrations"], "a drop-in session needs only its sign-ups");
+  assert.deepEqual(typeRow("event"), ["registrations"], "a drop-in event needs only its sign-ups");
+  assert.deepEqual(typeRow("court_rental"), ["registrations"], "a facility booking has no pools or scoring");
+  const tabKeys = tabs().map((x) => x.key);
+  assert.deepEqual(typeRow("tournament"), tabKeys, "a tournament shows every tab");
+  assert.deepEqual(typeRow("league"), tabKeys,
+    "a league shows every tab too — hiding Bracket until one exists would delete the only way to generate one (WF-2's rule), and admin-brackets' own empty state is that way in");
+});
+
+test("a tab hidden by type is ABSENT, never disabled — and the filter runs at BOTH levels", () => {
+  assert.match(HUB_JS, /TAB_TYPES\[/, "the renderer never consults the visibility map");
+  assert.equal(/disabled/.test(HUB_JS), false,
+    "a tab that does not apply must not be rendered at all — a greyed-out tab is a question the operator cannot answer");
+  // Panes are filtered too, or a league would be handed the tournament's pool grid.
+  assert.match(HUB_JS, /p\.types/, "panes carry no type filter");
+});
+
+test("the league's scoring surface is the League Manager; the tournament's is pool play", () => {
+  // Bounded by the NEXT tab's key rather than by a lazy `] }` — a pane's own `types: [...] }`
+  // ends in exactly those characters, so the lazy version stopped inside the first pane and
+  // reported the League Manager missing from a list that contained it. Ambiguous anchor, again.
+  const scoring = HUB_JS.match(/key: "scoring",([\s\S]*?)key: "live",/);
+  assert.ok(scoring, "the Scoring Edit tab lost its panes, or no longer sits before the Live tab");
+  assert.match(scoring[1], /tournament\.html/, "pool play is the tournament's scoring pane");
+  assert.match(scoring[1], /admin-league\.html/, "the League Manager is the league's scoring pane");
+  // "a tournament OR league management page" — his words. Each pane names the type it serves.
+  assert.match(scoring[1], /types: \["tournament"\]/, "pool play must be scoped to tournaments");
+  assert.match(scoring[1], /types: \["league"\]/, "the League Manager must be scoped to leagues");
+});
+
 /* ── negative controls — each mutates real input and asserts the mutation landed ── */
 
 test("NC-1: a hub that navigates on tab switch is caught", () => {
@@ -150,9 +243,13 @@ test("NC-1: a hub that navigates on tab switch is caught", () => {
   assert.ok(/location\.href\s*=/.test(mutated), "the navigation detector cannot fail");
 });
 
-test("NC-2: dropping the body.embed rule from admin.css is caught", () => {
-  const stripped = ADMIN_CSS.replace(/body\.embed[^}]*\}/g, "");
-  assert.notEqual(stripped, ADMIN_CSS, "the strip control found no body.embed rule to remove");
+test("NC-2: dropping the body.embed rule from the shared stylesheet is caught", () => {
+  // Rewritten in v0.140.0 to follow the rule set from admin.css to app.css. Left pointed at
+  // admin.css it would have gone green for the emptiest possible reason — there is nothing there
+  // to strip any more — which is the vacuous-control failure this repo keeps auditing for.
+  const APP_CSS = read("assets/app.css");
+  const stripped = APP_CSS.replace(/body\.embed[^}]*\}/g, "");
+  assert.notEqual(stripped, APP_CSS, "the strip control found no body.embed rule to remove");
   assert.equal(/body\.embed[^{]*\{[^}]*display:\s*none/.test(stripped), false, "the chromeless detector cannot fail");
 });
 
