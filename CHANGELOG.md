@@ -1,5 +1,51 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.139.0 — 2026-08-12
+
+### WF-5 H-1 — the per-event manager hub: the shell and the first two tabs
+
+Owner-approved 2026-08-12. `admin-manager.html?event=N` is one manager page per event, with the
+tab row across the top the owner asked for in item 7 — and **each tab's content is the EXISTING
+admin page, in a same-origin chromeless iframe.** Not a copy, not a fork, not a re-mount: a fix to
+the Pool Board is a fix in the Pool Board.
+
+- **Why an iframe and not a shared document.** Seven of the nine surfaces carry page-local
+  `<style>` (the pool board alone is 200+ lines) and one tab is a member-side page with a
+  different stylesheet set. One document would pour every tab's cascade into one place —
+  standards §11 in the form that actually bites. The frame makes §11 structural instead of a rule
+  someone has to remember, and an id collision between two tabs stops being expressible
+  (`#eventSelect` exists on two of the nine today).
+- **All seven tabs are declared now, in the owner's order** (`TABS`, one list); the renderer shows
+  only the ones with panes, so an unbuilt tab is **absent, never a dead button**. H-1 wires
+  **Registrations** (with **Waitlist** as its sub-tab, exactly as item 7 words it) and
+  **Divisions & Pools** (with **Create Pools** as its second pane).
+- **No reloads.** The open tab lives in the hash so a tab is linkable; frames are created on first
+  visit and **kept hidden, never destroyed**, so returning to a tab is instant.
+- **The embed contract is not new.** `schedule.js?embed=1` has posted `{bt_widget_height, slug}` to
+  its parent since v0.4.0 and `web/widget.js` has been the parent that listens and filters by slug.
+  `admin-nav.js` is now the second child and the hub the second parent. **They are two
+  implementations rather than one shared file because `widget.js` is a drop-in `<script>` served to
+  external customer sites and cannot import from this repo** — so what stops them drifting is a
+  test asserting the message key is identical across all four, which is the only place that
+  judgement can live. *(A build-time amendment to the approved design, recorded in §-1p.)*
+- **Chromeless is ONE rule set** in `admin.css` (`body.embed` hides rail, header and edge handle),
+  because the rail is static markup in every admin page — not forty per-page edits, and a page
+  added tomorrow inherits it.
+- **The `?event=` preselect is ADDITIVE.** `admin-registrations`, `admin-divisions` and
+  `admin-pool-board` accept an event from the URL and otherwise behave exactly as they did from
+  the rail. That is what makes this reversible: every tab page still works on its own, and the
+  guard pins the fallback rather than assuming it.
+- **Way in:** Events & Programs gains "Open manager →" beside the existing "Manage →" in both the
+  list and the day modal. The summary page keeps its job.
+
+**Guard:** `manager_hub.test.mjs` — the owner's tab order verbatim, panes that must be existing
+pages, no navigation on a tab switch, frames cached, the shared `.tabs` component with no local
+redefinition, the message key identical across all four embed files, one chromeless rule set with
+none of the tab pages carrying their own, and the standalone fallback. Two guard drafts were wrong
+before the code was: a flat scan of `TABS` returned tabs and panes interleaved, and the preselect
+detector pinned `params.get("event")` while the code builds its `URLSearchParams` inline — **the
+same pin-the-spelling trap as v0.138.0's, one release later.**
+
 ## v0.138.0 — 2026-08-12
 
 ### WF-6 — anywhere there is a print, there is now also email and CSV

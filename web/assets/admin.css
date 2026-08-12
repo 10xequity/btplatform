@@ -213,3 +213,30 @@
    controls) and belongs to the page, not to the class. */
 .pb-div-h { font-size: 14px; margin: 0 0 8px; display: flex; align-items: baseline; gap: 10px; }
 .pb-courts { font-size: 11px; font-weight: 400; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; }
+
+/* v0.139.0 (§-1p WF-5 H-1) — CHROMELESS MODE, ONE RULE SET FOR EVERY ADMIN PAGE.
+   The manager hub shows each existing admin page inside a same-origin iframe, and a page that
+   rendered its own rail and header inside a tab would show the operator two of each. This lives
+   here rather than on the pages because the rail is STATIC markup in every admin page (v2.16) —
+   so hiding it is one rule set, not forty edits, and a page added tomorrow inherits it.
+   admin-nav.js adds body.embed when it sees ?embed=1, and posts the page's height to the hub. */
+body.embed .sidebar,
+body.embed .header,
+body.embed .bt-edge,
+body.embed .bt-backbar-admin { display: none !important; }
+body.embed .admin-layout { display: block; }
+body.embed .admin-main { padding: 12px 14px; }
+/* No page scrollbar inside a frame: the hub sizes the frame to the content it reports. */
+body.embed { overflow-y: hidden; }
+
+/* The hub itself. */
+.mgr-head { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 14px; }
+.mgr-head h1 { font-size: 22px; margin: 0 0 2px; }
+.mgr-head .grow { flex: 1; min-width: 0; }
+.mgr-meta { font-size: 13px; color: var(--text-muted); margin: 0; }
+/* The sub-tab row is the same component one step down: lighter, and it never repeats the border
+   the tab row above it already draws. */
+.mgr-subtabs { border-bottom: 0; margin-top: -8px; margin-bottom: 10px; }
+.mgr-subtabs .tab { font-size: 13px; padding: 6px 10px; min-height: 44px; }
+.mgr-frame { width: 100%; border: 0; display: block; min-height: 420px; background: var(--bg); }
+.mgr-note { font-size: 13px; color: var(--text-muted); margin: 10px 0 0; }

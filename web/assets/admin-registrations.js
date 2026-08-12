@@ -46,7 +46,18 @@
     $("eventSelect").innerHTML = `<option value="">— choose event —</option>` +
       events.map((e) => `<option value="${e.id}">${esc(e.name)}</option>`).join("");
     $("eventSelect").onchange = () => { eventId = $("eventSelect").value || null; $("scoreLinksCard").hidden = true; loadRegs(); };
-    $("regTable").innerHTML = "<p>Pick an event above.</p>";
+    // WF-5 H-1 (v0.139.0): the manager hub points this page at ONE event via ?event=N. ADDITIVE
+    // on purpose — with no ?event= the page behaves exactly as it did from the rail, which is what
+    // makes the hub reversible and what lets this page keep its own way in. An id that is not in
+    // this org's list is ignored rather than forced: the picker is the org's own truth.
+    const fromUrl = Number(new URLSearchParams(location.search).get("event")) || 0;
+    if (fromUrl && events.some((e) => e.id === fromUrl)) {
+      $("eventSelect").value = String(fromUrl);
+      eventId = String(fromUrl);
+      loadRegs();
+    } else {
+      $("regTable").innerHTML = "<p>Pick an event above.</p>";
+    }
   }
 
   /* ---------- registrations table ---------- */

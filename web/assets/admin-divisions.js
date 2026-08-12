@@ -256,8 +256,15 @@
     $("dvEvent").innerHTML = list.length
       ? list.map((e) => `<option value="${e.id}">${esc(e.name)}</option>`).join("")
       : `<option value="">No events yet</option>`;
+    // WF-5 H-1 (v0.139.0): the manager hub points this page at ONE event via ?event=N. ADDITIVE
+    // on purpose — with no ?event= the page behaves exactly as it did from the rail, which is what
+    // makes the hub reversible and what lets this page keep its own way in. An id that is not in
+    // this org's list is ignored rather than forced: the picker is the org's own truth.
+    const fromUrl = Number(new URLSearchParams(location.search).get("event")) || 0;
     eventId = list.length ? list[0].id : null;
+    if (fromUrl && list.some((e) => e.id === fromUrl)) eventId = fromUrl;
     if (!eventId) return BT_ADMIN.orgEmptyState("dvNote", "events"); // v0.89.0 Block B3: an empty org is not a broken module
+    $("dvEvent").value = String(eventId);
     load();
   }
 

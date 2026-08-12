@@ -1,151 +1,22 @@
 <!DOCTYPE html>
-<!-- Boomtown Platform — Brackets (admin) · Version: v2.0 · Date: 2026-08-03 · Ships in: v0.72.0
-     v2.0: every slot is editable. Drag a team from the bench or click the slot to pick one — the
-     seeding is a starting point, not an answer (owner 2026-08-03). Each tile names the pool the team
-     came out of, because when a team goes home the question is who is available and how they did.
-     A team placed by hand into a slot whose feeder has not been played will be replaced by that
-     game's winner; the page says so rather than letting the edit silently revert.
-     v1.0 shipped in v0.66.0:
-     Single elimination, seeded from pool finish. Byes go to the TOP seeds and there are no play-in
-     games — owner 2026-08-03: "we try to avoid pigtails as often as possible with too many people
-     waiting." Every empty slot names the game it is waiting on, because an empty box answers
-     nothing when a director is trying to say who is on court 3 next.
-     Winners are moved forward by recomputing the tree from the scores, so correcting a result that
-     was typed in backwards fixes the round above it instead of stranding the wrong team there. -->
+<!-- Boomtown Platform — Event Manager hub · Version: v1.0 · Date: 2026-08-12 · Ships in: v0.139.0
+     §-1p WF-5 H-1 (owner approved 2026-08-12). ONE manager page per event: horizontal tabs across
+     the top that do not reload, each tab's content being the EXISTING admin page in a same-origin
+     chromeless iframe. Reused, never forked — the pool board alone carries 200+ lines of
+     page-local CSS, and a shared document would pour every tab's cascade into one place. -->
 <html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Brackets — Boomtown Athletics</title>
+  <title>Event Manager — Boomtown Admin</title>
   <script>/* Pre-paint state — collapse + theme (uiux-review §4/§6.4, v0.52.0): read the bt_nav cookie and the saved theme BEFORE the first stylesheet so the rail state AND the theme are right on frame one — no post-paint snap of either. admin-nav.js writes the cookie on rail toggle and bt_theme on theme toggle; the localStorage bt_nav fallback migrates pre-v0.51 sessions. */(function(){try{var m=document.cookie.match(/(?:^|; )bt_nav=([^;]*)/);var v=m?m[1]:((window.localStorage&&localStorage.getItem("bt_nav_collapsed")==="1")?"min":"");if(v==="min")document.documentElement.dataset.nav="min";var t=(window.localStorage&&localStorage.getItem("bt_theme"))||(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.dataset.theme=t;}catch(e){}})();</script>
   <link rel="stylesheet" href="assets/tokens.css?v=0.139.0" />
   <link rel="stylesheet" href="assets/app.css?v=0.139.0" />
   <link rel="stylesheet" href="assets/admin.css?v=0.139.0" />
-  <style>
-    .mf-head { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; margin-bottom: 12px; }
-    .mf-head p { max-width: 68ch; }
-    .mf-sub { font-size: 14px; margin: 16px 0 8px; }
-    .mf-row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
-    .mf-inline { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 700; }
-    .mf-inline select, .mf-inline input { font: inherit; font-size: 16px; padding: 10px; min-height: 44px; width: 100%;
-      background: var(--surface-2); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-control, 8px); }
-    .mf-inline input[type="number"] { max-width: 110px; }
-    .mf-check { display: flex; align-items: center; gap: 8px; font-size: 13px; min-height: 44px; }
-    .mf-note { font-size: 12px; color: var(--text-muted); margin-top: 8px; min-height: 1.4em; }
-
-    .br-setup { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card, 10px); padding: 12px; margin-bottom: 16px; }
-
-    .br-tree { margin-bottom: 24px; }
-    .br-champ { font-size: 15px; font-weight: 700; color: var(--emphasis); margin: 4px 0 10px; }
-    /* A bracket is wider than a phone and always will be. Scroll it rather than crush it.
-       position:relative anchors the connector svg (K-3) — the lines live in the SAME scroll
-       coordinate space as the tiles, so scrolling moves them together. */
-    .br-scroll { display: flex; gap: 28px; overflow-x: auto; padding-bottom: 8px; align-items: flex-start;
-      position: relative; }
-    /* K-3: the connecting lines a printed bracket has. Absolute, sized to the scroll content by
-       the drawing code, and pointer-transparent — a line that eats clicks kills the slot editor. */
-    .br-links { position: absolute; top: 0; left: 0; pointer-events: none; }
-    .br-round { flex: 0 0 auto; min-width: 190px; position: relative; }
-    .br-round-h { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); margin: 0 0 6px; }
-    /* Later rounds centre their fewer games against the column feeding them, the way a printed
-       sheet does — which is also what makes the connector elbows read as elbows. */
-    .br-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px;
-      justify-content: space-around; min-height: 100%; }
-    .br-round:not(:first-child) .br-list { justify-content: space-around; }
-
-    .br-match { position: relative; background: var(--surface); border: 1px solid var(--border);
-      border-radius: var(--radius-control, 8px); padding: 6px 8px 6px 16px; display: grid; gap: 2px; }
-    /* K-4 + D-10: state is the DOT idiom, not a coloured side-tab — this page carried the exact
-       3px cliché D-10 records, and it is gone. Green dot = READY (both teams known, unscored: this
-       game can be on a court right now — "in progress" is not a stored state, so ready is the
-       honest "live"). Muted dot = done. Both dots are companions to text (the score and the bold
-       winner line), never the only signal. */
-    .br-match::before { content: ""; position: absolute; left: 6px; top: 12px; width: 6px; height: 6px;
-      border-radius: 50%; background: transparent; }
-    .br-match[data-ready="1"]::before { content: ""; background: var(--positive); }
-    .br-match[data-done="1"]::before { content: ""; background: var(--text-muted); opacity: .5; }
-    .br-court { position: absolute; top: 4px; right: 6px; font-size: 10px; color: var(--text-muted); }
-    /* K-2: the seed as the generator stamped it — "#1 A" when the pool tag derives, "#3" when not. */
-    .br-seed { display: inline-block; margin-right: 6px; padding: 0 4px; border-radius: 4px;
-      background: var(--surface-2); color: var(--text-muted); font-size: 10px; font-weight: 700;
-      font-variant-numeric: tabular-nums; white-space: nowrap; }
-    .br-side.won .br-seed { color: var(--emphasis); }
-    .br-side { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; }
-    .br-side.won .br-name, .br-side.won .br-score { font-weight: 700; color: var(--emphasis); }
-    .br-side.tbd .br-name { color: var(--text-muted); font-style: italic; font-size: 12px; }
-    .br-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .br-score { font-variant-numeric: tabular-nums; min-width: 2ch; text-align: right; }
-
-    /* v0.72.0 — the bracket is editable, so a slot is a button and the bench sits beside it. */
-    .br-layout { display: grid; grid-template-columns: minmax(0, 1fr) 240px; gap: 16px; align-items: start; }
-    .br-bench { background: var(--surface); border: 1px solid var(--border);
-      border-radius: var(--radius-card, 10px); padding: 12px; position: sticky; top: 12px; }
-    .br-bench-list { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px;
-      max-height: 60vh; overflow-y: auto; }
-    .br-bench-tile { width: 100%; text-align: left; font: inherit; cursor: grab; display: grid; gap: 2px;
-      min-height: 44px; padding: 6px 8px; background: var(--surface-2); color: var(--text);
-      border: 1px solid var(--border); border-radius: var(--radius-control, 8px); }
-    .br-bench-tile:focus-visible, .br-side:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
-    .br-bench-tile.used { opacity: .6; }
-    .br-bench-tile.dragging, .br-side.dragging { opacity: .45; }
-    .br-used { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); }
-
-    /* A slot is now a control. It keeps the row shape so the bracket still reads as a bracket. */
-    .br-side { display: grid; gap: 1px; width: 100%; text-align: left; font: inherit; cursor: pointer;
-      background: transparent; color: var(--text); border: 1px solid transparent; border-radius: 6px;
-      padding: 3px 4px; min-height: 34px; }
-    .br-side:hover { border-color: var(--border); background: var(--surface-2); }
-    .br-side.over { border-color: var(--accent); background: var(--surface-2); }
-    .br-line { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; }
-    /* The pool the team came out of, which is the whole reason this line exists. */
-    .br-from { font-size: 10px; color: var(--text-muted); }
-
-    .br-ff { grid-column: 1 / -1; display: flex; gap: 4px; flex-wrap: wrap; margin-top: 2px; }
-    .br-ffbtn { font: inherit; font-size: 9px; padding: 3px 5px; min-height: 26px; cursor: pointer;
-      background: transparent; color: var(--text-muted); border: 1px dashed var(--border); border-radius: 5px; }
-    .br-ffbtn:hover { color: var(--text); border-style: solid; }
-    .br-ffbtn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
-
-    .br-pick[hidden] { display: none; } /* hidden must beat the display rule below — guarded by hidden_overlay.test.mjs */
-    .br-pick { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: grid; place-items: center;
-      padding: 16px; z-index: 60; }
-    .br-pick-box { background: var(--surface); border: 1px solid var(--border);
-      border-radius: var(--radius-card, 10px); padding: 14px; width: min(420px, 100%); max-height: 80vh;
-      display: flex; flex-direction: column; }
-    .br-pick-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
-    #bPickFilter { font: inherit; font-size: 16px; padding: 10px; min-height: 44px; width: 100%;
-      background: var(--surface-2); color: var(--text); border: 1px solid var(--border);
-      border-radius: var(--radius-control, 8px); }
-    .br-pick-list { list-style: none; margin: 10px 0 0; padding: 0; overflow-y: auto; display: flex;
-      flex-direction: column; gap: 6px; }
-    .br-pick-list .btn { width: 100%; text-align: left; min-height: 44px; }
-    .br-empty { font-size: 12px; color: var(--text-muted); list-style: none; }
-
-    @media (max-width: 860px) {
-      /* The bench moves above the bracket rather than squeezing it. */
-      .br-layout { grid-template-columns: 1fr; }
-      .br-bench { position: static; order: -1; }
-      .br-bench-list { max-height: 200px; flex-direction: row; flex-wrap: wrap; }
-      .br-bench-tile { width: 180px; }
-    }
-    @media (max-width: 430px) {
-      .mf-inline input[type="number"] { max-width: 90px; }
-      .br-round { min-width: 165px; }
-      .br-bench-tile { width: 100%; }
-    }
-    @media (prefers-reduced-motion: no-preference) {
-      /* The ready dot breathes, gently — the owner asked for a "glowing" live marker, and on a
-         screen a director stares at all day the honest version is a slow opacity swell on a 6px
-         dot, not a glow. Opacity only (off the main thread), 2.4s so it reads as alive rather
-         than urgent, and ONLY inside this block: with reduced motion set, the dot simply stays
-         solid — colour and the score text already carry the state. */
-      .br-match[data-ready="1"]::before { animation: brPulse 2.4s ease-in-out infinite; }
-      @keyframes brPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
-    }
-  </style>
+  <script>document.documentElement.dataset.theme = localStorage.getItem("bt_theme") || "dark";</script>
 </head>
-<body>
-    <header class="header chrome-glass no-print">
+<body data-org-switch-href="admin-events.html">
+  <header class="header chrome-glass no-print">
     <a class="wordmark" href="admin.html" style="text-decoration:none;color:inherit"><img class="brand-logo" src="assets/logo-boom-icon-512.png?v=0.139.0" alt="" width="22" height="22" />Boomtown <span>Athletics</span></a>
     <div class="spacer"></div>
     <select id="orgSwitcher" class="org-switcher" aria-label="Switch organization"></select>
@@ -154,7 +25,7 @@
     <a class="btn ghost" href="index.html">Member site</a>
   </header>
 
-  <div id="app" class="admin-layout">
+  <div class="admin-layout">
     <aside class="sidebar" data-static="rail" aria-label="Admin sections">
       <nav class="nav-group" data-key="run">
         <div class="nav-label" role="button" tabindex="0" aria-expanded="true">Run events<span class="grp-chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></span></div>
@@ -227,75 +98,24 @@
       <button class="bt-edge" type="button" aria-label="Collapse or expand navigation"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
     </aside>
     <main class="admin-main" id="main">
-      <div class="mf-head">
-        <div>
-          <h1>Brackets</h1>
-          <p class="muted">Seeded from how teams finished pool play, with byes to the top seeds and no play-in games. <b>Every slot is editable</b> — drag a team from the bench, or click a slot to pick one. Use it when a team goes home, or to pull somebody across from another pool.</p>
-        </div>
-        <div class="mf-row" style="margin:0">
-          <label class="mf-inline">Event
-            <select id="bEvent" aria-label="Choose an event"></select>
-          </label>
-          <button class="btn ghost" id="bReload" type="button">Reload</button>
+      <div class="mgr-head">
+        <a class="btn ghost" href="admin-events.html" aria-label="Back to events">‹</a>
+        <div class="grow">
+          <h1 id="mgrName">Loading…</h1>
+          <p class="mgr-meta" id="mgrMeta"></p>
         </div>
       </div>
 
-      <section class="br-setup" aria-labelledby="brSetupH">
-        <h2 class="mf-sub" id="brSetupH">Draw it up</h2>
-        <div class="mf-row">
-          <label class="mf-inline">Top teams into A
-            <input id="bASize" type="number" inputmode="numeric" min="2" max="64" value="8" />
-          </label>
-          <label class="mf-inline">Play to
-            <input id="bPoints" type="number" inputmode="numeric" min="11" max="31" value="25" />
-          </label>
-          <label class="mf-inline">Courts
-            <input id="bCourts" type="number" inputmode="numeric" min="1" max="20" value="4" />
-          </label>
-          <label class="mf-inline">Minutes per game
-            <input id="bSlot" type="number" inputmode="numeric" min="5" max="120" value="20" />
-          </label>
-          <label class="mf-inline">Minutes we have
-            <input id="bHave" type="number" inputmode="numeric" min="0" max="900" placeholder="optional" />
-          </label>
-          <label class="mf-check"><input id="bRest" type="checkbox" checked /> Everyone else plays a BB bracket</label>
-          <label class="mf-check"><input id="bBo3" type="checkbox" /> First round best of 3 (counts 2.25 games)</label>
-          <button class="btn" id="bGen" type="button">Generate bracket</button>
-          <button class="btn ghost" id="bAdvance" type="button">Move winners forward</button>
-        </div>
-        <p class="mf-note" id="bFit" role="status" aria-live="polite"></p>
-        <p class="mf-note" id="bSeedWarn" role="status" aria-live="polite"></p>
-        <p class="mf-note" id="bNote" role="status" aria-live="polite"></p>
-      </section>
+      <div class="tabs" role="tablist" id="mgrTabs"></div>
+      <div class="tabs mgr-subtabs" role="tablist" id="mgrSubtabs" hidden></div>
 
-      <div class="br-layout">
-        <div class="br-main">
-          <div id="bTrees"></div>
-          <p class="empty" id="bEmpty" hidden>No bracket yet. Set the size above and generate one — you can regenerate any time before the first game is played.</p>
-        </div>
-
-        <aside class="br-bench" aria-labelledby="brBenchH">
-          <h2 class="mf-sub" id="brBenchH">Every team</h2>
-          <p class="mf-note">Drag one onto any slot. Shows the pool they came out of and where they finished, so a substitution can be defended.</p>
-          <ul id="bBench" class="br-bench-list"></ul>
-        </aside>
-      </div>
-
-      <div id="bPick" class="br-pick" role="dialog" aria-modal="true" aria-labelledby="bPickH" hidden>
-        <div class="br-pick-box">
-          <div class="br-pick-head">
-            <h2 class="mf-sub" id="bPickH">Who plays here?</h2>
-            <button class="btn ghost" id="bPickClose" type="button" aria-label="Close without changing anything">Close</button>
-          </div>
-          <label class="sr-only" for="bPickFilter">Filter teams</label>
-          <input id="bPickFilter" type="search" placeholder="Type to filter…" autocomplete="off" />
-          <ul id="bPickList" class="br-pick-list"></ul>
-        </div>
-      </div>
+      <div id="mgrPanes"></div>
+      <p class="mgr-note" id="mgrNote" role="status" aria-live="polite"></p>
     </main>
   </div>
+
   <script src="assets/config.js?v=0.139.0"></script>
   <script src="assets/admin-nav.js?v=0.139.0"></script>
-  <script src="assets/admin-brackets.js?v=0.139.0"></script>
+  <script src="assets/admin-manager.js?v=0.139.0"></script>
 </body>
 </html>

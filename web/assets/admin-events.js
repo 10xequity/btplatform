@@ -94,6 +94,7 @@
         <span class="day-ev-name">${esc(e.name)}</span>
         <span class="day-ev-time">${(e.starts_at || "").slice(11, 16)}</span>
         <a class="btn ghost" href="admin-event.html?id=${e.id}">Manage →</a>
+        <a class="btn ghost" href="admin-manager.html?event=${e.id}">Open manager →</a>
       </div>`).join("")}
       <div class="actions"><button class="btn ghost" id="dm_close">Close</button></div>`);
     document.getElementById("dm_close").addEventListener("click", closeModal);
@@ -318,7 +319,8 @@
         <td><a href="admin-event.html?id=${e.id}">${esc(e.name)}</a></td>
         <td>${fmtDT(e.starts_at)}</td><td>${e.type}</td>
         <td><span class="chip ${e.status}">${e.status.replace("_", " ")}</span></td>
-        <td><a href="admin-event.html?id=${e.id}">Manage →</a></td></tr>`).join("")}
+        <td><a href="admin-event.html?id=${e.id}">Manage →</a>
+            <a href="admin-manager.html?event=${e.id}" style="margin-left:10px">Open manager →</a></td></tr>`).join("")}
     </tbody></table>`;
     wrap.querySelector("#selAll").addEventListener("change", e => {
       wrap.querySelectorAll(".selRow").forEach(c => { c.checked = e.target.checked; toggleSel(c); });
