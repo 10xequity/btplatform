@@ -1,5 +1,15 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.136.0 — 2026-08-12
+
+**WF-4 — the registrations screen sees waivers, and can chase them (owner brief 2026-08-11 item 8; roadmap §-1p, §-0 B26).** Measured half-built: the checking and the auto-send already existed — the daily sweep selects unsigned roster members through the door gate's own identity/liveness pair and reports email keyless-honestly. This release surfaces them:
+
+- **A Waivers column on the staff registrations list**: each team shows `signed/total` — green when complete, amber when short (the page's existing chip idiom), with a tooltip counting unsigned members who have no email address ("catch them at check-in"). Team-less sheet sign-ups (SG-1) aggregate over their own registrant. **The counts read the door gate's canonical predicate pair — one judgement, so the door roster, the nightly sweep, and these chips can never disagree about who is unsigned** (a case-variant email and an expired waiver are both pinned by tests).
+- **A "Send waiver reminders" button** on the same screen — the sweep's selection and sender, extracted into ONE shared pair of functions, gain their second caller (B16's one-helper-first shape). Staff-gated; the sweep's 2-day dedupe binds it too (a double press does not double-nag, and says so); members with no address are counted rather than silently skipped; and with no mail key set the response says plainly that nothing was emailed while the in-app reminders stand.
+- **The F-27 guard was rewritten, not deleted**: it now anchors on the shared selector (where the canonical pair lives) and additionally pins that the sweep still routes through it — a re-inlined copy is the drift it exists to prevent. One guard draft reddened against correct code by scanning the whole file for bare email compares (the file has lawful ones); it was re-scoped to the waiver-reading functions, the same scoping decision the original F-27 guard documented.
+
+8 new tests in `registrations_waivers.test.mjs` (6 seen failing pre-fix; the fixture pin and the sweep-semantics pin deliberately green); suite 1713 → 1721. No migration.
+
 ## v0.135.0 — 2026-08-12
 
 **WF-3 — the pool board's divisions pivot horizontal ↔ vertical (owner brief 2026-08-11 item 4; roadmap §-1p, §-0 B25).** A new segmented control sits above the board, in the owner's own words: **Horizontal** keeps today's layout — each division a full-width band with its pools flowing across; **Vertical** stands the divisions side by side as columns and stacks each division's pools, so a three-division day fits on one screen with no scrolling between divisions.

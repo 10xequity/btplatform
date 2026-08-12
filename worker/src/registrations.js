@@ -1,6 +1,13 @@
 /**
  * Boomtown Platform — Registration + Square + Captain-scoring routes
- * Version: v2.0 · Date: 2026-08-11 · Modules 4 + 8 · Ships in: v0.132.0
+ * Version: v2.1 · Date: 2026-08-12 · Modules 4 + 8 · Ships in: v0.132.0 · v2.1 in v0.136.0
+ *
+ * v2.1 (2026-08-12, v0.136.0): WF-4 — the registrations screen sees waivers and can chase them.
+ *   listRegistrations gains per-row waiver counts (waiver_members/waiver_signed/waiver_no_email)
+ *   through the door gate's canonical pair; the sweep's selection is extracted into ONE shared
+ *   `waiverGaps` + `sendWaiverReminders`, and POST /api/events/:id/waiver-reminders is their
+ *   second caller (staff-gated, 2-day dedupe binds it too, keyless-honest, counts the
+ *   address-less instead of skipping them). Guarded by registrations_waivers.test.mjs.
  *
  * v2.0 (2026-08-11, v0.132.0): SG-1 — THE DROP-IN SHEET (roadmap §-1o; owner "sheets first").
  *   Two PUBLIC routes, living HERE because this module owns registration and contact writes:
@@ -134,6 +141,7 @@ export async function registrationRoutes(request, env, url, ctx) {
   if ((match = p.match(/^\/api\/events\/(\d+)\/sheet$/)) && m === "GET") return eventSheet(env, ctx, +match[1]);
   if ((match = p.match(/^\/api\/events\/(\d+)\/signup$/)) && m === "POST") return sheetSignup(request, env, ctx, +match[1]);
   if ((match = p.match(/^\/api\/events\/(\d+)\/registrations$/)) && m === "GET") return listRegistrations(request, env, ctx, +match[1], url);
+  if ((match = p.match(/^\/api\/events\/(\d+)\/waiver-reminders$/)) && m === "POST") return sendEventWaiverReminders(env, ctx, +match[1]);
   if ((match = p.match(/^\/api\/registrations\/(\d+)\/remind$/)) && m === "POST") return remind(env, ctx, +match[1]);
   if ((match = p.match(/^\/api\/registrations\/(\d+)\/mark-paid$/)) && m === "POST") return markPaid(env, ctx, +match[1]);
   if ((match = p.match(/^\/api\/registrations\/(\d+)\/cancel$/)) && m === "POST") return cancelRegistration(env, ctx, +match[1]);
@@ -720,15 +728,39 @@ async function listRegistrations(request, env, ctx, eventId, url) {
   const { ev, deny } = await staffEventGate(env, ctx, eventId);
   if (deny) return deny;
   const status = url.searchParams.get("status");
+  // WF-4 (v0.136.0): per-row waiver counts, through the door gate's own pair — the chips on the
+  // registrations screen and the door roster read ONE judgement (F-27), never a second spelling.
+  // NOTE ON ALIASES: the canonical pair hardcodes `c` (contacts) and `w` (waivers) INSIDE each
+  // EXISTS, deliberately shadowing this query's outer `c` — the roster query does the same.
+  // A team-less row (an SG-1 sheet sign-up) aggregates over its own registrant: one person,
+  // identity by contact id through the same canonical function (email leg NULL).
+  const selfSigned = `EXISTS (SELECT 1 FROM contacts c JOIN waivers w ON w.contact_id = c.id AND ${WAIVER_LIVE_PREDICATE}
+         WHERE c.org_id = ?2 AND c.deleted_at IS NULL AND ${WAIVER_IDENTITY_MATCH("r.contact_id", "NULL")})`;
+  const memberSigned = `EXISTS (SELECT 1 FROM contacts c JOIN waivers w ON w.contact_id = c.id AND ${WAIVER_LIVE_PREDICATE}
+              WHERE c.org_id = ?2 AND c.deleted_at IS NULL AND ${WAIVER_IDENTITY_MATCH("tm.contact_id", "tm.member_email")})`;
   const base = `SELECT r.id, r.status, r.payment_method, r.checkout_url, r.last_reminded_at, r.created_at,
-      r.team_id, c.email, c.full_name AS captain_name, c.phone, t.name AS team_name, t.level, t.gender_division
+      r.team_id, c.email, c.full_name AS captain_name, c.phone, t.name AS team_name, t.level, t.gender_division,
+      CASE WHEN r.team_id IS NULL THEN 1 ELSE
+        (SELECT COUNT(*) FROM team_members tm WHERE tm.team_id = r.team_id AND tm.deleted_at IS NULL)
+      END AS waiver_members,
+      CASE WHEN r.team_id IS NULL THEN
+        (CASE WHEN ${selfSigned} THEN 1 ELSE 0 END)
+      ELSE
+        (SELECT COUNT(*) FROM team_members tm
+          WHERE tm.team_id = r.team_id AND tm.deleted_at IS NULL AND ${memberSigned})
+      END AS waiver_signed,
+      CASE WHEN r.team_id IS NULL THEN 0 ELSE
+        (SELECT COUNT(*) FROM team_members tm
+          WHERE tm.team_id = r.team_id AND tm.deleted_at IS NULL
+            AND tm.member_email IS NULL AND NOT ${memberSigned})
+      END AS waiver_no_email
     FROM registrations r
     LEFT JOIN contacts c ON c.id=r.contact_id
     LEFT JOIN teams t ON t.id=r.team_id
     WHERE r.event_id=?1 AND r.deleted_at IS NULL`;
   const rows = status
-    ? (await env.DB.prepare(base + " AND r.status=?2 ORDER BY r.created_at DESC").bind(eventId, status).all()).results
-    : (await env.DB.prepare(base + " ORDER BY r.created_at DESC").bind(eventId).all()).results;
+    ? (await env.DB.prepare(base + " AND r.status=?3 ORDER BY r.created_at DESC").bind(eventId, ev.org_id, status).all()).results
+    : (await env.DB.prepare(base + " ORDER BY r.created_at DESC").bind(eventId, ev.org_id).all()).results;
   return json({ event: { id: ev.id, name: ev.name, price_cents: ev.price_cents || 0 }, registrations: rows });
 }
 
@@ -1085,31 +1117,47 @@ export async function sendEmail(env, to, subject, htmlContent, orgId = null) {
   } catch { return false; }
 }
 
-/** Daily cron (original v0.7.0 design): chase roster members on UPCOMING events
- *  who have NO valid waiver on file — the same people the door page flags NO
- *  WAIVER. Max 1 email per person per 48h (deduped via a 'waiver_reminder'
- *  notifications row; contact-less roster emails dedupe on payload email). */
-export async function waiverReminderSweep(env) {
-  const rows = (await env.DB.prepare(
+/**
+ * WF-4 (v0.136.0): THE ONE SELECTION of "roster members with no live waiver", shared by the
+ * daily sweep and the registrations screen's send-now — a second caller is never a second
+ * implementation (B16's shape). Built from the door gate's own pair (WAIVER_IDENTITY_MATCH +
+ * WAIVER_LIVE_PREDICATE, F-27), so the door, the sweep, the chips and the button can never
+ * disagree about who is unsigned. Unlike the pre-WF-4 sweep SQL, the 2-day dedupe and the
+ * has-an-address rule are NOT baked into the WHERE: each row carries `email` (may be null) and
+ * `already` (reminded in the last 2 days), so callers can COUNT the unreachable and the
+ * recently-reminded honestly instead of silently dropping them.
+ */
+async function waiverGaps(env, { eventId = null, withinDays = null, limit = 400 } = {}) {
+  const windowSql = Number(withinDays) > 0
+    ? `AND e.starts_at BETWEEN datetime('now') AND datetime('now', '+${Number(withinDays)} days')`
+    : "";
+  return (await env.DB.prepare(
     `SELECT DISTINCT tm.member_email AS email, tm.member_name AS name, tm.contact_id,
-            e.org_id, e.name AS event_name, e.starts_at
+            e.org_id, e.name AS event_name, e.starts_at,
+            EXISTS (SELECT 1 FROM notifications n
+                    WHERE n.kind = 'waiver_reminder'
+                      AND n.created_at > datetime('now', '-2 days')
+                      AND json_extract(n.payload_json, '$.email') = tm.member_email) AS already
      FROM team_members tm
      JOIN teams t ON t.id = tm.team_id AND t.deleted_at IS NULL
      JOIN events e ON e.id = t.event_id AND e.deleted_at IS NULL
        AND e.status IN ('published','in_progress')
-       AND e.starts_at BETWEEN datetime('now') AND datetime('now', '+14 days')
-     WHERE tm.deleted_at IS NULL AND tm.member_email IS NOT NULL
+       AND (?1 IS NULL OR e.id = ?1)
+       ${windowSql}
+     WHERE tm.deleted_at IS NULL
        AND NOT EXISTS (SELECT 1 FROM waivers w
                        JOIN contacts c ON c.id = w.contact_id AND c.deleted_at IS NULL
                        WHERE c.org_id = e.org_id
                          AND ${WAIVER_IDENTITY_MATCH("tm.contact_id", "tm.member_email")}
                          AND ${WAIVER_LIVE_PREDICATE})
-       AND NOT EXISTS (SELECT 1 FROM notifications n
-                       WHERE n.kind = 'waiver_reminder'
-                         AND n.created_at > datetime('now', '-2 days')
-                         AND json_extract(n.payload_json, '$.email') = tm.member_email)
-     LIMIT 100`
-  ).all()).results;
+     LIMIT ?2`
+  ).bind(eventId, limit).all()).results;
+}
+
+/** The ONE sender: in-app row always, email when an address exists (keyless-honest — sendEmail
+ *  returns false with no BREVO_API_KEY and the CALLER reports what was not sent). Rows passed in
+ *  are assumed already filtered to email-bearing, not-recently-reminded members. */
+async function sendWaiverReminders(env, rows) {
   let sent = 0;
   for (const r of rows) {
     const when = (r.starts_at || "").replace("T", " ").slice(0, 16);
@@ -1123,7 +1171,47 @@ export async function waiverReminderSweep(env) {
       JSON.stringify({ email: r.email })).run();
     if (ok) sent++;
   }
-  return { due: rows.length, emailed: sent };
+  return sent;
+}
+
+/** Daily cron (original v0.7.0 design): chase roster members on UPCOMING events
+ *  who have NO valid waiver on file — the same people the door page flags NO
+ *  WAIVER. Max 1 email per person per 48h (deduped via a 'waiver_reminder'
+ *  notifications row; contact-less roster emails dedupe on payload email).
+ *  v0.136.0: composition of the shared selection + sender above; semantics unchanged —
+ *  address-less and recently-reminded rows are filtered here exactly as the old WHERE did,
+ *  and the 100-per-run send cap is applied AFTER the filter, as before. */
+export async function waiverReminderSweep(env) {
+  const gaps = await waiverGaps(env, { withinDays: 14 });
+  const due = gaps.filter((r) => r.email && !r.already).slice(0, 100);
+  const sent = await sendWaiverReminders(env, due);
+  return { due: due.length, emailed: sent };
+}
+
+/** WF-4(b): the registrations screen's "send waiver reminders now" — the shared selection scoped
+ *  to ONE event, honest three ways: the 2-day dedupe binds this caller too (a double press does
+ *  not double-nag, and says so), members with no address are counted rather than silently
+ *  skipped (they sign at check-in — the door gate still catches them), and with no mail key the
+ *  response says plainly that nothing was emailed while the in-app rows stand. */
+async function sendEventWaiverReminders(env, ctx, eventId) {
+  const { ev, deny } = await staffEventGate(env, ctx, eventId);
+  if (deny) return deny;
+  const gaps = await waiverGaps(env, { eventId });
+  const noEmail = gaps.filter((r) => !r.email);
+  const already = gaps.filter((r) => r.email && r.already);
+  const due = gaps.filter((r) => r.email && !r.already);
+  const sent = await sendWaiverReminders(env, due);
+  await audit(env, { orgId: ev.org_id, userId: ctx.userId }, "waivers.remind_event", "events", eventId,
+    { missing: gaps.length, notified: due.length, emailed: sent, no_email: noEmail.length, recently_reminded: already.length });
+  const bits = [];
+  bits.push(due.length
+    ? `Reminded ${due.length} ${due.length === 1 ? "person" : "people"} in their member inbox.`
+    : "Nobody new to remind.");
+  if (sent === 0 && due.length > 0) bits.push("No mail key is set, so nothing was emailed — they'll see it when they sign in.");
+  if (already.length) bits.push(`${already.length} ${already.length === 1 ? "was" : "were"} already reminded in the last two days and not nagged again.`);
+  if (noEmail.length) bits.push(`${noEmail.length} ${noEmail.length === 1 ? "has" : "have"} no email address on the roster — catch them at check-in.`);
+  return json({ ok: true, missing: gaps.length, notified: due.length, emailed: sent,
+    no_email: noEmail.length, recently_reminded: already.length, note: bits.join(" ") });
 }
 
 /**

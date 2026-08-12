@@ -67,13 +67,14 @@
     if (currentFilter === "unpaid") regs = regs.filter((x) => ["pending", "email-sent", "cash-pending"].includes(x.status));
     if (!regs.length) { $("regTable").innerHTML = "<p>No registrations here yet.</p>"; return; }
     $("regTable").innerHTML = `<table class="regs"><thead><tr>
-        <th>Team</th><th>Captain</th><th>Email</th><th>Status</th><th>Registered</th><th>Reminded</th><th></th>
+        <th>Team</th><th>Captain</th><th>Email</th><th>Status</th><th>Waivers</th><th>Registered</th><th>Reminded</th><th></th>
       </tr></thead><tbody>` +
       regs.map((x) => `<tr>
         <td>${esc(x.team_name)}${x.level ? ` <span style="opacity:.6">(${esc(x.level)})</span>` : ""}</td>
         <td>${esc(x.captain_name || "")}</td>
         <td>${esc(x.email || "")}</td>
         <td><span class="chip ${esc(x.status)}">${esc(x.status)}</span></td>
+        <td>${waiverChip(x)}</td>
         <td>${esc((x.created_at || "").slice(0, 10))}</td>
         <td>${esc((x.last_reminded_at || "—").slice(0, 10))}</td>
         <td>
@@ -83,6 +84,20 @@
       </tr>`).join("") + "</tbody></table>";
     document.querySelectorAll("[data-remind]").forEach((b) => { b.onclick = () => remind(b.dataset.remind, b); });
     document.querySelectorAll("[data-cash]").forEach((b) => { b.onclick = () => markPaid(b.dataset.cash); });
+  }
+
+  /* WF-4 (v0.136.0): the waiver mark the owner asked for. Counts arrive from the server through
+     the door gate's own predicate (waiver_signed / waiver_members / waiver_no_email) — this page
+     renders what it is given and never re-judges. Complete borrows the paid chip's green;
+     incomplete borrows pending's amber — the page's existing attention idiom, nothing invented. */
+  function waiverChip(x) {
+    const total = x.waiver_members ?? 0, signed = x.waiver_signed ?? 0;
+    if (!total) return "—";
+    const done = signed >= total;
+    const noAddr = x.waiver_no_email || 0;
+    const title = done ? "Every listed player has a current waiver"
+      : `${signed} of ${total} signed${noAddr ? ` · ${noAddr} unsigned with no email — catch them at check-in` : ""}`;
+    return `<span class="chip ${done ? "paid" : "pending"}" title="${esc(title)}">${signed}/${total} waivers</span>`;
   }
 
   async function remind(id, btn) {
@@ -116,6 +131,21 @@
   $("emailRegistrants").onclick = () => {
     if (!eventId) { say("Pick an event first.", true); return; }
     location.href = `admin-marketing.html?event=${encodeURIComponent(eventId)}`;
+  };
+
+  /* WF-4: chase this event's unsigned waivers now, instead of waiting for the nightly sweep.
+     The server applies the same 2-day dedupe the sweep uses and answers with an honest sentence
+     (who was reminded, who was skipped as recently nagged, who has no address, and — with no
+     mail key set — that nothing was emailed). This button just relays that sentence. */
+  $("waiverRemindBtn").onclick = async () => {
+    if (!eventId) { say("Pick an event first.", true); return; }
+    const btn = $("waiverRemindBtn");
+    btn.disabled = true;
+    const r = await api(`/api/events/${eventId}/waiver-reminders`, { method: "POST" });
+    btn.disabled = false;
+    if (!r.ok) { say(esc(r.data.error || "Couldn't send waiver reminders."), true); return; }
+    say(esc(r.data.note));
+    loadRegs();
   };
 
   /* ---------- captain score links ---------- */

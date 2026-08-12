@@ -71,26 +71,39 @@ test("escapeHtml: null/undefined coerce to safe strings rather than crashing an 
 
 /* ---------- F-27 — the sweep must borrow the door's waiver predicate, not restate it ---------- */
 
-test("F-27: waiverReminderSweep builds its waiver check from the canonical pair", () => {
+test("F-27: the waiver-gap selection builds its check from the canonical pair", () => {
+  // v0.136.0 (WF-4): the check MOVED. waiverReminderSweep is now a thin composition of the
+  // shared selector `waiverGaps` (one selection, two callers — the sweep and the registrations
+  // screen's send-now), so the canonical pair lives in the selector and this guard follows it
+  // there. The sweep must still route THROUGH that selector — asserted below — or the pair
+  // could sit unused while a re-inlined query drifts (built-but-uncalled, failure class 1).
   const src = readFileSync(
     fileURLToPath(new URL("../src/registrations.js", import.meta.url)), "utf8");
-  const start = src.indexOf("export async function waiverReminderSweep");
-  assert.ok(start > -1, "waiverReminderSweep not found — if it moved, move this guard with it");
-  const end = src.indexOf("export ", start + 1);
+  const anchor = "async function waiverGaps(";
+  assert.equal(src.split(anchor).length - 1, 1, "waiverGaps is missing or ambiguous — if it moved, move this guard with it");
+  const start = src.indexOf(anchor);
+  const end = src.indexOf("\nasync function", start + 1);
   const fn = src.slice(start, end > -1 ? end : undefined);
 
   // Scope: ONLY this function. registrations.js has other lawful email compares (the 48h
   // dedupe round-trips tm.member_email against its own stored payload), and checkin.test.mjs
   // already guards the helpers' own definitions — re-testing them here is F-16's second door.
   assert.ok(fn.includes("WAIVER_IDENTITY_MATCH"),
-    "sweep no longer uses the canonical identity match (F-27 regression)");
+    "the selection no longer uses the canonical identity match (F-27 regression)");
   assert.ok(fn.includes("WAIVER_LIVE_PREDICATE"),
-    "sweep no longer uses the canonical liveness predicate (F-27 regression)");
+    "the selection no longer uses the canonical liveness predicate (F-27 regression)");
 
   // The exact defect shape: a bare compare against the contacts email column.
   const BARE_CONTACT_EMAIL = /c\.email\s*=/;
   assert.equal(BARE_CONTACT_EMAIL.test(fn), false,
-    "raw case-sensitive c.email compare reintroduced in waiverReminderSweep (F-26/F-27)");
+    "raw case-sensitive c.email compare reintroduced in the waiver-gap selection (F-26/F-27)");
+
+  // The sweep still routes through the selector — a caller, not a re-implementation.
+  const sweepStart = src.indexOf("export async function waiverReminderSweep");
+  assert.ok(sweepStart > -1, "waiverReminderSweep not found");
+  const sweep = src.slice(sweepStart, src.indexOf("\nexport ", sweepStart + 1));
+  assert.ok(sweep.includes("waiverGaps("),
+    "the sweep no longer calls the shared selection — a re-inlined copy is F-27's defect reborn");
 });
 
 test("F-27: the guard above can actually fail (negative control)", () => {
