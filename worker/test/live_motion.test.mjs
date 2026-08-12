@@ -290,3 +290,66 @@ test("NC — dropping the degraded read is caught", () => {
   assert.ok(!/d\.degraded/.test(blind),
     "a page that never reads the flag renders a broken board as a complete one");
 });
+
+/* ──────────── WF-5 H-4: the tile, read from across a gym (v0.142.0) ────────────
+   K-7 measured this page and found the hard half already built — it polls every 25 seconds and
+   diffs against the previous payload, so "it should live update as scores are entered" was DONE.
+   What was unbuilt was the TILE: a scoreboard whose score rendered at the same size as everything
+   around it, and which showed an EMPTY space where an unstarted game's number goes.
+
+   These assertions live in the motion file because this file already owns this page's front end —
+   it reads live.html and live.js as text, and the tile IS the thing the motion animates. Splitting
+   them would put two halves of one screen in two homes. Everything above still applies to the
+   redesigned tile, which is the point of extending this file rather than starting another. */
+
+test("H-4: the score is the headline — larger than the team name beside it", () => {
+  const clampOf = (cls) => {
+    const rule = HTML.match(new RegExp("\\." + cls + "\\s*\\{[^}]*font-size:\\s*clamp\\(([^)]*)\\)"));
+    assert.ok(rule, `.${cls} has no clamp() font-size — the tile must scale with the screen it is read from`);
+    return rule[1].split(",").map((s) => parseFloat(s.trim()));
+  };
+  const sc = clampOf("lv-sc");
+  const t = clampOf("lv-t");
+  assert.ok(sc[0] > t[0] && sc[2] > t[2],
+    `the score (${sc[0]}-${sc[2]}) is not larger than the team name (${t[0]}-${t[2]}) — on a scoreboard the number is what carries across the room`);
+});
+
+test("H-4: an unscored game shows a placeholder, never an empty gap", () => {
+  // A blank where the number goes reads as broken at distance, and the tile's height jumps the
+  // moment the first point lands. One named constant holds the space on both sides.
+  assert.match(PAGE, /LIVE_NO_SCORE/,
+    "the unscored placeholder has no named constant, so the two sides of a tile can drift apart");
+  assert.equal(/live \? "" :/.test(PAGE), false, "an unscored side still renders an empty string");
+});
+
+test("H-4: the leader is emphasised, and a tie or an unplayed game crowns nobody", () => {
+  assert.match(PAGE, /lv-lead/, "no leader class is applied — at distance the tile must show who is ahead without being read word by word");
+  assert.match(HTML, /\.lv-lead\s*\{/, "the leader class has no rule, so applying it does nothing (the C11 shape)");
+  assert.match(PAGE, /mt\.score_a > mt\.score_b/, "the leader is decided by something other than comparing the two scores");
+});
+
+test("H-4: a seed chip renders only where a seed exists", () => {
+  // Measured live before building: 62 of 70 teams carry a seed and one event of six carries none,
+  // so an unconditional chip would render an empty box on a real event — the v0.125.0 trap the
+  // bracket unit dodged by reading the column first.
+  assert.match(PAGE, /seed_a/, "the tile never reads the seed the payload now carries");
+  assert.match(HTML, /\.lv-seed\s*\{/, "the seed chip has no rule");
+  assert.match(PAGE, /mt\.seed_a != null \?/, "the chip is not conditional — a team with no seed would render an empty chip");
+});
+
+test("H-4 NC: shrinking the score below the team name is caught", () => {
+  // Mutates the rule as it is actually written — the first draft assumed `.lv-sc { font-size: …`
+  // on one line and silently found nothing to shrink, which is a control that cannot fail.
+  const rule = HTML.match(/\.lv-sc\s*\{[^}]*\}/);
+  assert.ok(rule, "no .lv-sc rule found to mutate");
+  const shrunk = HTML.replace(rule[0], rule[0].replace(/font-size:\s*clamp\([^)]*\)/, "font-size: clamp(10px, 1vw, 11px)"));
+  assert.notEqual(shrunk, HTML, "the mutation found no .lv-sc clamp to shrink");
+  const m = shrunk.match(/\.lv-sc\s*\{[^}]*font-size:\s*clamp\(([^)]*)\)/);
+  assert.ok(m && parseFloat(m[1].split(",")[0]) < 12, "the size reader cannot see the shrunk value");
+});
+
+test("H-4 NC: a seed chip that stops being conditional is caught", () => {
+  const always = PAGE.replace(/mt\.seed_a != null \?/, "true ?");
+  assert.notEqual(always, PAGE, "the mutation found no conditional seed chip");
+  assert.equal(/mt\.seed_a != null \?/.test(always), false, "the conditional detector cannot fail");
+});

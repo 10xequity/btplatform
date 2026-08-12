@@ -52,19 +52,30 @@
 
   /* ---------- pieces ---------- */
 
+  /* H-4 (v0.142.0) — the tile, rebuilt to be read from across a gym.
+     What stood here rendered the score at the same size as the team name and left an EMPTY space
+     where an unstarted game's number goes. Three changes; nothing else about this card moved:
+       · the SCORE is the headline (.lv-sc's clamp in live.html) — a scoreboard is a number first
+         and a name second, and 210px tiles of uniform type are not readable at thirty feet;
+       · an unplayed game shows LIVE_NO_SCORE instead of nothing, so the tile keeps its shape and
+         "not started" is legible rather than looking broken;
+       · the side that is ahead carries .lv-lead. A tie crowns nobody and neither does a game with
+         no result — at distance you read the bright number, not the two names.
+     The seed chip renders ONLY where a seed exists: measured against live D1 before building —
+     62 of 70 teams carry one, and one event of six carries none. */
+  const LIVE_NO_SCORE = "–";                    // en dash: holds the column, reads as "not yet"
+
   function courtCard(mt) {
-    const live = mt.score_a === null || mt.score_b === null;
+    const unplayed = mt.score_a === null || mt.score_b === null;
+    const side = (name, cap, seed, score, lead) => `<span class="lv-vs">
+        <span class="lv-t${lead ? " lv-lead" : ""}">${seed != null ? `<span class="lv-seed">${esc(String(seed))}</span>` : ""}${esc(name)}${cap ? `<span class="lv-cap">${esc(cap)}</span>` : ""}</span>
+        <span class="lv-sc${lead ? " lv-lead" : ""}">${unplayed ? LIVE_NO_SCORE : score}</span>
+      </span>`;
     return `<li class="lv-court" data-k="${esc(keyOf(mt))}">
       <span class="lv-ct">Court ${mt.court}</span>
       <span class="lv-stage">${esc(mt.stage)}</span>
-      <span class="lv-vs">
-        <span class="lv-t">${esc(mt.team_a)}${mt.captain_a ? `<span class="lv-cap">${esc(mt.captain_a)}</span>` : ""}</span>
-        <span class="lv-sc">${live ? "" : mt.score_a}</span>
-      </span>
-      <span class="lv-vs">
-        <span class="lv-t">${esc(mt.team_b)}${mt.captain_b ? `<span class="lv-cap">${esc(mt.captain_b)}</span>` : ""}</span>
-        <span class="lv-sc">${live ? "" : mt.score_b}</span>
-      </span>
+      ${side(mt.team_a, mt.captain_a, mt.seed_a != null ? mt.seed_a : null, mt.score_a, !unplayed && mt.score_a > mt.score_b)}
+      ${side(mt.team_b, mt.captain_b, mt.seed_b != null ? mt.seed_b : null, mt.score_b, !unplayed && mt.score_b > mt.score_a)}
       ${mt.ref_team ? `<span class="lv-ref">ref ${esc(mt.ref_team)}</span>` : ""}
     </li>`;
   }

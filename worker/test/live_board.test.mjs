@@ -32,8 +32,11 @@ function boot() {
   DB.exec("INSERT INTO divisions (id, org_id, event_id, name, rank, court_from, court_to) VALUES (7,1,1,'Open',1,1,4)");
   DB.exec("INSERT INTO pools (id, org_id, event_id, name, division_id) VALUES (9,1,1,'Pool A',7)");
   for (let i = 1; i <= 4; i++) {
-    DB.exec(`INSERT INTO teams (id, org_id, event_id, name, pool_id, division_id, note, score_token)
-             VALUES (${i},1,1,'Team ${i}',9,7,'PRIVATE flight at 4pm','deadbeef0000000${i}')`);
+    // H-4: teams 1 and 2 carry a seed, 3 and 4 do not — the fixture has to exhibit BOTH, or the
+    // "a chip renders only where a seed exists" half is untestable. Live D1 has the same mix:
+    // 62 of 70 teams seeded, and one event of six with none at all.
+    DB.exec(`INSERT INTO teams (id, org_id, event_id, name, pool_id, division_id, note, score_token, seed)
+             VALUES (${i},1,1,'Team ${i}',9,7,'PRIVATE flight at 4pm','deadbeef0000000${i}',${i <= 2 ? i : "NULL"})`);
     DB.exec(`INSERT INTO standings (org_id, event_id, team_id, wins, losses, point_diff, rank)
              VALUES (1,1,${i},${4 - i},${i},${10 - i * 3},${i})`);
     DB.exec(`INSERT INTO contacts (id, org_id, email, full_name, phone) VALUES (${100 + i},1,'kid${i}@example.com','Minor Child ${i}','555-999${i}')`);
@@ -90,6 +93,19 @@ test("no player name, email, phone or director's note appears anywhere in the pa
     assert.ok(!r.raw.includes(secret),
       `the public board leaked "${secret}" — this endpoint needs no login, so that is published to anyone`);
   }
+  env.DB.close();
+});
+
+test("H-4: the payload carries each side's seed, and null where a team has none", async () => {
+  const env = boot();
+  const r = await pub(env, "/api/live/events/1");
+  const cards = [...(r.data.on_now || []), ...(r.data.up_next || [])];
+  assert.ok(cards.length, "the fixture produced no cards to inspect");
+  const seeds = new Set(cards.flatMap((c) => [c.seed_a, c.seed_b]));
+  assert.ok([...seeds].some((s) => typeof s === "number"),
+    "no card carries a numeric seed — the tile's chip would never render on a seeded event");
+  assert.ok([...seeds].some((s) => s === null),
+    "no card carries a null seed — the fixture cannot exhibit the unseeded team the chip must skip");
   env.DB.close();
 });
 

@@ -107,6 +107,7 @@ export async function liveRoutes(request, env, url, ctx) {
       `SELECT m.id, m.round, m.court, m.bracket_id, m.bracket_round, m.bracket_slot,
               m.score_a, m.score_b, m.points_to,
               ta.name AS team_a, tb.name AS team_b, tr.name AS ref_team,
+              ta.seed AS seed_a, tb.seed AS seed_b,
               capa.full_name AS cap_a_name, cmpa.visibility AS cap_a_vis,
               capb.full_name AS cap_b_name, cmpb.visibility AS cap_b_vis
          FROM matches m
@@ -220,6 +221,12 @@ const publicTeam = (t) => ({
 const publicMatch = (mt) => ({
   court: mt.court, round: mt.round,
   team_a: mt.team_a, team_b: mt.team_b,
+  // H-4 (v0.142.0): the seed the bracket unit STAMPS on generation (v0.131.0 made teams.seed a
+  // real written column, not the never-written fallback the v0.125.0 trap was about). Read live
+  // before shipping the chip: 62 of 70 teams carry one and one event of six carries none, so the
+  // tile renders it conditionally. A seed is a number, not personal data — the payload's
+  // no-personal-data walker still governs everything else here.
+  seed_a: mt.seed_a ?? null, seed_b: mt.seed_b ?? null,
   captain_a: personName(mt.cap_a_name, { visibility: mt.cap_a_vis }),
   captain_b: personName(mt.cap_b_name, { visibility: mt.cap_b_vis }),
   score_a: mt.score_a, score_b: mt.score_b, points_to: mt.points_to,

@@ -17,8 +17,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Live scores — Boomtown Athletics</title>
   <script>/* Pre-paint theme (v0.53.0): saved bt_theme, else system preference, applied before the first stylesheet — the member header paints the right theme on frame one (admin pre-paint v2 precedent, theme half only; member pages carry no rail-collapse state). site-nav.js v2.12 owns the toggle listener. */(function(){try{var t=(window.localStorage&&localStorage.getItem("bt_theme"))||(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.dataset.theme=t;}catch(e){}})();</script>
-  <link rel="stylesheet" href="assets/tokens.css?v=0.141.0" />
-  <link rel="stylesheet" href="assets/app.css?v=0.141.0" />
+  <link rel="stylesheet" href="assets/tokens.css?v=0.142.0" />
+  <link rel="stylesheet" href="assets/app.css?v=0.142.0" />
   <style>
     /* A public scoreboard is read from three feet away on a phone and thirty feet away on a TV, so
        the type scales with the viewport rather than sitting at one size. */
@@ -42,15 +42,34 @@
     .lv-sub { font-size: 11px; font-weight: 400; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; }
 
     /* On now — the reason anybody opened this page. */
+    /* H-4: wider tiles, because the type inside them grew. auto-fill still means one column on a
+       phone and a wall of them on a TV — the same grid serves the gym screen and the hub's frame. */
     .lv-courts { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px;
-      grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); }
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
     .lv-court { background: var(--surface); border: 1px solid var(--border);
-      border-radius: var(--radius-card, 10px); padding: 10px 12px; display: grid; gap: 3px; }
+      border-radius: var(--radius-card, 10px); padding: 12px 14px; display: grid; gap: 4px; }
     .lv-ct { font-size: clamp(13px, 1.6vw, 16px); font-weight: 700; color: var(--emphasis); }
     .lv-stage { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); }
-    .lv-vs { display: flex; justify-content: space-between; gap: 8px; font-size: clamp(14px, 1.7vw, 17px); }
-    .lv-t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .lv-sc { font-variant-numeric: tabular-nums; font-weight: 700; min-width: 2ch; text-align: right; }
+    .lv-vs { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+    /* The tile is read from across a gym, so the SCORE is the headline and the name is the caption
+       — not two lines of the same size, which is what stood here. Both scale with the viewport,
+       and the score's floor exceeds the name's ceiling; live_motion.test.mjs asserts that. */
+    .lv-t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      font-size: clamp(14px, 1.7vw, 18px); }
+    .lv-sc { font-variant-numeric: tabular-nums; font-weight: 800; min-width: 2ch; text-align: right;
+      font-size: clamp(22px, 3.4vw, 40px); line-height: 1.05; color: var(--text); }
+    /* The side that is ahead. Weight and full-strength text carry it and the trailing side dims —
+       the leader is never signalled by colour alone (standards §3), and gold as text fails
+       contrast on a light surface (uiux-review §1). */
+    .lv-vs .lv-t:not(.lv-lead) { color: var(--text-muted); }
+    .lv-sc:not(.lv-lead) { color: var(--text-muted); font-weight: 700; }
+    .lv-t.lv-lead { font-weight: 700; }
+    /* The seed the bracket stamps at generation (v0.131.0). A chip, not a sentence: it sits before
+       the name, and it is skipped entirely where a team has no seed. */
+    .lv-seed { display: inline-block; min-width: 1.6em; margin-right: 6px; padding: 0 5px;
+      border: 1px solid var(--border); border-radius: 999px; text-align: center;
+      font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums;
+      color: var(--text-muted); vertical-align: baseline; }
     .lv-ref { font-size: 10px; color: var(--text-muted); }
     /* The captain, under the team name. Quiet: it identifies who to find, it is not the headline. */
     .lv-cap { display: block; font-size: 10px; font-weight: 400; color: var(--text-muted); }
@@ -143,7 +162,7 @@
 </head>
 <body>
     <header class="header chrome-glass no-print">
-    <a class="wordmark" href="index.html" style="text-decoration:none;color:inherit"><img class="brand-logo" src="assets/logo-boom-icon-512.png?v=0.141.0" alt="" width="22" height="22" />Boomtown <span>Athletics</span></a>
+    <a class="wordmark" href="index.html" style="text-decoration:none;color:inherit"><img class="brand-logo" src="assets/logo-boom-icon-512.png?v=0.142.0" alt="" width="22" height="22" />Boomtown <span>Athletics</span></a>
     <div class="spacer"></div>
     <a id="btHdrAdmin" class="btn ghost hdr-admin" href="admin.html" aria-label="Switch to admin view" hidden>Admin</a>
     <a id="btHdrMail" class="btn ghost hdr-mail" href="member-inbox.html" aria-label="Messages">✉</a>
@@ -192,8 +211,8 @@
     </div>
   </main>
 
-  <script src="assets/site-nav.js?v=0.141.0" defer></script>
-  <script src="assets/config.js?v=0.141.0"></script>
-  <script src="assets/live.js?v=0.141.0" defer></script>
+  <script src="assets/site-nav.js?v=0.142.0" defer></script>
+  <script src="assets/config.js?v=0.142.0"></script>
+  <script src="assets/live.js?v=0.142.0" defer></script>
 </body>
 </html>

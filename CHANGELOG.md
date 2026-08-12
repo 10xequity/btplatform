@@ -1,5 +1,45 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.142.0 — 2026-08-12
+
+### WF-5 H-4 — the live board's tile, read from across a gym. **The hub program is complete.**
+
+K-7 measured this page and found the hard half already built: it polls every 25 seconds and diffs
+against the previous payload with a stable row identity, so *"it should live update as scores are
+entered"* was DONE. **Re-measured this session and it held** — `prev` is at module scope, `keyOf`
+is `round:court`, and the diff drives every animation. None of it was touched.
+
+**What was unbuilt was the tile.** The score rendered at `clamp(14px, 1.7vw, 17px)` — the same size
+as the team name beside it — and an unstarted game rendered an **empty string** where its number
+goes. On a TV across a gym that is a wall of uniform grey text with holes in it.
+
+- **The score is now the headline**, `clamp(22px, 3.4vw, 40px)` against the name's
+  `clamp(14px, 1.7vw, 18px)`; the guard asserts the score's floor exceeds the name's ceiling, so
+  the hierarchy cannot be quietly undone.
+- **An unplayed game shows an en dash**, one named constant for both sides, so the tile keeps its
+  shape and "not started" is legible instead of looking broken.
+- **The side that is ahead is emphasised** by weight and full-strength text while the trailing side
+  dims — never by colour alone (standards §3), and never gold as text (uiux-review §1). A tie
+  crowns nobody, and neither does a game with no result.
+- **Seed chips**, where a seed exists. The payload gains `seed_a`/`seed_b` from `teams.seed`, the
+  column the bracket unit began writing in v0.131.0. **Read live before building: 62 of 70 teams
+  carry a seed and one event of six carries none**, so the chip is conditional and the fixture was
+  given both cases — a fixture that cannot exhibit the defect is not a fixture.
+- Tiles widen from 260px so the larger type has room; `auto-fill` still gives one column on a phone
+  and a wall of them on a TV, and the same grid serves the hub's embedded frame.
+
+**The team NUMBER was deliberately left off, and that is a measured decision, not an omission.**
+K-1's tier-3 number (`board_no`) is *derived* — a correlated subquery inside `divisions.js:697`,
+not a stored column — so putting it on this tile would copy that judgement into a second module.
+K-1 tier 2 (§-0 B5) will change what the number means. The seed is a real written column; the
+number is not. Recorded rather than guessed at.
+
+**Every motion assertion written in v0.084.0 still passes against the redesigned tile** — that is
+what extending `live_motion.test.mjs` rather than starting a second file bought. Seven new tests
+across the two existing homes; the payload test's fixture now carries seeded and unseeded teams so
+both halves of "only where a seed exists" are exercised. One negative control had to be rewritten:
+it assumed a one-line CSS rule and silently found nothing to mutate — a control that cannot fail.
+
 ## v0.141.0 — 2026-08-12
 
 ### WF-5 H-3 — the all-events financial overview, and a premise that was already true
