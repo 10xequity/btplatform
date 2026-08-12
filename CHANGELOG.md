@@ -1,5 +1,37 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.137.0 — 2026-08-12
+
+### Three recorded defects, one shape: a reference that resolves nowhere
+
+- **D-23 — screen-reader-only text was rendering as visible text on fourteen pages.** `.sr-only`
+  was defined in four page-local `<style>` blocks and used on eighteen; the fourteen that never
+  defined it showed their hidden captions, legends and labels as ordinary words. One rule now
+  lives in `app.css` (every page links it) and the four copies are deleted, the same shape as the
+  v0.51.0 shared-button promotion. *Re-measured before fixing: the register named help.html, which
+  carries its own inline `left:-9999px` and was never visibly broken, and missed twelve pages that
+  were.*
+- **D-24 — the Court Board's headings were unstyled.** `.pb-div-h` / `.pb-courts` were defined
+  only inside `admin-pool-board.html` while `admin-kotc.html` used both, so three headings rendered
+  at default `h2` size and two counts as plain text. Both base rules moved to `admin.css`; the pool
+  board keeps its own `.pb-workspace .pb-div-h` override, which is page layout and not the class.
+- **D-29 — every "View" button on the member home landed on "Missing event".** `home.js` linked
+  `register.html?event_id=` while `register.js` reads `?event=`. The rule that decides where a
+  sign-up link points was written out twice (`schedule.js`, `admin-event.js`) and the third site
+  that needed it wrote its own — so it is now `BT_SIGNUP_LINK` in `config.js`, page and parameter
+  together, with three callers. The member home also gains the SG-1 fork it never had: a drop-in
+  session opens its sheet, a team event the registration form.
+
+**Guard:** `dangling_refs.test.mjs` — a page must resolve every promoted class from something it
+actually loads (its own `<style>` plus the stylesheets it links; uses come from its markup plus the
+scripts it loads, which is standards §11 by construction), each promoted class must be defined in
+the shared stylesheet named for it *before* any page copy is deleted, no page may redefine one,
+every `register.html?`/`sheet.html?` link must carry the parameter the target page actually reads
+(derived from `register.js`/`sheet.js`, never assumed), the drop-in fork must exist in exactly one
+file, and every page whose script builds a sign-up link must load `config.js` first. Eight of nine
+watched failing before the fix. `pool_board_pivot.test.mjs`'s D-24 pin and `signup_sheet.test.mjs`'s
+fork pin were rewritten to follow their judgements to their new homes, never deleted.
+
 ## v0.136.0 — 2026-08-12
 
 **WF-4 — the registrations screen sees waivers, and can chase them (owner brief 2026-08-11 item 8; roadmap §-1p, §-0 B26).** Measured half-built: the checking and the auto-send already existed — the daily sweep selects unsigned roster members through the door gate's own identity/liveness pair and reports email keyless-honestly. This release surfaces them:

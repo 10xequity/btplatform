@@ -30,6 +30,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import worker from "../src/index.js";
 import { createD1 } from "../testkit/d1-memory.mjs";
+import { blankComments, functionBodyAfter } from "../testkit/route-extract.mjs";
 
 const SCHEMA = readFileSync(new URL("../testkit/journey-schema.sql", import.meta.url), "utf8");
 const ORIGIN = "https://boomtown.test";
@@ -403,12 +404,26 @@ test("sheet.html is a real page: own script (§11), config, site-nav, live statu
 });
 
 test("the advertised links fork by type: drop-in types → sheet.html, team types keep register.html", () => {
-  const sched = readFileSync(new URL("../../web/assets/schedule.js", import.meta.url), "utf8");
-  assert.match(sched, /sheet\.html/, "the schedule CTA never points at the sheet");
-  assert.match(sched, /register\.html/, "team events must keep the registration form");
-  assert.match(sched, /e\.type === "training" \|\| e\.type === "event"/,
+  // REWRITTEN in v0.137.0, not deleted. This pin was written against the fork as SG-1 shipped it:
+  // spelled out inside schedule.js and again inside admin-event.js. D-29 was the third site that
+  // needed the same rule and wrote its own — with the wrong parameter — so the rule moved to
+  // config.js and both original sites became callers. The pin follows it: the behaviour it
+  // protects (a drop-in advertises its sheet, a team event its registration form) is unchanged.
+  const cfg = readFileSync(new URL("../../web/assets/config.js", import.meta.url), "utf8");
+  assert.match(cfg, /sheet\.html\?event=/, "the shared rule never points at the sheet");
+  assert.match(cfg, /register\.html\?event=/, "team events must keep the registration form");
+  assert.match(cfg, /type === "training" \|\| type === "event"/,
     "the fork must read the event type, not guess");
+  for (const caller of ["assets/schedule.js", "assets/admin-event.js"]) {
+    const src = readFileSync(new URL("../../web/" + caller, import.meta.url), "utf8");
+    assert.match(src, /BT_SIGNUP_LINK\(/, `${caller} stopped using the shared rule — a second copy is how D-29 happened`);
+  }
+  // The staff screen's link is the one that gets advertised (§-1o), so it must still be absolute.
+  // Anchored on regLink's brace-matched body, never on how far apart the two tokens sit (D-17b).
   const adminEvent = readFileSync(new URL("../../web/assets/admin-event.js", import.meta.url), "utf8");
-  assert.match(adminEvent, /sheet\.html\?event=/,
-    "the staff screen's public link is the link that gets advertised (§-1o) — it must fork too");
+  const regLink = functionBodyAfter(blankComments(adminEvent), "function regLink(");
+  assert.ok(regLink, "regLink is gone or is no longer a plain function declaration");
+  assert.match(regLink, /location\.origin/,
+    "the advertised link lost its origin — a relative link is not something staff can paste anywhere");
+  assert.match(regLink, /BT_SIGNUP_LINK\(/, "regLink stopped asking the shared rule where to point");
 });

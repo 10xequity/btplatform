@@ -271,6 +271,19 @@ button, .btn, .tab, .nav-item, a[href], input, select { touch-action: manipulati
   body { overflow-x: hidden; }
 }
 
+/* v0.137.0 (§-1c D-23) — SCREEN-READER-ONLY TEXT, DEFINED ONCE FOR EVERY PAGE.
+   Four pages defined this in their own <style> and FOURTEEN used it, so on those fourteen every
+   `class="sr-only"` caption, legend and label rendered as ordinary visible text. It lives here
+   because every page in web/ links app.css — that is what makes one rule enough. The bytes are
+   admin-buildstatus.html's copy, the most complete of the four (padding/margin/border matter: a
+   1px box with padding can still show a hairline). The page-local copies are deleted in the same
+   release, and dangling_refs.test.mjs keeps them deleted — same shape and same reason as the
+   v0.51.0 shared-button promotion above. */
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
 /* Respect the notch and the home indicator — the desk device is usually a phone in a stand. */
 @supports (padding: max(0px)) {
   .admin-main, .wrap, main {

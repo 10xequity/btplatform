@@ -103,12 +103,23 @@ test("the new buttons live inside a pb-seg group, inheriting the existing press 
   assert.match(seg[0], /aria-pressed/, "the buttons must carry pressed state for keyboard and screen-reader users");
 });
 
-test("D-24 stands: .pb-div-h and .pb-courts keep their names and their definitions in this page", () => {
-  // Deliberately green pre-fix: this pins the classes the Court Board borrows (this page is their
-  // only definer). Its control: the detectors fail on a copy with the definitions renamed.
-  assert.match(STYLES, /\.pb-div-h\s*\{/, ".pb-div-h lost its definition — admin-kotc.html renders unstyled headings (D-24)");
-  assert.match(STYLES, /\.pb-courts\s*\{/, ".pb-courts lost its definition — admin-kotc.html renders unstyled counts (D-24)");
-  const renamed = STYLES.replace(/\.pb-div-h\s*\{/g, ".pb-div-h-RENAMED {").replace(/\.pb-courts\s*\{/g, ".pb-courts-RENAMED {");
-  assert.notEqual(renamed, STYLES, "the rename control found nothing to rename");
+test("D-24 CLOSED (v0.137.0): .pb-div-h and .pb-courts keep their names, in admin.css now", () => {
+  // REWRITTEN, not deleted. This pin was written in v0.135.0 to stop the pivot renaming two
+  // classes admin-kotc.html borrows while this page was their ONLY definer. v0.137.0 fixed the
+  // borrowing itself — the base rules moved to admin.css — so the pin follows the judgement to
+  // its new home rather than pinning bytes that legitimately left. What it must still catch is
+  // unchanged: those two names disappearing, which is what leaves the Court Board unstyled.
+  const ADMIN_CSS = readFileSync(new URL("../../web/assets/admin.css", import.meta.url), "utf8");
+  assert.match(ADMIN_CSS, /\.pb-div-h\s*\{/, ".pb-div-h lost its definition — admin-kotc.html renders unstyled headings (D-24)");
+  assert.match(ADMIN_CSS, /\.pb-courts\s*\{/, ".pb-courts lost its definition — admin-kotc.html renders unstyled counts (D-24)");
+  const renamed = ADMIN_CSS.replace(/\.pb-div-h\s*\{/g, ".pb-div-h-RENAMED {").replace(/\.pb-courts\s*\{/g, ".pb-courts-RENAMED {");
+  assert.notEqual(renamed, ADMIN_CSS, "the rename control found nothing to rename");
   assert.equal(/\.pb-div-h\s*\{/.test(renamed), false, "the .pb-div-h detector cannot fail");
+  // And this page keeps its OWN stake: the waiting area's centre-aligned override is page layout,
+  // not the class, so it stayed behind. If it followed the base rules it would restyle the Court
+  // Board's headings too — the exact cross-page bleed D-24 was.
+  assert.match(STYLES, /\.pb-workspace\s+\.pb-div-h\s*\{/,
+    "the waiting area's scoped override left this page — it belongs here, and only here");
+  assert.equal(/^\s*\.pb-div-h\s*\{/m.test(STYLES), false,
+    "the base rule came back to this page's <style> — one definition, or the two boards drift");
 });

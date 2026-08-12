@@ -14,7 +14,10 @@
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const money = c => c ? "$" + (c / 100).toFixed(2).replace(/\.00$/, "") : "Free";
   // v0.132.0 SG-1: drop-in types get the public sheet; team types keep the registration form.
-  const signupPage = e => (e.type === "training" || e.type === "event") ? "sheet.html" : "register.html";
+  // v0.137.0 (D-29): the rule itself moved to config.js. It was stated here AND in
+  // admin-event.js, and the third site that needed it (home.js) wrote its own link with the
+  // wrong parameter instead. One judgement, imported — the whole link, page and parameter.
+  const signupLink = e => BT_SIGNUP_LINK(e.type, e.id);
   const TZ = "America/Denver";
 
   let events = [], mode = "list", org = "";
@@ -68,7 +71,7 @@
               ${e.registered_count != null ? ` · ${e.registered_count} registered${e.capacity ? " / " + e.capacity : ""}` : ""}</div>
             ${e.team_names && e.team_names.length ? `<div class="sched-meta">Teams: ${e.team_names.map(esc).join(", ")}</div>` : ""}
           </div>
-          ${e.status === "published" ? `<a class="btn sched-cta" href="${signupPage(e)}?event=${e.id}" ${embed ? 'target="_blank" rel="noopener"' : ""}>Sign up</a>` : ""}
+          ${e.status === "published" ? `<a class="btn sched-cta" href="${signupLink(e)}" ${embed ? 'target="_blank" rel="noopener"' : ""}>Sign up</a>` : ""}
         </div>`;
       }).join("");
     } else {
@@ -86,7 +89,7 @@
         const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
         const day = upcoming.filter(e => (e.starts_at || "").slice(0, 10) === ds);
         html += `<div class="cal-day${d.getMonth() !== mo ? " other" : ""}"><div class="dnum">${d.getDate()}</div>
-          ${day.map(e => `<a class="cal-ev" href="${signupPage(e)}?event=${e.id}" ${embed ? 'target="_blank" rel="noopener"' : ""} title="${esc(e.name)}">${esc(e.name)}</a>`).join("")}</div>`;
+          ${day.map(e => `<a class="cal-ev" href="${signupLink(e)}" ${embed ? 'target="_blank" rel="noopener"' : ""} title="${esc(e.name)}">${esc(e.name)}</a>`).join("")}</div>`;
       }
       el.innerHTML = html + "</div>";
       el.querySelector("#cp").addEventListener("click", () => { calCursor.setMonth(calCursor.getMonth() - 1); render(); });

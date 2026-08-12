@@ -38,9 +38,11 @@
 
   // v0.132.0 SG-1: the link staff copy and advertise. Drop-in types (training/event) get the
   // public sheet — the SignUpGenius-replacement URL; team types keep the registration form.
+  // v0.137.0 (D-29): the fork itself moved to config.js — it was stated here AND in schedule.js,
+  // and the third site that needed it (home.js) wrote its own link with the wrong parameter.
+  // This function keeps only what is its own: making the shared link absolute.
   function regLink() {
-    const page = (ev.type === "training" || ev.type === "event") ? "sheet.html?event=" : "register.html?event=";
-    return location.origin + location.pathname.replace(/[^/]*$/, "") + page + id;
+    return location.origin + location.pathname.replace(/[^/]*$/, "") + BT_SIGNUP_LINK(ev.type, id);
   }
 
   function render() {

@@ -203,3 +203,13 @@
   .fc-cell { min-height: 64px; }
   .fc-pill { font-size: 10px; }
 }
+
+/* v0.137.0 (§-1c D-24) — DIVISION HEADINGS, SHARED BY TWO BOARDS.
+   These were defined only in admin-pool-board.html's <style>, and admin-kotc.html used both:
+   `.kb-done .pb-div-h` restyled a rule it did not own, so the Court Board's three headings
+   rendered at default h2 size and its two counts as ordinary text. They live here rather than in
+   app.css because both boards are admin pages. admin-pool-board.html keeps its own
+   `.pb-workspace .pb-div-h` override — that one is page layout (centre-aligned beside 44px
+   controls) and belongs to the page, not to the class. */
+.pb-div-h { font-size: 14px; margin: 0 0 8px; display: flex; align-items: baseline; gap: 10px; }
+.pb-courts { font-size: 11px; font-weight: 400; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; }

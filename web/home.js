@@ -151,11 +151,16 @@
           ${muteBtn("item", n.id, "Hide this announcement")}</div>`).join("") + `</div>`);
     }
     if (cat.events && cat.events.length) {
+      /* v0.137.0 (§-1c D-29): this link read `register.html?event_id=` while register.js reads
+         `?event=`, so every View button here landed on the missing-event refusal — for as long as
+         the feed has existed. It now calls the shared rule, which also gives the card the SG-1
+         fork it never had: a drop-in session opens its sheet, a team event the registration form.
+         The feed's own query already selects `type` (announcements.js), so nothing new is fetched. */
       out.push(`<div class="feed-group"><h3>Upcoming events${muteBtn("category", "events", "Hide upcoming events from this box")}</h3>` +
         cat.events.map(e => `
         <div class="feed-item"><div class="fx"><b>${esc(e.name)}</b>
           <span>${fmt(e.starts_at)}${e.location ? " · " + esc(e.location) : ""}</span></div>
-          <a class="btn ghost" style="text-decoration:none" href="register.html?event_id=${e.id}">View</a></div>`).join("") + `</div>`);
+          <a class="btn ghost" style="text-decoration:none" href="${BT_SIGNUP_LINK(e.type, e.id)}">View</a></div>`).join("") + `</div>`);
     }
     if (cat.my_events && cat.my_events.length) {
       out.push(`<div class="feed-group"><h3>You're signed up${muteBtn("category", "my_events", "Hide my events from this box")}</h3>` +
