@@ -1,5 +1,40 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.138.0 — 2026-08-12
+
+### WF-6 — anywhere there is a print, there is now also email and CSV
+
+The owner, 2026-08-11: *"Ensure anywhere there is a print, we also have email and download to CSV."*
+Three print surfaces exist and the recording held on re-measure: the tournament pool sheet (CSV
+already), the league weeks, the scoring-link cards. *A `window.print()` grep finds only two of the
+three — `tournament.js` calls bare `print()` — so the corpus below matches the call, not the
+spelling.*
+
+- **Two CSVs added.** League weeks export one row per game, unplayed games included with empty
+  score cells (a schedule that hid its unplayed games would be a results sheet). Scoring links
+  export team + link. Neither export mints anything: **Get links is a POST that mints credentials,
+  and an export that quietly writes is a rule this page already keeps** (E3, v0.91.0).
+- **The email half is a REUSE, not a second sender, and that is the decision this release makes.**
+  `marketing.js` already ships event-scoped segments (W-F, v0.99.0), campaigns, and a
+  `sendCampaign` that is already honest about production having no mail key — and
+  `admin-marketing.js` already accepts `?event=` and opens the segment form with that event
+  chosen. `BT_ADMIN.emailDocument()` hands the printed document to that path, so the keyless
+  honesty lives in ONE place and cannot drift. A second sender would have needed its own copy of
+  it. **Recipient default, said out loud: the event's own registrants**, which is what `?event=`
+  already selects; the operator confirms the segment, and pressing the button sends nothing.
+- **The document travels through `sessionStorage`, not the URL** — a league schedule runs to
+  thousands of characters. Read once and cleared; cancelling the segment form still keeps the
+  draft, so the operator's work is never thrown away.
+- `BT_ADMIN` gains **`csvRow`** — quoting a cell is a judgement, and it was about to be written a
+  third and fourth time. `tournament.js`'s hand-rolled CSV escaper is retired to it.
+
+**Guard:** `print_parity.test.mjs` states the owner's sentence as a rule about a SET — any page
+whose own scripts call `print()` must also offer a CSV download and the shared email hand-off — so
+a fourth print surface fails on the day it is added. Four of eight watched failing pre-fix. **The
+shared helper module is excluded from each page's corpus, and NC-5 proves that exclusion is the
+check**: `admin-nav.js` defines `emailDocument` and every admin page loads it, so a scan that
+included it would clear ten-plus pages that offer nothing.
+
 ## v0.137.0 — 2026-08-12
 
 ### Three recorded defects, one shape: a reference that resolves nowhere

@@ -10,6 +10,28 @@
    errors always render through fail() (Back + Dashboard, standing rule 2). */
 (async function () {
   const { api, guard, esc, openModal, closeModal } = window.BT_ADMIN;
+
+  /* WF-6 (v0.138.0, §-0 B28) — a document handed over by a print screen.
+     The owner asked that anywhere there is a print there is also email; BT_ADMIN.emailDocument
+     puts the printed text in sessionStorage and sends the operator here, because this page
+     already owns everything sending needs — event-scoped segments (W-F), the composer, and a
+     sendCampaign that is already honest about production having no mail key. Read ONCE and
+     cleared: a draft that survived a refresh would reappear over work the operator had moved on
+     from, and this is a hand-off, not a saved document. Nothing here sends anything. */
+  const PENDING_DRAFT = (() => {
+    try {
+      const raw = sessionStorage.getItem("bt_print_draft");
+      if (!raw) return null;
+      const d = JSON.parse(raw);
+      return d && (d.subject || d.body)
+        ? { name: String(d.subject || "Schedule"), subject: String(d.subject || ""), html_body: String(d.body || "") }
+        : null;
+    } catch (e) { return null; }
+  })();
+  function takeDraft() {
+    try { sessionStorage.removeItem("bt_print_draft"); } catch (e) {}
+    return PENDING_DRAFT;
+  }
   const me = await guard();
   if (!me) return;
   const $ = (id) => document.getElementById(id);
@@ -141,8 +163,17 @@
         ? await api(`/api/admin/marketing/segments/${seg.id}/update`, { method: "POST", body })
         : await api("/api/admin/marketing/segments", { method: "POST", body });
       if (!r.ok) { $("mSegMsg").textContent = r.data.error || "Could not save."; return; }
-      closeModal(); loadSegments();
+      closeModal();
+      await loadSegments();
+      /* WF-6 (v0.138.0): arrived from a print screen carrying a document. The segment the
+         operator just confirmed IS who it goes to, so hand both to the composer rather than
+         making them find New campaign and paste. awaited, because campaignModal renders the
+         segment picker from SEGMENTS and the one they just made has to be in it. */
+      if (PENDING_DRAFT && !seg) { const d = takeDraft(); campaignModal(null, { ...d, segment_id: r.data.id }); }
     };
+    /* Cancelling the segment must not throw the document away — the composer opens without a
+       segment chosen, which is the same state New campaign gives them. */
+    if (PENDING_DRAFT) $("mSegCancel").onclick = () => { closeModal(); campaignModal(null, takeDraft()); };
   }
   $("newSegBtn").onclick = () => segmentModal(null);
 
@@ -188,8 +219,12 @@
     });
   }
 
-  async function campaignModal(id) {
+  /* WF-6: "preset" pre-fills a NEW campaign from a document handed over by a print screen
+     (BT_ADMIN.emailDocument). It is ignored when editing an existing campaign — a saved draft is
+     the record, and nothing arriving in a URL gets to overwrite one. */
+  async function campaignModal(id, preset) {
     let c = { name: "", subject: "", html_body: "", segment_id: null, channel: "email", sms_body: "" };
+    if (!id && preset) c = { ...c, ...preset };
     if (id) {
       const r = await api(`/api/admin/marketing/campaigns/${id}`);
       if (!r.ok) return fail(r.data.error || "Could not open campaign.");
@@ -317,6 +352,7 @@
      form with that event already chosen. Two taps from the registration list to a real segment. */
   const fromEvent = Number(new URLSearchParams(location.search).get("event")) || 0;
   if (fromEvent) segmentModal(null, fromEvent);
+  else if (PENDING_DRAFT) campaignModal(null, takeDraft()); // a document with no event still composes
 })();
 /* Changelog: v1.2 (2026-08-06, v0.99.0) — §-1b W-F: segments can target ONE event. Event picker in
    the segment form, the event named in the segment's description, and a ?event= deep link that

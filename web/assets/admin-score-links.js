@@ -15,10 +15,14 @@
    matters because it is used in a gym on whatever wifi the venue has. */
 (function () {
   "use strict";
-  const { api, esc, fail } = window.BT_ADMIN;
+  const { api, esc, fail, downloadText, csvRow, emailDocument } = window.BT_ADMIN;
   const $ = (id) => document.getElementById(id);
 
   let eventId = null;
+  // WF-6: the minted cards, kept so the CSV and the email export the SAME set the page shows.
+  // Never re-minted for an export: Get links is a POST that mints credentials, and an export
+  // that quietly writes is the rule this page already refuses to break (E3, v0.91.0).
+  let links = [];
 
   function card(l) {
     // The token is in the URL and the URL is the credential — so it is shown, never hidden behind
@@ -37,12 +41,31 @@
     </div>`;
   }
 
+  /* WF-6 (v0.138.0) — print's two siblings, over the same cards the page is showing.
+     The URL is the credential (see card() above), so this CSV is a list of credentials: it
+     exists because handing them out IS the job — a mail merge, a text, a sheet on the desk —
+     and it carries exactly what the printed card carries, no more. Neither export mints:
+     Get links is a POST, and an export that quietly writes is the rule this page already keeps. */
+  function csvCards() {
+    if (!links.length) { $("lNote").textContent = "Press Get links first — nothing has been minted for this event yet."; return; }
+    const rows = [csvRow(["Team", "Scoring link"]), ...links.map((l) => csvRow([l.team, l.url]))];
+    downloadText(`${new Date().toISOString().slice(0, 10)}_scoring-links.csv`, rows.join("\r\n"));
+    $("lNote").textContent = `Downloaded ${links.length} link${links.length === 1 ? "" : "s"}.`;
+  }
+
+  function emailCards() {
+    if (!links.length) { $("lNote").textContent = "Press Get links first — nothing has been minted for this event yet."; return; }
+    const body = ["Your scoring link — two taps to record a result, and it stops asking once your team is finished.", "",
+      ...links.map((l) => `${l.team}: ${l.url}`)].join("\n");
+    emailDocument(eventId, "Your scoring link", body);
+  }
+
   async function make() {
     if (!eventId) return;
     $("lNote").textContent = "Working…";
     const r = await api(`/api/events/${eventId}/score-links`, { method: "POST" });
     if (!r.ok) { $("lNote").textContent = ""; return fail("lCards", r.data.error || "Couldn't make the links."); }
-    const links = r.data.links || [];
+    links = r.data.links || [];
     $("lEmpty").hidden = links.length > 0;
     $("lCards").innerHTML = links.map(card).join("");
     $("lNote").textContent = links.length
@@ -101,6 +124,8 @@
     // paint should never write — so the one step is made unmissable instead.
     $("lEmptyGo").addEventListener("click", make);
     $("lPrint").addEventListener("click", () => window.print());
+    $("lCsv").addEventListener("click", csvCards);
+    $("lEmail").addEventListener("click", emailCards);
     loadEvents();
   });
 })();

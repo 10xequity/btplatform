@@ -666,6 +666,37 @@
     URL.revokeObjectURL(url);
   }
 
+  /* v2.21 (v0.138.0, WF-6) — ONE CSV row spelling for every export screen.
+     Quoting a cell is a judgement — comma, quote, newline, and the doubled quote Excel wants —
+     and it was about to be written a third and a fourth time. Callers pass an array of cells. */
+  function csvRow(cells) {
+    return (cells || []).map((c) => {
+      const s = c == null ? "" : String(c);
+      return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    }).join(",");
+  }
+
+  /* v2.21 (v0.138.0, WF-6) — HAND A PRINTED DOCUMENT TO THE CAMPAIGN COMPOSER.
+     The owner asked that anywhere there is a print, there is also email. The email half is NOT a
+     new sender: marketing.js already ships event-scoped segments (W-F), campaigns, and a
+     sendCampaign that is already honest about production having no mail key — and
+     admin-marketing.js already accepts ?event= and opens the segment form with that event
+     chosen. This hands the document across to that path, so the keyless honesty lives in ONE
+     place and cannot drift. RECIPIENT DEFAULT, SAID OUT LOUD: the event's own registrants, which
+     is what ?event= already selects; the operator can change the segment before sending, and
+     nothing is sent by pressing this button.
+     The body travels through sessionStorage, not the URL: a league schedule runs to thousands of
+     characters and a URL is not a transport for a document. Same origin, same tab, and the
+     composer clears the key once it has read it. */
+  function emailDocument(eventId, subject, body) {
+    try {
+      sessionStorage.setItem("bt_print_draft", JSON.stringify({
+        event: Number(eventId) || 0, subject: String(subject || ""), body: String(body || ""),
+      }));
+    } catch (e) { /* private mode: the composer still opens, just without the draft */ }
+    location.href = "admin-marketing.html?event=" + (Number(eventId) || 0) + "&draft=1";
+  }
+
   /* v2.4 UX-06: put the logo in the header wordmark. Decorative — text stays for AT.
      v2.5 (v0.46.0): per-org logo. Renders instantly from the localStorage cache (or the boom
      icon — the Athletics wordmark PNG is retired from the header, its baked-in text contradicted
@@ -790,7 +821,7 @@
      about to be bounced. A rejected guard leaves the header exactly as it painted. */
   guard().then((me) => { if (me) mailBadgeFill(); }).catch(() => {});
 
-  window.BT_ADMIN = { api, guard, esc, money, fmtDT, openModal, closeModal, downloadText, fail, loadFail, orgEmptyState, orgsReady };
+  window.BT_ADMIN = { api, guard, esc, money, fmtDT, openModal, closeModal, downloadText, csvRow, emailDocument, fail, loadFail, orgEmptyState, orgsReady };
 
   /* v0.59.0: keep <meta name="theme-color"> in step with the ACTIVE theme.
      It was pinned to #0B0B0D on every page, so a member in light mode saw a near-black status
@@ -829,7 +860,7 @@
       if (window.BT_STATUS || document.getElementById("bt-status-js")) return;
       var s = document.createElement("script");
       s.id = "bt-status-js";
-      s.src = "assets/build-status.js?v=0.137.0";
+      s.src = "assets/build-status.js?v=0.138.0";
       s.async = false;
       document.head.appendChild(s);
     } catch (e) { /* indicators are never load-blocking */ }

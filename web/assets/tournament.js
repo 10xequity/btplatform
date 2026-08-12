@@ -329,16 +329,28 @@
       : `<div class="warn-banner">${r.data.error || "Bracket failed."}</div>`;
   };
 
-  /* ---------- print + CSV ---------- */
+  /* ---------- print + CSV + email (WF-6: all three, wherever there is one) ---------- */
   $("printBtn").onclick = () => print();
+
+  /* ONE row builder, two renderers. The downloaded sheet and the emailed sheet must never
+     disagree about what a game IS. This file also used to carry its own CSV quoting — a third
+     spelling of a judgement that now lives once, in BT_ADMIN.csvRow (v0.138.0). */
+  const sheetRows = () => matches.map((m) => [m.round, m.court,
+    teamName[m.team_a_id] || "", teamName[m.team_b_id] || "", teamName[m.ref_team_id] || "",
+    m.score_a ?? "", m.score_b ?? ""]);
+
   $("csvBtn").onclick = () => {
-    const esc = (s) => `"${String(s ?? "").replace(/"/g, '""')}"`;
-    const lines = ["round,court,team_a,team_b,ref,score_a,score_b"];
-    for (const m of matches) lines.push([m.round, m.court, esc(teamName[m.team_a_id]), esc(teamName[m.team_b_id]), esc(teamName[m.ref_team_id] || ""), m.score_a ?? "", m.score_b ?? ""].join(","));
-    const blob = new Blob([lines.join("\n")], { type: "text/csv" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `${new Date().toISOString().slice(0, 10)}_${(currentEvent.name || "schedule").replace(/\W+/g, "-")}_schedule.csv`;
-    a.click();
+    const { csvRow, downloadText } = window.BT_ADMIN;
+    const lines = [csvRow(["round", "court", "team_a", "team_b", "ref", "score_a", "score_b"]),
+      ...sheetRows().map(csvRow)];
+    downloadText(`${new Date().toISOString().slice(0, 10)}_${(currentEvent.name || "schedule").replace(/\W+/g, "-")}_schedule.csv`,
+      lines.join("\r\n"));
+  };
+
+  $("emailBtn").onclick = () => {
+    if (!currentEvent) return;
+    const body = [currentEvent.name, "",
+      ...sheetRows().map((r) => `Round ${r[0]} · Court ${r[1]}: ${r[2] || "TBD"} vs ${r[3] || "TBD"}${r[4] ? ` (ref ${r[4]})` : ""}`)].join("\n");
+    window.BT_ADMIN.emailDocument(currentEvent.id, `${currentEvent.name} — pool sheet`, body);
   };
 })();

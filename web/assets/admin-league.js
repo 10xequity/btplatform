@@ -16,7 +16,7 @@
    scheduler), generate/remove weeks, 2-tap scoring (winner → point diff), standings, staff pick. */
 
 (function () {
-  const { api, guard, esc, openModal, closeModal } = window.BT_ADMIN;
+  const { api, guard, esc, openModal, closeModal, downloadText, csvRow, emailDocument } = window.BT_ADMIN;
   const $ = id => document.getElementById(id);
   let leagueId = null, data = null;
 
@@ -28,6 +28,10 @@
     $("genWeek").onclick = generateWeek;
     $("saveLevels").onclick = saveLevels;
     $("printWeeks").onclick = () => window.print(); // W-B: the schedule is a hand-out; print is export
+    // WF-6 (v0.138.0): print gets its two siblings. The owner asked for all three wherever
+    // there is one, and the whole schedule — not one week — is what a hand-out contains.
+    $("csvWeeks").onclick = csvWeeks;
+    $("emailWeeks").onclick = emailWeeks;
     await loadLeagues();
   }
 
@@ -170,11 +174,44 @@
 
   /* W-B: the week as paste-ready text — a group text or an email carries no table, so this is
      the export that actually gets used between the print-outs. */
+  /* WF-6: ONE line shape for a week, read by "Copy as text" AND by the emailed schedule. These
+     were about to be two spellings of the same sentence, and the pasted week and the emailed
+     week disagreeing about how a score reads is exactly the drift this repo keeps paying for. */
+  function weekLines(w) {
+    return [`Week ${w.round}`,
+      ...w.matches.map(m => `Court ${m.court}: ${m.team_a || "TBD"} vs ${m.team_b || "TBD"}${m.score_a != null ? ` (${m.score_a}–${m.score_b})` : ""}`)];
+  }
+
+  /* WF-6: the whole schedule as a spreadsheet. One row per game, unplayed games included with
+     empty score cells — a schedule that hid its unplayed games would be a results sheet. */
+  function csvWeeks() {
+    const weeks = (data && data.weeks) || [];
+    if (!weeks.length) { say("No weeks yet — generate week 1 first.", true); return; }
+    const rows = [csvRow(["Week", "Court", "Team A", "Team B", "Score A", "Score B"])];
+    for (const w of weeks) {
+      for (const m of w.matches) {
+        rows.push(csvRow([w.round, m.court, m.team_a || "", m.team_b || "",
+          m.score_a != null ? m.score_a : "", m.score_b != null ? m.score_b : ""]));
+      }
+    }
+    downloadText(`${new Date().toISOString().slice(0, 10)}_${(data.event.name || "league").replace(/\W+/g, "-")}_schedule.csv`,
+      rows.join("\r\n"));
+    say(`Downloaded ${rows.length - 1} game(s).`);
+  }
+
+  /* WF-6 / B10 "email the schedule": hands the SAME text the print-out carries to the campaign
+     composer, with this league's registrants already the target. Nothing is sent from here. */
+  function emailWeeks() {
+    const weeks = (data && data.weeks) || [];
+    if (!weeks.length) { say("No weeks yet — generate week 1 first.", true); return; }
+    const body = [data.event.name, "", ...weeks.flatMap(w => [...weekLines(w), ""])].join("\n");
+    emailDocument(leagueId, `${data.event.name} — schedule`, body);
+  }
+
   async function copyWeek(round, btn) {
     const w = (data.weeks || []).find(x => x.round === round);
     if (!w) return;
-    const lines = [`${data.event.name} — Week ${round}`,
-      ...w.matches.map(m => `Court ${m.court}: ${m.team_a || "TBD"} vs ${m.team_b || "TBD"}${m.score_a != null ? ` (${m.score_a}–${m.score_b})` : ""}`)];
+    const lines = [`${data.event.name} — Week ${round}`, ...weekLines(w).slice(1)];
     try {
       await navigator.clipboard.writeText(lines.join("\n"));
       const was = btn.textContent;
