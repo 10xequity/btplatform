@@ -26,6 +26,7 @@ import { readFileSync, writeFileSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
+import { functionBodyAfter } from "../testkit/route-extract.mjs"; // v0.144.0 — containment, not adjacency
 import worker from "../src/index.js";
 import { createD1 } from "../testkit/d1-memory.mjs";
 
@@ -524,7 +525,17 @@ test("A9 — the panel sits between the board and the workspace, and is wired ou
   assert.ok(!/pbSug/.test(wire), "the suggestions panel must not be wired from wire()");
   const render = PBJS.slice(PBJS.indexOf("function render()"), PBJS.indexOf("function wire()"));
   assert.ok(!/renderSuggestions/.test(render), "and must not be redrawn from render()");
-  assert.match(PBJS, /tempSeq = -1;\s*\n\s*renderSuggestions\(\);/, "it is drawn from ingest(), where new server data arrives");
+  /* v0.144.0: THIS PINNED ADJACENCY, NOT THE RULE — the same error this file's own note below
+     records about the gold border. It demanded `renderSuggestions()` appear on the line directly
+     after `tempSeq = -1;`, so K-13 inserting `paintSortOptions()` between them reddened it while
+     the claim it exists to protect — "drawn from ingest(), where new server data arrives" — stayed
+     exactly true. Rewritten to assert CONTAINMENT, which is what was always meant: the call is
+     inside ingest()'s body and nowhere near render(). Now a real move fails it and a neighbour
+     does not. */
+  const ingestBody = functionBodyAfter(PBJS, "function ingest(");
+  assert.ok(ingestBody, "ingest() is gone or is no longer a plain function declaration");
+  assert.match(ingestBody, /renderSuggestions\(\)/,
+    "it is drawn from ingest(), where new server data arrives — and it is no longer called there");
 
   // The reason a suggestion is being made is not small print.
   assert.match(PBHTML, /\.pb-sug-text \{[^}]*font-size: 13px/, ".pb-sug-text must be 13px");

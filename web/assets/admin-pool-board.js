@@ -54,36 +54,98 @@
   const PB_DIV_VIEWS = ["horizontal", "vertical"];
   let divView = "horizontal";
   let sortKey = "board";
+  let sortRev = false;
   let collapsed = false;
 
-  /** Order the waiting area. Pure, and deliberately closed over nothing — it is the one piece of
-      this file a test can execute directly, and a comparator that reaches outside itself cannot be
-      reasoned about from anywhere.
+  /** THE ONE PLACE A SORT KEY BECOMES A VALUE (v0.144.0, K-13). Two callers read it: `sortTeams`
+      orders by it, and `availableSortKeys` counts how many distinct values it yields to decide
+      whether the option is worth offering at all. They must never disagree — an option a director
+      is offered and the order they get from choosing it are the same judgement, so they are the
+      same function. Returns null for a key it does not know, which is how both callers fail safe.
+
+      Blank-yielding pickers return "" rather than null so the comparator has one blank test.
 
       Sorting by LEVEL groups teams by the label they registered with; it does not rank them. The
       labels are free text out of the registration form ("BB/A", "A/AA", "Open"), and there is no
       stored ordering for them — inventing one here would be a skill ranking nobody agreed to. What
-      a director needs from this button is all the BB/A teams together, which grouping gives. */
-  function sortTeams(list, key) {
-    const out = list.slice();
-    if (key === "board") return out;
-    const pick = {
+      a director needs from this button is all the BB/A teams together, which grouping gives — and
+      that is also the owner's "group" in the K-13 list, already implemented, so no second key was
+      invented for it.
+
+      NUMBER is the K-1 team number (`board_no`, derived once in divisions.js's loadBoard). It is
+      the owner's "rank" per Q3's standing default AND his "registration date": board_no is rank by
+      `t.id` within the event and ids are AUTOINCREMENT, so its order IS registration order. Two of
+      his six words, one option — offering both would be two controls with identical output. */
+  function sortPick(key) {
+    // Numbers are compared as zero-padded strings so one comparator serves text and numbers alike.
+    const num = (v) => (v == null || v === "" ? "" : String(v).padStart(6, "0"));
+    return {
       name: (t) => String(t.name || ""),
+      number: (t) => num(t.board_no),
       level: (t) => String(t.level || ""),
+      division: (t) => num(t.division_rank),
+      gender: (t) => String(t.gender_division || ""),
       captain: (t) => String(t.captain || ""),
-      seed: (t) => (t.seed == null ? "" : String(t.seed).padStart(6, "0")),
-    }[key];
+      seed: (t) => num(t.seed),
+    }[key] || null;
+  }
+
+  /** Order the waiting area. Pure, and deliberately closed over nothing but `sortPick` — it is the
+      one piece of this file a test can execute directly, and a comparator that reaches outside
+      itself cannot be reasoned about from anywhere.
+
+      REVERSE INVERTS THE COMPARISON, NOT THE ARRAY, and that is the whole design of it. A team with
+      no captain, no level or no seed sorts LAST rather than first, because a blank at the top of
+      the list is the first thing read and the least useful thing to read. Reversing the array would
+      throw every blank to the top the moment a director pressed the button — so descending flips
+      the teams that HAVE a value and leaves the blanks where they were. */
+  function sortTeams(list, key, reverse) {
+    const out = list.slice();
+    // The board's own order is a real ordering, so it reverses too — there is just nothing to pick.
+    if (key === "board") return reverse ? out.reverse() : out;
+    const pick = sortPick(key);
     if (!pick) return out;
     out.sort((a, b) => {
       const av = pick(a), bv = pick(b);
-      // A team with no captain, no level or no seed sorts LAST rather than first: a blank at the
-      // top of the list is the first thing read and the least useful thing to read.
       if (!av && !bv) return 0;
       if (!av) return 1;
       if (!bv) return -1;
-      return av.localeCompare(bv, undefined, { numeric: true, sensitivity: "base" }) || 0;
+      const c = av.localeCompare(bv, undefined, { numeric: true, sensitivity: "base" }) || 0;
+      return reverse ? -c : c;
     });
     return out;
+  }
+
+  /** Which sorts this board can actually offer (v0.144.0, K-13 — the owner's "where each applies").
+      An option is offered only when sorting by it could separate two teams, measured with the SAME
+      picker the sort uses.
+
+      WHY THIS IS COMPUTED AND NOT A LIST. Live D1, 2026-08-13: every team in production is either
+      ("Coed","BB/A") or (NULL,NULL). Gender would reorder nobody on any board that exists — and
+      neither would Level, which has shipped as an always-visible option since v0.125.0. A control
+      that acts on nothing is worse than one that is absent, so the rule repairs the old options at
+      the same time as it adds the new ones. Division earns its place on exactly one live board,
+      which is the point: it appears where it means something.
+
+      Board order, team number and team name are unconditional. The first two can always reorder a
+      list of distinct teams, and a board where every team shares a name is not a board. */
+  function availableSortKeys(list) {
+    const always = ["board", "number", "name"];
+    const conditional = ["level", "division", "gender", "captain", "seed"];
+    const teams = list || [];
+    return always.concat(conditional.filter((k) => {
+      const pick = sortPick(k);
+      return pick && new Set(teams.map(pick)).size > 1;
+    }));
+  }
+
+  /** The label a director reads for each key. Separate from `sortPick` on purpose: one is what a
+      key MEANS, the other is what it is CALLED, and a rename should never be able to change a sort. */
+  function sortLabel(key) {
+    return {
+      board: "Board order", number: "Team number", name: "Team name", level: "Level",
+      division: "Division", gender: "Gender", captain: "Captain", seed: "Seed",
+    }[key] || key;
   }
 
   /** Write the view state onto the DOM. One function so the attribute, the pressed states and the
@@ -105,6 +167,15 @@
       btn.textContent = collapsed ? "Show" : "Hide";
       btn.setAttribute("aria-expanded", String(!collapsed));
     }
+    // K-13: the reverse toggle NAMES the direction it is currently in rather than showing a bare
+    // arrow, because a lone ↑ leaves a director working out which way is on. "Ascending" and not
+    // "A→Z": half these sorts are numbers (team number, seed, division rank) and an alphabet is a
+    // lie on those. The pressed state carries the same fact for the styling and the screen reader.
+    const rev = $("pbRev");
+    if (rev) {
+      rev.setAttribute("aria-pressed", String(sortRev));
+      rev.textContent = sortRev ? "Descending" : "Ascending";
+    }
   }
 
   function ingest(data) {
@@ -121,7 +192,26 @@
     workspace = [...(data.workspace || [])];
     dirty = false;
     tempSeq = -1;
+    paintSortOptions();
     renderSuggestions();
+  }
+
+  /** Rebuild the Sort menu for the board that is actually on screen (v0.144.0, K-13).
+      Called from `ingest` and from NOWHERE else — deliberately not from `render()`. Two reasons:
+      §-1c D-6 is that `render()` runs constantly and anything it touches accumulates, and more
+      importantly a director drags teams in and out of the waiting area continuously. Recomputing
+      the menu on every drag would make an option vanish under the hand that was using it. `ingest`
+      runs on load and on save, which are the two moments the board's own truth changes. */
+  function paintSortOptions() {
+    const sel = $("pbSort");
+    if (!sel) return;
+    const keys = availableSortKeys(workspace);
+    // A remembered key this board cannot offer falls back to the board's own order rather than
+    // leaving the select showing one thing and the list sorted by another.
+    if (!keys.includes(sortKey)) sortKey = "board";
+    sel.innerHTML = keys.map((k) =>
+      `<option value="${k}"${k === sortKey ? " selected" : ""}>${esc(sortLabel(k))}</option>`).join("");
+    sel.value = sortKey;
   }
 
   /* ---------- suggestions ----------
@@ -274,7 +364,7 @@
 
     // Sorted for DISPLAY only. `workspace` keeps the server's order, so switching back to "Board
     // order" is a real return rather than an approximation of one.
-    $("pbWork").innerHTML = sortTeams(workspace, sortKey).map(tile).join("")
+    $("pbWork").innerHTML = sortTeams(workspace, sortKey, sortRev).map(tile).join("")
       || `<li class="pb-empty">Everyone is placed. Drag a tile back here to take them out of a pool.</li>`;
     $("pbCount").textContent = `${workspace.length} waiting`;
     $("pbSave").disabled = !dirty;
@@ -482,8 +572,13 @@
       if (PB_VIEWS.includes(savedView)) view = savedView;
       const savedDivView = localStorage.getItem("bt_pb_divview");
       if (PB_DIV_VIEWS.includes(savedDivView)) divView = savedDivView; // validated — a poisoned value never becomes the layout
+      // The saved key is remembered but NOT applied here — paintSortOptions() decides whether this
+      // board can offer it, because bt_pb_sort crosses events. A director who sorted by Division on
+      // a board that has three of them and opens one that has none must not land on a selection the
+      // select cannot show.
       const savedSort = localStorage.getItem("bt_pb_sort");
-      if (savedSort) { sortKey = savedSort; $("pbSort").value = savedSort; }
+      if (savedSort) sortKey = savedSort;
+      sortRev = localStorage.getItem("bt_pb_rev") === "1";
     } catch (e) { /* a browser with storage denied still gets a working board */ }
     paintView();
 
@@ -492,6 +587,12 @@
       // workspace's order is not part of what Save writes.
       sortKey = $("pbSort").value;
       try { localStorage.setItem("bt_pb_sort", sortKey); } catch (e) {}
+      render();
+    });
+    $("pbRev").addEventListener("click", () => {
+      sortRev = !sortRev;
+      try { localStorage.setItem("bt_pb_rev", sortRev ? "1" : "0"); } catch (e) {}
+      paintView();
       render();
     });
     for (const b of document.querySelectorAll("[data-pbview]")) {

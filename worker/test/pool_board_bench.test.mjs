@@ -241,11 +241,37 @@ test("T2-8 — the waiting area can also be collapsed outright, which is the own
 
 /** Rebuild the shipped `sortTeams` from its own bytes. No DOM, no closure: if that stops being true
     this throws, which is the correct failure — a comparator that reaches outside itself cannot be
-    reasoned about from a test and should not be one function. */
+    reasoned about from a test and should not be one function.
+
+    v0.144.0 (K-13): `sortTeams` now calls `sortPick`, a sibling function declaration, so the rebuild
+    composes BOTH sets of real bytes into one scope instead of one. That is deliberate and it is not
+    a weakening of the rule above: `sortPick` is the single place a sort key becomes a value, and
+    `availableSortKeys` reads it too — hoisting it was the alternative to giving the option list its
+    own private copy of the same judgement. The third parameter is the reverse flag; every T2-8 test
+    below calls `fn(list, key)` with it undefined, which is ascending, so they are unchanged. */
+function sortSource(source = PBJS) {
+  const pick = functionBodyAfter(source, "function sortPick");
+  assert.ok(pick, "sortPick is gone or is no longer a plain function declaration");
+  return "function sortPick(key) " + pick + "\n";
+}
 function loadSorter(source = PBJS) {
   const body = functionBodyAfter(source, "function sortTeams");
   assert.ok(body, "sortTeams is gone or is no longer a plain function declaration");
-  return { fn: new Function("list", "key", body.slice(1, -1)), body };
+  // The parameter names MIRROR the shipped signature `sortTeams(list, key, reverse)` — the body is
+  // real bytes, so a name that disagrees is a ReferenceError rather than a wrong answer.
+  return {
+    fn: new Function("list", "key", "reverse", sortSource(source) + body.slice(1, -1)),
+    body,
+  };
+}
+/** The option list, rebuilt the same way and over the SAME `sortPick`. */
+function loadAvailable(source = PBJS) {
+  const body = functionBodyAfter(source, "function availableSortKeys");
+  assert.ok(body, "availableSortKeys is gone or is no longer a plain function declaration");
+  return {
+    fn: new Function("list", sortSource(source) + body.slice(1, -1)),
+    body,
+  };
 }
 
 const FIXTURE = [
@@ -297,10 +323,17 @@ test("T2-8 — the board's own order is a real choice and returns the list untou
 });
 
 test("T2-8 NC — neutralising the real comparator stops the reordering, so the test can tell", () => {
+  // v0.144.0: THIS NC's VICTIM MOVED UNDER K-13 AND IT SAID SO. It mutated `return av.localeCompare`
+  // — the comparator's whole return — and K-13 split that into `const c = av.localeCompare(…)` plus
+  // `return reverse ? -c : c`, so the replace() became a no-op. It reddened on its own notEqual line
+  // instead of passing while mutating nothing, which is the third time in three sessions that one
+  // assertion has been the only thing between a control and vacuity. Rewritten, not deleted: the
+  // victim is now the line the comparison actually leaves through, so a neutralised comparator is
+  // still what this proves.
   const { body } = loadSorter();
-  const broken = body.replace("return av.localeCompare", "return 0; return av.localeCompare");
+  const broken = body.replace("return reverse ? -c : c;", "return 0;");
   assert.notEqual(broken, body, "mutation did not land — the comparator's return was not found");
-  const fn = new Function("list", "key", broken.slice(1, -1));
+  const fn = new Function("list", "key", "reverse", sortSource() + broken.slice(1, -1));
 
   // A fixture with NO blanks, because the blank-handling branches return 1/-1 before the mutated
   // line and would reorder the list on their own — the NC has to isolate the comparison itself.
@@ -417,4 +450,249 @@ test("T2-8 — a tile carries its number and its level, and both classes are sty
     assert.ok(tileBody.includes(said),
       `the tile shows a fact it never says: "${said.trim()}" is missing from the accessible name`);
   }
+});
+
+/* ==================== 7. K-13 (§-0 B17) — multi-sort, reverse, "where each applies" ==========
+ *
+ * Owner 2026-08-10 (Q3 rider): "registration date · alphabetical · rank (and reverse) · group ·
+ * division · gender, WHERE EACH APPLIES." Four of those six were resolved by measurement rather
+ * than by choosing, and the resolutions are pinned here because each one is a claim:
+ *
+ *   · RANK = the K-1 team number (`board_no`). Q3's own row sets that default. It is ALSO the
+ *     answer to "registration date": `board_no` is rank by `t.id` within the event, `id` is
+ *     AUTOINCREMENT, so its order IS registration order — loadBoard's own comment says so. Two of
+ *     the owner's six words are therefore ONE option, and offering both would be two controls that
+ *     produce byte-identical output.
+ *   · GROUP = the existing Level sort. `sortTeams`'s own comment has called it grouping since
+ *     v0.125.0 ("all the BB/A teams together, which grouping gives"), and the owner's Q3 answer
+ *     opened with "grouping is fine". No second key was invented for a word already implemented.
+ *   · DIVISION sorts by the division's `rank`, never its name or id — `rank` is the director's own
+ *     explicit ordering of divisions and `loadBoard` already orders by it. One judgement, imported.
+ *   · GENDER is `teams.gender_division`, which existed in the schema and was not in the payload.
+ *
+ * WHY "WHERE EACH APPLIES" IS COMPUTED AND NOT A STATIC LIST — this is the measurement that
+ * decided the design. Live D1, 2026-08-13, the five boards that have a waiting area:
+ *
+ *     event   waiting   division   gender   level   seed
+ *     90001      4          1         1       1       4
+ *     90003      8          1         1       1       1
+ *     90004      8          1         1       1       8
+ *     90005      8          1         1       1       8
+ *     90006     30          3         1       1      10
+ *
+ * (buckets of distinct values, blank counted as its own bucket). Every team in production is
+ * either ("Coed","BB/A") or (NULL,NULL) — so a Gender sort would reorder nothing on every board
+ * that exists, and so would Level, which HAS SHIPPED AS AN ALWAYS-VISIBLE OPTION SINCE v0.125.0.
+ * A control that acts on nothing is worse than one that is absent, so an option is offered only
+ * when sorting by it could actually separate two teams. That rule repairs the shipped Level and
+ * Seed options at the same time as it adds the new ones.
+ *
+ * THE AVAILABILITY TEST AND THE SORT SHARE `sortPick`. If they had separate copies of "what this
+ * key means", the option a director is offered and the order they get from it could disagree —
+ * which is the failure this whole section exists to prevent. */
+
+/* Mirrors production deliberately: level and gender are SINGLE-VALUED exactly as live D1 has them,
+   so the fixture can exhibit the hiding. Division and seed vary, so it can exhibit the showing.
+   A fixture where everything varied could not test half of this. */
+const K13 = [
+  { id: 1, name: "Net Assets",  board_no: 1, level: "BB/A", captain: "Ava Stone", seed: 3,    division_rank: 2,    gender_division: "Coed" },
+  { id: 2, name: "Block Party", board_no: 2, level: "BB/A", captain: "Ben Marsh", seed: 1,    division_rank: 1,    gender_division: "Coed" },
+  { id: 3, name: "Dig Nation",  board_no: 3, level: "BB/A", captain: null,        seed: 2,    division_rank: 1,    gender_division: "Coed" },
+  { id: 4, name: "Ace Ventura", board_no: 4, level: "BB/A", captain: "Cass Reed", seed: null, division_rank: null, gender_division: "Coed" },
+];
+
+test("K-13 — the fixture mirrors live D1: level and gender are single-valued, division and seed are not", () => {
+  assert.equal(K13.length, 4, "the fixture emptied — every assertion below would pass over nothing");
+  const buckets = (f) => new Set(K13.map(f)).size;
+  assert.equal(buckets((t) => t.level), 1, "level must be single-valued here, as it is on every real board");
+  assert.equal(buckets((t) => t.gender_division), 1, "gender must be single-valued here, as it is on every real board");
+  assert.ok(buckets((t) => t.division_rank) > 1, "division must vary or the showing case is untested");
+  assert.ok(buckets((t) => t.seed) > 1, "seed must vary or the showing case is untested");
+});
+
+test("K-13 — an option is offered only when sorting by it could separate two teams", () => {
+  const { fn } = loadAvailable();
+  const keys = fn(K13);
+  assert.ok(Array.isArray(keys) && keys.length, "availableSortKeys returned nothing — it is measuring nothing");
+  for (const always of ["board", "number", "name"]) {
+    assert.ok(keys.includes(always), `${always} must always be offered — it can always change the order`);
+  }
+  for (const shown of ["division", "captain", "seed"]) {
+    assert.ok(keys.includes(shown), `${shown} varies in this fixture and must be offered`);
+  }
+  for (const hidden of ["level", "gender"]) {
+    assert.ok(!keys.includes(hidden),
+      `${hidden} is single-valued here, so sorting by it reorders nobody — it must not be offered`);
+  }
+});
+
+test("K-13 — the option appears as soon as the data varies (the rule is data, not a hard-coded list)", () => {
+  const { fn } = loadAvailable();
+  assert.ok(!fn(K13).includes("gender"), "gender is offered before the mutation — this test proves nothing");
+  // Mutate the REAL fixture: one team plays in a different division of the same event.
+  const mutated = K13.map((t, i) => (i === 0 ? { ...t, gender_division: "Women" } : t));
+  assert.notDeepEqual(mutated, K13, "the mutation did not land — this control would pass while testing nothing");
+  assert.ok(fn(mutated).includes("gender"),
+    "gender now has two buckets and is still hidden — the rule is a hard-coded list, not a measurement");
+});
+
+test("K-13 — every offerable key is one sortPick understands, and every sortPick key is offerable", () => {
+  // The two-lists-one-source discipline this file already applies to the orientation toggle. A key
+  // in the option list that the comparator cannot pick is a control that silently does nothing; a
+  // key the comparator handles that is never offered is dead code.
+  const { fn: available } = loadAvailable();
+  const { fn: sorter } = loadSorter();
+  // Every field varies AND the list is in ascending order on NONE of them. An unknown key returns
+  // the list untouched, so a fixture already sorted on a key would compare equal to the unknown-key
+  // result and this control would pass over a comparator that does nothing — the trap T2-8's own
+  // "the fixture is unsorted on EVERY key" test exists to close, reproduced here on purpose.
+  const everything = [3, 1, 0, 2].map((i) => ({
+    ...K13[i], board_no: 4 - i, level: "L" + i, gender_division: "G" + i,
+    division_rank: i, seed: i, captain: "C" + i, name: "N" + i,
+  }));
+  for (const k of ["number", "name", "level", "division", "gender", "captain", "seed"]) {
+    const pick = { number: (t) => t.board_no, name: (t) => t.name, level: (t) => t.level,
+      division: (t) => t.division_rank, gender: (t) => t.gender_division,
+      captain: (t) => t.captain, seed: (t) => t.seed }[k];
+    const vals = everything.map(pick);
+    assert.notDeepEqual(vals, [...vals].sort(),
+      `the fixture is already in ${k} order — that key's check below would prove nothing`);
+  }
+  const offered = available(everything);
+  assert.ok(offered.length >= 8, `only ${offered.length} keys offered when every field varies: ${offered.join(", ")}`);
+  for (const k of offered) {
+    if (k === "board") continue;
+    const out = sorter(everything, k);
+    assert.deepEqual([...out].map((t) => t.id).sort(), everything.map((t) => t.id).sort(),
+      `sorting by the offered key "${k}" lost or duplicated a team`);
+    assert.notDeepEqual(out.map((t) => t.id), sorter(everything, k + "__nope").map((t) => t.id),
+      `"${k}" is offered but sortPick does not know it — it sorts exactly like an unknown key`);
+  }
+});
+
+test("K-13 — rank is the team NUMBER, which is registration order and is never blank", () => {
+  const { fn } = loadSorter();
+  const shuffled = [K13[2], K13[0], K13[3], K13[1]];
+  assert.deepEqual(fn(shuffled, "number").map((t) => t.board_no), [1, 2, 3, 4],
+    "sorting by team number did not produce registration order");
+  // board_no is 1..N with no gaps in the payload, so this key has no blank branch to exercise —
+  // stated rather than left as an untested assumption.
+  assert.ok(K13.every((t) => t.board_no != null), "a team with no number would need the blank branch");
+});
+
+test("K-13 — division sorts by the division's RANK, the director's own ordering", () => {
+  const { fn } = loadSorter();
+  const out = fn(K13, "division");
+  assert.deepEqual(out.map((t) => t.division_rank), [1, 1, 2, null],
+    "division did not order by rank with the un-divisioned team last");
+});
+
+test("K-13 — reverse flips the teams that HAVE a value and leaves blanks at the bottom in both directions", () => {
+  // The design decision, pinned because it is the one a naive `.reverse()` gets wrong. v0.125.0's
+  // comment is explicit that a blank at the TOP of the list is the first thing read and the least
+  // useful thing to read; that has to stay true when the director reverses the sort, so reverse
+  // inverts the comparison rather than the array.
+  const { fn } = loadSorter();
+  const asc = fn(K13, "captain"), desc = fn(K13, "captain", true);
+  const named = (l) => l.filter((t) => t.captain).map((t) => t.captain);
+  assert.deepEqual(named(desc), [...named(asc)].reverse(), "reverse did not invert the named teams");
+  assert.equal(asc[asc.length - 1].captain, null, "ascending must end with the blank");
+  assert.equal(desc[desc.length - 1].captain, null,
+    "descending put the blank first — a reversed array, not a reversed comparison");
+});
+
+test("K-13 — reverse is real on the board's own order too", () => {
+  const { fn } = loadSorter();
+  assert.deepEqual(fn(K13, "board").map((t) => t.id), K13.map((t) => t.id), "board order stopped being identity");
+  assert.deepEqual(fn(K13, "board", true).map((t) => t.id), [...K13].reverse().map((t) => t.id),
+    "reversing the board's own order did nothing");
+  assert.deepEqual(K13.map((t) => t.id), [1, 2, 3, 4], "sortTeams mutated the caller's array");
+});
+
+test("K-13 NC — neutralising the bucket count makes everything offerable, so the test can tell", () => {
+  const { body } = loadAvailable();
+  const broken = body.replace("> 1", "> 0");
+  assert.notEqual(broken, body, "mutation did not land — the bucket comparison was not found");
+  const fn = new Function("list", sortSource() + broken.slice(1, -1));
+  assert.ok(fn(K13).includes("gender"),
+    "with the count neutralised gender is STILL hidden — the availability check is not what hides it");
+});
+
+test("K-13 — the select is built from availableSortKeys, not from a static option list in the markup", () => {
+  const js = blankComments(PBJS);
+  assert.match(js, /availableSortKeys\(/, "nothing ever calls availableSortKeys — the option list cannot be dynamic");
+  const html = blankComments(PBHTML);
+  const sel = html.slice(html.indexOf('id="pbSort"'));
+  const block = sel.slice(0, sel.indexOf("</select>"));
+  // Level and Gender must NOT be shipped as static markup, or they appear on boards where they do
+  // nothing — the exact defect this unit repairs.
+  for (const dead of ["Level", "Gender", "Division"]) {
+    assert.ok(!block.includes(`>${dead}<`),
+      `"${dead}" is a static <option>, so it shows on every board regardless of the data`);
+  }
+});
+
+test("K-13 — a saved sort that this board cannot offer falls back to the board's own order", () => {
+  // localStorage carries bt_pb_sort across events. A director who sorted by Gender on one board and
+  // opens another where every team is Coed must not land on a selection the select cannot show.
+  const js = blankComments(PBJS);
+  const paint = functionBodyAfter(js, "function paintSortOptions");
+  assert.ok(paint, "paintSortOptions is gone or is no longer a plain function declaration");
+  assert.match(paint, /availableSortKeys\(/, "paintSortOptions does not ask which keys this board can offer");
+  assert.match(paint, /includes\(\s*sortKey\s*\)/,
+    "paintSortOptions never tests the remembered key against the offerable set");
+  assert.match(paint, /sortKey\s*=\s*"board"/,
+    "there is no fallback — an unofferable saved key would leave the select and the list disagreeing");
+  // And boot must NOT push the saved value straight onto the control, which is what it used to do:
+  // that is the line that would make the select show a key this board cannot honour.
+  assert.ok(!/\$\("pbSort"\)\.value\s*=\s*savedSort/.test(js),
+    "boot still writes the saved key onto the select directly, bypassing the offerable check");
+});
+
+/* ==================== 8. K-13 — the two fields the payload was missing ==================== */
+
+test("K-13 — the payload carries the GENDER a team registered with, which the route never selected", async () => {
+  // `teams.gender_division` has been in the schema since the first migration and `loadBoard` did
+  // not select it — the same shape of gap T2-8 found for `level`. The fixture is given a real
+  // value first: a test that only asserts the key EXISTS passes just as well when every row is
+  // null, which is a fixture that cannot exhibit the defect.
+  const env = boot();
+  env.DB.exec("UPDATE teams SET gender_division='Coed' WHERE id IN (1,2)");
+  const token = await staff(env);
+  const r = await call(env, "GET", "/api/admin/events/1/board", { token });
+  assert.equal(r.status, 200, JSON.stringify(r.data).slice(0, 200));
+  const byId = Object.fromEntries(allTeams(r.data).map((t) => [t.id, t]));
+  assert.equal(byId[1].gender_division, "Coed",
+    "the board cannot sort by a gender it is never sent");
+  assert.equal(byId[3].gender_division, null, "a team that registered with no gender must report null, not ''");
+});
+
+test("K-13 NC — changing the real gender row changes the response, so the payload reads the COLUMN", async () => {
+  const env = boot();
+  env.DB.exec("UPDATE teams SET gender_division='Coed' WHERE id=1");
+  const token = await staff(env);
+  const before = await call(env, "GET", "/api/admin/events/1/board", { token });
+  assert.equal(allTeams(before.data).find((t) => t.id === 1).gender_division, "Coed", "NC has no victim");
+  env.DB.exec("UPDATE teams SET gender_division='Women' WHERE id=1");
+  assert.equal(env.DB.one("SELECT gender_division AS g FROM teams WHERE id=1").g, "Women", "mutation did not land");
+  const after = await call(env, "GET", "/api/admin/events/1/board", { token });
+  assert.equal(allTeams(after.data).find((t) => t.id === 1).gender_division, "Women",
+    "the gender was changed on the row and the board still reports the old one — it is not reading the column");
+});
+
+test("K-13 — a team's division_rank is its DIVISION's rank, resolved through the join, not its id", async () => {
+  // The fixture's division 10 has rank 1, and the ids differ from the ranks on purpose: a join that
+  // returned `division_id` by mistake would pass a test where the two happened to match.
+  const env = boot();
+  env.DB.exec("INSERT INTO divisions (id, org_id, event_id, name, rank) VALUES (11,1,1,'BB',2)");
+  env.DB.exec("UPDATE teams SET division_id=11 WHERE id=1");
+  env.DB.exec("UPDATE teams SET division_id=10 WHERE id=2");
+  const token = await staff(env);
+  const r = await call(env, "GET", "/api/admin/events/1/board", { token });
+  const byId = Object.fromEntries(allTeams(r.data).map((t) => [t.id, t]));
+  assert.equal(byId[1].division_rank, 2, "team 1 is in division 11 (rank 2) and did not report rank 2");
+  assert.equal(byId[2].division_rank, 1, "team 2 is in division 10 (rank 1) and did not report rank 1");
+  assert.notEqual(byId[1].division_rank, byId[1].division_id,
+    "division_rank equals division_id — the join is returning the wrong column and the fixture proves it");
+  assert.equal(byId[3].division_rank, null, "a team in no division must report null so it sorts last");
 });

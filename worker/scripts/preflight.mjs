@@ -215,6 +215,44 @@ function checkTestParity() {
     : { status: "ok", detail: `${matched.length} test files, all matched by the glob.` };
 }
 
+/**
+ * §-1c D-31 (v0.144.0) — the CHANGELOG entry belongs in the RELEASE commit.
+ *
+ * Standards §9: the entry goes in before the push, CI's `record-changelog` finds it present, its
+ * commit step is skipped, and CI adds no commit at all. Iteration 71 broke that — the entry went
+ * into the closing docs commit instead, so CI wrote a `[skip ci]` stub (the first since v0.115.0,
+ * twenty-seven releases earlier), the docs push was rejected, and the stub had to be hand-merged
+ * against the real entry at the top of the file.
+ *
+ * That was recorded as a lesson, and a written correction is not a control. This is the control.
+ * `index.js` is already the only honest version source here, so the check costs one read: whatever
+ * version the worker is about to ship must have a `## v<version>` heading in CHANGELOG.md. It
+ * fails BEFORE the release commit is made, which is the only moment the answer is cheap.
+ *
+ * A `warn` rather than a `fail` when the file is missing entirely: that is not this repo, and
+ * calling it a release blocker would be a confusing way to say "the file is gone".
+ */
+function checkChangelog() {
+  const version = versionFromIndex(readFileSync(join(WORKER, "src", "index.js"), "utf8"));
+  const path = join(REPO, "CHANGELOG.md");
+  if (!existsSync(path)) return { status: "warn", detail: "CHANGELOG.md not found — cannot check the release entry." };
+  const text = readFileSync(path, "utf8");
+  // The heading form the file actually uses (`## v0.143.0 — 2026-08-12`), anchored to line start so
+  // the version merely being mentioned in prose cannot satisfy it. The trailing guard stops
+  // "v0.14" from being satisfied by "v0.144.0".
+  // `versionFromIndex` returns the bare number, so the heading this names is spelled with the `v`
+  // the file actually uses — a message that tells you to write the wrong string is worse than none.
+  const want = "v" + String(version).replace(/^v/, "");
+  const heading = new RegExp("^##\\s+" + want.replace(/\./g, "\\.") + "(?![\\d.])", "m");
+  return heading.test(text)
+    ? { status: "ok", detail: `CHANGELOG.md carries the ${want} entry (D-31).` }
+    : {
+      status: "fail",
+      detail: `CHANGELOG.md has no "## ${want}" heading. Standards §9: the entry goes in the RELEASE `
+        + "commit, before the push — otherwise CI writes a [skip ci] stub and the next push is rejected (D-31).",
+    };
+}
+
 function checkSuite() {
   // Enumerate explicitly rather than passing `test/*.mjs`: CI runs under bash, which expands
   // the glob, but cmd.exe does not — the pattern arrived at node as a literal and the run
@@ -321,6 +359,7 @@ async function main() {
   checks.git = checkGit(session);
   checks.syntax = checkSyntax();
   checks.parity = checkTestParity();
+  checks.changelog = checkChangelog(); // D-31 — before the suite, because it is instant and it blocks
   checks.suite = checkSuite();
 
   const { highest, unparseable } = scanMigrations(join(REPO, "db", "migrations"));

@@ -1,5 +1,85 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.144.0 — 2026-08-13
+
+### K-13 / B17 — multi-sort on the pool board, and an option only where it applies
+
+Owner 2026-08-10 (Q3 rider): *"registration date · alphabetical · rank (and reverse) · group ·
+division · gender, **where each applies**."* Four of those six were settled by measuring rather
+than by choosing.
+
+**Rank is the K-1 team number**, per Q3's own standing default — and it is the same option as
+**registration date**, because `board_no` is rank by `t.id` within the event and ids are
+AUTOINCREMENT, so its order *is* registration order. Two of the owner's words, one control;
+offering both would have been two menu items with byte-identical output. **Group is the Level
+sort that already shipped** in v0.125.0 — `sortTeams`'s own comment has called it grouping since
+the day it landed, and the owner's answer opened with "grouping is fine", so no second key was
+invented for a word already implemented. **Division sorts by the division's `rank`**, never its
+name or id: `rank` is the director's own ordering of divisions and `loadBoard` already orders by
+it. **Gender** is `teams.gender_division`, which had been in the schema since the first migration
+and was never selected — the same gap T2-8 found for `level`.
+
+**"Where each applies" is computed from the board, and the measurement is why.** Live D1 on
+2026-08-13, the five boards that have a waiting area, counting distinct values (blank is its own
+bucket):
+
+| event | waiting | division | gender | level | seed |
+|---|---|---|---|---|---|
+| 90001 | 4 | 1 | 1 | 1 | 4 |
+| 90003 | 8 | 1 | 1 | 1 | 1 |
+| 90004 | 8 | 1 | 1 | 1 | 8 |
+| 90005 | 8 | 1 | 1 | 1 | 8 |
+| 90006 | 30 | **3** | 1 | 1 | 10 |
+
+Every team in production is either ("Coed","BB/A") or (NULL,NULL). A Gender sort would reorder
+nobody on any board that exists — **and neither would Level, which has been an always-visible
+option since v0.125.0.** So an option is now offered only when sorting by it could actually
+separate two teams, which repairs the shipped Level and Seed options at the same time as it adds
+the new ones. Running the shipped code against those real shapes: 90003 offers Board order, Team
+number and Team name only; 90001 adds Captain and Seed; 90006 adds Division. Division appears on
+exactly the one board that has divisions, which is the point.
+
+**Reverse inverts the comparison, not the array.** v0.125.0 put teams with no captain, level or
+seed at the BOTTOM on the grounds that a blank at the top of a list is the first thing read and
+the least useful thing to read. A `.reverse()` would have thrown every blank to the top the
+moment a director pressed the button, so descending flips the teams that have a value and leaves
+the blanks where they were. The toggle names its direction ("Ascending" / "Descending") rather
+than showing an arrow, and says words rather than "A→Z" because half these sorts are numbers.
+
+**One judgement, two readers.** The option list and the sort share `sortPick` — the single place a
+key becomes a value. Had they kept separate copies, the option a director is offered and the
+order they get from choosing it could have drifted apart, which is the whole failure this design
+is arranged to prevent. The reverse toggle reuses `.pb-collapse` and needed no component of its
+own; only its pressed state was missing, and it joined the rule that already defines pressed.
+
+**Guard: `pool_board_bench.test.mjs` grows 14 tests (13 red pre-build).** The fixture mirrors
+production deliberately — level and gender single-valued, division and seed varied — because a
+fixture where everything varied could not test the hiding half at all.
+
+**`board_suggestions.test.mjs` had pinned adjacency, not a rule.** It required
+`renderSuggestions()` to sit on the line directly after `tempSeq = -1;`, so inserting a call
+between them reddened it while the claim it protects — "drawn from ingest()" — stayed true. It now
+asserts containment, which is what was always meant. Same file, ten lines below, already carries a
+note about making exactly this mistake with a CSS border.
+
+**T2-8's own comparator NC reddened on its `notEqual` line** because the bytes it mutated
+(`return av.localeCompare`) were split by the reverse work. Third session running that this class
+has appeared; third time that one assertion was the only thing between a control and vacuity.
+Rewritten, not deleted.
+
+### D-31 — preflight now refuses a release whose CHANGELOG entry is missing
+
+Iteration 71 put this file's entry in the closing docs commit instead of the release commit, so CI
+wrote a `[skip ci]` stub — the first since v0.115.0, twenty-seven releases earlier — the docs push
+was rejected, and the stub had to be hand-merged. That was recorded as a lesson, and a written
+correction is not a control. `preflight.mjs` already treats `index.js` as the only honest version
+source, so it now also requires a matching `## v<version>` heading here and **fails before the
+release commit is made**. Seen failing on this very release before this entry was written.
+
+Suite **1806/1806** (1792 + 14) · **123** test files, unchanged — K-13 extended the pool board's
+existing guard rather than opening a second home for one page · 51 modules · busters **415/67** at
+0.144.0 · ledger **0044**, no migration.
+
 ## v0.143.0 — 2026-08-12
 
 ### B29 / D-28 — member pages read the ORGANIZATION's own contact email

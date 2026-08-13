@@ -691,14 +691,26 @@ async function loadBoard(env, ctx, eventId) {
   // director's own registration export is already in. Soft-deleted teams are COUNTED but not
   // returned, so a withdrawal leaves a gap instead of renumbering everyone below it, exactly as
   // scratching a name off a paper list does.
+  // v0.144.0 (K-13 / §-0 B17) — two more columns, both so the waiting area can be SORTED by them:
+  //   · `gender_division` is the gender a team registered with. It has been in the schema since the
+  //     first migration and was never selected here, which is the same gap T2-8 found for `level`:
+  //     no amount of client work can sort by a field the client is never sent.
+  //   · `division_rank` is the team's DIVISION's `rank` — not its id and not its name. `rank` is the
+  //     director's own explicit ordering of the divisions, and the divisions query above already
+  //     orders by it; sorting teams by division NAME would invent a second ordering of the same
+  //     thing. One judgement, imported rather than restated.
+  // Alias `dv` because `t`, `s`, `cap` and `cmp` are already taken here and in CAPTAIN_JOIN.
   const teams = (await env.DB.prepare(
     `SELECT t.id, t.name, t.pool_id, t.division_id, t.note, t.board_order, t.seed, t.level,
+            t.gender_division,
             (SELECT COUNT(*) FROM teams x
               WHERE x.org_id=t.org_id AND x.event_id=t.event_id AND x.id<=t.id) AS board_no,
+            dv.rank AS division_rank,
             COALESCE(s.wins,0) AS wins, COALESCE(s.losses,0) AS losses,
             ${CAPTAIN_COLS}
        FROM teams t
        LEFT JOIN standings s ON s.team_id=t.id AND s.event_id=t.event_id AND s.deleted_at IS NULL
+       LEFT JOIN divisions dv ON dv.id=t.division_id AND dv.deleted_at IS NULL
        ${CAPTAIN_JOIN}
       WHERE t.org_id=?1 AND t.event_id=?2 AND t.deleted_at IS NULL
       ORDER BY t.board_order, COALESCE(t.seed, 9999), t.id`

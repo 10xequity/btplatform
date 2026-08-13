@@ -12,9 +12,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Pool board — Boomtown Athletics</title>
   <script>/* Pre-paint state — collapse + theme (uiux-review §4/§6.4, v0.52.0): read the bt_nav cookie and the saved theme BEFORE the first stylesheet so the rail state AND the theme are right on frame one — no post-paint snap of either. admin-nav.js writes the cookie on rail toggle and bt_theme on theme toggle; the localStorage bt_nav fallback migrates pre-v0.51 sessions. */(function(){try{var m=document.cookie.match(/(?:^|; )bt_nav=([^;]*)/);var v=m?m[1]:((window.localStorage&&localStorage.getItem("bt_nav_collapsed")==="1")?"min":"");if(v==="min")document.documentElement.dataset.nav="min";var t=(window.localStorage&&localStorage.getItem("bt_theme"))||(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.dataset.theme=t;}catch(e){}})();</script>
-  <link rel="stylesheet" href="assets/tokens.css?v=0.143.0" />
-  <link rel="stylesheet" href="assets/app.css?v=0.143.0" />
-  <link rel="stylesheet" href="assets/admin.css?v=0.143.0" />
+  <link rel="stylesheet" href="assets/tokens.css?v=0.144.0" />
+  <link rel="stylesheet" href="assets/app.css?v=0.144.0" />
+  <link rel="stylesheet" href="assets/admin.css?v=0.144.0" />
   <style>
     .mf-head { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; margin-bottom: 12px; }
     .mf-head p { max-width: 74ch; }
@@ -139,7 +139,11 @@
       border-radius: var(--radius-control, 8px); overflow: hidden; }
     .pb-seg button { font: inherit; font-size: 12px; font-weight: 700; min-height: 44px;
       padding: 0 12px; background: transparent; color: var(--text-muted); border: 0; cursor: pointer; }
-    .pb-seg button[aria-pressed="true"] { background: var(--surface-2); color: var(--text); }
+    /* K-13 (v0.144.0): the reverse toggle is a .pb-collapse — same size, border and press feedback
+       as the Hide button beside it — so it needed no component of its own. Only its pressed state
+       was missing, and it joins the rule that already defines pressed rather than restating it. */
+    .pb-seg button[aria-pressed="true"],
+    .pb-collapse[aria-pressed="true"] { background: var(--surface-2); color: var(--text); }
     .pb-seg button:focus-visible, .pb-collapse:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
     .pb-collapse { font: inherit; font-size: 12px; font-weight: 700; min-height: 44px; padding: 0 12px;
       background: transparent; color: var(--text-muted); border: 1px solid var(--border);
@@ -226,7 +230,7 @@
 </head>
 <body>
     <header class="header chrome-glass no-print">
-    <a class="wordmark" href="admin.html" style="text-decoration:none;color:inherit"><img class="brand-logo" src="assets/logo-boom-icon-512.png?v=0.143.0" alt="" width="22" height="22" />Boomtown <span>Athletics</span></a>
+    <a class="wordmark" href="admin.html" style="text-decoration:none;color:inherit"><img class="brand-logo" src="assets/logo-boom-icon-512.png?v=0.144.0" alt="" width="22" height="22" />Boomtown <span>Athletics</span></a>
     <div class="spacer"></div>
     <select id="orgSwitcher" class="org-switcher" aria-label="Switch organization"></select>
     <a id="btHdrMail" class="btn ghost hdr-mail" href="admin-messages.html" aria-label="Messages">✉</a>
@@ -356,13 +360,18 @@
           <h2 class="pb-div-h" id="pbWorkH">Waiting to be placed <span class="pb-courts" id="pbCount"></span>
             <span class="pb-tools">
               <label for="pbSort">Sort</label>
+              <!-- K-13 (v0.144.0): these options are REBUILT from the board's own data by
+                   paintSortOptions(), so a sort that could not reorder anything on this board is
+                   never offered. Only the three unconditional keys ship as markup, and they ship so
+                   the control is never momentarily empty before the first board arrives. Putting
+                   Level/Division/Gender back here would show them on every board regardless of the
+                   data — the exact defect this unit repairs — and a guard fails if they reappear. -->
               <select id="pbSort">
                 <option value="board">Board order</option>
+                <option value="number">Team number</option>
                 <option value="name">Team name</option>
-                <option value="level">Level</option>
-                <option value="captain">Captain</option>
-                <option value="seed">Seed</option>
               </select>
+              <button type="button" class="pb-collapse" id="pbRev" aria-pressed="false">Ascending</button>
               <span class="pb-seg" role="group" aria-label="Where the waiting area sits">
                 <button type="button" id="pbViewBottom" data-pbview="bottom" aria-pressed="true">Bottom</button>
                 <button type="button" id="pbViewSide" data-pbview="side" aria-pressed="false">Side</button>
@@ -375,8 +384,8 @@
       </div>
     </main>
   </div>
-  <script src="assets/config.js?v=0.143.0"></script>
-  <script src="assets/admin-nav.js?v=0.143.0"></script>
-  <script src="assets/admin-pool-board.js?v=0.143.0"></script>
+  <script src="assets/config.js?v=0.144.0"></script>
+  <script src="assets/admin-nav.js?v=0.144.0"></script>
+  <script src="assets/admin-pool-board.js?v=0.144.0"></script>
 </body>
 </html>
