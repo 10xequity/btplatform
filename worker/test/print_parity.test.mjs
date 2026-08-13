@@ -26,18 +26,15 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
-import { blankComments } from "../testkit/route-extract.mjs";
+import { blankComments, scriptsOf } from "../testkit/route-extract.mjs";
 
 const WEB = new URL("../../web/", import.meta.url);
 const read = (rel) => readFileSync(new URL(rel, WEB), "utf8");
 
-/* Scripts a page loads, buster stripped. Deliberately duplicated from dangling_refs.test.mjs
-   rather than imported: importing an export from a test FILE re-registers that file's tests in
-   this run (route-extract.mjs's header records the cost). That header also sets the exit
-   condition — "if a THIRD consumer ever needs it, move it to worker/testkit/". This is the
-   second. When a third arrives, move it; until then four lines beat a foreign test suite. */
-const scriptsOf = (html) =>
-  [...html.matchAll(/<script\b[^>]*src="([^"?]+)(?:\?[^"]*)?"/g)].map((m) => m[1]);
+/* v0.143.0: `scriptsOf` was the private copy that used to sit here. The exit condition this
+   comment set — "when a THIRD consumer arrives, move it to worker/testkit/" — was met by B29's
+   member-page contact guard, so it moved and this file imports it. Every test below is unchanged
+   and still runs against the same bytes, which is what verifies the move. */
 
 /* ── pure verdicts ── */
 

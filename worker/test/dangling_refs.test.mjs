@@ -30,7 +30,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
-import { blankComments } from "../testkit/route-extract.mjs";
+import { blankComments, scriptsOf } from "../testkit/route-extract.mjs";
 
 const WEB = new URL("../../web/", import.meta.url);
 const read = (rel) => readFileSync(new URL(rel, WEB), "utf8");
@@ -44,12 +44,15 @@ const PROMOTED = [
 
 /* ── pure verdicts — the real corpus and the negative controls go through the same code ── */
 
-/** Stylesheets and scripts a page actually loads, buster stripped, in document order. */
+/** Stylesheets and scripts a page actually loads, buster stripped, in document order.
+ *  v0.143.0: the script half was an inline copy of what is now `scriptsOf` in the testkit — it and
+ *  print_parity.test.mjs held byte-identical private copies, and B29's contact guard was the third
+ *  consumer that triggered route-extract.mjs's own move rule. The link/CSS half stays here because
+ *  no other guard wants it. */
 export function pageAssets(html) {
   const css = [...html.matchAll(/<link\b[^>]*href="([^"?]+)(?:\?[^"]*)?"/g)]
     .map((m) => m[1]).filter((h) => h.endsWith(".css"));
-  const js = [...html.matchAll(/<script\b[^>]*src="([^"?]+)(?:\?[^"]*)?"/g)].map((m) => m[1]);
-  return { css, js };
+  return { css, js: scriptsOf(html) };
 }
 
 /** Does this CSS DEFINE the class — a selector whose first simple selector IS the class?

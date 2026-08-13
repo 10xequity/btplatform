@@ -84,7 +84,7 @@
         </div>
         <div class="settings-row">
           <div class="grow"><div class="k">Email (your sign-in)</div><div class="v">${esc(me.user.email)}</div></div>
-          <a class="btn ghost" href="mailto:admin@boomtownvb.com?subject=Change my sign-in email" style="text-decoration:none">Request change</a>
+          <a class="btn ghost" href="help.html" data-org-contact data-org-contact-subject="Change my sign-in email" style="text-decoration:none">Request change</a>
         </div>
         <p class="v" style="color:var(--text-muted);font-size:13px;margin:8px 0 0">
           Your email is how you sign in and where results and reminders go, so a staff member
@@ -157,6 +157,14 @@
     `;
 
     document.getElementById("signOut2").addEventListener("click", () => document.getElementById("logoutBtn").click());
+
+    /* v0.143.0 (§-0 B29): the "Request change" anchor above carries [data-org-contact] and ships
+       href="help.html". site-nav.js fills every such anchor with the ORGANIZATION's own contact
+       address, but its pass runs when the rail paints — this row does not exist until render()
+       has been called with /api/me, so the rail's single pass cannot have seen it. Calling the
+       shared filler here is what makes this the fifth site rather than the one that stayed
+       broken; it is idempotent, and if the brand has not resolved the help.html fallback stands. */
+    if (window.btOrgContact) window.btOrgContact();
 
     /* staff push test (v1.1) */
     const ptb = document.getElementById("pushTestBtn");

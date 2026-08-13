@@ -11,9 +11,10 @@
  *      `|| (await announcementsRoutes(` and the `wireAnnouncements(` call — never the filename.
  *   4. Owner rule 1 in source: the mute route REFUSES kind='cta' (fail closed), and the feed
  *      never filters ctas through mutes.
- *   5. Public org-brand: the SELECT carries exactly the three brand fields (standards §8 —
- *      an email/legal column in that query would leak org PII to the world), sets
- *      Cache-Control, and index.js mounts it BEFORE buildCtx (the icsFeed precedent).
+ *   5. Public org-brand: the SELECT carries exactly the four PUBLICATION fields (standards §8 —
+ *      an operational, legal or sender column in that world-readable query is forbidden; v0.143.0
+ *      added admin_email for B29, which is the {{ORG_EMAIL}} source), sets Cache-Control, and
+ *      index.js mounts it BEFORE buildCtx (the icsFeed precedent).
  * Negative controls mutate the EXACT subject line (the §2 lesson) and prove each scan fails.
  */
 import { test } from "node:test";
@@ -103,13 +104,25 @@ test("every org-scoped statement binds org_id; the ONLY exception is the public 
   assert.deepEqual(offenders, [], `statements missing an org_id bind:\n  ${offenders.join("\n  ")}`);
 });
 
-test("the public org-brand SELECT carries exactly the three brand fields (standards §8)", () => {
+/* v0.143.0 (§-0 B29) — REWRITTEN, NOT RELAXED. This asserted the literal three columns
+   `id, name, logo_url`. B29 added a fourth, `admin_email`, deliberately: five member-facing sites
+   hard-coded admin@boomtownvb.com, so members of Colorado Boom and Match Point were being told to
+   email Boomtown, and the fix reads the address each org already sets on its own settings screen.
+
+   THE OLD ASSERTION'S REASON SURVIVES ITS NUMBER. What made three columns safe was never the
+   count — it was that all three are PUBLICATION fields, things an operator fills in expressly to
+   be published (the {{ORG_*}} token family). `admin_email` is the {{ORG_EMAIL}} source and is the
+   same kind of thing. Operational and internal columns are still forbidden, and the check is
+   still an exact list, so a fifth column is still a test that reddens rather than a line that
+   slips through. `org_contact.test.mjs` pins the same list from the other side. */
+test("the public org-brand SELECT carries exactly the four PUBLICATION fields (standards §8)", () => {
   const { statements } = collectStatements(SRC);
   const brand = statements.find((s) => /FROM orgs/i.test(s));
   assert.ok(brand, "the org-brand SELECT must exist");
   const cols = brand.replace(/\s+/g, " ").match(/SELECT (.*?) FROM/i)[1];
-  assert.equal(cols.trim(), "id, name, logo_url",
-    "any additional column here is served to the world with no session — email/legal fields are forbidden");
+  assert.equal(cols.trim(), "id, name, logo_url, admin_email",
+    "this query is served to the world with no session — only fields an operator publishes on "
+    + "purpose may appear here; legal, sender and internal columns are forbidden");
   assert.match(brand, /active = 1/, "inactive orgs must not resolve");
   assert.match(brand, /deleted_at IS NULL/, "deleted orgs must not resolve");
 });
@@ -166,13 +179,24 @@ test("NC-1: removing the org_id bind from a real statement is caught", () => {
   assert.ok(offenders.length >= 1, "the de-scoped statement must surface as an offender");
 });
 
-test("NC-2: widening the org-brand SELECT by one column is caught", () => {
-  const mutated = SRC.replace("SELECT id, name, logo_url FROM orgs", "SELECT id, name, logo_url, admin_email FROM orgs");
-  assert.notEqual(mutated, SRC);
+/* v0.143.0 (§-0 B29): THIS NC'S MUTATION HAD BECOME THE REAL SOURCE. It widened the SELECT by
+   adding `admin_email` — which is exactly what B29 then did on purpose, so the replace() became a
+   no-op and the NC went red on its own `notEqual` line. That is the assertion earning its keep:
+   without it this would have passed while mutating nothing and testing nothing.
+
+   The victim is now `email_sender_address` — an OPERATIONAL column (the address campaigns are
+   sent from), not one an operator publishes — so the NC still proves what it always proved: a
+   column appearing in this world-readable query fails the exact-list check. Chosen by what the
+   rule forbids, not by what was convenient to type. */
+test("NC-2: widening the org-brand SELECT with a non-publication column is caught", () => {
+  const mutated = SRC.replace("SELECT id, name, logo_url, admin_email FROM orgs",
+                              "SELECT id, name, logo_url, admin_email, email_sender_address FROM orgs");
+  assert.notEqual(mutated, SRC, "mutation must hit — otherwise this NC proves nothing");
   const { statements } = collectStatements(mutated);
   const brand = statements.find((s) => /FROM orgs/i.test(s));
   const cols = brand.replace(/\s+/g, " ").match(/SELECT (.*?) FROM/i)[1];
-  assert.notEqual(cols.trim(), "id, name, logo_url", "the widened SELECT must no longer satisfy the exact-columns check");
+  assert.notEqual(cols.trim(), "id, name, logo_url, admin_email",
+    "the widened SELECT must no longer satisfy the exact-columns check");
 });
 
 test("NC-3: stripping the cta refusal from the mute route is caught", () => {

@@ -240,3 +240,20 @@ export function functionBodyAfter(t, signature) {
   if (brace < 0) return null;
   return t.slice(brace, blockEnd(t, brace));
 }
+
+/**
+ * The src= list of a page's external scripts, cache-buster stripped.
+ *
+ * MOVED HERE IN v0.143.0 UNDER THIS FILE'S OWN THIRD-CONSUMER RULE (see the header). It existed
+ * as two byte-identical private copies — a named `scriptsOf` in `print_parity.test.mjs` and an
+ * inline one at `dangling_refs.test.mjs`'s page walker — and B29's member-page contact guard was
+ * about to be the third. Both consumers now import this and keep every one of their own tests, so
+ * a behavioural drift introduced by the move reddens the guards that already depend on it.
+ *
+ * NOT the only spelling in the suite, deliberately: `header_shell.test.mjs` matches a NARROWER
+ * shape (`assets/<name>.js` only, capturing the bare filename) because it is asserting which
+ * shared assets a shell loads, not resolving hrefs. That is a different question and it keeps its
+ * own regex — unifying them would widen its corpus silently.
+ */
+export const scriptsOf = (html) =>
+  [...html.matchAll(/<script\b[^>]*src="([^"?]+)(?:\?[^"]*)?"/g)].map((m) => m[1]);

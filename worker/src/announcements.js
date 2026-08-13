@@ -25,9 +25,9 @@
  *   PUT    /api/admin/announcements/:id        → same fields, partial
  *   DELETE /api/admin/announcements/:id        → soft delete
  * Public (mounted in index.js BEFORE buildCtx — the icsFeed precedent; NO session):
- *   GET    /api/public/org-brand?org=<id|slug> → { org_id, display_name, logo_url }
- *       Only active, non-deleted orgs resolve; only the three brand fields ever leave
- *       (standards §8 — no email/legal fields); Cache-Control ~5 minutes.
+ *   GET    /api/public/org-brand?org=<id|slug> → { org_id, display_name, logo_url, admin_email }
+ *       Only active, non-deleted orgs resolve; only the org's PUBLICATION fields ever leave
+ *       (standards §8 — no operational, sender or legal columns); Cache-Control ~5 minutes.
  *
  * Rules baked in (standards §4/§8):
  *   - Every org-scoped read and write binds ctx.orgId; no route accepts an org_id for
@@ -89,18 +89,36 @@ export function normalizeSubBody(body) {
 
 /**
  * NO session, NO ctx — resolves an org by id or slug for member-page branding.
- * Returns exactly three fields; a wider SELECT here would leak org PII to the world.
+ *
+ * THE RULE FOR THIS SELECT, replacing the "exactly three fields" note that stood here (v0.143.0,
+ * B29). The COUNT was never the invariant — the KIND of column is. This endpoint is public and
+ * unauthenticated, so it may return an org's PUBLICATION fields (the ones an operator fills in on
+ * Organization Settings expressly to be published — the {{ORG_*}} token family) and nothing else.
+ * Operational or internal columns stay out however small the payload is.
+ *
+ * `admin_email` joined that list for B29: it is the "Contact email" the operator sets on that
+ * screen and the source of {{ORG_EMAIL}}, and member pages need it so their "Contact us" link
+ * reaches the organization the member actually belongs to. Until now five member-facing sites
+ * hard-coded admin@boomtownvb.com, so Colorado Boom and Match Point members were told to email
+ * Boomtown. The address was already world-readable in static HTML; what is new is that it is now
+ * per-org and machine-readable, which is the deliberate part of the decision.
+ *
+ * `org_contact.test.mjs` pins this column list, so widening it again is an edit that reddens a
+ * test rather than a line that slips through.
  */
 export async function publicOrgBrand(env, url) {
   const q = String(url.searchParams.get("org") || "").trim();
   if (!q) return json({ error: "Which organization?" }, 400);
   const byId = /^\d+$/.test(q);
   const row = await env.DB.prepare(
-    `SELECT id, name, logo_url FROM orgs
+    `SELECT id, name, logo_url, admin_email FROM orgs
       WHERE ${byId ? "id = ?1" : "slug = lower(?1)"} AND active = 1 AND deleted_at IS NULL`
   ).bind(byId ? Number(q) : q.toLowerCase()).first();
   if (!row) return json({ error: "That organization isn't available." }, 404);
-  const res = json({ org_id: row.id, display_name: row.name, logo_url: row.logo_url || null });
+  const res = json({
+    org_id: row.id, display_name: row.name, logo_url: row.logo_url || null,
+    admin_email: row.admin_email || null,
+  });
   res.headers.set("Cache-Control", "public, max-age=300"); // ~5 min (spec, handoff §4)
   return res;
 }

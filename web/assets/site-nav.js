@@ -1,4 +1,10 @@
 /* Boomtown Platform — Site-wide sidebar navigation (shared)
+   v2.18 (v0.143.0, §-0 B29 / §-1c D-28): the member-facing contact link resolves through the
+   organization instead of a hard-coded address. applyOrgBrand now fills any [data-org-contact]
+   anchor from the brand payload's admin_email, and the filler is exposed as window.btOrgContact
+   for pages that render their own markup after the rail has painted (settings.js). Fail-closed
+   by markup: the anchors ship href="help.html" and are only ever rewritten to a mailto: once a
+   non-empty address resolves. See the block comment above btOrgContact for the TDZ note.
    v2.14 (v0.53.1, external code review 2026-08-02): two fixes from the review.
    (1) headerMailFill builds the badge with DOM APIs instead of insertAdjacentHTML and is
    IDEMPOTENT (reuses/removes an existing .badge). The v2.13 form appended unconditionally,
@@ -341,7 +347,12 @@
         localStorage.setItem(KEY, JSON.stringify({ at: Date.now(), v: brand }));
       } catch (e) { return; } // offline = default brand stays
     }
-    if (!brand || !brand.display_name) return;
+    if (!brand) return;
+    /* v2.18 (v0.143.0, §-0 B29): the contact fill runs BEFORE the display_name bail-out below.
+       A brand row with a name but no logo, or an address but no name, must still fill what it
+       has — the two are independent fields and bailing early on one silently dropped the other. */
+    btOrgContact(brand);
+    if (!brand.display_name) return;
     const nameEl = aside.querySelector(".nav-brand-name");
     if (nameEl) nameEl.textContent = brand.display_name;
     const img = aside.querySelector(".nav-brand img");
@@ -350,6 +361,43 @@
       img.src = brand.logo_url;
     }
   }
+
+  /* ── v2.18 (v0.143.0) — §-0 B29 / §-1c D-28 / standards §8 F-40: the member-facing contact link.
+     Five member-facing sites hard-coded admin@boomtownvb.com, so members of every organization
+     that is not Boomtown were told to write to Boomtown. Every org already sets its own Contact
+     email (Organization Settings → orgs.admin_email → the {{ORG_EMAIL}} token); this reads it.
+
+     FAIL CLOSED, AND THE FALLBACK LIVES IN THE MARKUP, NOT HERE. Each contact anchor ships
+     href="help.html" in source. This function only ever REPLACES that with a mailto:, and only
+     once a non-empty address has resolved — so an offline member, a member with no bt_org, a 5xx
+     and a null admin_email all leave a live page link rather than a dead mailto:. The link text
+     is destination-agnostic ("Contact us" / "Request change"), so nothing is rewritten but the
+     href and there is no post-paint copy flash.
+
+     WHY IT IS EXPOSED ON window. The rail paints once, early. settings.js renders its "Email
+     (your sign-in)" row later, from its own /api/me response — its anchor does not exist when
+     the rail's pass runs, so a private fill would leave exactly one of the five sites unfilled
+     forever. Idempotent and safe to call from anywhere, as many times as a page likes.
+
+     THE REMEMBERED BRAND HANGS OFF THE FUNCTION, NOT A `let`, AND THAT IS NOT A STYLE CHOICE.
+     `init()` is invoked at the top of this file, ABOVE this point. It is async, so when a token
+     exists it yields at its first `await` and the rest of the module body runs before the rail
+     renders — but a SIGNED-OUT visitor with a bt_org and a warm brand cache never awaits: init
+     runs straight through to the render, applyOrgBrand finds the cached brand synchronously, and
+     this function is called while the module body below it has not executed yet. A `let` here
+     would be in the temporal dead zone on exactly that path and would throw a ReferenceError
+     that no signed-in test would ever see. A function declaration is hoisted whole, so a
+     property on it is always assignable. Structurally impossible beats remembered. */
+  function btOrgContact(brand) {
+    if (brand) btOrgContact.last = brand;
+    const email = btOrgContact.last && btOrgContact.last.admin_email;
+    if (!email) return; // fail closed — the markup's help.html fallback stands
+    document.querySelectorAll("[data-org-contact]").forEach((a) => {
+      const subject = a.getAttribute("data-org-contact-subject");
+      a.setAttribute("href", "mailto:" + email + (subject ? "?subject=" + encodeURIComponent(subject) : ""));
+    });
+  }
+  window.btOrgContact = btOrgContact;
 
   /* v2.17 (§-1f F-1, v0.107.0) — LEAVE "acting as a member", server side first.
      Since migration 0043 the drop is a real privilege drop on the session row, so clearing the
@@ -414,7 +462,7 @@
       if (window.BT_STATUS || document.getElementById("bt-status-js")) return;
       var s = document.createElement("script");
       s.id = "bt-status-js";
-      s.src = "assets/build-status.js?v=0.142.0";
+      s.src = "assets/build-status.js?v=0.143.0";
       s.async = false;
       document.head.appendChild(s);
     } catch (e) { /* indicators are never load-blocking */ }
