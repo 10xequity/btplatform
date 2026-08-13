@@ -240,7 +240,8 @@
         rule: { freq: back.querySelector("#r_freq").value, count: Number(back.querySelector("#r_count").value) || 8 },
       })});
       if (!r.ok) return alert(r.data.error || "Couldn't create the series.");
-      alert(`Created ${r.data.count} events. They're drafts — publish from the list when ready.`);
+      alert(`Created ${r.data.count} events. They're drafts — publish from the list when ready.`
+        + (r.data.square_note ? `\n\n${r.data.square_note}` : ""));
       closeModal(); loadAll();
     });
   });
@@ -273,7 +274,8 @@
       if (!res.ok) return alert(res.data.error || "Import failed.");
       const n = back.querySelector("#b_notice");
       n.innerHTML = `<p class="notice-ok">Created ${res.data.created} events.</p>` +
-        (res.data.skipped.length ? `<p class="notice-err">Skipped ${res.data.skipped.length}: ${res.data.skipped.map(s => `row ${s.row} (${esc(s.reason)})`).join(", ")}</p>` : "");
+        (res.data.skipped.length ? `<p class="notice-err">Skipped ${res.data.skipped.length}: ${res.data.skipped.map(s => `row ${s.row} (${esc(s.reason)})`).join(", ")}</p>` : "") +
+        (res.data.square_note ? `<p class="notice-ok">${esc(res.data.square_note)}</p>` : "");
       loadAll();
     });
   });
@@ -354,6 +356,7 @@
       if (!Object.keys(fields).length) return alert("Fill in at least one field.");
       const r = await api("/api/admin/events/bulk", { method: "PATCH", body: JSON.stringify({ ids: [...selected], fields }) });
       if (!r.ok) return alert(r.data.error || "Bulk edit failed.");
+      if (r.data.square_note) alert(r.data.square_note);
       selected.clear(); closeModal(); loadAll();
     });
   }

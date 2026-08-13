@@ -1,5 +1,10 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.148.0 — 2026-08-13
+
+**K-15 (§-0 B22): a priced event now creates its own Square catalog item.** Migration 0047 adds `events.square_item_id` + `square_variation_id`. `ensureEventSquareItem` (memberships.js, beside the SUBSCRIPTION_PLAN writer it extends) fires from the two ends a pricing write cannot bypass — `insertEvent`, which every creation path flows through, and the bulk edit's price path, the one route that can price an existing event. The item is named `<event> — <date>` (a series' sessions stay distinguishable), carries the price on one nested variation, and is scoped to `orgs.square_location_id` with the `env.SQUARE_LOCATION_ID` fallback payment links have always used, under the one platform token — the credential decision the queue asked to be made at build time. An event that registers elsewhere never gets an item (PM-1's exclusion, re-checked at the writer); an unpriced or already-itemed event skips; no token skips silently (an event without an item loses no function, unlike a plan); Square failures warn and never block the local save. The admin screens surface the note wherever one is returned. Square remains sandbox-only until `SQUARE_ENV` says otherwise, and the new guard file pins the sandbox host — the suite's first outbound-fetch capture (no test had ever exercised a Square call). Recorded, not fixed: D-35 (series edit skips the price↔URL exclusion — a third write path PM-1's enumeration missed) and D-36 (`orgs.square_location_id` has no writer; every org is NULL, so all items land on the platform location today).
+
+
 ## v0.147.0 — 2026-08-13
 
 ### PM-1 / B6 — an event can point at someone else's registration

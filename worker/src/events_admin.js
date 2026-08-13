@@ -17,8 +17,20 @@
  *   GET    /api/admin/programs / POST / DELETE  → program folders for grouping events
  */
 
-let json, audit, requireStaff, sendEmail, escapeHtml;
-export function wireEventsAdmin(h) { ({ json, audit, requireStaff, sendEmail, escapeHtml } = h); }
+let json, audit, requireStaff, sendEmail, escapeHtml, ensureEventSquareItem;
+export function wireEventsAdmin(h) { ({ json, audit, requireStaff, sendEmail, escapeHtml, ensureEventSquareItem } = h); }
+
+/* K-15: fold ensureEventSquareItem outcomes into one human sentence, or nothing. `undefined`
+   drops out of the JSON payload, so a response only carries square_note when a person should
+   read it — created items are counted, the first warning is quoted, silence means silence. */
+function squareNoteFrom(outcomes) {
+  const real = outcomes.filter(Boolean);
+  const created = real.filter((o) => o.created).length;
+  const warning = (real.find((o) => o.warning) || {}).warning;
+  if (!created && !warning) return undefined;
+  return [created ? `Square: created ${created} catalog item${created === 1 ? "" : "s"}.` : null, warning]
+    .filter(Boolean).join(" ");
+}
 
 /* The registration statuses that mean "this person is coming" — read from the schema's CHECK
    constraint, not guessed. A registration the member already cancelled hears nothing. */
@@ -153,6 +165,14 @@ async function loadOrgEvent(env, ctx, id) {
   return ev && ev.org_id === ctx.orgId ? ev : null;
 }
 
+/**
+ * Returns { id, square } — square is ensureEventSquareItem's outcome for a priced insert, null
+ * otherwise. K-15's creation hook lives HERE because this is the one INSERT all four creation
+ * paths flow through (duplicate, recurring, bulk import, templates-via-duplicate); a hook at the
+ * callers is a hook the fifth caller forgets. The return SHAPE changed with it, deliberately —
+ * every caller had to be visited (PM-1's shape-not-arity lesson). The Square write happens after
+ * the INSERT and never throws, so a Square outage cannot cost the operator their event.
+ */
 async function insertEvent(env, orgId, bag, startsAt, seriesId, recurrenceJson, status) {
   const r = await env.DB.prepare(
     `INSERT INTO events (org_id, type, name, starts_at, ends_at, location, capacity, court_count,
@@ -164,7 +184,9 @@ async function insertEvent(env, orgId, bag, startsAt, seriesId, recurrenceJson, 
     bag.config_json || "{}", status || "draft", bag.cash_option_enabled ? 1 : 0, bag.price_cents || 0,
     seriesId || null, recurrenceJson || null, bag.program_id || null
   ).run();
-  return r.meta.last_row_id;
+  const id = r.meta.last_row_id;
+  const square = Number(bag.price_cents) > 0 ? await ensureEventSquareItem(env, id) : null;
+  return { id, square };
 }
 
 /* ---------- templates ---------- */
@@ -218,7 +240,7 @@ async function duplicateEvent(request, env, ctx, eventId) {
   const b = await request.json().catch(() => ({}));
   const bag = cleanEventBag(ev);
   bag.name = b.name || `${ev.name} (copy)`;
-  const id = await insertEvent(env, ctx.orgId, bag, b.starts_at || ev.starts_at, null, null, "draft");
+  const { id, square } = await insertEvent(env, ctx.orgId, bag, b.starts_at || ev.starts_at, null, null, "draft");
 
   // The LIVE division structure rides along (v0.127.0). For the owner's stated use case — "set up
   // next season from this one" — the divisions ARE the configuration: Open/A/BB, their order,
@@ -238,7 +260,9 @@ async function duplicateEvent(request, env, ctx, eventId) {
   }
 
   await audit(env, ctx, "event.duplicated", "event", id, { from: eventId, divisions: divs.length });
-  return json({ ok: true, id, divisions: divs.length });
+  // K-15: a duplicate's SUCCESSFUL item is silent (the operator lands on the new event; the item
+  // is visible in Square) — only a warning is worth interrupting the navigation for.
+  return json({ ok: true, id, divisions: divs.length, square_note: square && square.warning ? square.warning : undefined });
 }
 
 /* ---------- recurring ---------- */
@@ -270,10 +294,13 @@ async function createRecurring(request, env, ctx) {
   const dates = expandRule(b.base && b.base.starts_at, rule);
   if (!dates.length) return json({ error: "Couldn't build any dates from that rule — check the start date." }, 400);
   const seriesId = crypto.randomUUID();
-  const ids = [];
-  for (const dt of dates) ids.push(await insertEvent(env, ctx.orgId, bag, dt, seriesId, JSON.stringify(rule), b.status || "draft"));
+  const ids = [], squares = [];
+  for (const dt of dates) {
+    const { id, square } = await insertEvent(env, ctx.orgId, bag, dt, seriesId, JSON.stringify(rule), b.status || "draft");
+    ids.push(id); squares.push(square);
+  }
   await audit(env, ctx, "series.created", "event", ids[0], { series_id: seriesId, instances: ids.length, rule });
-  return json({ ok: true, series_id: seriesId, event_ids: ids, count: ids.length });
+  return json({ ok: true, series_id: seriesId, event_ids: ids, count: ids.length, square_note: squareNoteFrom(squares) });
 }
 
 async function editSeries(request, env, ctx, seriesId) {
@@ -322,7 +349,7 @@ async function bulkCreate(request, env, ctx) {
   const b = await request.json().catch(() => ({}));
   const rows = Array.isArray(b.rows) ? b.rows.slice(0, MAX_BULK) : [];
   if (!rows.length) return json({ error: "No rows to import." }, 400);
-  const created = [], skipped = [];
+  const created = [], skipped = [], squares = [];
   for (let i = 0; i < rows.length; i++) {
     const r = rows[i];
     if (!r.name || !r.starts_at) { skipped.push({ row: i + 1, reason: "Missing name or date" }); continue; }
@@ -330,12 +357,12 @@ async function bulkCreate(request, env, ctx) {
     if (r.price != null && r.price_cents == null) bag.price_cents = Math.round(Number(r.price) * 100) || 0;
     const status = STATUSES.includes(r.status) ? r.status : "draft";
     try {
-      const id = await insertEvent(env, ctx.orgId, bag, r.starts_at, null, null, status);
-      created.push(id);
+      const { id, square } = await insertEvent(env, ctx.orgId, bag, r.starts_at, null, null, status);
+      created.push(id); squares.push(square);
     } catch (e) { skipped.push({ row: i + 1, reason: "Database rejected the row" }); }
   }
   await audit(env, ctx, "events.bulk_created", "event", created[0] || 0, { count: created.length, skipped: skipped.length });
-  return json({ ok: true, created: created.length, skipped });
+  return json({ ok: true, created: created.length, skipped, square_note: squareNoteFrom(squares) });
 }
 
 async function bulkEdit(request, env, ctx) {
@@ -384,8 +411,17 @@ async function bulkEdit(request, env, ctx) {
      WHERE org_id=?${sets.length + 1} AND id IN (${idPh}) AND deleted_at IS NULL`
   ).bind(...vals).run();
   const notice = toNotify.length ? await notifyEventCancelled(env, ctx, toNotify) : undefined;
+  // K-15: this is the one route that can price an EXISTING event, so it is where an already-live
+  // event earns its Square catalog item. After the UPDATE, on the RESULT — ensure re-reads each
+  // row, so an id that ended up unpriced, external or already-itemed skips itself.
+  let squareNote;
+  if (f.price_cents != null && Number(f.price_cents) > 0) {
+    const squares = [];
+    for (const id of ids) squares.push(await ensureEventSquareItem(env, id));
+    squareNote = squareNoteFrom(squares);
+  }
   await audit(env, ctx, "events.bulk_edited", "event", ids[0], { count: ids.length, fields: Object.keys(f) });
-  return json({ ok: true, updated: r.meta.changes, cancelled_notice: notice });
+  return json({ ok: true, updated: r.meta.changes, cancelled_notice: notice, square_note: squareNote });
 }
 
 /* ---------- registrations CSV ---------- */

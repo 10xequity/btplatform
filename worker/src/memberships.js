@@ -112,6 +112,90 @@ async function createSquareVariation(env, planId, name, priceCents, interval) {
   return { variationId: v.data.catalog_object.id };
 }
 
+/**
+ * K-15 (§-0 B22): the catalog-write pattern above, extended to a regular ITEM for a priced event.
+ * One upsert with the variation NESTED, so a Square failure can never leave an item without its
+ * price. `locationId` scopes the item to the org (present_at_location_ids) — with one platform
+ * token, locations are the only org axis Square has.
+ */
+async function createSquareItemObjects(env, name, priceCents, locationId) {
+  const r = await sq(env, "POST", "/v2/catalog/object", {
+    idempotency_key: crypto.randomUUID(),
+    object: {
+      type: "ITEM", id: "#item",
+      present_at_all_locations: false,
+      present_at_location_ids: [locationId],
+      item_data: {
+        name: name.slice(0, 120),
+        variations: [{
+          type: "ITEM_VARIATION", id: "#var",
+          present_at_all_locations: false,
+          present_at_location_ids: [locationId],
+          item_variation_data: {
+            item_id: "#item", name: "Registration",
+            pricing_type: "FIXED_PRICING",
+            price_money: { amount: priceCents, currency: "USD" },
+          },
+        }],
+      },
+    },
+  });
+  if (r.error) return r;
+  const obj = r.data.catalog_object || {};
+  const variation = obj.item_data && Array.isArray(obj.item_data.variations) ? obj.item_data.variations[0] : null;
+  if (!obj.id || !variation || !variation.id) return { error: "Square answered without catalog ids" };
+  return { itemId: obj.id, variationId: variation.id };
+}
+
+/**
+ * The one place a pricing write becomes a Square catalog item (owner 2026-08-11: "write and
+ * create items in square under the appropriate organization and then name the item correctly").
+ * Callers: events_admin.js's insertEvent (every creation path) and bulkEdit (the one route that
+ * can price an existing event), injected through wireEventsAdmin — events_admin imports nothing.
+ *
+ * IT RE-READS THE ROW AND JUDGES THE RESULT, never the request (PM-1 rule 3's lesson), so the
+ * refusals hold no matter which write path called it:
+ *   · external_url → never. Routes already make priced+external unwriteable; this is the same
+ *     rule at the destination, where a write path that skipped the route check cannot avoid it.
+ *   · unpriced → nothing to sell.
+ *   · square_item_id already set → done once, stays done (the columns are the memory).
+ *   · no SQUARE_ACCESS_TOKEN → silent skip, DELIBERATELY quieter than createPlan's warning: a
+ *     plan without Square cannot be subscribed to, but an event without a catalog item loses no
+ *     function (payment links are quick_pay). A nag on every priced save while Square is off
+ *     would teach the operator to ignore warnings.
+ *   · no location anywhere → warning; an item scoped to nowhere is not "under the appropriate
+ *     organization". Same org-then-platform fallback as registrations.js's payment links.
+ * The name is `<event name> — <YYYY-MM-DD>`: a recurring series creates one item per session,
+ * and same-named items would be indistinguishable in the catalog. Local writes are never hostage
+ * to Square — every path out of here leaves the event exactly as the caller saved it.
+ */
+export async function ensureEventSquareItem(env, eventId) {
+  const ev = await env.DB.prepare(
+    `SELECT e.id, e.name, e.starts_at, e.price_cents, e.external_url, e.square_item_id,
+            o.square_location_id AS org_location
+       FROM events e JOIN orgs o ON o.id = e.org_id
+      WHERE e.id=?1 AND e.deleted_at IS NULL`
+  ).bind(eventId).first();
+  if (!ev) return { skipped: "missing" };
+  if (String(ev.external_url || "").trim()) return { skipped: "external" };
+  if (!(Number(ev.price_cents) > 0)) return { skipped: "unpriced" };
+  if (ev.square_item_id) return { skipped: "exists" };
+  if (!env.SQUARE_ACCESS_TOKEN) return { skipped: "keys" };
+  const locationId = ev.org_location || env.SQUARE_LOCATION_ID;
+  if (!locationId) {
+    return { warning: "The event saved, but no Square location is linked for this organization, so no catalog item was created." };
+  }
+  const name = ev.starts_at ? `${ev.name} — ${String(ev.starts_at).slice(0, 10)}` : ev.name;
+  const s = await createSquareItemObjects(env, name, Number(ev.price_cents), locationId);
+  if (s.error) {
+    return { warning: "The event saved, but its Square catalog item didn't get created — re-save the price to retry." };
+  }
+  await env.DB.prepare(
+    "UPDATE events SET square_item_id=?1, square_variation_id=?2, updated_at=datetime('now') WHERE id=?3"
+  ).bind(s.itemId, s.variationId, ev.id).run();
+  return { created: true, itemId: s.itemId, variationId: s.variationId };
+}
+
 /* ================= member: plans + subscribe ================= */
 
 async function listPlans(env, ctx) {

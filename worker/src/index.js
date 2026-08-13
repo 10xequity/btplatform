@@ -197,7 +197,7 @@ import { webauthnRoutes, wireWebauthn } from "./webauthn.js";
 import { leagueRoutes, wireLeagues } from "./leagues_admin.js";
 import { reportRoutes, wireReports } from "./reports.js";
 import { checkinRoutes, wireCheckin } from "./checkin.js";
-import { membershipRoutes, wireMemberships, membershipWebhook } from "./memberships.js";
+import { membershipRoutes, wireMemberships, membershipWebhook, ensureEventSquareItem } from "./memberships.js";
 import { sandboxRoutes, wireSandbox } from "./sandbox.js";
 import { facilityRoutes, wireFacility } from "./facility.js";
 import { securityRoutes, wireSecurity } from "./security.js";
@@ -273,7 +273,7 @@ wire(wiredHelpers);
 wireRegistrations(wiredHelpers);
 wireAdmin(wiredHelpers);
 wireSchedule(wiredHelpers);
-wireEventsAdmin({ ...wiredHelpers, sendEmail, escapeHtml }); // B16 — sendEmail injected, waitlists precedent, no cycle
+wireEventsAdmin({ ...wiredHelpers, sendEmail, escapeHtml, ensureEventSquareItem }); // B16 — sendEmail injected, waitlists precedent, no cycle; K-15 — the Square writer injected the same way (a direct import would cycle: events_admin ← tournaments ← registrations ← memberships)
 wireProfiles(wiredHelpers);
 wireWebauthn(wiredHelpers);
 wireLeagues(wiredHelpers);
@@ -406,7 +406,7 @@ export default {
         const session = await currentSession(request, env);
         res = session ? await listOrgs(env) : json({ error: "Sign in first." }, 401);
       } else if (url.pathname === "/api/health") {
-        res = json({ ok: true, version: "v0.147.0" });
+        res = json({ ok: true, version: "v0.148.0" });
       } else if (url.pathname === "/api/webhooks/square" && request.method === "POST") {
         res = await membershipWebhook(request, env); // verifies signature; forwards payment.* to squareWebhook
       } else if (url.pathname === "/api/public/org-brand" && request.method === "GET") {

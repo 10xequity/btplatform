@@ -186,6 +186,7 @@
   async function duplicate() {
     const r = await api(`/api/events/${id}/duplicate`, { method: "POST", body: JSON.stringify({}) });
     if (!r.ok) return alert(r.data.error || "Duplicate failed.");
+    if (r.data.square_note) alert(r.data.square_note); // K-15: only a WARNING rides this field — success is silent
     location.href = "admin-event.html?id=" + r.data.id;
   }
 
