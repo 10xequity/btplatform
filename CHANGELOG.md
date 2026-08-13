@@ -1,5 +1,9 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.143.0 — 2026-08-13
+
+- Auto-recorded by CI on deploy. `/api/health` reported `v0.143.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
+
 ## v0.142.0 — 2026-08-12
 
 ### WF-5 H-4 — the live board's tile, read from across a gym. **The hub program is complete.**
