@@ -154,8 +154,12 @@ async function feed(env, url, ctx) {
     }
   }
   const rows = (await env.DB.prepare(
+    // v0.147.0 (PM-1): external_url/external_label travel with every public event so the member
+    // list can send someone to the right place. They are publication fields by nature — an
+    // outbound registration link exists to be followed.
     `SELECT e.id, e.org_id, o.name AS org_name, o.slug AS org_slug, e.type, e.name,
-            e.starts_at, e.ends_at, e.location, e.status, e.price_cents, e.capacity
+            e.starts_at, e.ends_at, e.location, e.status, e.price_cents, e.capacity,
+            e.external_url, e.external_label
      FROM events e JOIN orgs o ON o.id=e.org_id WHERE ${where}
      ORDER BY e.starts_at, e.id LIMIT 500`
   ).bind(...binds).all()).results;

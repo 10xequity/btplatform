@@ -115,13 +115,37 @@ export async function eventsAdminRoutes(request, env, url, ctx) {
 
 /* ---------- shared ---------- */
 
-const EVENT_FIELDS = ["type", "name", "location", "price_cents", "capacity", "court_count", "format_template", "cash_option_enabled", "config_json", "program_id"];
+const EVENT_FIELDS = ["type", "name", "location", "price_cents", "capacity", "court_count", "format_template", "cash_option_enabled", "config_json", "program_id", "external_url", "external_label"];
 
 function cleanEventBag(src) {
   const out = {};
   for (const k of EVENT_FIELDS) if (k in src && src[k] !== undefined) out[k] = src[k];
   if (out.type && !TYPES.includes(out.type)) delete out.type;
   return out;
+}
+
+/**
+ * §-1m PM-1 rule 3: "it must be impossible to set both a price and an external URL, or the
+ * product contradicts itself." Returns a sentence to refuse with, or null when the state is fine.
+ *
+ * IT TAKES THE RESULTING STATE, NOT THE REQUEST. A write carrying only `external_url`, aimed at
+ * an event that is already priced, contains one field and still produces the contradiction — and
+ * live D1 on 2026-08-13 had 6 of 7 events priced, so that is the common path rather than a
+ * corner. Every caller merges the stored row with the incoming bag and passes the ANSWER here.
+ *
+ * EXPORTED BECAUSE THE TWO HALVES OF THE RULE SIT ON TWO WRITE PATHS. `price_cents` is settable
+ * through this module (bulk edit, create, duplicate); `external_url` is settable through
+ * `tournaments.js`'s patchEvent, which is the route the admin event page calls. Two copies of one
+ * judgement is how they come to disagree, so there is one function and two importers.
+ */
+export function externalPriceConflict(next) {
+  const url = String((next && next.external_url) == null ? "" : next.external_url).trim();
+  const price = Number((next && next.price_cents) || 0);
+  if (url && price > 0) {
+    return "An event can have a price or an outside registration link, not both — we cannot take "
+      + "a payment for a sign-up that happens somewhere else. Clear one before setting the other.";
+  }
+  return null;
 }
 
 async function loadOrgEvent(env, ctx, id) {
@@ -322,6 +346,24 @@ async function bulkEdit(request, env, ctx) {
   const f = b.fields || {};
   const sets = [], vals = [];
   if (f.status && STATUSES.includes(f.status)) { vals.push(f.status); sets.push(`status=?${vals.length}`); }
+  // PM-1 rule 3, the price half. This is the ONE route that can put a price on an event, so it is
+  // the one that can price an event registering somewhere else. Any id in the batch that already
+  // points outward refuses the whole write rather than pricing some of them — a bulk edit that
+  // half-applied would leave the operator guessing which.
+  if (f.price_cents != null && Number(f.price_cents) > 0) {
+    const ph = ids.map((_, i) => `?${i + 2}`).join(",");
+    const clash = (await env.DB.prepare(
+      `SELECT name FROM events WHERE org_id=?1 AND id IN (${ph}) AND deleted_at IS NULL
+         AND external_url IS NOT NULL AND TRIM(external_url) <> ''`
+    ).bind(ctx.orgId, ...ids).all()).results || [];
+    if (clash.length) {
+      return json({
+        error: externalPriceConflict({ external_url: "x", price_cents: Number(f.price_cents) })
+          + ` ${clash.length === 1 ? "One event registers" : `${clash.length} events register`} elsewhere: `
+          + clash.map((e) => e.name).join(", ") + ".",
+      }, 400);
+    }
+  }
   if (f.price_cents != null) { vals.push(Number(f.price_cents) || 0); sets.push(`price_cents=?${vals.length}`); }
   if (f.location != null) { vals.push(f.location); sets.push(`location=?${vals.length}`); }
   if (f.program_id !== undefined) { vals.push(f.program_id || null); sets.push(`program_id=?${vals.length}`); }

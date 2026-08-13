@@ -176,6 +176,24 @@ async function eventForm(env, eventId) {
   if (!ev || !["published", "in_progress"].includes(ev.status)) {
     return json({ error: "This event isn't open for registration." }, 404);
   }
+  // PM-1 rule 2 (§-1m, v0.147.0): an event that registers somewhere else must NOT hand back a
+  // form, a price or a waiver. "Empty and broken look identical to a user" — a form nobody can
+  // submit is worse than no form, because it looks like it works right up to the last button.
+  // THE REFUSAL LIVES AT THE DESTINATION ON PURPOSE. Forking the sign-up button is the visible
+  // half, but anyone can type `register.html?event=N`, so the one surface a stray link cannot
+  // route around is this payload.
+  const outward = String(ev.external_url == null ? "" : ev.external_url).trim();
+  if (outward) {
+    return json({
+      event: {
+        id: ev.id, org_id: ev.org_id, org_name: ev.org_name, name: ev.name, type: ev.type,
+        starts_at: ev.starts_at, location: ev.location, price_cents: 0,
+      },
+      external_url: outward,
+      external_label: String(ev.external_label == null ? "" : ev.external_label).trim() || null,
+      fields: [],
+    });
+  }
   const fields = (await env.DB.prepare(
     "SELECT id, label, field_type, options_json, required, sort_order FROM form_fields WHERE org_id=?1 AND (event_id=?2 OR event_id IS NULL) AND deleted_at IS NULL ORDER BY sort_order, id"
   ).bind(ev.org_id, eventId).all()).results;
@@ -509,6 +527,17 @@ async function loadSheetEvent(env, eventId) {
 async function eventSheet(env, ctx, eventId) {
   const ev = await loadSheetEvent(env, eventId);
   if (!ev) return json({ error: "This event doesn't have a public sign-up sheet." }, 404);
+  // PM-1 rule 2, the drop-in half. Same reasoning as eventForm: a live count and a list of who is
+  // coming, on a session nobody can sign up for here, is a surface that will never receive data.
+  const outward = String(ev.external_url == null ? "" : ev.external_url).trim();
+  if (outward) {
+    return json({
+      event: { id: ev.id, name: ev.name, type: ev.type, starts_at: ev.starts_at, location: ev.location },
+      external_url: outward,
+      external_label: String(ev.external_label == null ? "" : ev.external_label).trim() || null,
+      people: [],
+    });
+  }
   const spotsTaken = await activeRegistrationCount(env, eventId);
   const rows = (await env.DB.prepare(
     `SELECT c.full_name AS full_name, mp.visibility AS visibility

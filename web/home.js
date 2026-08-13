@@ -160,7 +160,8 @@
         cat.events.map(e => `
         <div class="feed-item"><div class="fx"><b>${esc(e.name)}</b>
           <span>${fmt(e.starts_at)}${e.location ? " · " + esc(e.location) : ""}</span></div>
-          <a class="btn ghost" style="text-decoration:none" href="${BT_SIGNUP_LINK(e.type, e.id)}">View</a></div>`).join("") + `</div>`);
+          ${((s) => `<a class="btn ghost" style="text-decoration:none" href="${esc(s.href)}"
+            ${s.external ? `target="_blank" rel="${esc(s.rel)}"` : ""}>${s.external ? esc(s.label) + " ↗" : "View"}</a>`)(BT_SIGNUP(e))}</div>`).join("") + `</div>`);
     }
     if (cat.my_events && cat.my_events.length) {
       out.push(`<div class="feed-group"><h3>You're signed up${muteBtn("category", "my_events", "Hide my events from this box")}</h3>` +

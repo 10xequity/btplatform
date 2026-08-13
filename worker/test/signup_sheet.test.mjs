@@ -412,18 +412,28 @@ test("the advertised links fork by type: drop-in types → sheet.html, team type
   const cfg = readFileSync(new URL("../../web/assets/config.js", import.meta.url), "utf8");
   assert.match(cfg, /sheet\.html\?event=/, "the shared rule never points at the sheet");
   assert.match(cfg, /register\.html\?event=/, "team events must keep the registration form");
-  assert.match(cfg, /type === "training" \|\| type === "event"/,
+  // REWRITTEN AGAIN in v0.147.0, still not deleted, and only the SPELLING moved. PM-1 gave this
+  // fork a second axis — an event can register on someone else's site — and adding that as a
+  // third parameter would have let a caller omit it and silently get the internal link, which is
+  // D-29 for a third time in the same function. So `BT_SIGNUP_LINK(type, id)` became
+  // `BT_SIGNUP(event)`: the whole event in, the whole decision out. The behaviour THIS test
+  // protects is untouched — a drop-in advertises its sheet, a team event its registration form.
+  assert.match(cfg, /e\.type === "training" \|\| e\.type === "event"/,
     "the fork must read the event type, not guess");
   for (const caller of ["assets/schedule.js", "assets/admin-event.js"]) {
     const src = readFileSync(new URL("../../web/" + caller, import.meta.url), "utf8");
-    assert.match(src, /BT_SIGNUP_LINK\(/, `${caller} stopped using the shared rule — a second copy is how D-29 happened`);
+    assert.match(src, /BT_SIGNUP\(/, `${caller} stopped using the shared rule — a second copy is how D-29 happened`);
   }
-  // The staff screen's link is the one that gets advertised (§-1o), so it must still be absolute.
-  // Anchored on regLink's brace-matched body, never on how far apart the two tokens sit (D-17b).
+  // The staff screen's link is the one that gets advertised (§-1o), so it must still be absolute
+  // — for OUR page. An event registering elsewhere has no link of ours worth pasting, and
+  // BT_SIGNUP returns that one already absolute, so the origin is prefixed on the internal branch
+  // only. Anchored on regLink's brace-matched body, never on how far apart two tokens sit (D-17b).
   const adminEvent = readFileSync(new URL("../../web/assets/admin-event.js", import.meta.url), "utf8");
   const regLink = functionBodyAfter(blankComments(adminEvent), "function regLink(");
   assert.ok(regLink, "regLink is gone or is no longer a plain function declaration");
   assert.match(regLink, /location\.origin/,
     "the advertised link lost its origin — a relative link is not something staff can paste anywhere");
-  assert.match(regLink, /BT_SIGNUP_LINK\(/, "regLink stopped asking the shared rule where to point");
+  assert.match(regLink, /BT_SIGNUP\(/, "regLink stopped asking the shared rule where to point");
+  assert.match(regLink, /external/,
+    "regLink prefixes our origin unconditionally — an outside registration URL is already absolute");
 });

@@ -12,7 +12,7 @@ import {
 import { autoClaimForEvent, releaseAutoClaims } from "./facility.js";
 import { advanceBracketFor } from "./brackets.js"; // v0.67.0 — brackets.js imports only scheduler.js, no cycle
 import { personName, CAPTAIN_JOIN, CAPTAIN_COLS } from "./names.js"; // T2-3 — one captain shape, one place
-import { notifyEventCancelled } from "./events_admin.js"; // B16 — one recipient rule for all three cancel writers; events_admin imports nothing, no cycle
+import { notifyEventCancelled, externalPriceConflict } from "./events_admin.js"; // B16 — one recipient rule for all three cancel writers; PM-1 — one price/external rule for both write paths; events_admin imports nothing, no cycle
 
 export async function tournamentRoutes(request, env, url, ctx) {
   const p = url.pathname;
@@ -94,12 +94,27 @@ async function getEvent(env, ctx, id) {
 }
 
 async function patchEvent(request, env, ctx, id) {
-  const ev = await env.DB.prepare("SELECT org_id, status FROM events WHERE id=?1 AND deleted_at IS NULL").bind(id).first();
+  // v0.147.0 (PM-1): `price_cents` and `external_url` are both read now, because rule 3 is a
+  // comparison between them and it must be evaluated on the RESULT of this write.
+  const ev = await env.DB.prepare(
+    "SELECT org_id, status, price_cents, external_url FROM events WHERE id=?1 AND deleted_at IS NULL"
+  ).bind(id).first();
   if (!ev) return json({ error: "Event not found." }, 404);
   const deny = await requireStaff(env, ctx, ev.org_id);
   if (deny) return deny;
   const b = await request.json();
-  const allowed = ["name", "starts_at", "location", "court_count", "status", "cash_option_enabled", "config_json"];
+  // `external_url` and `external_label` join this list. `price_cents` deliberately does NOT:
+  // this route has never written it, the admin page has been sending it and being ignored, and
+  // quietly fixing that here would be a second change riding on this one (§-1c D-34). So the
+  // conflict this route can create is "a URL onto an already-priced event", and that is what the
+  // check below compares — the incoming URL against the price ALREADY STORED.
+  const allowed = ["name", "starts_at", "location", "court_count", "status", "cash_option_enabled",
+    "config_json", "external_url", "external_label"];
+  const conflict = externalPriceConflict({
+    external_url: "external_url" in b ? b.external_url : ev.external_url,
+    price_cents: ev.price_cents,
+  });
+  if (conflict) return json({ error: conflict }, 400);
   const sets = [], vals = [];
   for (const k of allowed) if (k in b) { sets.push(`${k}=?${sets.length + 1}`); vals.push(b[k]); }
   if (!sets.length) return json({ error: "Nothing to update." }, 400);

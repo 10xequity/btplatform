@@ -41,8 +41,12 @@
   // v0.137.0 (D-29): the fork itself moved to config.js — it was stated here AND in schedule.js,
   // and the third site that needed it (home.js) wrote its own link with the wrong parameter.
   // This function keeps only what is its own: making the shared link absolute.
+  // v0.147.0 (PM-1): an event that registers elsewhere has no link of OURS worth sharing, and
+  // BT_SIGNUP already returns the outside one absolute. This still owns only one thing — making
+  // our own page's relative path absolute.
   function regLink() {
-    return location.origin + location.pathname.replace(/[^/]*$/, "") + BT_SIGNUP_LINK(ev.type, id);
+    const s = BT_SIGNUP(Object.assign({ id }, ev));
+    return s.external ? s.href : location.origin + location.pathname.replace(/[^/]*$/, "") + s.href;
   }
 
   function render() {
@@ -76,6 +80,20 @@
             <div class="field"><label>Price (USD)</label><input id="e_price" type="number" min="0" step="0.01" value="${((ev.price_cents || 0) / 100).toFixed(2)}" /></div>
             <div class="field"><label>Capacity</label><input id="e_cap" type="number" min="1" value="${ev.capacity || ""}" placeholder="unlimited" /></div>
           </div>
+          <!-- PM-1 (§-0 B6): an event can register somewhere else entirely. The two fields sit
+               together and say what happens, because setting one without the other gives a button
+               with no words on it. The price/URL conflict is refused by the server (one rule, two
+               write paths) and the note below states it BEFORE the operator hits a wall. -->
+          <div class="row2" style="display:grid;grid-template-columns:2fr 1fr;gap:10px;margin-top:10px">
+            <div class="field"><label>Outside registration link</label>
+              <input id="e_exturl" type="url" placeholder="https://volleyballlife.com/…" value="${esc(ev.external_url || "")}" /></div>
+            <div class="field"><label>Button text</label>
+              <input id="e_extlabel" maxlength="60" placeholder="Register on their site" value="${esc(ev.external_label || "")}" /></div>
+          </div>
+          <p class="help-text" style="margin:4px 0 8px">Leave the link empty to register people here.
+            ${(ev.price_cents || 0) > 0
+              ? "<strong>This event has a price, so it cannot also link out</strong> — clear the price from the events list first."
+              : "An event that links out takes no price, no waiver and no check-in here."}</p>
           <label style="display:flex;gap:8px;align-items:center;font-size:14px;margin:8px 0">
             <input type="checkbox" id="e_cash" ${ev.cash_option_enabled ? "checked" : ""} /> Hidden cash option (admin-only, flags CASH-PENDING)</label>
           <button class="btn" id="saveBtn">Save details</button>
@@ -84,9 +102,11 @@
       </div>
 
       <div class="card" style="padding:16px;margin-bottom:18px">
-        <h2 style="font-size:16px;margin:0 0 6px">Sign-up &amp; pay link</h2>
-        <p class="help-text">Anyone with this link can register${(ev.price_cents || 0) > 0 ? " and pay by card (Square)" : ""}.
-          ${ev.status === "draft" ? "<strong>Publish the event first — drafts aren't open for registration.</strong>" : ""}</p>
+        <h2 style="font-size:16px;margin:0 0 6px">${(ev.external_url || "").trim() ? "Where this event registers" : "Sign-up &amp; pay link"}</h2>
+        <p class="help-text">${(ev.external_url || "").trim()
+          ? "This event registers on another site, so the link below is <strong>theirs, not ours</strong> — sharing it sends people straight there. Nobody can sign up, pay or check in here."
+          : `Anyone with this link can register${(ev.price_cents || 0) > 0 ? " and pay by card (Square)" : ""}.
+            ${ev.status === "draft" ? "<strong>Publish the event first — drafts aren't open for registration.</strong>" : ""}`}</p>
         <code style="user-select:all">${esc(regLink())}</code>
         <button class="btn ghost" id="copyLink" style="margin-left:8px">Copy link</button>
       </div>
@@ -141,6 +161,8 @@
       price_cents: Math.round(Number(document.getElementById("e_price").value || 0) * 100),
       capacity: Number(document.getElementById("e_cap").value) || null,
       cash_option_enabled: document.getElementById("e_cash").checked ? 1 : 0,
+      external_url: document.getElementById("e_exturl").value.trim() || null,
+      external_label: document.getElementById("e_extlabel").value.trim() || null,
     };
     const r = await api("/api/events/" + id, { method: "PATCH", body: JSON.stringify(body) });
     const n = document.getElementById("saveNotice");

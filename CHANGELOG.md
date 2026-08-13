@@ -1,5 +1,68 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.147.0 — 2026-08-13
+
+### PM-1 / B6 — an event can point at someone else's registration
+
+Owner (§-1m Q4): *"If it is outside registration, to an outside registration."* An event can now
+carry an outside registration link (migration 0046: `events.external_url` + `external_label`) and
+send people to Volleyball Life / Volo instead of registering them here.
+
+§-1m states three rules for this and calls each one a trap this repo already knows. All three are
+built and each is pinned:
+
+**Rule 1 — the outbound link must be visibly outbound.** `BT_SIGNUP` returns `rel="noopener
+noreferrer"`, `target="_blank"`, an ↗ affordance and never a bare URL as the label (an unlabelled
+external link falls back to *"Register on their site"*). *"Or we have made a third party look
+like us."*
+
+**Rule 2 — no surface that will never receive data.** `eventForm` and `eventSheet` return the
+outbound destination instead of a form, a price, a waiver or a live count, and both public pages
+render a card that says where to go. **The refusal lives at the destination on purpose:** forking
+the button is the visible half, but anyone can type `register.html?event=N`, so the one surface a
+stray link cannot route around is the payload.
+
+**Rule 3 — a price and an external URL cannot coexist.** Enforced on the **resulting state**, not
+the request: a write carrying only `external_url`, aimed at an already-priced event, has one field
+and still produces the contradiction. **Live D1: 6 of 7 events are priced**, so that is the common
+path. The rule is one exported function with two importers, because the two halves sit on two
+write paths — `external_url` goes through `tournaments.js`, `price_cents` through bulk edit.
+
+**The signature changed, and that is the point.** `BT_SIGNUP_LINK(type, id)` has been the single
+place deciding where a sign-up button points since D-29. An external URL is a second axis, and
+adding it as a third parameter would have let a caller omit it and silently get the internal link
+— D-29 for a third time in the same function. It is now **`BT_SIGNUP(event)`**: the whole event
+in, the whole decision out, so "forgot the external URL" is not expressible.
+
+**That rename found a live bypass.** `leagues.js` was building its own `Register` href instead of
+calling the helper — producing the identical string today and silently ignoring an external URL
+tomorrow. Exactly what *"add a caller, never a copy"* exists to stop. It is now a caller, and
+`dangling_refs.test.mjs`'s caller set names it.
+
+**The deploy changed nothing.** Live D1 after both ALTERs: 0 of 7 events carry either column, so
+every button on every screen points exactly where it did at v0.146.0.
+
+**Guard: `worker/test/external_registration.test.mjs`, 17 tests, 14 red pre-build.** Two existing
+guards were REWRITTEN, not deleted, because they pinned the old name while their claims stayed
+true: `signup_sheet.test.mjs`'s type-fork test and three tests in `dangling_refs.test.mjs`.
+
+### §-1c D-34 — recorded, not fixed: PATCH /api/events/:id silently drops price and capacity
+
+Found while looking for where rule 3 belongs. `patchEvent`'s allow-list is
+`["name","starts_at","location","court_count","status","cash_option_enabled","config_json"]` —
+and `admin-event.js` has been sending `price_cents` and `capacity` on every save, getting
+"Saved.", and having both discarded. `price_cents` is writable only through bulk edit.
+
+**It is recorded rather than fixed because widening that allow-list is a change to a route this
+unit is not about** — but it has a consequence worth stating plainly: with 6 of 7 live events
+priced, converting an event to an external link means **clearing its price from the events list
+first**, because the event page cannot clear it. The admin form says so rather than letting an
+operator hit the refusal and guess.
+
+Suite **1848/1848** (1831 + 17) · **125** test files (124 + 1) · 51 modules · busters **415/67** at
+0.147.0 · **ledger 0046**, both ALTERs applied to live D1 and the row read back before the repo
+ratchet moved.
+
 ## v0.146.0 — 2026-08-13
 
 ### K-1 tier 2 / B5 — the team number comes from the director's own arrangement

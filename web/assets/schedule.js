@@ -17,7 +17,9 @@
   // v0.137.0 (D-29): the rule itself moved to config.js. It was stated here AND in
   // admin-event.js, and the third site that needed it (home.js) wrote its own link with the
   // wrong parameter instead. One judgement, imported — the whole link, page and parameter.
-  const signupLink = e => BT_SIGNUP_LINK(e.type, e.id);
+  // v0.147.0 (PM-1): BT_SIGNUP takes the whole event and returns the whole decision — href plus
+  // whether it leaves the site, so the CTA below can be honest about it.
+  const signup = e => BT_SIGNUP(e);
   const TZ = "America/Denver";
 
   let events = [], mode = "list", org = "";
@@ -222,7 +224,8 @@
               ${e.registered_count != null ? ` · ${e.registered_count} registered${e.capacity ? " / " + e.capacity : ""}` : ""}</div>
             ${e.team_names && e.team_names.length ? `<div class="sched-meta">Teams: ${e.team_names.map(esc).join(", ")}</div>` : ""}
           </div>
-          ${e.status === "published" ? `<a class="btn sched-cta" href="${signupLink(e)}" ${embed ? 'target="_blank" rel="noopener"' : ""}>Sign up</a>` : ""}
+          ${e.status === "published" ? (s => `<a class="btn sched-cta" href="${esc(s.href)}"
+            ${s.external || embed ? `target="_blank" rel="${esc(s.rel || "noopener")}"` : ""}>${esc(s.label)}${s.external ? " ↗" : ""}</a>`)(signup(e)) : ""}
         </div>`;
       }).join("");
     } else {
@@ -240,7 +243,9 @@
         const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
         const day = upcoming.filter(e => (e.starts_at || "").slice(0, 10) === ds);
         html += `<div class="cal-day${d.getMonth() !== mo ? " other" : ""}"><div class="dnum">${d.getDate()}</div>
-          ${day.map(e => `<a class="cal-ev" href="${signupLink(e)}" ${embed ? 'target="_blank" rel="noopener"' : ""} title="${esc(e.name)}">${esc(e.name)}</a>`).join("")}</div>`;
+          ${day.map(e => ((s) => `<a class="cal-ev" href="${esc(s.href)}"
+            ${s.external || embed ? `target="_blank" rel="${esc(s.rel || "noopener")}"` : ""}
+            title="${esc(e.name)}${s.external ? " — registers on another site" : ""}">${esc(e.name)}${s.external ? " ↗" : ""}</a>`)(signup(e))).join("")}</div>`;
       }
       el.innerHTML = html + "</div>";
       el.querySelector("#cp").addEventListener("click", () => { calCursor.setMonth(calCursor.getMonth() - 1); render(); });

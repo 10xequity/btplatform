@@ -56,6 +56,19 @@
     const r = await api(`/api/events/${encodeURIComponent(eventId)}/form`);
     if (!r.ok) { card.innerHTML = `<h1>Registration unavailable</h1><p>${esc(r.data.error || "Please try again later.")}</p>`; return; }
     ev = r.data.event; customFields = r.data.fields || []; waiver = r.data.waiver || null;
+    // PM-1 (§-0 B6, v0.147.0): this event registers somewhere else. The payload deliberately
+    // carries no form, no price and no waiver, because each would be a surface that can never
+    // receive data. Checked BEFORE the waiver branch below — otherwise an external event is
+    // turned away with "the organizer hasn't published a waiver", which is both wrong and
+    // something the reader cannot act on.
+    if (r.data.external_url) {
+      const label = esc(r.data.external_label || "Register on their site");
+      card.innerHTML = `<h1>${esc(ev.name)}</h1>
+        <p>Registration for this event happens on another site.</p>
+        <p><a class="btn" href="${esc(r.data.external_url)}" target="_blank" rel="noopener noreferrer">${label} ↗</a></p>
+        <p class="help-text">You'll finish signing up there. Nothing is saved here, and there is nothing to pay us.</p>`;
+      return;
+    }
     if (!waiver) { // no published waiver = we cannot lawfully take a signature
       card.innerHTML = `<h1>Registration isn't open yet</h1><p>This event can't accept registrations until the organizer publishes the participant waiver. Please check back shortly.</p>`;
       return;

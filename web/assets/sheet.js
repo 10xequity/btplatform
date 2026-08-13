@@ -60,6 +60,17 @@
     const r = await api(`/api/events/${encodeURIComponent(eventId)}/sheet`);
     if (!r.ok) { card.innerHTML = `<h1>Sheet unavailable</h1><p>${esc(r.data.error || "Please try again later.")}</p>`; return; }
     sheet = r.data;
+    // PM-1 (§-0 B6, v0.147.0): a drop-in that signs up elsewhere. The payload carries no live
+    // count and nobody's name, because a sheet no one can add themselves to is the "empty and
+    // broken look identical" case wearing a working page's clothes.
+    if (sheet.external_url) {
+      const label = esc(sheet.external_label || "Sign up on their site");
+      card.innerHTML = `<h1>${esc((sheet.event && sheet.event.name) || "This session")}</h1>
+        <p>Sign-up for this session happens on another site.</p>
+        <p><a class="btn" href="${esc(sheet.external_url)}" target="_blank" rel="noopener noreferrer">${label} ↗</a></p>
+        <p class="help-text">You'll finish there — we don't keep the list for this one.</p>`;
+      return;
+    }
     render();
   }
 

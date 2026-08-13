@@ -194,7 +194,7 @@ test("NC-0: the comment stripping itself works, and does not eat code", () => {
   const blanked = blankComments(src);
   assert.deepEqual(signupLinks(blanked).map((l) => l.param), ["event"],
     "the stripper either kept the commented link or ate the real one");
-  assert.ok(webScripts().get("home.js").includes("BT_SIGNUP_LINK("),
+  assert.ok(webScripts().get("home.js").includes("BT_SIGNUP("),
     "stripping removed real code from home.js");
 });
 
@@ -243,17 +243,22 @@ test("the drop-in fork is ONE judgement in ONE place, with every caller importin
   const owners = [...webScripts()].filter(([, src]) => fork.test(src)).map(([n]) => n);
   assert.deepEqual(owners, ["assets/config.js"],
     "the drop-in type list is stated in more than one file (or has moved) — one judgement, imported, never restated: " + owners.join(", "));
-  assert.match(read("assets/config.js"), /window\.BT_SIGNUP_LINK\s*=/, "config.js no longer defines the shared rule");
-  const callers = [...webScripts()].filter(([n, src]) => n !== "assets/config.js" && src.includes("BT_SIGNUP_LINK("))
+  // v0.147.0 (PM-1): the shared rule is now BT_SIGNUP(event). It takes the whole event so a caller
+  // cannot omit the external-registration axis, which a third parameter would have allowed — D-29
+  // a third time in the same function. And leagues.js JOINS the caller list: this unit found it
+  // building its own Register href, producing the same string as the helper today and silently
+  // ignoring an external URL tomorrow. Precisely what "add a caller, never a copy" exists to stop.
+  assert.match(read("assets/config.js"), /window\.BT_SIGNUP\s*=/, "config.js no longer defines the shared rule");
+  const callers = [...webScripts()].filter(([n, src]) => n !== "assets/config.js" && src.includes("BT_SIGNUP("))
     .map(([n]) => n).sort();
-  assert.deepEqual(callers, ["assets/admin-event.js", "assets/schedule.js", "home.js"].sort(),
+  assert.deepEqual(callers, ["assets/admin-event.js", "assets/leagues.js", "assets/schedule.js", "home.js"].sort(),
     "a sign-up link is being built without the shared rule (or a caller vanished): " + callers.join(", "));
 });
 
 test("every page whose script builds a sign-up link loads config.js FIRST", () => {
   // WF-1(b)'s lesson, generalised: admin-events.js referenced a global `orgs` that no script on
   // the page defined, and the page looked alive while every loadAll() ended in a ReferenceError.
-  const consumers = [...webScripts()].filter(([n, src]) => n !== "assets/config.js" && src.includes("BT_SIGNUP_LINK("))
+  const consumers = [...webScripts()].filter(([n, src]) => n !== "assets/config.js" && src.includes("BT_SIGNUP("))
     .map(([n]) => n);
   assert.ok(consumers.length >= 3, `only ${consumers.length} consumers found — this check would pass by scanning nothing`);
   const offenders = [];
@@ -265,5 +270,5 @@ test("every page whose script builds a sign-up link loads config.js FIRST", () =
     if (cfg === -1) offenders.push(`${name} loads ${uses.join(", ")} but never loads config.js`);
     else if (uses.some((u) => js.indexOf(u) < cfg)) offenders.push(`${name} loads ${uses.join(", ")} before config.js`);
   }
-  assert.deepEqual(offenders, [], "BT_SIGNUP_LINK is undefined when these scripts run:\n" + offenders.join("\n"));
+  assert.deepEqual(offenders, [], "BT_SIGNUP is undefined when these scripts run:\n" + offenders.join("\n"));
 });

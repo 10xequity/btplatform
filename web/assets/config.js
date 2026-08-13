@@ -12,17 +12,43 @@ window.BT_CONFIG = {
   RENTALS_ENABLED: false,
 };
 
-/* WHERE A SIGN-UP LINK POINTS — ONE JUDGEMENT, THREE CALLERS.
-   SG-1 (v0.132.0) decided it: drop-in types (training, event) sign up on the public sheet, team
-   types keep the registration form. The rule was then written out twice — schedule.js:17 and
-   admin-event.js:42 — and home.js, which never got it, linked `register.html?event_id=` while
-   register.js reads `?event=`, so every "View" button on the member home landed on the
-   missing-event refusal (D-29). Both halves live here now: the page AND the parameter, because
-   splitting them is what let one caller get the parameter wrong on its own.
-   Callers: assets/schedule.js · assets/admin-event.js · home.js. Add a caller, never a copy. */
-window.BT_SIGNUP_LINK = function (type, eventId) {
-  const page = (type === "training" || type === "event") ? "sheet.html?event=" : "register.html?event=";
-  return page + encodeURIComponent(eventId);
+/* WHERE A SIGN-UP LINK POINTS — ONE JUDGEMENT, EVERY CALLER.
+   SG-1 (v0.132.0) decided the first axis: drop-in types (training, event) sign up on the public
+   sheet, team types keep the registration form. The rule was then written out twice —
+   schedule.js:17 and admin-event.js:42 — and home.js, which never got it, linked
+   `register.html?event_id=` while register.js reads `?event=`, so every "View" button on the
+   member home landed on the missing-event refusal (D-29). Both halves moved here: the page AND
+   the parameter, because splitting them is what let one caller get the parameter wrong alone.
+
+   v0.6.0 (v0.147.0, §-1m PM-1 / §-0 B6) — A SECOND AXIS, AND A SIGNATURE CHANGE THAT IS THE
+   POINT. An event can now carry `external_url` and send people to Volleyball Life / Volo instead
+   of registering them here. The cheap way to add that was a third parameter,
+   `BT_SIGNUP_LINK(type, id, externalUrl)` — and a caller that forgot it would have silently
+   produced the internal link, which is D-29 happening a second time in the same function. It now
+   takes the WHOLE EVENT and returns the WHOLE DECISION, so "forgot to pass the external URL" is
+   not expressible. Building this unit found `leagues.js` doing exactly what the old comment
+   forbade: a member-facing Register button with its own href, producing the same string as the
+   helper today and silently ignoring an external URL tomorrow.
+
+   Returns { href, external, label, rel, target }. §-1m's rule 1 is why the last three exist: an
+   outbound link must be VISIBLY outbound, "or we have made a third party look like us". */
+window.BT_SIGNUP = function (event) {
+  const e = event || {};
+  const url = String(e.external_url == null ? "" : e.external_url).trim();
+  if (url) {
+    const label = String(e.external_label == null ? "" : e.external_label).trim();
+    return {
+      href: url,
+      external: true,
+      // Never the bare URL as the label: a link whose words are "https://…" tells a member the
+      // address but not what pressing it does.
+      label: label || "Register on their site",
+      rel: "noopener noreferrer",
+      target: "_blank",
+    };
+  }
+  const page = (e.type === "training" || e.type === "event") ? "sheet.html?event=" : "register.html?event=";
+  return { href: page + encodeURIComponent(e.id), external: false, label: "Sign up", rel: "", target: "" };
 };
 
 /* THE EMBED CHILD — ONE IMPLEMENTATION FOR EVERY PAGE IN THE APP.

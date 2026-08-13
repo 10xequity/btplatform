@@ -83,7 +83,8 @@
         <div class="lg-meta">${esc(e.org_name || "")}${e.location ? " \u00b7 " + esc(e.location) : ""}${price ? " \u00b7 " + price : ""}${e.registered_count != null ? " \u00b7 " + e.registered_count + " registered" : ""}</div>
       </div>
       <div class="lg-cta">${open
-        ? `<a class="btn" href="register.html?event=${e.id}" style="text-decoration:none">Register</a>`
+        ? ((s) => `<a class="btn" href="${esc(s.href)}" style="text-decoration:none"
+            ${s.external ? `target="_blank" rel="${esc(s.rel)}"` : ""}>${s.external ? esc(s.label) + " ↗" : "Register"}</a>`)(BT_SIGNUP(e))
         : `<span class="lg-meta">${e.status === "in_progress" ? "In progress" : "Closed"}</span>`}</div>
     </div>`;
   }
