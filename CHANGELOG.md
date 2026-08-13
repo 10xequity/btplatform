@@ -1,8 +1,81 @@
 # Boomtown Platform — CHANGELOG
 
-## v0.143.0 — 2026-08-13
+## v0.143.0 — 2026-08-12
 
-- Auto-recorded by CI on deploy. `/api/health` reported `v0.143.0`. Fill this entry from the session handoff — this stub only guarantees the release is not missing from history.
+### B29 / D-28 — member pages read the ORGANIZATION's own contact email
+
+Five member-facing sites hard-coded `admin@boomtownvb.com`: the "Request change" button on
+settings and a *Have questions or need help?* footer on member, profile, library and inbox. The
+consequence was not cosmetic — **members of Colorado Boom and Match Point Social were being told to
+email Boomtown.** Standards §8 / F-40 has forbidden a literal org address in member-facing copy
+since before those pages were written.
+
+**The owner's half was already built.** Every organization sets its own Contact email on its own
+Organization Settings screen, server-validated through `orgs.js`'s EDITABLE allow-list and
+published as the `{{ORG_EMAIL}}` token. Live D1 held three distinct addresses. So this unit was
+never "let orgs set an email" — it was making the member pages **read the one they already set**.
+
+**What shipped:**
+
+- `publicOrgBrand` returns `admin_email` alongside the brand fields. The note on that SELECT said
+  "exactly three fields"; **the count was never the invariant.** What made three columns safe is
+  that all three are *publication* fields — things an operator fills in expressly to be published.
+  `admin_email` is the same kind of thing. The rule is rewritten to say that, and the exact column
+  list is pinned from both sides, so a fifth column reddens a test.
+- `site-nav.js` **v2.18** fills any `[data-org-contact]` anchor from that payload, with an optional
+  `data-org-contact-subject`. It reuses the org-brand fetch every member page already makes — one
+  request, one cache, no second mechanism.
+- **`window.btOrgContact`** exists because `settings.js` renders its row *after* the rail paints,
+  from its own `/api/me`. The rail's single pass cannot see markup that does not exist yet, so a
+  private fill would have left exactly one of the five sites broken forever.
+
+**Fail closed, decided as a markup question rather than a runtime one.** Every anchor ships
+`href="help.html"` — a live page — and is only ever *rewritten* to a `mailto:` once a non-empty
+address resolves. Offline, no `bt_org`, a 5xx and a NULL column therefore all leave a working
+route instead of a dead link, and *empty and broken look identical* cannot happen here by
+construction. Verified against a stub DOM on all six paths. The link text is destination-agnostic
+("Contact us", "Request change") so nothing but the href changes and there is no copy flash.
+
+**The owner's constraint holds by construction.** `admin@boomtownvb.com` is the RIGHT address for
+org 1 and must never resolve to his login email: the value comes from `orgs.admin_email` and
+`publicOrgBrand` takes no session and no ctx, so there is no user row in scope to read one from.
+Live check after deploy — org 1 `admin@boomtownvb.com`, org 2 `admin@matchptsocial.com`, org 4
+`admin@coloradoboom.com`.
+
+**A bug in this change was caught before it shipped.** The remembered brand was a `let`. `init()`
+runs at the top of the file, and a *signed-out* visitor with a `bt_org` and a warm cache never
+awaits — it runs straight through to the render and reaches the filler while the module body below
+it has not executed. That is a temporal-dead-zone `ReferenceError` on a path no signed-in test
+would ever exercise. It now hangs off the hoisted function declaration.
+
+**Guard — `worker/test/org_contact.test.mjs`, 16 tests, 8 red before the fix.** It scans the 17
+canonical member pages **and the scripts they load**, because one offending site lives in a JS
+template literal and a page-HTML-only scan would have reported four of five and called itself
+clean. `site-nav.js` is deliberately **in** the corpus rather than excluded: the "exclude the
+definer" trap does not apply (it holds a selector string, never an `<a>`), and inventing an
+exclusion would have bought a control that tests nothing. The honest control is an anchor **count**,
+and NC-3 plants a real offence inside `site-nav.js` to prove the script half is genuinely read.
+The placeholder exemption is scoped to the attribute, not the address, and NC-2 proves it.
+
+**Two superseded tests in `announcements.test.mjs` were REWRITTEN, not deleted.** Its NC-2 mutation
+was literally *"add `admin_email`"* — which this change made the real source, so the `replace()`
+became a no-op and the NC went red on its own `notEqual` line. That assertion is the only thing
+standing between a negative control and vacuity, and it earned its keep. Its victim is now
+`email_sender_address`: an operational column, chosen by what the rule forbids.
+
+**Also:** `scriptsOf` moved to `worker/testkit/route-extract.mjs` under that file's own
+third-consumer rule. It existed as two byte-identical private copies and B29 was the third; both
+consumers now import it and keep all 19 of their tests, which is what verifies the move.
+
+**Recorded, not fixed (D-30):** three further literal addresses live in server-side member-facing
+error strings — `profiles.js`, `messages.js`, `webauthn.js`. Same rule, but each needs a judgement
+this uniform sweep did not make (an unbound R2 namespace is a *platform* fault the org admin cannot
+fix; the WebAuthn path may have no org in scope at all), so they are a separate unit rather than a
+sixth site.
+
+Suite **1792/1792** (1776 + 16, exactly the new file) · **123** test files · 51 modules · busters
+**415/67** at 0.143.0, unchanged · ledger **0044**, no migration. Push first try, fifty-third
+running; 14 consecutive health samples with no flap; five live byte-checks, two of them negative.
 
 ## v0.142.0 — 2026-08-12
 
