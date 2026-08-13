@@ -72,10 +72,18 @@
       that is also the owner's "group" in the K-13 list, already implemented, so no second key was
       invented for it.
 
-      NUMBER is the K-1 team number (`board_no`, derived once in divisions.js's loadBoard). It is
-      the owner's "rank" per Q3's standing default AND his "registration date": board_no is rank by
-      `t.id` within the event and ids are AUTOINCREMENT, so its order IS registration order. Two of
-      his six words, one option — offering both would be two controls with identical output. */
+      NUMBER is the K-1 team number (`board_no`, resolved once in divisions.js's loadBoard). It is
+      the owner's "rank" per Q3's standing default.
+
+      v0.146.0 (K-1 TIER 2 / §-0 B5) — THIS PARAGRAPH USED TO SAY board_no IS REGISTRATION ORDER,
+      FULL STOP, AND THAT BECAME FALSE. `board_no` is now COALESCE(team_no, registration rank):
+      once a director saves a board it is their own tile arrangement, 1 down each division. So
+      sorting by NUMBER still sorts by the number printed on the tile — which is the property that
+      matters and the reason the sort needed no change — but it is no longer a synonym for
+      registration order on a saved board. The claim that K-13 collapsed "rank" and "registration
+      date" into one option still holds for an UNSAVED board and is the reason there is one option
+      here rather than two; the board's own note (paintNumberNote) tells a director which of the
+      two they are currently looking at. */
   function sortPick(key) {
     // Numbers are compared as zero-padded strings so one comparator serves text and numbers alike.
     const num = (v) => (v == null || v === "" ? "" : String(v).padStart(6, "0"));
@@ -193,7 +201,24 @@
     dirty = false;
     tempSeq = -1;
     paintSortOptions();
+    paintNumberNote();
     renderSuggestions();
+  }
+
+  /** Say where the tile numbers come from (K-1 tier 2, §-0 B5).
+      The `.pb-num` badge shows the admin's own arrangement once a board has been saved, and
+      registration order before that. Those are two different facts wearing one badge, so the board
+      states which is true instead of letting a director discover it by noticing the sheet in their
+      hand disagrees with the screen — K-1 asks for this explicitly.
+      Called from `ingest` and nowhere else: the answer changes when the server sends new data,
+      which is load and save, not while somebody is dragging. */
+  function paintNumberNote() {
+    const el = $("pbNumNote");
+    if (!el) return;
+    const frozen = allTeams().some((t) => t.team_no != null);
+    el.textContent = frozen
+      ? "Team numbers came from your saved arrangement — 1 down each division. Rearranging tiles won't change them until you save again."
+      : "Team numbers are in registration order. Save the board and they renumber 1 down each division, from your tile order.";
   }
 
   /** Rebuild the Sort menu for the board that is actually on screen (v0.144.0, K-13).

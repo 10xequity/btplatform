@@ -145,7 +145,7 @@ test("pad produces the 4-digit form used in filenames and the ledger", () => {
   assert.equal(pad(2026), "2026");
 });
 
-test("the real db/migrations directory parses cleanly and reports 0044", () => {
+test("the real db/migrations directory parses cleanly and reports 0045", () => {
   // This number is a deliberate ratchet, not a nuisance: it reddens on every new migration and
   // makes whoever added one confirm the scanner still reads the whole directory. Bump it in the
   // same commit as the migration, AFTER the ledger row exists in live D1 (v0.60.0 → 0036;
@@ -160,10 +160,14 @@ test("the real db/migrations directory parses cleanly and reports 0044", () => {
   // the column present on `sessions`. Fourth time 2026-08-10: migration 0044 (orgs.modules_off_json,
   // P-1) — moved only after live D1 answered MAX(id)=44, COUNT(*)=44, MAX(version)='0044' and
   // pragma_table_info('orgs') showed the column, with every row NULL: default-ON, deploy changes
-  // no screen.)
+  // no screen. FIFTH time 2026-08-13: migration 0045 (teams.team_no, K-1 tier 2 / §-0 B5) — it
+  // reddened here on the run straight after the file landed, and moved only once live D1 answered
+  // MAX(id)=45, COUNT(*)=45, MAX(version)='0045', pragma_table_info('teams') showed the column,
+  // and `COUNT(*) WHERE team_no IS NOT NULL` came back 0 of 70: every team keeps the number it
+  // already displayed until a director saves a board.)
   const { highest, files, unparseable } = scanMigrations(DEFAULT_DIR);
   assert.deepEqual(unparseable, [], `unparseable migration filenames: ${unparseable.join(", ")}`);
-  assert.equal(highest, 44);
+  assert.equal(highest, 45);
   assert.ok(files >= 20, `expected at least 20 .sql files, saw ${files}`);
 });
 

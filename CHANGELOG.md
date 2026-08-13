@@ -1,5 +1,67 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.146.0 — 2026-08-13
+
+### K-1 tier 2 / B5 — the team number comes from the director's own arrangement
+
+Owner 2026-08-10: *"Team number is assigned based on historical performance data if returning team
+… then guess based on admins arrangement of tiles (1 being top down for each division). Then
+finally registration order."* A three-tier fallback. Tier 3 shipped in v0.125.0; **this is tier 2**,
+the item H-4 and K-13 both deliberately deferred to. Tier 1 stays unbuilt and §-1k records why —
+"returning team" has no definition in this schema.
+
+**Saving a board now numbers it.** Every team that sits in a pool inside a division gets
+`team_no`, 1..N **top-down within each division**, ordered by the division's own rank, then the
+pool order the director saved, then the tile order inside the pool. Each division restarts at 1,
+because that is what the owner asked for — two teams in one event legitimately share a number.
+
+**Migration 0045 adds `teams.team_no`, and the column is the interesting decision.** The cheaper
+design is to derive the number on every read from (division, `pools.sort_order`,
+`board_order`) and add nothing — and it very nearly works, because both of those change only when
+the board is saved, so a derivation would already be frozen at Save by construction. **That was
+checked against the writers and refuted:** `teams.division_id` has two writers outside the board —
+`divisions.assign` and the promote/relegate moves — and `teams.pool_id` is cleared when a pool is
+deleted. Any of those would have renumbered a saved board with nobody touching it, which is
+precisely the failure K-1's spec names: *"the sheet in their hand disagrees with the screen."*
+Freezing at Save has to be a write.
+
+**The deploy changed no number on any screen.** Live D1 after the ALTER: 0 of 70 rows non-NULL, so
+every team kept the number it already displayed until a director saves. `board_no` is now
+`COALESCE(team_no, registration rank)`, so all three existing consumers — the tile badge, the
+tile's accessible name, and K-13's *Team number* sort — keep working untouched.
+
+**Dragging a team out clears its number in the same save that gives one to the team dragged in.**
+A stale number on an unplaced team is worse than none: it looks like a real position.
+
+**The board now says which numbering it is showing**, which K-1 asks for in as many words. A saved
+board reads *"Team numbers came from your saved arrangement — 1 down each division"*; an unsaved
+one reads *"Team numbers are in registration order. Save the board and they renumber…"*. The same
+badge meaning two different things on two days is the "empty and broken look identical" family, and
+a line that appears only in one state leaves the reader deciding whether it is missing or unloaded.
+
+**Guard: `pool_board_bench.test.mjs` grows 8 tests.** Verified end to end against a fixture shaped
+like live event 90002 — three divisions, pools interleaved across them, teams placed out of
+registration order so the two tiers are distinguishable.
+
+**One v0.125.0 test was REWRITTEN because tier 2 contradicts it.** It asserted that a save must NOT
+renumber. The property it was actually protecting — a number must never change *under* the director
+— survives and is now stated in its stronger form: **only** a save renumbers, a read never does,
+and a division change made elsewhere does not either. That last one is the measurement that forced
+the column, so it is now pinned as a test rather than only as a comment.
+
+**And that test was vacuous when first written.** Before the column existed it compared two
+all-NULL snapshots and passed while proving nothing. It now asserts something is frozen going in,
+so the comparison cannot be between two empty things.
+
+**A claim this change made false has been corrected rather than left.** K-13's comment in
+`admin-pool-board.js` documented `board_no` as *"rank by t.id … so its order IS registration
+order"*, and the K-13 test title said the same. Both now say what is true: sorting by NUMBER orders
+by the number printed on the tile, whichever tier produced it.
+
+Suite **1831/1831** (1823 + 8) · **124** test files, unchanged — tier 2 extended the guard that
+already owned this number · 51 modules · busters **415/67** at 0.146.0 · **ledger 0045**, migration
+applied to live D1 and the row read back before the repo ratchet moved.
+
 ## v0.145.0 — 2026-08-13
 
 ### K-14 / B21 — sort and filter tabs on the member events list

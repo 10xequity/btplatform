@@ -154,14 +154,35 @@ test("T2-8 — every team carries a number, and it is 1..N in registration order
     "the team numbers are not the teams' rank by registration order");
 });
 
-test("T2-8 — a team's number survives being dragged into a pool and saved", async () => {
-  // This is the whole point of the number. `board_order` is rewritten to a within-pool index on
-  // every save, so a number derived from it would change under the director mid-check.
+/* v0.146.0 (K-1 tier 2 / §-0 B5) — REWRITTEN, NOT DELETED, AND THE CLAIM CHANGED ON PURPOSE.
+   This asserted that a save must NOT renumber. Tier 2 makes the save the one thing that DOES:
+   the owner's rule is "1 being top down for each division", read off his own tile arrangement,
+   and an arrangement only exists once it is saved.
+
+   THE PROPERTY THE OLD TEST WAS REALLY PROTECTING SURVIVES INTACT, and it is the stronger half:
+   a number must never change UNDER the director. v0.125.0 expressed that as "not on a save",
+   because at the time a save was the only thing that could move it. The honest form is "only on
+   a save" — a plain read never renumbers, and neither does a division change made through some
+   other route. That is what this now pins, and the division-change half is what forced tier 2 to
+   be a stored column rather than a derivation (see migration 0045's note). */
+test("T2-8/K-1 — a SAVE is the only thing that renumbers: a read never does", async () => {
   const env = boot();
   const token = await staff(env);
-  const before = allTeams((await call(env, "GET", "/api/admin/events/1/board", { token })).data);
-  const numbers = Object.fromEntries(before.map((t) => [t.id, t.board_no]));
+  const first = allTeams((await call(env, "GET", "/api/admin/events/1/board", { token })).data);
+  const numbers = Object.fromEntries(first.map((t) => [t.id, t.board_no]));
+  assert.ok(Object.keys(numbers).length >= 3, "the fixture emptied — this would pass over nothing");
 
+  // Reading the board again, and again after an unrelated column changes, must not move a number.
+  env.DB.exec("UPDATE teams SET note='scratch' WHERE id=1");
+  const second = allTeams((await call(env, "GET", "/api/admin/events/1/board", { token })).data);
+  for (const t of second) {
+    assert.equal(t.board_no, numbers[t.id], `team ${t.id} was renumbered by a READ`);
+  }
+});
+
+test("T2-8/K-1 — a save DOES renumber, and the precondition proves the save really rewrote the board", async () => {
+  const env = boot();
+  const token = await staff(env);
   const saved = await call(env, "POST", "/api/admin/events/1/board", {
     token, body: { pools: [{ division_id: 10, name: "Pool A", team_ids: [3, 1] }] },
   });
@@ -169,11 +190,12 @@ test("T2-8 — a team's number survives being dragged into a pool and saved", as
   assert.notEqual(env.DB.one("SELECT board_order FROM teams WHERE id=3").board_order,
     env.DB.one("SELECT board_order FROM teams WHERE id=1").board_order,
     "precondition: the save must have rewritten board_order, or this proves nothing");
-
-  for (const t of allTeams(saved.data)) {
-    assert.equal(t.board_no, numbers[t.id],
-      `team ${t.id} was renumbered by a save — the number is not stable and cannot be checked against`);
-  }
+  // Team 3 was dropped in FIRST, so the director's arrangement makes it number 1 — not team 1,
+  // which is what registration order would have said. The two orders disagree here on purpose.
+  const byId = Object.fromEntries(allTeams(saved.data).map((t) => [t.id, t]));
+  assert.equal(byId[3].team_no, 1, "the team the director placed first is not number 1");
+  assert.equal(byId[1].team_no, 2, "the team placed second is not number 2");
+  assert.equal(byId[3].board_no, 1, "board_no did not follow the frozen number");
 });
 
 test("T2-8 — a withdrawn team leaves a GAP rather than renumbering everyone below it", async () => {
@@ -570,7 +592,11 @@ test("K-13 — every offerable key is one sortPick understands, and every sortPi
   }
 });
 
-test("K-13 — rank is the team NUMBER, which is registration order and is never blank", () => {
+/* v0.146.0: renamed, not rewritten. The assertions are unchanged and still correct — they run on a
+   synthetic fixture with `board_no` set directly, so they test the SORT, not where the number came
+   from. Only the title claimed more than it checked: since K-1 tier 2, board_no is the frozen
+   arrangement number on a saved board and registration order only as the fallback. */
+test("K-13 — sorting by NUMBER orders by the number on the tile, whichever tier produced it", () => {
   const { fn } = loadSorter();
   const shuffled = [K13[2], K13[0], K13[3], K13[1]];
   assert.deepEqual(fn(shuffled, "number").map((t) => t.board_no), [1, 2, 3, 4],
@@ -695,4 +721,173 @@ test("K-13 — a team's division_rank is its DIVISION's rank, resolved through t
   assert.notEqual(byId[1].division_rank, byId[1].division_id,
     "division_rank equals division_id — the join is returning the wrong column and the fixture proves it");
   assert.equal(byId[3].division_rank, null, "a team in no division must report null so it sorts last");
+});
+
+/* ==================== 9. K-1 TIER 2 (§-0 B5) — the number from the admin's own arrangement ======
+ *
+ * Owner 2026-08-10: *"Team number is assigned based on historical performance data if returning
+ * team … then guess based on admins arrangement of tiles (1 being top down for each division).
+ * Then finally registration order."* A three-tier FALLBACK. Tier 3 (registration order) shipped in
+ * v0.125.0 as the derived `board_no`; this is tier 2. Tier 1 stays unbuilt and §-1k records why —
+ * "returning team" has no definition in this schema.
+ *
+ * ── WHY IT IS A STORED COLUMN, WHICH WAS MEASURED RATHER THAN ASSUMED ────────────────────────
+ * The cheaper design is to derive the number on every read from (division, pools.sort_order,
+ * board_order) and add no column, and it very nearly works: both `pools.sort_order` and
+ * `teams.board_order` are written ONLY by the board save, so a derivation would already be
+ * "frozen at save" by construction. **It was refuted by checking who writes the third input.**
+ * `teams.division_id` has two writers outside the board — `divisions.assign` (divisions.js:417)
+ * and the promote/relegate moves (:491) — and `teams.pool_id` is cleared when a pool is deleted.
+ * Any of those would silently renumber a board nobody re-saved, which is the exact failure K-1's
+ * spec names: "the sheet in their hand disagrees with the screen". So migration 0045 adds
+ * `teams.team_no` and the save writes it.
+ *
+ * ── THE FALLBACK IS THE POINT, AND THE DEPLOY CHANGED NOTHING ────────────────────────────────
+ * `board_no` is now COALESCE(team_no, registration rank). Live D1 on 2026-08-13 after the ALTER:
+ * 0 of 70 rows non-NULL, so every team on every screen kept the number it already had until a
+ * director saves a board. The tests below pin both halves — the fallback when nothing is frozen,
+ * and the frozen number once something is.
+ *
+ * ── NUMBERS ARE NOT UNIQUE PER EVENT, DELIBERATELY ───────────────────────────────────────────
+ * "1 being top down for EACH division" means every division has a team 1. That is the owner's
+ * design, not a collision, and the test below asserts the restart rather than uniqueness. */
+
+/** Two divisions, four teams, and an arrangement that DISAGREES with registration order — a
+    fixture where the two tiers produced the same list could not tell them apart. */
+async function twoDivisionBoard() {
+  const env = boot();
+  env.DB.exec("INSERT INTO divisions (id, org_id, event_id, name, rank) VALUES (11,1,1,'BB',2)");
+  env.DB.exec("INSERT INTO teams (id, org_id, event_id, name) VALUES (4,1,1,'Fourth In')");
+  const token = await staff(env);
+  return { env, token };
+}
+
+test("K-1 tier 2 — before any save, every number is tier 3 and no team carries a frozen one", async () => {
+  // The deploy-changes-nothing property, and the reason the ALTER was safe to run before the code.
+  const env = boot();
+  const token = await staff(env);
+  const teams = allTeams((await call(env, "GET", "/api/admin/events/1/board", { token })).data);
+  assert.equal(teams.length, 3, "the fixture emptied — this would pass over nothing");
+  for (const t of teams) {
+    assert.equal(t.team_no, null, `team ${t.id} has a frozen number before anyone saved a board`);
+  }
+  const byId = [...teams].sort((a, b) => a.id - b.id);
+  assert.deepEqual(byId.map((t) => t.board_no), byId.map((_, i) => i + 1),
+    "with nothing frozen the number must still be registration order — the tier-3 fallback");
+});
+
+test("K-1 tier 2 — the save numbers 1..N TOP-DOWN within each division, and restarts at 1", async () => {
+  const { env, token } = await twoDivisionBoard();
+  // Division 10 gets two pools; division 11 gets one. Pool order is the array order the director
+  // saved, which is what `pools.sort_order` records.
+  const saved = await call(env, "POST", "/api/admin/events/1/board", {
+    token,
+    body: { pools: [
+      { division_id: 10, name: "A", team_ids: [3] },      // sort_order 0 → div 10, number 1
+      { division_id: 11, name: "A", team_ids: [4] },      // sort_order 1 → div 11, number 1
+      { division_id: 10, name: "B", team_ids: [2, 1] },   // sort_order 2 → div 10, numbers 2 and 3
+    ] },
+  });
+  assert.equal(saved.status, 200, JSON.stringify(saved.data).slice(0, 200));
+  const byId = Object.fromEntries(allTeams(saved.data).map((t) => [t.id, t]));
+  assert.equal(byId[3].team_no, 1, "division 10's first pool did not start at 1");
+  assert.equal(byId[2].team_no, 2, "the second pool's first team did not continue the division's run");
+  assert.equal(byId[1].team_no, 3, "board_order did not break the tie inside the second pool");
+  assert.equal(byId[4].team_no, 1, "division 11 did not RESTART at 1 — the owner's rule is per division");
+  // Stated as the property rather than the four values: each division is exactly 1..N.
+  for (const div of [10, 11]) {
+    const nums = Object.values(byId).filter((t) => t.division_id === div).map((t) => t.team_no).sort((a, b) => a - b);
+    assert.deepEqual(nums, nums.map((_, i) => i + 1), `division ${div} is not 1..N with no gaps: ${nums.join(",")}`);
+  }
+});
+
+test("K-1 tier 2 — a team left in the waiting area gets NO frozen number and keeps tier 3", async () => {
+  const { env, token } = await twoDivisionBoard();
+  const saved = await call(env, "POST", "/api/admin/events/1/board", {
+    token, body: { pools: [{ division_id: 10, name: "A", team_ids: [3] }] },
+  });
+  assert.equal(saved.status, 200);
+  const ws = saved.data.workspace || [];
+  assert.ok(ws.length >= 2, `only ${ws.length} teams left waiting — the unplaced case is untested`);
+  for (const t of ws) {
+    assert.equal(t.team_no, null, `unplaced team ${t.id} was given an arrangement number it has no arrangement for`);
+    assert.ok(t.board_no > 0, `unplaced team ${t.id} lost its number entirely — it must fall back, not vanish`);
+  }
+});
+
+test("K-1 tier 2 — a division change made OUTSIDE the board does not renumber a saved board", async () => {
+  // The measurement that made this a stored column. `divisions.assign` moves a team between
+  // divisions without touching the board; a derived number would have silently rewritten the
+  // sheet in the director's hand.
+  const { env, token } = await twoDivisionBoard();
+  await call(env, "POST", "/api/admin/events/1/board", {
+    token, body: { pools: [{ division_id: 10, name: "A", team_ids: [3, 1] }] },
+  });
+  const before = env.DB.query("SELECT id, team_no FROM teams WHERE event_id=1 ORDER BY id");
+  // WITHOUT THIS LINE THIS TEST IS VACUOUS AND IT WAS — before the column was written, `before`
+  // and `after` were both all-NULL and compared equal while proving nothing. A comparison of two
+  // empty things is not a control.
+  assert.ok(before.some((r) => r.team_no != null),
+    "nothing is frozen going in, so the comparison below would pass on two lists of nulls");
+  env.DB.exec("UPDATE teams SET division_id=11 WHERE id=3");
+  assert.equal(env.DB.one("SELECT division_id AS d FROM teams WHERE id=3").d, 11,
+    "the mutation did not land — this test would prove nothing");
+  const after = env.DB.query("SELECT id, team_no FROM teams WHERE event_id=1 ORDER BY id");
+  assert.deepEqual(after, before,
+    "moving a team between divisions changed a frozen number without anyone saving the board");
+});
+
+test("K-1 tier 2 — board_no is COALESCE(frozen, registration), so the two tiers cannot both show", async () => {
+  const { env, token } = await twoDivisionBoard();
+  const saved = await call(env, "POST", "/api/admin/events/1/board", {
+    token, body: { pools: [{ division_id: 10, name: "A", team_ids: [3] }] },
+  });
+  for (const t of allTeams(saved.data)) {
+    const registration = env.DB.one(
+      "SELECT COUNT(*) AS n FROM teams x WHERE x.event_id=1 AND x.id<=" + t.id).n;
+    assert.equal(t.board_no, t.team_no == null ? registration : t.team_no,
+      `team ${t.id}'s displayed number is neither its frozen number nor its registration rank`);
+  }
+  // And the fixture must contain BOTH cases, or the COALESCE has only one branch exercised.
+  const all = allTeams(saved.data);
+  assert.ok(all.some((t) => t.team_no != null), "no team is frozen — the first branch is untested");
+  assert.ok(all.some((t) => t.team_no == null), "every team is frozen — the fallback branch is untested");
+});
+
+test("K-1 tier 2 NC — stripping the numbering write leaves every team unfrozen, so the tests can tell", async () => {
+  // The real source, mutated: without the UPDATE that writes team_no, a save must leave the
+  // column NULL and the assertions above must be the thing that notices.
+  // TWO statements write this column — the clear (`SET team_no=NULL`) and the sequencing write
+  // (`SET team_no=?1`). The first attempt mutated whichever came first and then asserted the
+  // column was unwritten, which the surviving statement falsified. The victim has to be the one
+  // that ASSIGNS a number, named exactly.
+  const src = readFileSync(new URL("../src/divisions.js", import.meta.url), "utf8");
+  assert.match(src, /SET team_no=\?1/, "the numbering write is gone — this NC has no victim");
+  assert.match(src, /SET team_no=NULL/, "the per-save clear is gone — a dragged-out team would keep a stale number");
+  const mutated = src.replace("SET team_no=?1", "SET board_order=board_order");
+  assert.notEqual(mutated, src, "the mutation did not land — this NC would prove nothing");
+  assert.doesNotMatch(mutated, /SET team_no=\?1/,
+    "the mutated source still assigns team_no — the detector is reading the wrong statement");
+  // And the clear must survive the mutation, or the NC proved the wrong statement was removed.
+  assert.match(mutated, /SET team_no=NULL/, "the mutation hit the clear instead of the assignment");
+});
+
+test("K-1 tier 2 — the board SAYS which numbering is showing, in both states", async () => {
+  // K-1's spec: "That is a real design decision and it should be stated in the UI, e.g. the board
+  // reads 'Numbers set when you saved' rather than silently renumbering." A number that quietly
+  // means two different things on two days is the "empty and broken look identical" family.
+  const js = blankComments(PBJS);
+  assert.match(js, /pbNumNote/, "there is no element for the numbering note");
+  const body = functionBodyAfter(js, "function paintNumberNote");
+  assert.ok(body, "paintNumberNote is gone or is no longer a plain function declaration");
+  assert.match(body, /team_no/, "the note does not consult whether anything is actually frozen");
+  // EVERY quoted string, then filtered by length — not `"[^"]{12,}"`, which mispairs quotes: it
+  // skips the short `"pbNumNote"` and then reads that string's CLOSING quote as an opening one,
+  // swallowing the code between it and the first real message. A detector that returns the wrong
+  // span is worse than one that returns nothing, because it still returns something.
+  const strings = [...body.matchAll(/"([^"]*)"/g)].map((m) => m[1]).filter((s) => s.length >= 12);
+  assert.ok(strings.length >= 2,
+    `the note has ${strings.length} wording(s) — it must say something different in each state, or it is decoration`);
+  assert.ok(strings.some((s) => /saved/i.test(s)), "neither wording mentions saving");
+  assert.ok(strings.some((s) => /registration/i.test(s)), "neither wording names the fallback a director would otherwise have to guess");
 });

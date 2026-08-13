@@ -625,7 +625,42 @@ export async function divisionRoutes(request, env, url, ctx) {
       removed++;
     }
 
-    await audit(env, ctx, "board.save", "events", eventId, { created, updated, removed, placed: placed.size });
+    // ── K-1 TIER 2 (§-0 B5, v0.146.0): freeze the team numbers from THIS arrangement. ──
+    // Owner: "guess based on admins arrangement of tiles (1 being top down for each division)".
+    // It runs last, after every placement, every eviction to the workspace and every pool removal
+    // above, so it numbers the board that was actually just saved rather than the one in progress.
+    //
+    // WHY IT IS WRITTEN AND NOT DERIVED ON READ: `pools.sort_order` and `teams.board_order` change
+    // only here, so a derivation would already be frozen at save — but `teams.division_id` does
+    // not. `divisions.assign` (:417) and the promote/relegate moves (:491) both rewrite it, and a
+    // pool deletion clears `pool_id`. Any of those would renumber a saved board with nobody
+    // touching it, which is the failure K-1's spec names. Migration 0045 carries the column.
+    //
+    // The whole event is cleared first so a team dragged OUT of a pool loses its number in the same
+    // pass that gives one to the team dragged in — a stale number on an unplaced team is exactly
+    // the "empty and broken look identical" case, because it looks like a real position.
+    await env.DB.prepare(
+      "UPDATE teams SET team_no=NULL WHERE org_id=?1 AND event_id=?2"
+    ).bind(ctx.orgId, eventId).run();
+    // Ordered the way the director reads the board: divisions by their own rank, then pools in the
+    // order they were saved, then the tile order inside a pool. `id` only ever breaks a dead tie.
+    const arranged = (await env.DB.prepare(
+      `SELECT t.id, t.division_id FROM teams t
+         JOIN pools pl ON pl.id = t.pool_id AND pl.deleted_at IS NULL
+         LEFT JOIN divisions dv ON dv.id = t.division_id AND dv.deleted_at IS NULL
+        WHERE t.org_id=?1 AND t.event_id=?2 AND t.deleted_at IS NULL AND t.division_id IS NOT NULL
+        ORDER BY dv.rank, t.division_id, pl.sort_order, t.board_order, t.id`
+    ).bind(ctx.orgId, eventId).all()).results || [];
+    let seq = 0, seqDivision = null;
+    for (const row of arranged) {
+      if (row.division_id !== seqDivision) { seqDivision = row.division_id; seq = 0; } // restart per division
+      seq++;
+      await env.DB.prepare(
+        "UPDATE teams SET team_no=?1 WHERE id=?2 AND org_id=?3 AND event_id=?4"
+      ).bind(seq, row.id, ctx.orgId, eventId).run();
+    }
+
+    await audit(env, ctx, "board.save", "events", eventId, { created, updated, removed, placed: placed.size, numbered: arranged.length });
     const board = await loadBoard(env, ctx, eventId);
     return json({
       ok: true, created, updated, removed,
@@ -691,6 +726,15 @@ async function loadBoard(env, ctx, eventId) {
   // director's own registration export is already in. Soft-deleted teams are COUNTED but not
   // returned, so a withdrawal leaves a gap instead of renumbering everyone below it, exactly as
   // scratching a name off a paper list does.
+  //
+  // v0.146.0 (K-1 TIER 2 / §-0 B5) — THAT PARAGRAPH IS NOW THE FALLBACK, NOT THE WHOLE RULE.
+  // The owner's number is a three-tier guess: historical performance (tier 1, unbuilt — "returning
+  // team" has no definition in this schema), else the admin's own tile arrangement (tier 2), else
+  // registration order (tier 3, everything above). `team_no` holds tier 2 and is written only by
+  // the board save; `board_no` is therefore COALESCE(frozen, registration) and every consumer of
+  // `board_no` keeps working unchanged. Both are returned so the screen can SAY which it is
+  // showing — K-1 asks for that in as many words, and a number that quietly means two different
+  // things on two days is the "empty and broken look identical" family.
   // v0.144.0 (K-13 / §-0 B17) — two more columns, both so the waiting area can be SORTED by them:
   //   · `gender_division` is the gender a team registered with. It has been in the schema since the
   //     first migration and was never selected here, which is the same gap T2-8 found for `level`:
@@ -702,9 +746,9 @@ async function loadBoard(env, ctx, eventId) {
   // Alias `dv` because `t`, `s`, `cap` and `cmp` are already taken here and in CAPTAIN_JOIN.
   const teams = (await env.DB.prepare(
     `SELECT t.id, t.name, t.pool_id, t.division_id, t.note, t.board_order, t.seed, t.level,
-            t.gender_division,
-            (SELECT COUNT(*) FROM teams x
-              WHERE x.org_id=t.org_id AND x.event_id=t.event_id AND x.id<=t.id) AS board_no,
+            t.gender_division, t.team_no,
+            COALESCE(t.team_no, (SELECT COUNT(*) FROM teams x
+              WHERE x.org_id=t.org_id AND x.event_id=t.event_id AND x.id<=t.id)) AS board_no,
             dv.rank AS division_rank,
             COALESCE(s.wins,0) AS wins, COALESCE(s.losses,0) AS losses,
             ${CAPTAIN_COLS}
