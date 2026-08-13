@@ -1,5 +1,76 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.145.0 — 2026-08-13
+
+### K-14 / B21 — sort and filter tabs on the member events list
+
+Owner 2026-08-11 (Q2): *"B, main list of events needs to be sortable. Have tabs at the top to
+sort, similar to the tournament page in Boomtownvb.com."*
+
+**The record said this was an extension. It was not, and the difference was a live bug.** §-1m
+recorded *"`schedule.js:21-23` already has a working `.tab` mechanism on that page — K-14 is
+extending an existing tab row, not building one."* Re-measured: the listener is at :26-30, and
+**the `.tab` row is `List | Month` — a VIEW switcher.** Hanging the owner's categories off it
+would have put "in what order" and "in what layout" in one control.
+
+Worse, `schedule.js` bound `document.querySelectorAll(".tab")` **globally**. Any second `.tab` on
+the page joined the view switcher, so clicking a type tab would have set `mode = undefined` and
+dropped the page into the calendar branch — a filter that silently changes the view, which reads
+as a styling bug forever. Both rows now carry ids and both listeners are scoped to their own
+container. A guard fails if an unscoped `.tab` selector ever comes back.
+
+**Every control is built from the loaded events.** The schema allows five event types; live D1 on
+2026-08-13 had published events of exactly two — `tournament` (4 in the public window) and
+`league` (1). `training`, `event` and `court_rental` have **none**. A static row would have
+shipped three permanently empty tabs, which is K-13's pool-board defect reproduced on a public
+page. So: **All + each type present**, and the row does not draw at all below two types, because
+"All" beside a single tab filters nothing. Against the live shape the row reads
+**All | Tournaments | Leagues**.
+
+The same rule reaches the sort (**Date** always, since it is the server's own order and the way
+back to it; **Name** and **Price** only when they vary) and the direction toggle (hidden below two
+events). **Reverse inverts the comparison, not the array** — an event with no date or no price
+stays at the bottom in both directions, which is v0.125.0's deliberate blanks-last decision
+carried through rather than re-made. The toggle names its direction per key: *Soonest first /
+Latest first*, *A–Z / Z–A*, *Low to high / High to low* — K-13 refused to put an alphabet on a
+number, and this refuses the same thing in the other direction.
+
+**The org filter was already half-doing this and is now honest.** `load()` has always computed
+`seen.size > 1` before populating it, then left the control on screen saying "All orgs" — and one
+org is live, so it has been filtering nothing. It now hides when there is nothing to choose
+between. Fixing the control beside the one being built, under the rule being built, is not scope
+creep; leaving it exempt from its neighbour's rule would have been the odd choice.
+
+The type filter is applied **before** the view branch, so Month view honours it too — a filter
+that only narrowed the list would leave someone on Leagues still seeing tournaments in the
+calendar. The empty state names the tab you are on rather than claiming nothing is scheduled.
+
+**Guard: `worker/test/schedule_tabs.test.mjs`, 16 tests, 14 red pre-build.** The type labels are
+checked against the type list parsed out of the schema's own CHECK constraint, so a sixth event
+type fails this until somebody names it in human words — H-2's lesson, where an approved design
+named a type that did not exist.
+
+### hidden_overlay.test.mjs — two findings, one of each kind
+
+It reddened on this change with two offenders, and they were not the same sort of thing.
+
+**`.sched-controls` was a real defect in the new code** — `display: flex` beats the user agent's
+`[hidden] { display: none }`, so a hidden control row would have painted anyway. That is exactly
+v0.119.0's unclosable-overlay bug, caught on arrival by the guard written for it. Both new rows
+now ship `[hidden]` overrides, including `#schedTypeTabs`, **which that guard structurally could
+not have caught**: it takes `display: flex` from `.tabs` in `admin.css` rather than this page's
+inline CSS, and it ships without the attribute in markup.
+
+**`.btn` was a defect in the guard.** It matched the text `.btn` inside a CSS *comment* — the
+checker's `[^{}]*` window spans from a class name mentioned in prose to the next real rule's
+`display`. The only other cure would have been rewording a comment to appease a broken check, so
+the guard now strips CSS block comments before scanning, with an NC proving it both ways. `//` is
+deliberately left alone: a style block can hold `url(https://…)`, and blanking to end of line
+there would delete real declarations and make this guard a source of false CLEANS.
+
+Suite **1823/1823** (1806 + 17) · **124** test files (123 + 1) · 51 modules · busters **415/67** at
+0.145.0 · ledger **0044**, no migration.
+
 ## v0.144.0 — 2026-08-13
 
 ### K-13 / B17 — multi-sort on the pool board, and an option only where it applies

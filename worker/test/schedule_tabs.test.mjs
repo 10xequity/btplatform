@@ -1,0 +1,283 @@
+/**
+ * Boomtown Platform — the member events list: type tabs, sort, and honest controls
+ * File: worker/test/schedule_tabs.test.mjs · Version: v1.0 · Date: 2026-08-13 · Ships in: v0.145.0
+ *
+ * §-0 B21 / K-14. Owner 2026-08-11 (Q2): *"B, main list of events needs to be sortable. Have tabs
+ * at the top to sort, similar to the tournament page in Boomtownvb.com."*
+ *
+ * ── WHAT THE RECORD SAID, AND WHAT WAS ACTUALLY THERE ────────────────────────────────────────
+ * §-1m recorded: *"Measured: `schedule.js:21-23` already has a working `.tab` mechanism on that
+ * page — K-14 is extending an existing tab row, not building one."* Re-measured 2026-08-13, that
+ * is wrong twice over and the second half is the dangerous one:
+ *   · the listener is at :26-30, not :21-23 (:21 is `const TZ`);
+ *   · **the `.tab` row is `List | Month` — a VIEW switcher, not a sort.** "Extending the existing
+ *     tab row" would have put "in what order" and "in what layout" in one control, and the
+ *     owner's tabs would have changed the page's view mode as a side effect.
+ * So K-14 BUILDS a tab row. It is a sibling of the view row, not an extension of it.
+ *
+ * ── THE COLLISION THAT MADE THIS MORE THAN A STYLE CHOICE ────────────────────────────────────
+ * `schedule.js` bound `document.querySelectorAll(".tab")` — GLOBAL, unscoped. Any second `.tab`
+ * on this page joins the view switcher, and clicking it sets `mode = t.dataset.mode` → undefined
+ * → `render()` falls to its `else` branch and the page silently switches to the calendar. A type
+ * tab that quietly changes the view is exactly the kind of defect that looks like a styling bug
+ * forever. Both rows now carry ids and both listeners are scoped to their own container.
+ *
+ * ── WHY THE TABS ARE BUILT FROM DATA (K-13's rule, imported) ─────────────────────────────────
+ * The schema allows five event types. **Live D1, 2026-08-13, published events in the public
+ * window: `tournament` 4 and `league` 1. `training`, `event` and `court_rental` have ZERO.** A
+ * static five-tab row would have shipped three tabs that are permanently empty — the defect K-13
+ * found on the pool board, reproduced on a public page. Tabs are built from the types actually
+ * loaded, and the whole row hides below two distinct types because "All" beside one tab filters
+ * nothing.
+ *
+ * The same rule is applied to the ORG filter, which was already half-doing it: `load()` only
+ * POPULATES `#orgFilter` when more than one org appears, but left the control on screen saying
+ * "All orgs" and doing nothing. One org is live today, so it is doing nothing today. Fixing the
+ * control beside the one being built — under the rule being built — is not scope creep; leaving
+ * it exempt from its neighbour's rule would be the odd choice.
+ *
+ * ── THE COMPARATOR IS THE SECOND CONSUMER OF K-13's JUDGEMENT, AND IS DELIBERATELY NOT SHARED ─
+ * `sortPick` / bucket-counted availability / reverse-inverts-the-comparison all mirror
+ * `admin-pool-board.js`. They are NOT hoisted into `config.js` (the cross-page home, by the
+ * BT_SIGNUP_LINK precedent) because this repo's own threshold for hoisting is a THIRD consumer —
+ * the rule in `route-extract.mjs`'s header that governed `scriptsOf`. The two pickers share no
+ * data (teams vs events) and hoisting now would force a second rewrite of a guard harness
+ * rewritten one session ago. Recorded as §-1c D-32 with the trigger, rather than duplicated
+ * silently.
+ */
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { blankComments, functionBodyAfter } from "../testkit/route-extract.mjs";
+
+const WEB = new URL("../../web/", import.meta.url);
+const read = (f) => readFileSync(new URL(f, WEB), "utf8");
+const SJS = read("assets/schedule.js");
+const SHTML = read("schedule.html");
+const SCHEMA = readFileSync(new URL("../testkit/journey-schema.sql", import.meta.url), "utf8");
+
+/** Rebuild a shipped pure function from its own bytes, `sortPick` composed in where needed. */
+function pickSource(src = SJS) {
+  const body = functionBodyAfter(src, "function sortPick");
+  assert.ok(body, "sortPick is gone or is no longer a plain function declaration");
+  return "function sortPick(key) " + body + "\n";
+}
+function load(name, args, src = SJS) {
+  const body = functionBodyAfter(src, "function " + name);
+  assert.ok(body, `${name} is gone or is no longer a plain function declaration`);
+  return { fn: new Function(...args, pickSource(src) + body.slice(1, -1)), body };
+}
+
+/* Mirrors the live window deliberately: two types present of the five the schema allows, prices
+   that vary, one event with no price and one with no date so the blank branches are exercised. */
+const EVENTS = [
+  { id: 1, name: "Spring Slam",   type: "tournament", starts_at: "2026-09-02 09:00", price_cents: 4000, org_id: 1 },
+  { id: 2, name: "Autumn Open",   type: "tournament", starts_at: "2026-08-20 18:00", price_cents: 2500, org_id: 1 },
+  { id: 3, name: "Monday League", type: "league",     starts_at: "2026-10-05 19:00", price_cents: null, org_id: 1 },
+  { id: 4, name: "Beach Bash",    type: "tournament", starts_at: null,               price_cents: 6000, org_id: 1 },
+];
+
+/* ══════════════ 1. the fixture can exhibit what the tests below claim ══════════════ */
+
+test("K-14 — the fixture varies on every key it tests and is in NO key's order", () => {
+  assert.equal(EVENTS.length, 4, "the fixture emptied — every assertion below would pass over nothing");
+  for (const [key, pick] of [["name", (e) => e.name], ["price", (e) => e.price_cents],
+    ["date", (e) => e.starts_at], ["type", (e) => e.type]]) {
+    assert.ok(new Set(EVENTS.map(pick)).size > 1, `${key} does not vary — its check would prove nothing`);
+  }
+  for (const [key, pick] of [["name", (e) => e.name], ["date", (e) => e.starts_at]]) {
+    const vals = EVENTS.map(pick);
+    assert.notDeepEqual(vals, [...vals].sort(),
+      `the fixture is already in ${key} order — a sort test on it could not tell a comparator from a no-op`);
+  }
+  assert.ok(EVENTS.some((e) => e.price_cents == null), "no blank price — the blanks-last branch is untested");
+  assert.ok(EVENTS.some((e) => e.starts_at == null), "no blank date — the blanks-last branch is untested");
+});
+
+/* ══════════════ 2. the collision: two tab rows, two scopes ══════════════ */
+
+test("K-14 — the page ships TWO tab rows and they are told apart by id, not by document order", () => {
+  const html = blankComments(SHTML);
+  for (const id of ["schedViewTabs", "schedTypeTabs"]) {
+    assert.ok(html.includes(`id="${id}"`), `#${id} is missing — the two tab rows cannot be scoped apart`);
+  }
+});
+
+test("K-14 — NEITHER tab listener may select `.tab` globally, or one row drives the other", () => {
+  // The live hazard this unit found. An unscoped querySelectorAll(".tab") binds the type tabs to
+  // the view switcher: clicking "Tournaments" sets mode = undefined and render() falls through to
+  // the calendar. The page would look like it had a styling bug for as long as nobody clicked.
+  const js = blankComments(SJS);
+  assert.ok(!/document\.querySelectorAll\(\s*["']\.tab["']\s*\)/.test(js),
+    "an unscoped document.querySelectorAll('.tab') survives — the two rows will drive each other");
+  assert.match(js, /schedViewTabs/, "the view listener is not scoped to its own container");
+  assert.match(js, /schedTypeTabs/, "the type listener is not scoped to its own container");
+});
+
+test("K-14 NC — the unscoped form IS caught, so the check above is not spelling-blind", () => {
+  const bad = 'document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () => {});';
+  assert.ok(/document\.querySelectorAll\(\s*["']\.tab["']\s*\)/.test(bad), "the detector cannot see the shipped-bug form");
+  const good = 'document.querySelectorAll("#schedViewTabs .tab").forEach(t => {});';
+  assert.ok(!/document\.querySelectorAll\(\s*["']\.tab["']\s*\)/.test(good), "a scoped selector is wrongly flagged");
+});
+
+/* ══════════════ 3. the tabs are built from the data ══════════════ */
+
+test("K-14 — the type tabs are NOT static markup, or they show on boards that have none of them", () => {
+  const html = blankComments(SHTML);
+  const row = html.slice(html.indexOf('id="schedTypeTabs"'));
+  const block = row.slice(0, row.indexOf("</div>"));
+  for (const dead of ["Tournaments", "Leagues", "Training", "Court rentals"]) {
+    assert.ok(!block.includes(dead),
+      `"${dead}" ships as static markup — three of the five schema types have no published events at all`);
+  }
+  assert.match(blankComments(SJS), /availableTypes\(/, "nothing builds the tab row from the loaded events");
+});
+
+test("K-14 — All + the types PRESENT, and the row hides below two types", () => {
+  const { fn } = load("availableTypes", ["list"]);
+  assert.deepEqual(fn(EVENTS), ["", "tournament", "league"],
+    "the tab row must be All plus each type present, in first-seen order");
+  const oneType = EVENTS.filter((e) => e.type === "tournament");
+  assert.ok(oneType.length > 1, "the single-type fixture is empty — this case would prove nothing");
+  assert.deepEqual(fn(oneType), [],
+    "one type means All sits beside a tab that selects everything — the row must disappear, not sit there");
+  assert.deepEqual(fn([]), [], "an empty list cannot produce a tab row");
+});
+
+test("K-14 — every type the SCHEMA allows has a human label, derived from the schema not a memory", () => {
+  // H-2's lesson: an approved design named an event type that does not exist. The list is read
+  // out of the CHECK constraint so a new type added to the schema fails this until it is named.
+  const m = /type TEXT NOT NULL CHECK \(type IN \(([^)]+)\)\)/.exec(SCHEMA);
+  assert.ok(m, "the events type CHECK could not be parsed — this test is measuring nothing");
+  const types = m[1].split(",").map((s) => s.trim().replace(/'/g, ""));
+  assert.equal(types.length, 5, `expected 5 event types in the schema, saw ${types.length}: ${types.join(", ")}`);
+  const { fn } = load("typeLabel", ["type"]);
+  for (const t of types) {
+    const label = fn(t);
+    assert.ok(label && label !== t,
+      `"${t}" has no human label — a tab reading "court_rental" is a schema token on a public page`);
+  }
+  assert.equal(fn(""), "All", "the empty type is the All tab");
+});
+
+/* ══════════════ 4. the sort ══════════════ */
+
+test("K-14 — date is the unconditional default; name and price are offered only when they vary", () => {
+  const { fn } = load("availableSortKeys", ["list"]);
+  assert.deepEqual(fn(EVENTS), ["date", "name", "price"], "all three vary in this fixture");
+  const samePrice = EVENTS.map((e) => ({ ...e, price_cents: 1000 }));
+  assert.ok(!fn(samePrice).includes("price"),
+    "every event costs the same and Price is still offered — it would reorder nobody");
+  assert.ok(fn(samePrice).includes("date"), "date is the server's own order and must always be offered");
+  const oneEvent = [EVENTS[0]];
+  assert.deepEqual(fn(oneEvent), ["date"], "a single event varies on nothing");
+});
+
+test("K-14 — sorting by date, name and price each orders the list and loses nobody", () => {
+  const { fn } = load("sortEvents", ["list", "key", "reverse"]);
+  for (const key of ["date", "name", "price"]) {
+    const out = fn(EVENTS, key);
+    assert.deepEqual([...out].map((e) => e.id).sort(), EVENTS.map((e) => e.id).sort(),
+      `sorting by ${key} dropped or duplicated an event`);
+    assert.notEqual(out, EVENTS, `sorting by ${key} mutated the caller's array`);
+  }
+  assert.deepEqual(fn(EVENTS, "name").map((e) => e.name),
+    ["Autumn Open", "Beach Bash", "Monday League", "Spring Slam"], "name did not sort alphabetically");
+  assert.deepEqual(fn(EVENTS, "date").map((e) => e.id), [2, 1, 3, 4],
+    "date did not sort soonest-first with the dateless event last");
+});
+
+test("K-14 — reverse inverts the COMPARISON, so a blank stays at the bottom both ways", () => {
+  // Imported judgement, not a re-decision: v0.125.0 put blanks last because a blank at the top of
+  // a list is the first thing read and the least useful thing to read, and K-13 kept that through
+  // reverse by negating the comparison rather than reversing the array. An event with no date is
+  // exactly that case here.
+  const { fn } = load("sortEvents", ["list", "key", "reverse"]);
+  const asc = fn(EVENTS, "date"), desc = fn(EVENTS, "date", true);
+  const dated = (l) => l.filter((e) => e.starts_at).map((e) => e.id);
+  assert.deepEqual(dated(desc), [...dated(asc)].reverse(), "reverse did not invert the dated events");
+  assert.equal(asc[asc.length - 1].starts_at, null, "ascending must end with the dateless event");
+  assert.equal(desc[desc.length - 1].starts_at, null,
+    "descending put the dateless event first — that is a reversed array, not a reversed comparison");
+});
+
+test("K-14 — the direction control says what it means for the key in hand", () => {
+  // K-13 shipped "Ascending/Descending" because half its keys were numbers and an alphabet would
+  // have been a lie on them. Here the three keys are a date, a name and a price, and each has its
+  // own natural words — "A–Z" on a price sort is the same lie in the other direction.
+  const { fn } = load("dirLabel", ["key", "reverse"]);
+  const seen = new Set();
+  for (const key of ["date", "name", "price"]) {
+    const a = fn(key, false), b = fn(key, true);
+    assert.ok(a && b, `${key} has no direction wording`);
+    assert.notEqual(a, b, `${key} reads the same in both directions — the control cannot say which is on`);
+    seen.add(a);
+  }
+  assert.equal(seen.size, 3, `the three keys share direction wording: ${[...seen].join(" / ")}`);
+  assert.ok(!/A.Z/i.test(fn("price", false)), "the price direction is worded as an alphabet");
+  assert.ok(!/A.Z/i.test(fn("date", false)), "the date direction is worded as an alphabet");
+});
+
+/* ══════════════ 5. the filter reaches both views, and the org control is honest ══════════════ */
+
+test("K-14 — the type filter narrows the data BOTH views draw from, not just the list", () => {
+  // The calendar is the same events in a grid. A filter that only applied to the list would leave
+  // a director filtering to Leagues and still seeing tournaments in Month view.
+  const render = functionBodyAfter(blankComments(SJS), "function render");
+  assert.ok(render, "render() is gone or is no longer a plain function declaration");
+  const listAt = render.indexOf('mode === "list"');
+  const filterAt = render.indexOf("typeFilter");
+  assert.ok(filterAt >= 0, "render() never consults the type filter");
+  assert.ok(filterAt < listAt,
+    "the type filter is applied inside the list branch — Month view would ignore it");
+});
+
+test("K-14 — the org filter hides when there is nothing to choose between", () => {
+  const js = blankComments(SJS);
+  const body = functionBodyAfter(js, "async function load");
+  assert.ok(body, "load() is gone or is no longer a plain async function declaration");
+  assert.match(body, /seen\.size > 1/, "the >1 org test is gone — it is what decides whether the control means anything");
+  assert.match(body, /orgSel\.hidden|orgWrap\.hidden/,
+    "the org filter is never hidden — with one org it renders 'All orgs' and does nothing, which is live today");
+});
+
+/* ══════════════ 6. negative controls — each mutates the REAL source ══════════════ */
+
+test("K-14 NC — neutralising the comparator stops the reordering, so the sort tests can tell", () => {
+  const { body } = load("sortEvents", ["list", "key", "reverse"]);
+  const broken = body.replace("return reverse ? -c : c;", "return 0;");
+  assert.notEqual(broken, body, "mutation did not land — the comparator's return was not found");
+  const fn = new Function("list", "key", "reverse", pickSource() + broken.slice(1, -1));
+  // Every blank FILLED rather than the blank rows dropped: the `!av`/`!bv` branches return 1/-1
+  // before the mutated line and would reorder the list on their own, so a fixture that still
+  // contained a blank would let this NC pass against a comparator that does nothing. Filtering
+  // instead of filling left only two rows, which is how that was noticed.
+  const noBlanks = EVENTS.map((e) => ({ ...e, starts_at: e.starts_at || "2026-11-01 10:00", price_cents: e.price_cents == null ? 9999 : e.price_cents }));
+  assert.equal(noBlanks.length, EVENTS.length, "filling the blanks lost a row");
+  assert.ok(noBlanks.every((e) => e.starts_at && e.price_cents != null), "a blank survived — the branches above would reorder");
+  assert.notDeepEqual(load("sortEvents", ["list", "key", "reverse"]).fn(noBlanks, "name").map((e) => e.id),
+    noBlanks.map((e) => e.id), "the fixture is already in name order — the intact comparator does not reorder it either");
+  assert.deepEqual(fn(noBlanks, "name").map((e) => e.id), noBlanks.map((e) => e.id),
+    "a comparator returning 0 still reordered — the ordering assertions are not reading this function");
+});
+
+test("K-14 NC — neutralising the bucket count offers every sort key, so availability is real", () => {
+  const { body } = load("availableSortKeys", ["list"]);
+  const broken = body.replace("> 1", "> 0");
+  assert.notEqual(broken, body, "mutation did not land — the bucket comparison was not found");
+  const fn = new Function("list", pickSource() + broken.slice(1, -1));
+  const samePrice = EVENTS.map((e) => ({ ...e, price_cents: 1000 }));
+  assert.ok(!load("availableSortKeys", ["list"]).fn(samePrice).includes("price"), "the real function already offers it");
+  assert.ok(fn(samePrice).includes("price"),
+    "with the count neutralised Price is STILL hidden — something other than the bucket test is hiding it");
+});
+
+test("K-14 NC — a type present in the data but absent from the tab row IS caught", () => {
+  const { fn } = load("availableTypes", ["list"]);
+  const withTraining = EVENTS.concat([{ id: 9, name: "Skills", type: "training", starts_at: "2026-09-09 18:00", price_cents: 0, org_id: 1 }]);
+  assert.notDeepEqual(withTraining, EVENTS, "the mutation did not land — this NC would prove nothing");
+  assert.ok(!fn(EVENTS).includes("training"), "training is offered before it exists in the data");
+  assert.ok(fn(withTraining).includes("training"),
+    "a type that IS in the loaded events is missing from the tab row — the row is not built from the data");
+});

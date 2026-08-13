@@ -31,8 +31,22 @@ const BRACKETS_JS = readFileSync(new URL("assets/admin-brackets.js", WEB), "utf8
 
 /* ---------- the checker: hidden-attribute elements vs author display rules ---------- */
 
+/* v0.145.0 — CSS COMMENTS ARE STRIPPED NOW, AND THIS GUARD USED TO SCORE THEM AS RULES.
+   `classHasAuthorDisplay` looks for `.cls` then `{` then `display:`, and its `[^{}]*` window
+   happily spans from a class name MENTIONED IN A COMMENT to the next real rule's display. K-14
+   added a comment reading "Press feedback comes from .btn/.tab, which already carry it" above a
+   `display: flex` rule, and this guard reported `.btn` as defeating its own hidden attribute —
+   a false positive whose only other cure would have been rewording prose to appease a broken
+   check. Standards guard-discipline instance 3, which tokens.test.mjs already strips for.
+
+   Only block comments are blanked, never `//`: a style block can carry `url(https://...)`, and
+   blanking from `//` to end of line would delete real declarations and turn this guard into a
+   source of false CLEANS — the worst failure a guard can have. NC-COMMENT proves it both ways. */
+const stripCssComments = (s) => s.replace(/\/\*[\s\S]*?\*\//g, " ");
+
 function styleText(doc) {
-  return [...doc.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)].map((m) => m[1]).join("\n");
+  return stripCssComments(
+    [...doc.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)].map((m) => m[1]).join("\n"));
 }
 
 /** Classes of elements that carry the `hidden` attribute in markup. */
@@ -128,4 +142,21 @@ test("all three ways out of the chooser stay wired: Close button, backdrop click
   assert.notEqual(gutted, js, "mutation did not land");
   assert.doesNotMatch(gutted, /\$\("bPickClose"\)\.addEventListener\("click",\s*closeChooser\)/,
     "the mutated source still matches — the assertion is not reading what it claims to read");
+});
+
+test("NC-COMMENT — a class named only in a CSS comment is not scored as a rule, but a real one is", () => {
+  // v0.145.0. The false positive that produced the stripper: prose above a display rule. Both
+  // halves matter — a stripper that ate real declarations would make this guard report clean.
+  const commented = `<style>
+    /* Press feedback comes from .btn/.tab, which already carry it. */
+    .sched-controls { display: flex; }
+    .sched-controls[hidden] { display: none; }
+  </style>`;
+  assert.deepEqual(hiddenDisplayViolations(
+    `<div class="btn" hidden></div><div class="sched-controls" hidden></div>` + commented), [],
+    "a class mentioned only in a comment was scored as an author display rule");
+
+  const live = `<style>.btn { display: inline-flex; }</style><button class="btn" hidden></button>`;
+  assert.deepEqual(hiddenDisplayViolations(live), ["btn"],
+    "the stripper ate a REAL rule — this guard would now report clean on the defect it exists for");
 });

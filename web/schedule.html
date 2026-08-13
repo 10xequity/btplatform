@@ -7,9 +7,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Schedule — Boomtown Athletics</title>
   <script>/* Pre-paint theme (v0.53.0): saved bt_theme, else system preference, applied before the first stylesheet — the member header paints the right theme on frame one (admin pre-paint v2 precedent, theme half only; member pages carry no rail-collapse state). site-nav.js v2.12 owns the toggle listener. */(function(){try{var t=(window.localStorage&&localStorage.getItem("bt_theme"))||(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.dataset.theme=t;}catch(e){}})();</script>
-  <link rel="stylesheet" href="assets/tokens.css?v=0.144.0" />
-  <link rel="stylesheet" href="assets/app.css?v=0.144.0" />
-  <link rel="stylesheet" href="assets/admin.css?v=0.144.0" />
+  <link rel="stylesheet" href="assets/tokens.css?v=0.145.0" />
+  <link rel="stylesheet" href="assets/app.css?v=0.145.0" />
+  <link rel="stylesheet" href="assets/admin.css?v=0.145.0" />
   <style>
     .sched-wrap { max-width: 960px; margin: 0 auto; padding: 16px; }
     .sched-ev { display: flex; gap: 14px; padding: 14px; border: 1px solid var(--border);
@@ -23,6 +23,27 @@
     .sched-name { font-weight: 600; font-size: 16px; }
     .sched-meta { font-size: 13.5px; color: var(--text-muted); margin-top: 2px; }
     .sched-cta { align-self: center; }
+    /* K-14: the type tabs sit on their own row under the head, where a tournament page puts them,
+       so the head does not have to hold four controls on a phone. Nothing here animates: a
+       director filtering a list uses these repeatedly, and motion on a repeated action reads as
+       lag. Press feedback comes from .btn/.tab, which already carry it. */
+    .sched-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+    .sched-controls .tabs { border: 0; margin: 0; flex-wrap: wrap; }
+    /* AUTHOR DISPLAY BEATS THE UA'S [hidden] — v0.119.0's unclosable-overlay lesson, and
+       hidden_overlay.test.mjs caught both of these on arrival. Every element here that is hidden
+       from JS carries a display rule, so every one needs its own override. #schedTypeTabs is the
+       one that guard could NOT have caught: it takes display:flex from .tabs in admin.css, which
+       is not this page's inline CSS, and it ships without the attribute in markup. */
+    .sched-controls[hidden] { display: none; }
+    #schedTypeTabs[hidden] { display: none; }
+    .sched-sortlab { font-size: 11px; font-weight: 400; color: var(--text-muted);
+      text-transform: uppercase; letter-spacing: .04em; }
+    /* 44px targets (standards §5) — .tab already has one; the select and the toggle need saying. */
+    #schedSort { font: inherit; font-size: 13px; padding: 6px 8px; min-height: 44px;
+      background: var(--surface-2); color: var(--text); border: 1px solid var(--border);
+      border-radius: var(--radius-control, 8px); }
+    .sched-dir { min-height: 44px; }
+    .sched-dir[aria-pressed="true"] { background: var(--surface-2); color: var(--text); }
     body.embed .header { display: none; }
     body.embed .sched-wrap { padding: 4px; }
   </style>
@@ -38,7 +59,7 @@
 </head>
 <body>
     <header class="header chrome-glass no-print">
-    <a class="wordmark" href="index.html" style="text-decoration:none;color:inherit"><img class="brand-logo" src="assets/logo-boom-icon-512.png?v=0.144.0" alt="" width="22" height="22" />Boomtown <span>Athletics</span></a>
+    <a class="wordmark" href="index.html" style="text-decoration:none;color:inherit"><img class="brand-logo" src="assets/logo-boom-icon-512.png?v=0.145.0" alt="" width="22" height="22" />Boomtown <span>Athletics</span></a>
     <div class="spacer"></div>
     <a id="btHdrAdmin" class="btn ghost hdr-admin" href="admin.html" aria-label="Switch to admin view" hidden>Admin</a>
     <a id="btHdrMail" class="btn ghost hdr-mail" href="member-inbox.html" aria-label="Messages">✉</a>
@@ -50,17 +71,32 @@
     <div class="page-head">
       <h1 id="schedTitle" style="font-size:20px;margin:0">Schedule</h1>
       <div class="spacer"></div>
-      <select id="orgFilter" aria-label="Filter by organization"><option value="">All orgs</option></select>
-      <div class="tabs" style="border:0;margin:0">
+      <select id="orgFilter" aria-label="Filter by organization" hidden><option value="">All orgs</option></select>
+      <!-- K-14 (v0.145.0): this row is the VIEW switcher and it now carries an id. Its listener
+           used to select `.tab` across the whole document, so the type tabs below would have
+           joined it and clicking one would have silently flipped the page to Month view. -->
+      <div class="tabs" id="schedViewTabs" style="border:0;margin:0">
         <button class="tab active" data-mode="list">List</button>
         <button class="tab" data-mode="month">Month</button>
       </div>
     </div>
+    <!-- K-14 (§-0 B21): the owner's "tabs at the top to sort, similar to the tournament page in
+         Boomtownvb.com". The tabs are BUILT FROM THE LOADED EVENTS by availableTypes() — the
+         schema allows five event types and only two have ever been published, so a static row
+         would ship three tabs that are permanently empty. The row, the sort and the direction
+         each hide when they could not change what is on screen. -->
+    <div class="sched-controls" id="schedControls" hidden>
+      <div class="tabs" id="schedTypeTabs" role="tablist" aria-label="Filter events by type"></div>
+      <div class="spacer"></div>
+      <label class="sched-sortlab" for="schedSort">Sort</label>
+      <select id="schedSort" aria-label="Sort events" hidden></select>
+      <button type="button" class="btn ghost sched-dir" id="schedDir" aria-pressed="false" hidden>Soonest first</button>
+    </div>
     <div id="schedBody"><div class="empty">Loading schedule…</div></div>
   </main>
 
-  <script src="assets/site-nav.js?v=0.144.0" defer></script>
-  <script src="assets/config.js?v=0.144.0"></script>
-  <script src="assets/schedule.js?v=0.144.0"></script>
+  <script src="assets/site-nav.js?v=0.145.0" defer></script>
+  <script src="assets/config.js?v=0.145.0"></script>
+  <script src="assets/schedule.js?v=0.145.0"></script>
 </body>
 </html>
