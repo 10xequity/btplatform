@@ -75,7 +75,20 @@ export function asEventId(v) {
   return Number.isInteger(n) && n > 0 ? n : 0;
 }
 
-/** filter: { tags:[], played:'any'|'league'|'tournament'|'none'|null, since:'YYYY-MM-DD'|null, event:<id>|null }
+/** SG-4: the age band, validated wherever it is read. A stored filter_json can predate
+ *  cleanFilter or be hand-edited, so buildSegmentWhere validates AGAIN — cleanFilter is not the
+ *  only gate. Integers 0–120 only; a contradictory band (min > max) yields null, matching
+ *  cleanFilter's drop-both rule. */
+function ageBand(f) {
+  const min = Number.isInteger(f.age_min) && f.age_min >= 0 && f.age_min <= 120 ? f.age_min : null;
+  const max = Number.isInteger(f.age_max) && f.age_max >= 0 && f.age_max <= 120 ? f.age_max : null;
+  if (min === null && max === null) return null;
+  if (min !== null && max !== null && min > max) return null;
+  return { min, max };
+}
+
+/** filter: { tags:[], played:'any'|'league'|'tournament'|'none'|null, since:'YYYY-MM-DD'|null, event:<id>|null,
+ *            age_min:<int>|null, age_max:<int>|null }
  *  Returns { where, binds } to append after: org_id=?1 AND deleted_at IS NULL AND unsubscribed=0 AND email present.
  *  `event` narrows to the people who registered for ONE event — `played` only knows the event TYPE. */
 export function buildSegmentWhere(filter) {
@@ -114,6 +127,20 @@ export function buildSegmentWhere(filter) {
   if (f.since && /^\d{4}-\d{2}-\d{2}$/.test(f.since)) {
     parts.push("c.created_at >= ?");
     binds.push(f.since);
+  }
+  const age = ageBand(f);
+  if (age) {
+    // SG-4 (§-1o): "announce/invite a specific demographic selection — her age group: 40+."
+    // ONE profile EXISTS carries the whole band, because a single profile row must satisfy both
+    // ends. Age ≥ N is dob on-or-before now−N years; age ≤ M is dob strictly after now−(M+1)
+    // years (a person is M until the day they turn M+1). The offsets are COMPUTED from validated
+    // integers and BOUND — nothing from a stored filter is ever interpolated into SQL. mp.org_id
+    // reuses ?1 (the org bind BASE_WHERE carries), the same no-new-bind idiom as `event` above.
+    const conds = ["mp.org_id = ?1", "mp.contact_id = c.id", "mp.deleted_at IS NULL",
+                   "mp.date_of_birth IS NOT NULL", "TRIM(mp.date_of_birth) <> ''"];
+    if (age.min !== null) { conds.push("date(mp.date_of_birth) <= date('now', ?)"); binds.push(`-${age.min} years`); }
+    if (age.max !== null) { conds.push("date(mp.date_of_birth) > date('now', ?)"); binds.push(`-${age.max + 1} years`); }
+    parts.push(`EXISTS (SELECT 1 FROM member_profiles mp WHERE ${conds.join(" AND ")})`);
   }
   return { where: parts.length ? " AND " + parts.join(" AND ") : "", binds };
 }
@@ -261,11 +288,32 @@ const BASE_WHERE =
 const SMS_BASE_WHERE =
   "c.org_id=?1 AND c.deleted_at IS NULL AND c.sms_opt_in=1 AND c.phone IS NOT NULL AND TRIM(c.phone)<>''";
 
-async function segmentCount(env, orgId, filter) {
+/**
+ * SG-4: the ONE reach judgement — who a segment reaches, and who it CANNOT JUDGE. Renamed from
+ * the old single-number counter so every caller had to be visited (a rename is a search).
+ * `no_birthdate` counts
+ * contacts that pass the filter's OTHER axes but carry no usable birthdate — the axis-scoped
+ * number, because "of the people this segment otherwise reaches, how many can't the age filter
+ * see" is the actionable honesty (live D1 2026-08-14: 49 contacts, 0 birthdates — today the
+ * honesty line IS the feature, or the owner reads a small send as a broken one). Zero when the
+ * filter has no age axis: an honesty line on every segment would train the operator to ignore it.
+ */
+export async function segmentReach(env, orgId, filter) {
   const { where, binds } = buildSegmentWhere(filter);
   const row = await env.DB.prepare(`SELECT COUNT(*) AS n FROM contacts c WHERE ${BASE_WHERE}${where}`)
     .bind(orgId, ...binds).first();
-  return row.n || 0;
+  const count = row.n || 0;
+  const f = filter || {};
+  if (!Number.isInteger(f.age_min) && !Number.isInteger(f.age_max)) return { count, no_birthdate: 0 };
+  const rest = { ...f };
+  delete rest.age_min; delete rest.age_max;
+  const { where: w2, binds: b2 } = buildSegmentWhere(rest);
+  const blind = await env.DB.prepare(
+    `SELECT COUNT(*) AS n FROM contacts c WHERE ${BASE_WHERE}${w2}
+       AND NOT EXISTS (SELECT 1 FROM member_profiles mp WHERE mp.org_id = ?1 AND mp.contact_id = c.id
+                         AND mp.deleted_at IS NULL AND mp.date_of_birth IS NOT NULL AND TRIM(mp.date_of_birth) <> '')`
+  ).bind(orgId, ...b2).first();
+  return { count, no_birthdate: blind.n || 0 };
 }
 
 async function listSegments(env, ctx) {
@@ -276,7 +324,7 @@ async function listSegments(env, ctx) {
   for (const s of rows) {
     let filter = {};
     try { filter = JSON.parse(s.filter_json || "{}"); } catch {}
-    out.push({ ...s, filter, count: await segmentCount(env, ctx.orgId, filter) });
+    out.push({ ...s, filter, ...(await segmentReach(env, ctx.orgId, filter)) });
   }
   return H.json({ segments: out });
 }
@@ -289,6 +337,17 @@ export function cleanFilter(raw) {
   const eventId = asEventId(f.event);
   if (eventId) out.event = eventId;
   if (typeof f.since === "string" && /^\d{4}-\d{2}-\d{2}$/.test(f.since)) out.since = f.since;
+  // SG-4: the age band — integers 0–120 only. A contradictory band (min > max) drops BOTH ends:
+  // keeping one would silently invert the operator's intent, and this function's contract is to
+  // drop what it cannot honour, never to guess.
+  const min = Number(f.age_min), max = Number(f.age_max);
+  const okMin = Number.isInteger(min) && min >= 0 && min <= 120;
+  const okMax = Number.isInteger(max) && max >= 0 && max <= 120;
+  if (okMin && okMax && min > max) { /* contradictory — drop both */ }
+  else {
+    if (okMin) out.age_min = min;
+    if (okMax) out.age_max = max;
+  }
   return out;
 }
 
@@ -300,7 +359,7 @@ async function createSegment(request, env, ctx) {
     "INSERT INTO segments (org_id, name, filter_json) VALUES (?1, ?2, ?3)"
   ).bind(ctx.orgId, String(name).trim(), JSON.stringify(clean)).run();
   await H.audit(env, ctx, "marketing.segment_create", "segments", ins.meta.last_row_id, { name });
-  return H.json({ ok: true, id: ins.meta.last_row_id, count: await segmentCount(env, ctx.orgId, clean) });
+  return H.json({ ok: true, id: ins.meta.last_row_id, ...(await segmentReach(env, ctx.orgId, clean)) });
 }
 
 async function updateSegment(request, env, ctx, id) {
@@ -332,11 +391,11 @@ async function previewSegment(env, ctx, id) {
   let filter = {};
   try { filter = JSON.parse(seg.filter_json || "{}"); } catch {}
   const { where, binds } = buildSegmentWhere(filter);
-  const count = await segmentCount(env, ctx.orgId, filter);
+  const reach = await segmentReach(env, ctx.orgId, filter);
   const sample = (await env.DB.prepare(
     `SELECT c.id, c.full_name, c.email FROM contacts c WHERE ${BASE_WHERE}${where} ORDER BY c.id DESC LIMIT 10`
   ).bind(ctx.orgId, ...binds).all()).results;
-  return H.json({ count, sample });
+  return H.json({ ...reach, sample });
 }
 
 /* ---------------- campaigns ---------------- */

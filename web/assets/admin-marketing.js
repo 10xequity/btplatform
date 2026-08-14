@@ -19,7 +19,7 @@
   function fillWidgetSnippet() {
     const el = document.getElementById("widgetSnippet");
     if (!el) return;
-    const src = new URL("assets/signup-widget.js?v=0.152.0", location.href).href;
+    const src = new URL("assets/signup-widget.js?v=0.153.0", location.href).href;
     el.textContent = '<script src="' + src + '" data-org="boomtown" defer><' + '/script>';
   }
   fillWidgetSnippet();
@@ -102,6 +102,7 @@
         <div class="grow"><div class="k">${esc(s.name)}</div>
           <div class="v">${esc(describeFilter(s.filter))}</div></div>
         <span class="status-pill"><b>${s.count}</b> people</span>
+        ${s.no_birthdate > 0 ? `<span class="v">${s.no_birthdate} more have no birthdate on file — the age filter can't see them</span>` : ""}
         <button class="btn ghost" data-act="preview">Preview</button>
         <button class="btn ghost" data-act="edit">Edit</button>
         <button class="btn ghost" data-act="del">Delete</button>
@@ -124,6 +125,11 @@
     if (f.played === "none") bits.push("never played yet");
     if (f.event) bits.push(`registered for ${eventName(f.event)}`);
     if (f.since) bits.push(`joined since ${f.since}`);
+    // SG-4: the age band in words. Only members with a birthdate on file can match one.
+    const hasMin = Number.isInteger(f.age_min), hasMax = Number.isInteger(f.age_max);
+    if (hasMin && hasMax) bits.push(`aged ${f.age_min}–${f.age_max}`);
+    else if (hasMin) bits.push(`aged ${f.age_min}+`);
+    else if (hasMax) bits.push(`aged ${f.age_max} and under`);
     return bits.length ? bits.join(" · ") : "Everyone reachable";
   }
 
@@ -154,6 +160,11 @@
         </select>
         <label for="mSegSince">Joined on or after (optional)</label>
         <input id="mSegSince" type="date" value="${f.since || ""}" />
+        <label for="mSegAgeMin">Age at least (optional)</label>
+        <input id="mSegAgeMin" type="number" min="0" max="120" value="${Number.isInteger(f.age_min) ? f.age_min : ""}" placeholder="40" />
+        <label for="mSegAgeMax">Age at most (optional)</label>
+        <input id="mSegAgeMax" type="number" min="0" max="120" value="${Number.isInteger(f.age_max) ? f.age_max : ""}" />
+        <p class="mkt-hint">Ages come from birthdates on member profiles. Anyone without one can't be seen by an age filter — the counts will say how many that is.</p>
         <div class="mkt-actions">
           <button class="btn" id="mSegSave">${seg ? "Save changes" : "Create segment"}</button>
           <button class="btn ghost" id="mSegCancel">Cancel</button>
@@ -170,6 +181,8 @@
           /* The server coerces this string; sending it raw is deliberate and asEventId is its guard. */
           event: $("mSegEvent").value || undefined,
           since: $("mSegSince").value || undefined,
+          age_min: $("mSegAgeMin").value === "" ? undefined : Number($("mSegAgeMin").value),
+          age_max: $("mSegAgeMax").value === "" ? undefined : Number($("mSegAgeMax").value),
         },
       });
       const r = seg
@@ -196,6 +209,7 @@
     openModal(`
       <h2 style="margin-top:0">Who's in this segment</h2>
       <p><b>${r.data.count}</b> reachable people. First ${r.data.sample.length}:</p>
+      ${r.data.no_birthdate > 0 ? `<p class="mkt-hint">${r.data.no_birthdate} more contact${r.data.no_birthdate === 1 ? " has" : "s have"} no birthdate on file — the age filter can't see them. They would otherwise be in this segment.</p>` : ""}
       ${r.data.sample.map((c) => `<div class="mkt-row"><div class="grow"><div class="k">${esc(c.full_name || "(no name)")}</div><div class="v">${esc(c.email)}</div></div></div>`).join("") || "<p>No one matches yet.</p>"}
       <div class="mkt-actions"><button class="btn ghost" id="mPrevClose">Close</button></div>`);
     $("mPrevClose").onclick = closeModal;
@@ -261,6 +275,7 @@
         <select id="mCSeg"><option value="">Choose…</option>
           ${SEGMENTS.map((s) => `<option value="${s.id}" ${c.segment_id === s.id ? "selected" : ""}>${esc(s.name)} (${s.count})</option>`).join("")}
         </select>
+        <p class="mkt-hint" id="mCSegNote" role="status"></p>
         <div id="mCBodyEmail">
         <label for="mCBody">Email body (HTML or plain text)</label>
         <textarea id="mCBody" placeholder="Hi {{first_name}}, ...">${esc(c.html_body)}</textarea>
@@ -284,6 +299,19 @@
         <div id="mCPreview" hidden class="preview-box"></div>
       </div>`);
     $("mCCancel").onclick = closeModal;
+
+    /* SG-4 (§-1o), the owner's requirement in his own words: "the send screen must SAY how many
+       of the org's contacts are invisible to the filter." Live coverage is sparse (49 contacts,
+       0 birthdates at build time), so an age-filtered send that reaches almost nobody must
+       explain itself here, at the moment of sending — or a small send reads as a broken one. */
+    const paintSegNote = () => {
+      const s = SEGMENTS.find((x) => x.id === Number($("mCSeg").value));
+      $("mCSegNote").textContent = s && s.no_birthdate > 0
+        ? `${s.no_birthdate} more contact${s.no_birthdate === 1 ? " has" : "s have"} no birthdate on file — the age filter can't see them, so they won't get this.`
+        : "";
+    };
+    paintSegNote();
+    $("mCSeg").addEventListener("change", paintSegNote);
 
     const applyChannel = () => {
       const sms = $("mCChan").value === "sms";
