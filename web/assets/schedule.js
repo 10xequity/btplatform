@@ -1,5 +1,11 @@
 /* Boomtown Platform — Public Schedule
-   Version: v0.4.0 · Date: 2026-07-22
+   Version: v0.5.0 · Date: 2026-08-14 · Ships in: v0.155.0
+   v0.5.0 (§-1o SG-6): THE MONTH VIEW BECOMES A PLACE. ?mode=month opens the calendar directly
+   — the grid itself had existed here all along (measured iteration 83: the §-1o "does not
+   exist" line was wrong), but no URL reached it, so no announcement, admin screen or bookmark
+   could land anyone on it. The tab toggle keeps the URL honest via replaceState, and any value
+   other than exactly "month" is the List default, because render()'s else-branch would
+   otherwise treat a typo as the calendar.
    Reads GET /api/schedule (no auth). What's visible (names/counts) is decided by the
    server-side view profile, never by this page. ?embed=1 → chromeless, posts its height
    to the parent so the widget iframe can auto-size. */
@@ -22,7 +28,15 @@
   const signup = e => BT_SIGNUP(e);
   const TZ = "America/Denver";
 
-  let events = [], mode = "list", org = "";
+  /** SG-6 (§-1o): the one place a URL value becomes a view mode. A WHITELIST, not a passthrough
+      — render() branches `if (mode === "list") … else <calendar>`, so any unrecognised value
+      that slipped through here would silently render the calendar and a typo would read as a
+      layout bug forever. Exactly "month" opens the calendar; everything else is the list. */
+  function modeFromUrl(v) {
+    return v === "month" ? "month" : "list";
+  }
+
+  let events = [], mode = modeFromUrl(params.get("mode")), org = "";
   let typeFilter = "", sortKey = "date", sortRev = false;
   let calCursor = new Date(); calCursor.setDate(1);
 
@@ -145,11 +159,27 @@
     dir.textContent = dirLabel(sortKey, sortRev);
   }
 
+  /** SG-6: keep the address bar honest about which view is on screen, so the calendar can be
+      copied, bookmarked and landed on. replaceState, never pushState — a tab toggle is not a
+      navigation, and the Back button must not walk a tour of every tab ever clicked. "list"
+      is kept OUT of the URL: the default state should not decorate every copied link. */
+  function syncModeUrl() {
+    const u = new URL(location);
+    if (mode === "month") u.searchParams.set("mode", "month");
+    else u.searchParams.delete("mode");
+    history.replaceState(null, "", u);
+  }
+
   document.querySelectorAll("#schedViewTabs .tab").forEach(t => t.addEventListener("click", () => {
     mode = t.dataset.mode;
+    syncModeUrl();
     document.querySelectorAll("#schedViewTabs .tab").forEach(x => x.classList.toggle("active", x === t));
     render();
   }));
+  // SG-6: the markup hardcodes List as active; the URL may have decided otherwise before first
+  // paint. Sync once at wiring time so a ?mode=month deep link is not a calendar under a lit
+  // List tab.
+  document.querySelectorAll("#schedViewTabs .tab").forEach(x => x.classList.toggle("active", x.dataset.mode === mode));
   // Delegated: the type tabs are rebuilt on every load, so a handler per button would stack.
   document.getElementById("schedTypeTabs").addEventListener("click", e => {
     const t = e.target.closest(".tab");

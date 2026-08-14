@@ -281,3 +281,96 @@ test("K-14 NC — a type present in the data but absent from the tab row IS caug
   assert.ok(fn(withTraining).includes("training"),
     "a type that IS in the loaded events is missing from the tab row — the row is not built from the data");
 });
+
+/* ══════════════ SG-6 (§-1o): the Month view becomes a PLACE ══════════════
+   Measured 2026-08-14 (iteration 83): the "visual calendar page of upcoming events" §-1o said
+   did not exist HAS existed on this page since before the 2026-08-10 brief — a full month grid
+   with navigation, fed by the public view profile whose live type_filter is NULL, so every
+   published type (drop-ins included) already lands on it. What was genuinely missing: a URL.
+   `mode` was a client-side toggle, so no announcement, no admin screen and no bookmark could
+   open the calendar directly. SG-6 ships the landing: `?mode=month` opens the Month view, the
+   tab toggle keeps the URL honest (replaceState — the back button must not walk a tab tour),
+   and ANY other value is the List default — load-bearing, because render()'s branch is
+   `if (mode === "list") … else <calendar>`, so an unvalidated `?mode=banana` would silently
+   render the calendar and a typo would look like a layout bug. */
+
+test("SG-6 — modeFromUrl whitelists: exactly 'month' opens the calendar, anything else is the list", () => {
+  const { fn } = load("modeFromUrl", ["v"]);
+  assert.equal(fn("month"), "month");
+  for (const junk of ["list", "", null, undefined, "MONTH", "banana", "month ", "0"]) {
+    assert.equal(fn(junk), "list",
+      `modeFromUrl(${JSON.stringify(junk)}) is not 'list' — render()'s else-branch would show the calendar for a typo`);
+  }
+});
+
+test("SG-6 — the page's mode is INITIALISED from the URL, through the whitelist", () => {
+  const code = blankComments(SJS);
+  assert.match(code, /mode = modeFromUrl\(params\.get\("mode"\)\)/,
+    "mode is no longer initialised from ?mode= via modeFromUrl — the calendar stopped being reachable by URL, or the whitelist was bypassed");
+});
+
+test("SG-6 — syncModeUrl writes month INTO the URL and takes it back OUT, via replaceState", () => {
+  const { body } = load("syncModeUrl", ["mode", "location", "history"]);
+  const fn = new Function("mode", "location", "history", body.slice(1, -1));
+  const spy = () => ({ url: null, replaceState(_s, _t, u) { this.url = String(u); } });
+  const h1 = spy();
+  fn("month", "https://x.test/web/schedule.html?view=public", h1);
+  assert.ok(h1.url, "syncModeUrl never called history.replaceState");
+  assert.equal(new URL(h1.url).searchParams.get("mode"), "month", "month mode did not reach the URL");
+  assert.equal(new URL(h1.url).searchParams.get("view"), "public", "the view slug was dropped while writing mode — other params must survive");
+  const h2 = spy();
+  fn("list", "https://x.test/web/schedule.html?mode=month&view=public", h2);
+  assert.ok(h2.url, "syncModeUrl never called history.replaceState on the way back");
+  assert.equal(new URL(h2.url).searchParams.get("mode"), null,
+    "switching back to List left mode=month in the URL — a copied link would lie about what it shows");
+  assert.ok(!body.includes("pushState"),
+    "syncModeUrl uses pushState — every tab click becomes a history entry and Back walks a tab tour");
+});
+
+test("SG-6 — the view-tab click handler both sets the mode AND syncs the URL (containment, not adjacency)", () => {
+  const code = blankComments(SJS);
+  const anchor = 'document.querySelectorAll("#schedViewTabs .tab").forEach(t => t.addEventListener("click"';
+  assert.equal(code.split(anchor).length - 1, 1, "the view-tab wiring anchor is not unique — this containment check would read the wrong span");
+  const at = code.indexOf(anchor);
+  // Span the forEach ARGUMENT LIST (which contains the whole click handler), not the first
+  // paren after the anchor — that one belongs to querySelectorAll and closes before the
+  // handler even starts. This walker's first draft did exactly that and the check reddened on
+  // the real source before certifying anything.
+  const fEach = code.indexOf(".forEach(", at);
+  assert.ok(fEach > at && fEach < at + anchor.length, "the anchor no longer contains .forEach( — re-derive this span");
+  let depth = 0, end = -1;
+  for (let k = fEach + ".forEach".length; k < code.length; k++) {
+    if (code[k] === "(") depth++;
+    else if (code[k] === ")") { depth--; if (depth === 0) { end = k; break; } }
+  }
+  assert.ok(end > at, "could not span the view-tab wiring statement");
+  const span = code.slice(at, end);
+  assert.ok(span.includes("mode = t.dataset.mode"), "the handler no longer sets the mode — the span is reading the wrong statement");
+  assert.ok(span.includes("syncModeUrl()"),
+    "the view-tab handler does not sync the URL — the address bar lies the moment someone clicks Month");
+});
+
+test("SG-6 — first paint lights the tab the URL chose, not the one the markup hardcodes", () => {
+  const code = blankComments(SJS);
+  assert.match(code, /x\.classList\.toggle\("active", x\.dataset\.mode === mode\)/,
+    "no init sync of the view tabs — a ?mode=month deep link renders the calendar under a lit List tab");
+  assert.match(SHTML, /class="tab active" data-mode="list"/,
+    "positive control: the markup no longer hardcodes List active — if that changed, re-judge whether the init sync is still needed");
+});
+
+test("SG-6 NC — renaming the sync call is CAUGHT, so the containment check can fail", () => {
+  const mutated = blankComments(SJS).split("syncModeUrl()").join("syncModeUrlZZ()");
+  assert.notEqual(mutated, blankComments(SJS), "the mutation did not land — the source never calls syncModeUrl");
+  const anchor = 'document.querySelectorAll("#schedViewTabs .tab").forEach(t => t.addEventListener("click"';
+  const at = mutated.indexOf(anchor);
+  const fEach = mutated.indexOf(".forEach(", at);
+  let depth = 0, end = -1;
+  for (let k = fEach + ".forEach".length; k < mutated.length; k++) {
+    if (mutated[k] === "(") depth++;
+    else if (mutated[k] === ")") { depth--; if (depth === 0) { end = k; break; } }
+  }
+  assert.ok(mutated.slice(at, end).includes("mode = t.dataset.mode"),
+    "positive control: the mutated span lost the handler itself — this NC is reading the wrong bytes");
+  assert.ok(!mutated.slice(at, end).includes("syncModeUrl()"),
+    "the mutated span still matches — the containment check above cannot fail and proves nothing");
+});
