@@ -92,75 +92,133 @@ test("regenerating without replace is refused, and says how many exist", async (
   env.DB.close();
 });
 
-/* ============================ the move, and the swap ============================ */
+/* ============================ hold until Save (T2-1a, §-0 B11) ============================
+   The owner's settled shape: hold changes until Save, revert back and forward, confirm to save —
+   the pool board is the working precedent ("nothing saves until you say so"). v0.65.0's
+   save-every-move design and its /schedule/move route are SUPERSEDED; the tests that pinned them
+   are REWRITTEN here to their purposes — a reposition lands where it was sent, a swap never loses
+   a match, fairness is scored by the server's one set of rules — now enforced at /schedule/apply
+   (the one writer) and /schedule/preview (the no-write scorer). */
 
-test("moving to an EMPTY slot relocates the match", async () => {
+test("applying held positions relocates a match — and writes NOTHING it was not sent", async () => {
   const env = boot();
   const token = await staff(env);
   await call(env, "POST", "/api/admin/events/1/generate-schedule", { token, body: { courts: 2, rounds: 6 } });
   const first = env.DB.one("SELECT id FROM matches WHERE round=1 AND court=1");
-  const r = await call(env, "POST", "/api/admin/events/1/schedule/move", {
-    token, body: { match_id: first.id, round: 1, court: 3 },
+  const other = env.DB.one("SELECT id, round, court FROM matches WHERE round=2 AND court=2");
+  const r = await call(env, "POST", "/api/admin/events/1/schedule/apply", {
+    token, body: { positions: [{ match_id: first.id, round: 1, court: 3 }] },
   });
   assert.equal(r.status, 200, JSON.stringify(r.data));
-  assert.equal(r.data.swapped_with, null, "an empty slot is a move, not a swap");
+  assert.equal(r.data.changed, 1, "one held change was saved");
   const after = env.DB.one("SELECT round, court FROM matches WHERE id = ?1", first.id);
   assert.deepEqual([after.round, after.court], [1, 3]);
+  const untouched = env.DB.one("SELECT round, court FROM matches WHERE id = ?1", other.id);
+  assert.deepEqual([untouched.round, untouched.court], [other.round, other.court],
+    "a match outside the payload keeps its position");
   env.DB.close();
 });
 
-test("moving onto an OCCUPIED slot swaps — and never loses a match", async () => {
+test("an apply that EXCHANGES two matches keeps both — a save must never lose a match", async () => {
   const env = boot();
   const token = await staff(env);
   await call(env, "POST", "/api/admin/events/1/generate-schedule", { token, body: { courts: 2, rounds: 6 } });
   const before = env.DB.one("SELECT COUNT(*) AS n FROM matches WHERE deleted_at IS NULL").n;
 
-  const mover = env.DB.one("SELECT id FROM matches WHERE round=1 AND court=1");
-  const target = env.DB.one("SELECT id FROM matches WHERE round=4 AND court=2");
-
-  const r = await call(env, "POST", "/api/admin/events/1/schedule/move", {
-    token, body: { match_id: mover.id, round: 4, court: 2 },
+  const a = env.DB.one("SELECT id FROM matches WHERE round=1 AND court=1");
+  const b = env.DB.one("SELECT id FROM matches WHERE round=4 AND court=2");
+  const r = await call(env, "POST", "/api/admin/events/1/schedule/apply", {
+    token, body: { positions: [
+      { match_id: a.id, round: 4, court: 2 },
+      { match_id: b.id, round: 1, court: 1 },
+    ] },
   });
   assert.equal(r.status, 200, JSON.stringify(r.data));
-  assert.equal(r.data.swapped_with, target.id, "the occupant must be reported as swapped");
+  assert.equal(r.data.changed, 2);
 
-  const movedTo = env.DB.one("SELECT round, court FROM matches WHERE id = ?1", mover.id);
-  const pushedTo = env.DB.one("SELECT round, court FROM matches WHERE id = ?1", target.id);
-  assert.deepEqual([movedTo.round, movedTo.court], [4, 2]);
-  assert.deepEqual([pushedTo.round, pushedTo.court], [1, 1], "the occupant lands where the mover came from");
-
+  assert.deepEqual([env.DB.one("SELECT round FROM matches WHERE id=?1", a.id).round,
+                    env.DB.one("SELECT court FROM matches WHERE id=?1", a.id).court], [4, 2]);
+  assert.deepEqual([env.DB.one("SELECT round FROM matches WHERE id=?1", b.id).round,
+                    env.DB.one("SELECT court FROM matches WHERE id=?1", b.id).court], [1, 1]);
   assert.equal(env.DB.one("SELECT COUNT(*) AS n FROM matches WHERE deleted_at IS NULL").n, before,
     "THE promise of this screen: a swap must never lose a match");
-  assert.equal(env.DB.one("SELECT COUNT(*) AS n FROM matches WHERE court = -1").n, 0,
-    "the temporary parking court must not survive the swap");
+  assert.equal(env.DB.one("SELECT COUNT(*) AS n FROM matches WHERE court < 1").n, 0,
+    "the temporary parking courts must not survive the save");
   env.DB.close();
 });
 
-test("the fairness report is recomputed after a move, by the SAME rules as the generator", async () => {
+test("preview scores a HYPOTHETICAL arrangement by the generator's own rules — and writes nothing at all", async () => {
   const env = boot();
   const token = await staff(env);
   await call(env, "POST", "/api/admin/events/1/generate-schedule", { token, body: { courts: 2, rounds: 6 } });
-  const mover = env.DB.one("SELECT id FROM matches WHERE round=1 AND court=1");
-  const r = await call(env, "POST", "/api/admin/events/1/schedule/move", {
-    token, body: { match_id: mover.id, round: 2, court: 1 },
+  const mover = env.DB.one("SELECT id, round, court FROM matches WHERE round=1 AND court=1");
+  const r = await call(env, "POST", "/api/admin/events/1/schedule/preview", {
+    token, body: { positions: [{ match_id: mover.id, round: 2, court: 1 }] },
   });
-  assert.ok(r.data.report, "a move must come back with a fresh report");
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  assert.ok(r.data.report, "a preview must come back with a fresh report");
   assert.ok(Array.isArray(r.data.summary) && r.data.summary.length,
     "and with the plain-English lines, so the editor never phrases fairness itself");
+  // The write-nothing half — this is what makes hold-until-Save honest.
+  const stored = env.DB.one("SELECT round, court FROM matches WHERE id = ?1", mover.id);
+  assert.deepEqual([stored.round, stored.court], [mover.round, mover.court],
+    "preview must not move the stored match");
   env.DB.close();
 });
 
-test("NC: a match from another event cannot be moved into this one", async () => {
+test("NC: a match from another event is refused WHOLESALE by apply, and nothing is written", async () => {
   const env = boot();
   const token = await staff(env);
+  await call(env, "POST", "/api/admin/events/1/generate-schedule", { token, body: { courts: 2, rounds: 6 } });
   env.DB.exec("INSERT INTO events (id, org_id, type, name, status) VALUES (2,1,'tournament','Other','published')");
   env.DB.exec("INSERT INTO teams (id, org_id, event_id, name) VALUES (90,1,2,'X'),(91,1,2,'Y')");
   env.DB.exec("INSERT INTO matches (id, org_id, event_id, stage, round, court, team_a_id, team_b_id) VALUES (900,1,2,'pool',1,1,90,91)");
-  const r = await call(env, "POST", "/api/admin/events/1/schedule/move", {
-    token, body: { match_id: 900, round: 1, court: 1 },
+  const own = env.DB.one("SELECT id, round, court FROM matches WHERE event_id=1 AND round=1 AND court=1");
+  const r = await call(env, "POST", "/api/admin/events/1/schedule/apply", {
+    token, body: { positions: [
+      { match_id: own.id, round: 6, court: 2 },
+      { match_id: 900, round: 1, court: 1 },
+    ] },
   });
-  assert.equal(r.status, 404, "a match belonging to another event must not be movable here");
+  assert.equal(r.status, 404, "a match belonging to another event must poison the whole save");
+  // A missing ROUTE also answers 404 — this line is what makes the assertion about the refusal
+  // rather than about absence (this test was green pre-build until it was added).
+  assert.match(String(r.data && r.data.error), /isn't part of this event/,
+    "the refusal must be the route's own sentence, not a router fall-through");
+  const stillHome = env.DB.one("SELECT round, court FROM matches WHERE id = ?1", own.id);
+  assert.deepEqual([stillHome.round, stillHome.court], [own.round, own.court],
+    "a refused save applies NONE of its positions — half-applied is the worst outcome");
   env.DB.close();
+});
+
+test("apply refuses two matches on one slot — the collision is checked on the RESULT, not the request", async () => {
+  const env = boot();
+  const token = await staff(env);
+  await call(env, "POST", "/api/admin/events/1/generate-schedule", { token, body: { courts: 2, rounds: 6 } });
+  const a = env.DB.one("SELECT id FROM matches WHERE round=1 AND court=1");
+  // One field in the payload, colliding with a match that is NOT in the payload: the resulting
+  // state, not the request, is what must be collision-free (PM-1 rule 3's lesson).
+  const r = await call(env, "POST", "/api/admin/events/1/schedule/apply", {
+    token, body: { positions: [{ match_id: a.id, round: 4, court: 2 }] },
+  });
+  assert.equal(r.status, 409, "round 4 court 2 is already occupied — two matches on one court is not a schedule");
+  const still = env.DB.one("SELECT round, court FROM matches WHERE id = ?1", a.id);
+  assert.deepEqual([still.round, still.court], [1, 1], "nothing was written");
+  env.DB.close();
+});
+
+test("the superseded /schedule/move route is GONE from the worker — one writer, not two", () => {
+  // The route regexes in formats.js spell their paths with ESCAPED slashes, so the needles here
+  // must too — draft one searched for the plain form, missed the real routes, and "found" the
+  // preview route in a comment instead (the D-33 family, caught by its own red).
+  const moveRoute = "schedule\\/move";
+  assert.ok(!SRC.includes(moveRoute) && !SRC.includes("schedule/move"),
+    "the save-every-move route must not survive beside apply — two writers of one arrangement is how they disagree");
+  assert.ok(SRC.includes("schedule\\/preview"), "the no-write scorer's ROUTE exists (escaped form — the regex, not a comment)");
+  assert.ok(SRC.includes("schedule\\/apply"), "the one writer's ROUTE exists (escaped form — the regex, not a comment)");
+  // NC: the needle is load-bearing — plant the old route shape and the check goes red.
+  const mutated = SRC + "\nif (p.match(/schedule\\/move/)) {}";
+  assert.ok(mutated.includes(moveRoute), "the mutation landed and would be caught");
 });
 
 test("changing WHO plays is a separate operation from changing WHEN", async () => {
@@ -199,7 +257,8 @@ test("a member cannot reach any editor route", async () => {
   const v = await call(env, "POST", "/api/auth/verify", { body: { token: tok } });
   for (const [m, path, body] of [
     ["GET", "/api/admin/events/1/schedule", undefined],
-    ["POST", "/api/admin/events/1/schedule/move", { match_id: 1, round: 1, court: 1 }],
+    ["POST", "/api/admin/events/1/schedule/preview", { positions: [] }],
+    ["POST", "/api/admin/events/1/schedule/apply", { positions: [{ match_id: 1, round: 1, court: 1 }] }],
     ["POST", "/api/admin/events/1/schedule/teams", { match_id: 1 }],
   ]) {
     const r = await call(env, m, path, body === undefined ? { token: v.data.token } : { token: v.data.token, body });
@@ -212,11 +271,34 @@ test("a member cannot reach any editor route", async () => {
 
 test("the editor scores from the SERVER, never with its own copy of the rules", () => {
   // Two definitions of "fair" is the F-26 failure. If the client computed its own numbers they
-  // would drift from the generator's, and the director would believe neither.
+  // would drift from the generator's, and the director would believe neither. Hold-until-Save
+  // did not change this: held moves are scored by /schedule/preview — the same poolReport, no
+  // write — never by client arithmetic.
   assert.ok(!/function poolReport|repeatedPairs\s*=/.test(EDJS),
     "the editor must not reimplement the report");
-  assert.match(EDJS, /schedule\/move/, "moves go through the server");
+  assert.match(EDJS, /schedule\/preview/, "held arrangements are scored by the server");
+  assert.ok(!EDJS.includes("schedule/move"), "the superseded per-move writer has no caller left");
   assert.match(EDJS, /data\.summary/, "and the summary lines come back from it");
+});
+
+test("the editor HOLDS: moves are local, Save is the one writer, and the history runs both ways", () => {
+  assert.match(EDJS, /undoStack/, "an undo history exists");
+  assert.match(EDJS, /redoStack/, "and it runs forward again after an undo");
+  assert.match(EDJS, /schedule\/apply/, "Save posts the held positions to the one writer");
+  const saveBody = EDJS.slice(EDJS.indexOf("async function save"), EDJS.indexOf("async function save") + 900);
+  assert.ok(saveBody.includes("schedule/apply"), "…and that call lives INSIDE save(), nowhere else");
+  assert.equal(EDJS.split("schedule/apply").length - 1, 1, "exactly one apply call site — a second writer is how they disagree");
+  // The dirty state must be visible and guarded: a director who navigates away with held changes
+  // must be asked, because hold-until-Save makes silent loss POSSIBLE where save-every-move could
+  // not lose anything.
+  assert.match(EDJS, /beforeunload/, "held changes guard the tab close");
+  assert.match(EDHTML, /id="sSave"/, "a Save button exists");
+  assert.match(EDHTML, /id="sUndo"/, "an Undo button exists");
+  assert.match(EDHTML, /id="sRedo"/, "a Redo button exists");
+  assert.match(EDHTML, /id="sState"[^>]*aria-live/, "the saved/unsaved state is announced, not just coloured");
+  // NC: the needle is load-bearing.
+  const mutated = EDJS.replace(/undoStack/g, "XXGONE");
+  assert.ok(!mutated.includes("undoStack"), "the mutation landed");
 });
 
 test("the editor is usable without a mouse", () => {

@@ -587,7 +587,13 @@ export function repairRepeats(plan, teams, maxPasses = 6) {
  * the moment those disagree the director stops believing either. Converting the DB rows back into
  * the planner's shape and calling poolReport keeps exactly one answer to "is this fair".
  */
-async function loadSchedule(env, ctx, eventId) {
+/**
+ * T2-1a (v0.151.0): `overrides` is a Map(match_id → {round, court}). When present, the stored
+ * positions are patched IN MEMORY before the report is computed — this is how /schedule/preview
+ * scores a held arrangement with the generator's own rules without writing a row. One loader,
+ * one scorer, zero drift between "what you see" and "what a save would produce".
+ */
+async function loadSchedule(env, ctx, eventId, overrides = null) {
   const ev = await env.DB.prepare(
     "SELECT id, name FROM events WHERE id=?1 AND org_id=?2 AND deleted_at IS NULL"
   ).bind(eventId, ctx.orgId).first();
@@ -611,6 +617,12 @@ async function loadSchedule(env, ctx, eventId) {
        FROM matches WHERE org_id=?1 AND event_id=?2 AND deleted_at IS NULL
       ORDER BY round, court`
   ).bind(ctx.orgId, eventId).all()).results || [];
+  if (overrides) {
+    for (const row of rows) {
+      const o = overrides.get(row.id);
+      if (o) { row.round = o.round; row.court = o.court; }
+    }
+  }
 
   const nameOf = new Map(teams.map((t) => [t.id, t.name]));
   const idxOf = new Map(teams.map((t, i) => [t.id, i + 1]));   // real id → planner 1..N
@@ -845,51 +857,112 @@ export async function formatsRoutes(request, env, url, ctx) {
     return json(loaded);
   }
 
-  /* Move a match to another round/court. If something is already there the two SWAP — dragging
-     onto an occupied slot means "these two should trade places", which is what a director means
-     every time. Silently overwriting the other match would lose it. */
-  if ((x = p.match(/^\/api\/admin\/events\/(\d+)\/schedule\/move$/)) && m === "POST") {
+  /* T2-1a (§-0 B11): hold changes until Save — the owner's settled shape, the pool board's
+     "nothing saves until you say so" precedent. The v0.65.0 save-every-move route is REMOVED,
+     not kept beside these: two writers of one arrangement is how they come to disagree, and an
+     editor that holds locally would have left it caller-less anyway.
+
+     PREVIEW scores a held arrangement — the same loader, the same poolReport, positions patched
+     in memory — and writes NOTHING. It exists because the editor's charter forbids client-side
+     fairness arithmetic (two definitions of "fair" is the F-26 failure), and hold-until-Save
+     would otherwise have left the fairness panel frozen at the last save. */
+  function parsePositions(b) {
+    const raw = Array.isArray(b.positions) ? b.positions : null;
+    if (!raw) return { error: "Send positions: a list of { match_id, round, court }." };
+    const out = [];
+    for (const pos of raw) {
+      const id = Number(pos && pos.match_id), round = Number(pos && pos.round), court = Number(pos && pos.court);
+      if (!id || !Number.isInteger(round) || !Number.isInteger(court) || round < 1 || court < 1) {
+        return { error: "Every position needs a match and a round and court of at least 1." };
+      }
+      out.push({ id, round, court });
+    }
+    return { positions: out };
+  }
+
+  /** Every supplied id must be a live match of THIS event — one stranger poisons the whole call,
+      because a save that half-applies leaves the director guessing which half. */
+  async function ownedMatches(env, ctx, eventId, ids) {
+    if (!ids.length) return new Map();
+    const ph = ids.map((_, i) => `?${i + 3}`).join(",");
+    const rows = (await env.DB.prepare(
+      `SELECT id, round, court FROM matches
+        WHERE org_id=?1 AND event_id=?2 AND id IN (${ph}) AND deleted_at IS NULL`
+    ).bind(ctx.orgId, eventId, ...ids).all()).results || [];
+    return new Map(rows.map((r) => [r.id, r]));
+  }
+
+  if ((x = p.match(/^\/api\/admin\/events\/(\d+)\/schedule\/preview$/)) && m === "POST") {
     const denied = await requireStaff(env, ctx);
     if (denied) return denied;
     const eventId = +x[1];
     const b = await request.json().catch(() => ({}));
-    const matchId = Number(b.match_id);
-    const toRound = Number(b.round);
-    const toCourt = Number(b.court);
-    if (!matchId || !Number.isInteger(toRound) || !Number.isInteger(toCourt) || toRound < 1 || toCourt < 1) {
-      return json({ error: "Say which match, and which round and court to move it to." }, 400);
+    const parsed = parsePositions(b);
+    if (parsed.error) return json({ error: parsed.error }, 400);
+    const owned = await ownedMatches(env, ctx, eventId, parsed.positions.map((p2) => p2.id));
+    if (parsed.positions.some((p2) => !owned.has(p2.id))) {
+      return json({ error: "A match in that arrangement isn't part of this event." }, 404);
+    }
+    const overrides = new Map(parsed.positions.map((p2) => [p2.id, { round: p2.round, court: p2.court }]));
+    const loaded = await loadSchedule(env, ctx, eventId, overrides);
+    if (loaded.error) return json({ error: loaded.error }, loaded.status || 404);
+    return json({ ok: true, ...loaded });
+  }
+
+  /* APPLY is the one writer. It validates the RESULT, not the request: the final arrangement —
+     stored positions overridden by the payload — must put at most one match on any (round,
+     court), or the refusal names the collision. Writes park on distinct negative courts first,
+     the move route's own documented idiom, so a concurrent read never sees two matches on one
+     real court mid-save. One audit row for the whole save. */
+  if ((x = p.match(/^\/api\/admin\/events\/(\d+)\/schedule\/apply$/)) && m === "POST") {
+    const denied = await requireStaff(env, ctx);
+    if (denied) return denied;
+    const eventId = +x[1];
+    const b = await request.json().catch(() => ({}));
+    const parsed = parsePositions(b);
+    if (parsed.error) return json({ error: parsed.error }, 400);
+    if (!parsed.positions.length) return json({ error: "Nothing to save — no positions were sent." }, 400);
+    const owned = await ownedMatches(env, ctx, eventId, parsed.positions.map((p2) => p2.id));
+    if (parsed.positions.some((p2) => !owned.has(p2.id))) {
+      return json({ error: "A match in that arrangement isn't part of this event." }, 404);
     }
 
-    const mv = await env.DB.prepare(
-      "SELECT id, round, court FROM matches WHERE id=?1 AND org_id=?2 AND event_id=?3 AND deleted_at IS NULL"
-    ).bind(matchId, ctx.orgId, eventId).first();
-    if (!mv) return json({ error: "That match isn't part of this event." }, 404);
-
-    const occupant = await env.DB.prepare(
-      `SELECT id FROM matches WHERE org_id=?1 AND event_id=?2 AND round=?3 AND court=?4
-         AND deleted_at IS NULL AND id != ?5`
-    ).bind(ctx.orgId, eventId, toRound, toCourt, matchId).first();
-
-    if (occupant) {
-      // Two writes, no transaction available on D1 here — so park the mover on a court number that
-      // cannot collide first. Without this the unique-ish (round, court) pairing briefly doubles up
-      // and a concurrent read sees two matches on one court.
-      await env.DB.prepare("UPDATE matches SET court=-1, updated_at=datetime('now') WHERE id=?1 AND org_id=?2")
-        .bind(matchId, ctx.orgId).run();
-      await env.DB.prepare("UPDATE matches SET round=?1, court=?2, updated_at=datetime('now') WHERE id=?3 AND org_id=?4")
-        .bind(mv.round, mv.court, occupant.id, ctx.orgId).run();
-      await env.DB.prepare("UPDATE matches SET round=?1, court=?2, updated_at=datetime('now') WHERE id=?3 AND org_id=?4")
-        .bind(toRound, toCourt, matchId, ctx.orgId).run();
-    } else {
-      await env.DB.prepare("UPDATE matches SET round=?1, court=?2, updated_at=datetime('now') WHERE id=?3 AND org_id=?4")
-        .bind(toRound, toCourt, matchId, ctx.orgId).run();
+    const all = (await env.DB.prepare(
+      "SELECT id, round, court FROM matches WHERE org_id=?1 AND event_id=?2 AND deleted_at IS NULL"
+    ).bind(ctx.orgId, eventId).all()).results || [];
+    const finalPos = new Map(all.map((r) => [r.id, { round: r.round, court: r.court }]));
+    for (const p2 of parsed.positions) finalPos.set(p2.id, { round: p2.round, court: p2.court });
+    const seen = new Map();
+    for (const [id, pos] of finalPos) {
+      const key = `${pos.round}/${pos.court}`;
+      if (seen.has(key)) {
+        return json({ error: `That save would put two matches on round ${pos.round}, court ${pos.court}. Move one of them somewhere else first.` }, 409);
+      }
+      seen.set(key, id);
     }
 
-    await audit(env, ctx, "schedule.move", "matches", matchId,
-      { from: `${mv.round}/${mv.court}`, to: `${toRound}/${toCourt}`, swapped: occupant ? occupant.id : null });
+    const changed = parsed.positions.filter((p2) => {
+      const cur = owned.get(p2.id);
+      return cur.round !== p2.round || cur.court !== p2.court;
+    });
+    let park = 0;
+    for (const p2 of changed) {
+      park -= 1;
+      await env.DB.prepare("UPDATE matches SET court=?1, updated_at=datetime('now') WHERE id=?2 AND org_id=?3")
+        .bind(park, p2.id, ctx.orgId).run();
+    }
+    for (const p2 of changed) {
+      await env.DB.prepare("UPDATE matches SET round=?1, court=?2, updated_at=datetime('now') WHERE id=?3 AND org_id=?4")
+        .bind(p2.round, p2.court, p2.id, ctx.orgId).run();
+    }
+
+    await audit(env, ctx, "schedule.apply", "events", eventId, {
+      changed: changed.length,
+      moves: changed.slice(0, 40).map((p2) => ({ id: p2.id, from: `${owned.get(p2.id).round}/${owned.get(p2.id).court}`, to: `${p2.round}/${p2.court}` })),
+    });
 
     const loaded = await loadSchedule(env, ctx, eventId);
-    return json({ ok: true, swapped_with: occupant ? occupant.id : null, ...loaded });
+    return json({ ok: true, changed: changed.length, ...loaded });
   }
 
   /* Swap the two TEAMS in a match, or replace one side. Changing who plays whom is a different

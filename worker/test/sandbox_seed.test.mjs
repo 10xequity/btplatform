@@ -78,11 +78,19 @@ test("pools really can be generated and then dragged on Summer Open", async () =
   assert.equal(gen.status, 200, JSON.stringify(gen.data));
   assert.equal(gen.data.report.gamesPerTeam.equal, true, "12-on-5 must give every team the same count");
 
-  const first = env.DB.one("SELECT id FROM matches WHERE event_id=90002 ORDER BY round, court LIMIT 1");
-  const moved = await call(env, "POST", "/api/admin/events/90002/schedule/move", {
-    token, body: { match_id: first.id, round: 1, court: 5 },
+  // v0.151.0 (T2-1a): the editor holds moves and saves the arrangement in one write, so the
+  // fixture's "can it be rearranged" purpose is now proven through the apply endpoint — an
+  // EXCHANGE, because a 12-round 5-court schedule has no empty slot to move into and the save
+  // honestly refuses two matches on one court.
+  const [a, b] = env.DB.query("SELECT id, round, court FROM matches WHERE event_id=90002 ORDER BY round, court LIMIT 2");
+  const moved = await call(env, "POST", "/api/admin/events/90002/schedule/apply", {
+    token, body: { positions: [
+      { match_id: a.id, round: b.round, court: b.court },
+      { match_id: b.id, round: a.round, court: a.court },
+    ] },
   });
   assert.equal(moved.status, 200, JSON.stringify(moved.data));
+  assert.equal(moved.data.changed, 2);
   env.DB.close();
 });
 

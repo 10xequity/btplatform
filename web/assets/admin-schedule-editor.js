@@ -22,9 +22,19 @@
   const $ = (id) => document.getElementById(id);
 
   let eventId = null;
-  let data = null;          // last server payload
+  let data = null;          // last server payload; positions in it are the HELD (unsaved) state
   let prevReport = null;    // to describe what a move changed
   let carrying = null;      // match id being moved by keyboard
+  /* T2-1a (§-0 B11), the owner's settled shape: hold changes until Save, revert back and
+     forward, confirm to save — the pool board's "nothing saves until you say so", plus a
+     history. Every move below mutates `data` LOCALLY and records its inverse; the server sees
+     nothing until save() posts the changed positions to the one apply endpoint. Fairness still
+     comes from the server after every held move — the preview endpoint scores the hypothetical
+     arrangement with the generator's own rules and writes nothing — because this file's charter
+     forbids a second, client-side definition of "fair". */
+  let baseline = new Map();  // match id → {round, court} as last saved/loaded
+  let undoStack = [];        // each entry: list of {id, round, court} to restore (the inverse)
+  let redoStack = [];
 
   /* ---------- render ---------- */
 
@@ -88,7 +98,23 @@
     return bits.length ? bits.join(" · ") : "No change to fairness.";
   }
 
-  /* ---------- moving ---------- */
+  /* ---------- moving (LOCAL — nothing saves until you say so) ---------- */
+
+  const positionsOf = (ids) => ids.map((id) => {
+    const m = data.matches.find((x) => x.id === id);
+    return { id, round: m.round, court: m.court };
+  });
+  const changedPositions = () => data.matches
+    .filter((m) => { const b = baseline.get(m.id); return b && (b.round !== m.round || b.court !== m.court); })
+    .map((m) => ({ match_id: m.id, round: m.round, court: m.court }));
+  const dirty = () => changedPositions().length > 0;
+
+  function applyLocal(entries) {
+    for (const e of entries) {
+      const m = data.matches.find((x) => x.id === e.id);
+      if (m) { m.round = e.round; m.court = e.court; }
+    }
+  }
 
   async function move(matchId, round, court) {
     const mt = data.matches.find((m) => m.id === matchId);
@@ -99,15 +125,75 @@
       `${mt.team_a} v ${mt.team_b} has already been played (${mt.score_a}–${mt.score_b}). Move it anyway?`
     )) return;
 
-    prevReport = data.report;
-    const r = await api(`/api/admin/events/${eventId}/schedule/move`, {
-      method: "POST", body: JSON.stringify({ match_id: matchId, round, court }),
-    });
-    if (!r.ok) return fail("sGrid", r.data.error || "Couldn't move that match.");
-    data = r.data;
+    const occupant = data.matches.find((m) => m.round === round && m.court === court && m.id !== matchId);
+    // The inverse — restoring these positions undoes this move — goes on the history BEFORE the
+    // mutation, and a new move burns the redo branch, as every editor's history does.
+    undoStack.push(positionsOf(occupant ? [matchId, occupant.id] : [matchId]));
+    redoStack = [];
+    if (occupant) { occupant.round = mt.round; occupant.court = mt.court; }
+    mt.round = round; mt.court = court;
     render();
-    const delta = describeDelta(prevReport, data.report);
-    $("sDelta").textContent = (r.data.swapped_with ? "Swapped. " : "Moved. ") + delta;
+    await previewScore(occupant ? "Swapped (not saved). " : "Moved (not saved). ");
+  }
+
+  /** The server scores the HELD arrangement — same rules as the generator, no write. */
+  async function previewScore(prefix) {
+    prevReport = data.report;
+    const r = await api(`/api/admin/events/${eventId}/schedule/preview`, {
+      method: "POST",
+      body: JSON.stringify({ positions: data.matches.map((m) => ({ match_id: m.id, round: m.round, court: m.court })) }),
+    });
+    if (r.ok) {
+      data.report = r.data.report; data.summary = r.data.summary; data.byes = r.data.byes;
+      renderSide();
+      $("sDelta").textContent = (prefix || "") + describeDelta(prevReport, data.report);
+    } else {
+      $("sDelta").textContent = (prefix || "") + (r.data.error || "Couldn't re-score the arrangement.");
+    }
+    paintState();
+  }
+
+  function undo() {
+    const entry = undoStack.pop();
+    if (!entry) return;
+    redoStack.push(positionsOf(entry.map((e) => e.id)));
+    applyLocal(entry);
+    render();
+    previewScore("Undid a move (not saved). ");
+  }
+  function redo() {
+    const entry = redoStack.pop();
+    if (!entry) return;
+    undoStack.push(positionsOf(entry.map((e) => e.id)));
+    applyLocal(entry);
+    render();
+    previewScore("Redid a move (not saved). ");
+  }
+
+  async function save() {
+    const positions = changedPositions();
+    if (!positions.length) return;
+    const r = await api(`/api/admin/events/${eventId}/schedule/apply`, {
+      method: "POST", body: JSON.stringify({ positions }),
+    });
+    if (!r.ok) { $("sDelta").textContent = r.data.error || "Couldn't save the arrangement."; return; }
+    data = r.data;
+    baseline = new Map(data.matches.map((m) => [m.id, { round: m.round, court: m.court }]));
+    undoStack = []; redoStack = [];
+    prevReport = null;
+    render();
+    $("sDelta").textContent = `Saved ${r.data.changed} change${r.data.changed === 1 ? "" : "s"}.`;
+    paintState();
+  }
+
+  function paintState() {
+    const n = changedPositions().length;
+    $("sSave").disabled = n === 0;
+    $("sSave").textContent = n ? `Save ${n} change${n === 1 ? "" : "s"}` : "Save";
+    $("sUndo").disabled = undoStack.length === 0;
+    $("sRedo").disabled = redoStack.length === 0;
+    $("sState").textContent = n ? "Unsaved changes" : "Saved";
+    $("sState").className = "ed-state" + (n ? " dirty" : "");
   }
 
   function wireGrid() {
@@ -175,9 +261,18 @@
     const r = await api(`/api/admin/events/${eventId}/schedule`);
     if (!r.ok) return fail("sGrid", r.data.error || "Couldn't load that schedule.");
     data = r.data;
+    baseline = new Map(data.matches.map((m) => [m.id, { round: m.round, court: m.court }]));
+    undoStack = []; redoStack = [];
     prevReport = null;
     $("sDelta").textContent = "";
     render();
+    paintState();
+  }
+
+  /** Held changes are the one thing this screen can now LOSE — save-every-move could not.
+      Every exit while dirty asks first; "discard" reverts to the last saved arrangement. */
+  function confirmDiscard(what) {
+    return !dirty() || window.confirm(`You have unsaved schedule changes. ${what} without saving them?`);
   }
 
   async function loadEvents() {
@@ -198,8 +293,25 @@
   }
 
   document.addEventListener("DOMContentLoaded", () => {
-    $("sEvent").addEventListener("change", () => { eventId = Number($("sEvent").value); loadSchedule(); });
-    $("sReload").addEventListener("click", loadSchedule);
+    $("sEvent").addEventListener("change", () => {
+      if (!confirmDiscard("Switch events")) { $("sEvent").value = String(eventId); return; }
+      eventId = Number($("sEvent").value); loadSchedule();
+    });
+    $("sReload").addEventListener("click", () => { if (confirmDiscard("Reload")) loadSchedule(); });
+    $("sSave").addEventListener("click", save);
+    $("sUndo").addEventListener("click", undo);
+    $("sRedo").addEventListener("click", redo);
+    // The history from the keyboard: Ctrl/Cmd+Z back, Ctrl/Cmd+Shift+Z or Ctrl+Y forward. No
+    // animation on any of it — these are repeated actions, and the grid re-render IS the feedback.
+    document.addEventListener("keydown", (e) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      const k = e.key.toLowerCase();
+      if (k === "z") { e.preventDefault(); if (e.shiftKey) redo(); else undo(); }
+      if (k === "y") { e.preventDefault(); redo(); }
+    });
+    window.addEventListener("beforeunload", (e) => {
+      if (dirty()) { e.preventDefault(); e.returnValue = ""; }
+    });
     loadEvents();
   });
 })();
