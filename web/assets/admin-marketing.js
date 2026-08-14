@@ -11,6 +11,19 @@
 (async function () {
   const { api, guard, esc, openModal, closeModal } = window.BT_ADMIN;
 
+  /* K-10(a) (§-0 B8): the copyable widget snippet is BUILT from where this page is actually
+     served, not baked into the markup — a baked address hands every future embedder a dead URL
+     the day the domain changes, and nobody re-reads a snippet that used to work. `location.href`
+     is the one address that is true wherever the app lives; the buster literal below is swept by
+     sweep-buster like every other. */
+  function fillWidgetSnippet() {
+    const el = document.getElementById("widgetSnippet");
+    if (!el) return;
+    const src = new URL("assets/signup-widget.js?v=0.149.0", location.href).href;
+    el.textContent = '<script src="' + src + '" data-org="boomtown" defer><' + '/script>';
+  }
+  fillWidgetSnippet();
+
   /* WF-6 (v0.138.0, §-0 B28) — a document handed over by a print screen.
      The owner asked that anywhere there is a print there is also email; BT_ADMIN.emailDocument
      puts the printed text in sessionStorage and sends the operator here, because this page

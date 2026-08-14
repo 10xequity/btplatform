@@ -185,9 +185,12 @@ async function sessionContact(env, ctx) {
   ).bind(ctx.userId, ctx.orgId).first();
 }
 
+/* K-10(a): env.APP_URL is the one configured frontend address (wrangler.toml sets it; SITE_ORIGIN
+   was set nowhere, so the old `SITE_ORIGIN || "<hardcoded>"` shipped its hardcoded half as the
+   LIVE path while tests, which set the variable, exercised the other branch). No fallback on
+   purpose: one that silently mints links to a stale domain outlives every rename. */
 function signUrl(env, raw) {
-  const base = env.SITE_ORIGIN || "https://10xequity.github.io/btplatform/web";
-  return `${base}/sign.html#${raw}`;
+  return `${env.APP_URL}/sign.html#${raw}`;
 }
 
 /* ==================== A. teammate self-sign ==================== */

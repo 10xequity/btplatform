@@ -182,8 +182,10 @@ export async function offerNext(env, eventId, opts = {}) {
        updated_at=datetime('now') WHERE id=?3`
     ).bind(token, expires, w.id).run();
 
-    const site = env.SITE_ORIGIN || "https://10xequity.github.io/btplatform";
-    const link = `${site}/web/register.html?event=${eventId}&wtoken=${token}`;
+    // K-10(a): APP_URL already ends in the app base (…/web today), so the old "/web" append is
+    // gone with the SITE_ORIGIN fallback — the two only composed a working link by accident of
+    // that fallback's shape, which disagreed with consent.js's and messages.js's.
+    const link = `${env.APP_URL}/register.html?event=${eventId}&wtoken=${token}`;
     try {
       await sendEmail(env, w.email, `A spot opened up — ${ev.name}`,
         `<p>Hi ${escapeHtml(w.name)},</p>

@@ -588,7 +588,9 @@ async function notifyAndRelay(env, ctx, me, to, threadId, body) {
   ).bind(ctx.orgId, to.contact_id || to.id, `New message from ${senderName}`, preview,
          "member-inbox.html", JSON.stringify({ thread_id: threadId })).run();
   if (!to.email) return "sandbox";
-  const inboxUrl = (env.SITE_ORIGIN || "https://10xequity.github.io/btplatform/web") + "/member-inbox.html";
+  // K-10(a): APP_URL is the configured frontend address; the old SITE_ORIGIN fallback was the
+  // live path because that variable is set nowhere.
+  const inboxUrl = env.APP_URL + "/member-inbox.html";
   // F-13 (v0.31.0): ctx.orgId reaches both the sender identity and the body, so a Queens Club
   // relay is branded Queens Club rather than Boomtown.
   const orgRow = await env.DB.prepare("SELECT name FROM orgs WHERE id = ?1").bind(ctx.orgId).first();
