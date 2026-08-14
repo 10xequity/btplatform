@@ -118,7 +118,7 @@ CREATE TABLE events (
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),
   deleted_at TEXT
-, price_cents INTEGER, series_id TEXT, program_id INTEGER REFERENCES programs(id), recurrence_json TEXT, staff_contact_id INTEGER REFERENCES contacts(id), checkin_token TEXT, external_url TEXT, external_label TEXT, square_item_id TEXT, square_variation_id TEXT);
+, price_cents INTEGER, series_id TEXT, program_id INTEGER REFERENCES programs(id), recurrence_json TEXT, staff_contact_id INTEGER REFERENCES contacts(id), checkin_token TEXT, external_url TEXT, external_label TEXT, square_item_id TEXT, square_variation_id TEXT, min_signups INTEGER);
 
 CREATE TABLE registrations (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

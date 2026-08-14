@@ -145,7 +145,7 @@ test("pad produces the 4-digit form used in filenames and the ledger", () => {
   assert.equal(pad(2026), "2026");
 });
 
-test("the real db/migrations directory parses cleanly and reports 0048", () => {
+test("the real db/migrations directory parses cleanly and reports 0049", () => {
   // This number is a deliberate ratchet, not a nuisance: it reddens on every new migration and
   // makes whoever added one confirm the scanner still reads the whole directory. Bump it in the
   // same commit as the migration, AFTER the ledger row exists in live D1 (v0.60.0 → 0036;
@@ -176,10 +176,14 @@ test("the real db/migrations directory parses cleanly and reports 0048", () => {
   // 2026-08-14: migration 0048 (webauthn_credentials.uv_required, S-4a / §-0 B12) — moved only
   // once live D1 answered MAX(id)=48, COUNT(*)=48, MAX(version)='0048', pragma_table_info showed
   // the column, and the ratcheted count came back 0 of 1: no login behaviour changes until a
-  // credential demonstrates Face ID/PIN once.)
+  // credential demonstrates Face ID/PIN once. NINTH time 2026-08-14: migration 0049
+  // (events.min_signups, SG-2 / §-1o) — moved only once live D1 answered MAX(id)=49,
+  // COUNT(*)=49, MAX(version)='0049', pragma_table_info('events') showed the column, and the
+  // non-NULL count came back 0 of 7: no event has a minimum until an operator types one, so the
+  // deploy changes no screen.)
   const { highest, files, unparseable } = scanMigrations(DEFAULT_DIR);
   assert.deepEqual(unparseable, [], `unparseable migration filenames: ${unparseable.join(", ")}`);
-  assert.equal(highest, 48);
+  assert.equal(highest, 49);
   assert.ok(files >= 20, `expected at least 20 .sql files, saw ${files}`);
 });
 

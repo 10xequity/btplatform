@@ -127,12 +127,25 @@ export async function eventsAdminRoutes(request, env, url, ctx) {
 
 /* ---------- shared ---------- */
 
-const EVENT_FIELDS = ["type", "name", "location", "price_cents", "capacity", "court_count", "format_template", "cash_option_enabled", "config_json", "program_id", "external_url", "external_label"];
+const EVENT_FIELDS = ["type", "name", "location", "price_cents", "capacity", "court_count", "format_template", "cash_option_enabled", "config_json", "program_id", "external_url", "external_label", "min_signups"];
+
+/**
+ * SG-2 (§-1o): the ONE spelling of what a threshold may be — a whole number of sign-ups, 1 or
+ * more; anything else (junk, 0, negatives) means "no minimum" and stores NULL, matching the UI,
+ * which sends 0 for an emptied field. Exported because the rule sits on two write paths:
+ * cleanEventBag here (create / duplicate / bulk / series) and tournaments.js's patchEvent (the
+ * event page's own save). min_signups is the FLOOR of the band whose CEILING is `capacity`.
+ */
+export function cleanMinSignups(v) {
+  const n = Number(v);
+  return Number.isFinite(n) && n >= 1 ? Math.round(n) : null;
+}
 
 function cleanEventBag(src) {
   const out = {};
   for (const k of EVENT_FIELDS) if (k in src && src[k] !== undefined) out[k] = src[k];
   if (out.type && !TYPES.includes(out.type)) delete out.type;
+  if ("min_signups" in out) out.min_signups = cleanMinSignups(out.min_signups);
   return out;
 }
 
@@ -176,13 +189,13 @@ async function loadOrgEvent(env, ctx, id) {
 async function insertEvent(env, orgId, bag, startsAt, seriesId, recurrenceJson, status) {
   const r = await env.DB.prepare(
     `INSERT INTO events (org_id, type, name, starts_at, ends_at, location, capacity, court_count,
-       format_template, config_json, status, cash_option_enabled, price_cents, series_id, recurrence_json, program_id)
-     VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16)`
+       format_template, config_json, status, cash_option_enabled, price_cents, series_id, recurrence_json, program_id, min_signups)
+     VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17)`
   ).bind(
     orgId, bag.type || "event", bag.name || "Untitled event", startsAt || null, bag.ends_at || null,
     bag.location || null, bag.capacity || null, bag.court_count || null, bag.format_template || null,
     bag.config_json || "{}", status || "draft", bag.cash_option_enabled ? 1 : 0, bag.price_cents || 0,
-    seriesId || null, recurrenceJson || null, bag.program_id || null
+    seriesId || null, recurrenceJson || null, bag.program_id || null, bag.min_signups ?? null
   ).run();
   const id = r.meta.last_row_id;
   const square = Number(bag.price_cents) > 0 ? await ensureEventSquareItem(env, id) : null;

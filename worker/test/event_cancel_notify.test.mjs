@@ -35,6 +35,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import worker from "../src/index.js";
 import { createD1 } from "../testkit/d1-memory.mjs";
+import { blankComments, functionBodyAfter } from "../testkit/route-extract.mjs";
 
 const SCHEMA = readFileSync(new URL("../testkit/journey-schema.sql", import.meta.url), "utf8");
 const ORIGIN = "https://boomtown.test";
@@ -215,4 +216,122 @@ test("the notification pass is audited with its counts, from ONE place", async (
   assert.equal(d.notified, 2);
   assert.equal(d.emailed, 0);
   env.DB.close();
+});
+
+/* ==================== SG-2 (§-1o): the threshold ==================== */
+/* Cathy's decision is a COUNT against a MINIMUM — "What is your count for Sunday?" → go / no-go.
+   The column is events.min_signups (NULL = no minimum). It is the FLOOR of a band whose CEILING,
+   capacity, shipped long ago — SG-2 adds the missing end, not a third number. The count is
+   activeRegistrationCount (waitlists.js) — the ONE judgement the capacity gate, the sheet and
+   the roster already read; SG-2 adds NO second counter. UNITS DIVERGE BY DESIGN and stay
+   diverged: the count is registration ROWS (capacity's own units, so "9 of 12" and "full at 12"
+   can never contradict), while the cancel notice is distinct PEOPLE (B16's one-message-per-
+   member). Both read ONE status set, and the tests below pin both the agreement and the
+   divergence so neither is ever "fixed" into the other. */
+
+test("SG-2 PRE-FIX — the fixture can trip a threshold: 3 active rows, 2 active people on event 50", () => {
+  const env = boot();
+  const rows = env.DB.one(
+    "SELECT COUNT(*) AS n FROM registrations WHERE event_id=50 AND deleted_at IS NULL AND status IN ('pending','email-sent','paid','cash-pending','comped')").n;
+  assert.equal(rows, 3, "the fixture lost Ava's double sign-up or Cam — the rows-vs-people tests below would go vacuous");
+  const people = env.DB.one(
+    "SELECT COUNT(DISTINCT contact_id) AS n FROM registrations WHERE event_id=50 AND deleted_at IS NULL AND status IN ('pending','email-sent','paid','cash-pending','comped')").n;
+  assert.equal(people, 2, "the fixture lost the row/person split — 3 rows must belong to 2 people");
+  env.DB.close();
+});
+
+test("SG-2 — PATCH persists min_signups; junk and zero clear it to NULL rather than poisoning it", async () => {
+  const env = boot();
+  const { staff } = await tokens(env);
+  const r1 = await call(env, "PATCH", "/api/events/50", { token: staff, body: { min_signups: 12 } });
+  assert.equal(r1.status, 200, JSON.stringify(r1.data).slice(0, 200));
+  assert.equal(env.DB.one("SELECT min_signups AS m FROM events WHERE id=50").m, 12,
+    "the threshold never reached the row — the allow-list dropped it, D-34's defect worn by SG-2's own field");
+  // NC — the junk lands on a row PROVEN to hold 12 above, so a pass here cannot be vacuous
+  const r2 = await call(env, "PATCH", "/api/events/50", { token: staff, body: { min_signups: "volleyball" } });
+  assert.equal(r2.status, 200, JSON.stringify(r2.data).slice(0, 200));
+  assert.equal(env.DB.one("SELECT min_signups AS m FROM events WHERE id=50").m, null,
+    "junk neither cleared nor refused — a NaN threshold makes every count line lie");
+  await call(env, "PATCH", "/api/events/50", { token: staff, body: { min_signups: 12 } });
+  await call(env, "PATCH", "/api/events/50", { token: staff, body: { min_signups: 0 } });
+  assert.equal(env.DB.one("SELECT min_signups AS m FROM events WHERE id=50").m, null,
+    "zero is 'no minimum', not 'a minimum of zero' — the UI sends 0 for an emptied field");
+  env.DB.close();
+});
+
+test("SG-2 — getEvent surfaces active_signups: the capacity gate's own number, in ROWS", async () => {
+  const env = boot();
+  const { staff } = await tokens(env);
+  const e50 = (await call(env, "GET", "/api/events/50", { token: staff })).data.event;
+  assert.equal(e50.active_signups, 3,
+    "expected Ava's two active rows + Cam's one; Ben's cancelled row must not count");
+  const e53 = (await call(env, "GET", "/api/events/53", { token: staff })).data.event;
+  assert.equal(e53.active_signups, 1, "event 53 has exactly Ben, paid");
+  env.DB.close();
+});
+
+test("SG-2 — the count and the cancel notice read ONE status set: rows for capacity, people for messages", async () => {
+  const env = boot();
+  const { staff } = await tokens(env);
+  // where every active row is a distinct person, the two numbers MUST agree — same set, same rows
+  const before = (await call(env, "GET", "/api/events/53", { token: staff })).data.event.active_signups;
+  const r = await call(env, "PATCH", "/api/events/53", { token: staff, body: { status: "cancelled" } });
+  assert.equal(r.data.cancelled_notice.notified, before,
+    "distinct-person event: count said one thing, the notice said another — the status sets have drifted apart");
+  // and the divergence where they SHOULD differ, pinned so nobody equalises it later
+  const e50 = (await call(env, "GET", "/api/events/50", { token: staff })).data.event;
+  assert.equal(e50.active_signups, 3, "rows — capacity's units");
+  await call(env, "PATCH", "/api/events/50", { token: staff, body: { status: "cancelled" } });
+  assert.equal(cancelled(env, 50).length, 2,
+    "people — one message per member; Ava's two sign-ups are one Ava. If this now equals the row count, the dedup died");
+  env.DB.close();
+});
+
+test("SG-2 — no second spelling: tournaments.js imports the ONE judgement, never respells the status list", () => {
+  const TUPLE = "'pending','email-sent','paid','cash-pending','comped'";
+  const wl = readFileSync(new URL("../src/waitlists.js", import.meta.url), "utf8");
+  const ea = readFileSync(new URL("../src/events_admin.js", import.meta.url), "utf8");
+  const tn = readFileSync(new URL("../src/tournaments.js", import.meta.url), "utf8");
+  assert.ok(wl.includes(TUPLE),
+    "positive control: the defining spelling left waitlists.js — this guard is searching for nothing");
+  assert.ok(ea.includes(TUPLE),
+    "events_admin's deliberate no-imports copy drifted from the definition — count and notice can now disagree");
+  const code = blankComments(tn);
+  assert.ok(!code.includes(TUPLE),
+    "tournaments.js respells the active-status list — the ONE judgement now has a second room (green by design until someone sins; the positive control above proves the needle finds the real spelling)");
+  assert.match(code, /activeRegistrationCount\(/,
+    "getEvent stopped reading the ONE count — whatever replaced it is a second definition of 'signed up'");
+});
+
+test("SG-2 — the bag path carries the threshold: bulk-created rows store it, junk stores NULL", async () => {
+  const env = boot();
+  const { staff } = await tokens(env);
+  const r = await call(env, "POST", "/api/admin/events/bulk", { token: staff, body: { rows: [
+    { name: "Tuesday Skills — threshold", starts_at: "2026-09-01 18:00", type: "training", min_signups: 10 },
+    { name: "Tuesday Skills — junk", starts_at: "2026-09-08 18:00", type: "training", min_signups: -5 },
+  ] } });
+  assert.equal(r.status, 200, JSON.stringify(r.data).slice(0, 200));
+  assert.equal(r.data.created, 2, JSON.stringify(r.data.skipped || []));
+  assert.equal(env.DB.one("SELECT min_signups AS m FROM events WHERE name='Tuesday Skills — threshold'").m, 10,
+    "cleanEventBag dropped the threshold — create, duplicate, bulk and series paths would all lose it");
+  assert.equal(env.DB.one("SELECT min_signups AS m FROM events WHERE name='Tuesday Skills — junk'").m, null,
+    "a negative minimum reached the row — the bag path skipped the one normaliser");
+  env.DB.close();
+});
+
+test("SG-2 — the screen: the field, the save payload, and a count line that is QUIET without a threshold", () => {
+  const src = readFileSync(new URL("../../web/assets/admin-event.js", import.meta.url), "utf8");
+  assert.ok(src.includes('id="e_min"'), "the Minimum-to-run field is not on the details card");
+  const save = functionBodyAfter(src, "async function save");
+  assert.ok(save, "save() went missing — the containment check below would read the whole file instead");
+  assert.ok(save.includes("min_signups"),
+    "save() does not send the threshold — typed and told 'Saved.', stored nowhere (D-34's exact shape)");
+  assert.match(src, /if \(!ev\.min_signups\) return ""/,
+    "the count line lost its quiet-when-unset gate — an always-on line trains the operator to ignore it (SG-4's lesson)");
+  assert.ok(src.includes("needed to run"), "the count sentence left the screen");
+  // NC — mutate the real input and prove the needles can fail
+  const mutated = src.split("min_signups").join("min_signup_zz");
+  assert.ok(mutated !== src, "the mutation did not land — the source never contained the needle");
+  assert.ok(!functionBodyAfter(mutated, "async function save").includes("min_signups"),
+    "the mutated save() still matches — the containment check cannot fail and proves nothing");
 });

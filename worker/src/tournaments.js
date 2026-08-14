@@ -12,7 +12,8 @@ import {
 import { autoClaimForEvent, releaseAutoClaims } from "./facility.js";
 import { advanceBracketFor } from "./brackets.js"; // v0.67.0 — brackets.js imports only scheduler.js, no cycle
 import { personName, CAPTAIN_JOIN, CAPTAIN_COLS } from "./names.js"; // T2-3 — one captain shape, one place
-import { notifyEventCancelled, externalPriceConflict } from "./events_admin.js"; // B16 — one recipient rule for all three cancel writers; PM-1 — one price/external rule for both write paths; events_admin imports nothing, no cycle
+import { notifyEventCancelled, externalPriceConflict, cleanMinSignups } from "./events_admin.js"; // B16 — one recipient rule for all three cancel writers; PM-1 — one price/external rule for both write paths; SG-2 — one threshold spelling for both write paths; events_admin imports nothing, no cycle
+import { activeRegistrationCount } from "./waitlists.js"; // SG-2 — the ONE count the capacity gate, sheet and roster already read; waitlists imports only push.js, no cycle
 
 export async function tournamentRoutes(request, env, url, ctx) {
   const p = url.pathname;
@@ -90,6 +91,12 @@ async function getEvent(env, ctx, id) {
   const ev = await env.DB.prepare("SELECT * FROM events WHERE id=?1 AND deleted_at IS NULL").bind(id).first();
   if (!ev) return json({ error: "Event not found." }, 404);
   if (ev.status === "draft" && !(await isStaff(env, ctx, ev.org_id))) return json({ error: "Not available." }, 403);
+  // SG-2 (§-1o): the count IS Cathy's decision, so the event carries it — activeRegistrationCount
+  // is the capacity gate's own number (registration ROWS, the same units as `capacity`, so
+  // "9 of 12" and "full at 12" can never contradict). Unconditional: the sheet already shows
+  // this number publicly for drop-ins, and a field only staff receive is a field a caller can
+  // forget to be staff for.
+  ev.active_signups = await activeRegistrationCount(env, id);
   return json({ event: ev });
 }
 
@@ -108,8 +115,12 @@ async function patchEvent(request, env, ctx, id) {
   // quietly fixing that here would be a second change riding on this one (§-1c D-34). So the
   // conflict this route can create is "a URL onto an already-priced event", and that is what the
   // check below compares — the incoming URL against the price ALREADY STORED.
+  // SG-2: `min_signups` joins the list the day its field ships, or the event page would tell the
+  // operator "Saved." while dropping it — D-34's exact defect worn by the new field. Normalised
+  // through the ONE spelling (events_admin.js) that the bag path also uses.
   const allowed = ["name", "starts_at", "location", "court_count", "status", "cash_option_enabled",
-    "config_json", "external_url", "external_label"];
+    "config_json", "external_url", "external_label", "min_signups"];
+  if ("min_signups" in b) b.min_signups = cleanMinSignups(b.min_signups);
   const conflict = externalPriceConflict({
     external_url: "external_url" in b ? b.external_url : ev.external_url,
     price_cents: ev.price_cents,

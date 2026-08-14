@@ -1,5 +1,11 @@
 /* Boomtown Platform — Event Management screen
-   Version: v0.5.0 · Date: 2026-08-05 · Ships in: v0.90.0
+   Version: v0.6.0 · Date: 2026-08-14 · Ships in: v0.154.0
+   v0.6.0 (§-1o SG-2): THE THRESHOLD. A "Minimum to run" field on the details card and a live
+   count line beside Registrations — "9 of 12 needed to run — 3 short." The decision Cathy makes
+   by email thread ("What is your count for Sunday?") becomes this screen plus the Cancel button
+   that already tells everyone who signed up (B16). The line is QUIET when no minimum is set;
+   the count is the server's active_signups — the capacity gate's own number, never re-counted
+   client-side.
    v0.5.0 (roadmap §-1 Block D1, audit R4): KING OF THE COURT IS FINALLY STARTABLE BY A HUMAN.
    POST /api/admin/events/:id/kotc and POST /api/admin/kotc/:id/players existed and were tested
    since v0.80.0 — and no file in web/ called either, so a fully-built format could not be
@@ -49,6 +55,20 @@
     return s.external ? s.href : location.origin + location.pathname.replace(/[^/]*$/, "") + s.href;
   }
 
+  // SG-2 (§-1o): Cathy's decision is this sentence — the live count against the minimum she set.
+  // Quiet when no minimum is set: an always-on line trains the operator to ignore it (SG-4's
+  // lesson). The count is the server's active_signups (the capacity gate's own number, in
+  // sign-up rows); this function never counts anything itself.
+  function thresholdLine() {
+    if (!ev.min_signups) return "";
+    const n = ev.active_signups || 0;
+    if (n < ev.min_signups) {
+      return `<span class="notice-err" role="status">${n} of ${ev.min_signups} needed to run — ${ev.min_signups - n} short.
+        Cancelling from here tells everyone who signed up.</span>`;
+    }
+    return `<span class="notice-ok" role="status">${n} signed up — meets the ${ev.min_signups} needed to run.</span>`;
+  }
+
   function render() {
     const s = ev.starts_at || "";
     main.innerHTML = `
@@ -79,6 +99,7 @@
             <div class="field"><label>Start time</label><input id="e_time" type="time" value="${s.slice(11, 16) || "09:00"}" /></div>
             <div class="field"><label>Price (USD)</label><input id="e_price" type="number" min="0" step="0.01" value="${((ev.price_cents || 0) / 100).toFixed(2)}" /></div>
             <div class="field"><label>Capacity</label><input id="e_cap" type="number" min="1" value="${ev.capacity || ""}" placeholder="unlimited" /></div>
+            <div class="field"><label>Minimum to run</label><input id="e_min" type="number" min="1" value="${ev.min_signups || ""}" placeholder="none" /></div>
           </div>
           <!-- PM-1 (§-0 B6): an event can register somewhere else entirely. The two fields sit
                together and say what happens, because setting one without the other gives a button
@@ -122,6 +143,7 @@
 
       <div class="page-head">
         <h2 style="font-size:17px;margin:0">Registrations</h2>
+        ${thresholdLine()}
         <div class="spacer"></div>
         <button class="btn ghost" id="csvBtn">⬇ Download CSV</button>
       </div>
@@ -160,6 +182,7 @@
         ? `${document.getElementById("e_date").value} ${document.getElementById("e_time").value || "09:00"}` : null,
       price_cents: Math.round(Number(document.getElementById("e_price").value || 0) * 100),
       capacity: Number(document.getElementById("e_cap").value) || null,
+      min_signups: Number(document.getElementById("e_min").value) || null,
       cash_option_enabled: document.getElementById("e_cash").checked ? 1 : 0,
       external_url: document.getElementById("e_exturl").value.trim() || null,
       external_label: document.getElementById("e_extlabel").value.trim() || null,
