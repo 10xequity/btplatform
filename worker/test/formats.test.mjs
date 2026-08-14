@@ -315,3 +315,136 @@ test("6-on-2 is clean at 6 rounds and unavoidably repeats beyond 7", () => {
   assert.ok(forced.report.opponents.repeatedPairs > 0,
     "18 matches from 15 possible pairings must repeat — and must be reported as repeating");
 });
+
+/* ============================ T2-4 (§-0 B9): the curated offering ============================
+   Owner, two statements of record. The floor (2026-08-03): "there will never be a situation we
+   offer only 4 games for pool play." The template (v0.110.0 verbatim): "we would aim to run 8
+   games in pool play … Usually though, we have 9-10 ROUNDS … the max games players are playing
+   are approximately 12-16. More than 16 become physically unplayable." So the buttons a director
+   sees are the 8–10-pool-game options; 11–16 are playable but leave no bracket room under the
+   16-game TOTAL ceiling; past 16 is unplayable outright — and the ceiling's reason outranks the
+   band's, because short of games is a disappointment and past sixteen is an injury.
+
+   THE PLACEMENT IS THE TRAP THE ARCHIVE NAMED: the curation happens at the route/render, NEVER
+   inside equalGameOptions — chooseRounds consumes the unfiltered list for its most-that-can-be
+   fallback, and the {minGames:2} league-night override above must keep working. The pins below
+   hold that placement in both directions.
+
+   New exports are imported DYNAMICALLY so that pre-build these tests fail one by one while the
+   twenty-six above stay green — a static import of a missing export reddens the whole file. */
+import { readFileSync } from "node:fs";
+import worker from "../src/index.js";
+import { createD1 } from "../testkit/d1-memory.mjs";
+
+const FORMATS_SRC = readFileSync(new URL("../src/formats.js", import.meta.url), "utf8");
+const BRACKETS_SRC = readFileSync(new URL("../src/brackets.js", import.meta.url), "utf8");
+const TOURN_JS = readFileSync(new URL("../../web/assets/tournament.js", import.meta.url), "utf8");
+const TOURN_HTML = readFileSync(new URL("../../web/tournament.html", import.meta.url), "utf8");
+const ORIGIN = "https://boomtown.test";
+
+function bootRouter() {
+  const DB = createD1(readFileSync(new URL("../testkit/journey-schema.sql", import.meta.url), "utf8"));
+  DB.exec("INSERT INTO orgs (id, name, slug, active) VALUES (1,'Boomtown','boomtown',1)");
+  return { DB, APP_URL: ORIGIN, SITE_ORIGIN: ORIGIN, API_ORIGIN: ORIGIN, ALLOWED_ORIGINS: ORIGIN };
+}
+async function call(env, method, path, { body, token } = {}) {
+  const headers = { "Content-Type": "application/json", Origin: ORIGIN, "X-Org-Id": "1" };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const res = await worker.fetch(new Request(`${ORIGIN}${path}`, {
+    method, headers, body: body === undefined ? undefined : JSON.stringify(body),
+  }), env);
+  return { status: res.status, data: await res.json().catch(() => null) };
+}
+async function staff(env) {
+  const asked = await call(env, "POST", "/api/auth/request-link", { body: { email: "s@bt.test" } });
+  const v = await call(env, "POST", "/api/auth/verify", { body: { token: String(asked.data.dev_link).split("token=")[1] } });
+  const u = env.DB.one("SELECT id FROM users WHERE email='s@bt.test'");
+  env.DB.exec(`INSERT INTO user_org_roles (user_id, org_id, role) VALUES (${u.id},1,'admin')
+               ON CONFLICT(user_id, org_id) DO UPDATE SET role='admin'`);
+  return v.data.token;
+}
+
+test("T2-4 — the two bounds are named constants with the owner's values, and the ceiling now lives beside the floor it belongs with", async () => {
+  const f = await import("../src/formats.js");
+  assert.equal(f.MAX_GAMES_PER_TEAM, 16, "owner: more than 16 becomes physically unplayable");
+  assert.equal(f.RECOMMENDED_MAX_POOL_GAMES, 10, "owner's standard template tops pool play at ~10 so the bracket fits under 16 total");
+  assert.equal(typeof f.curatePoolOptions, "function", "the ONE curation judgement is exported");
+});
+
+test("T2-4 — ONE definition of the ceiling: formats.js defines it, brackets.js imports it (the v0.109.0 floor precedent, mirrored)", () => {
+  assert.match(FORMATS_SRC, /^export const MAX_GAMES_PER_TEAM = 16;$/m, "the definition moved to formats.js");
+  assert.ok(!/^export const MAX_GAMES_PER_TEAM/m.test(BRACKETS_SRC), "brackets.js no longer defines it");
+  assert.match(BRACKETS_SRC, /import \{[^}]*MAX_GAMES_PER_TEAM[^}]*\} from "\.\/formats\.js"/, "brackets.js imports it from the one home");
+  // NC: the definition-needle is load-bearing — remove it and the first assertion goes dark.
+  const mutated = FORMATS_SRC.replace(/^export const MAX_GAMES_PER_TEAM = 16;$/m, "");
+  assert.ok(mutated !== FORMATS_SRC, "the mutation landed");
+  assert.ok(!/^export const MAX_GAMES_PER_TEAM = 16;$/m.test(mutated), "and would be caught");
+});
+
+test("T2-4 — PROPERTY over the real field sizes (6–32 teams, 2–12 courts): recommended ⇔ inside 8–10, every refusal says why, and the ceiling's reason outranks the band's", async () => {
+  const { curatePoolOptions, MIN_GAMES_PER_TEAM: MIN, RECOMMENDED_MAX_POOL_GAMES: AIM, MAX_GAMES_PER_TEAM: MAX } =
+    await import("../src/formats.js");
+  let sawBelow = 0, sawInBand = 0, sawRoomless = 0, sawUnplayable = 0;
+  for (let teams = 6; teams <= 32; teams++) {
+    for (let courts = 2; courts <= 12; courts++) {
+      const raw = equalGameOptions(teams, courts);
+      const curated = curatePoolOptions(raw);
+      assert.equal(curated.length, raw.length, "curation annotates — it never removes (chooseRounds' contract)");
+      for (const o of curated) {
+        const inBand = o.gamesPerTeam >= MIN && o.gamesPerTeam <= AIM;
+        assert.equal(!!o.recommended, inBand, `${teams}t/${courts}c: ${o.gamesPerTeam} games recommended=${o.recommended}`);
+        if (inBand) { sawInBand++; assert.equal(o.why, undefined, "a recommended option needs no excuse"); }
+        else {
+          assert.ok(o.why && o.why.length > 10, "every refusal is a sentence a director can read");
+          if (o.gamesPerTeam > MAX) { sawUnplayable++; assert.match(o.why, /unplayable/, "past 16: the injury reason, even though it is also past 10"); }
+          else if (o.gamesPerTeam < MIN) { sawBelow++; assert.match(o.why, /floor|under/i); }
+          else { sawRoomless++; assert.match(o.why, /bracket|16/, "11–16: playable alone, no bracket room"); }
+        }
+      }
+    }
+  }
+  // The property proved nothing unless the sweep actually visited all four classes.
+  assert.ok(sawInBand > 50 && sawBelow > 50 && sawRoomless > 20 && sawUnplayable > 5,
+    `corpus must exhibit every class: in-band ${sawInBand}, below ${sawBelow}, roomless ${sawRoomless}, unplayable ${sawUnplayable}`);
+});
+
+test("T2-4 — the raw list stays unfiltered UNDER the curation: equalGameOptions still returns sub-floor counts (green by design — it pins the placement that must survive)", () => {
+  const raw = equalGameOptions(16, 4);
+  assert.ok(raw.some((o) => o.gamesPerTeam < MIN_GAMES_PER_TEAM), "sub-floor options exist in the raw list");
+  assert.ok(raw.some((o) => o.gamesPerTeam >= MIN_GAMES_PER_TEAM), "and in-band ones too — the fixture exhibits both sides");
+});
+
+test("T2-4 — the ROUTE serves the curated shape: 16 teams / 4 courts recommends exactly the 8, 9 and 10-game counts and says the band", async () => {
+  const env = bootRouter();
+  const token = await staff(env);
+  const r = await call(env, "GET", "/api/admin/formats/options?teams=16&courts=4", { token });
+  assert.equal(r.status, 200);
+  const rec = r.data.options.filter((o) => o.recommended);
+  assert.deepEqual(rec.map((o) => o.gamesPerTeam), [8, 9, 10], "the buttons a director would actually pick");
+  assert.equal(r.data.recommended_count, 3);
+  assert.deepEqual(r.data.band, { floor: 8, aim_max: 10, ceiling: 16 });
+  assert.ok(r.data.options.length === 12, "…and all twelve equal counts are still in the payload for the operator who wants them");
+});
+
+test("T2-4 — when NO option lands in the band the route says so and still hands over the list (empty and broken must not look identical)", async () => {
+  const env = bootRouter();
+  const token = await staff(env);
+  // 20 teams on 2 courts: equal counts top out at 4 games in 24 rounds — nothing reaches the floor.
+  const r = await call(env, "GET", "/api/admin/formats/options?teams=20&courts=2", { token });
+  assert.equal(r.data.recommended_count, 0);
+  assert.ok(r.data.options.length > 0, "the options are still there — a guard that only forbids deletes the last way out");
+  assert.match(String(r.data.note), /floor|8 games|court/i, "the note explains the shortfall instead of presenting an empty room");
+});
+
+test("T2-4 — the screen renders the judgement and finally SENDS the points: recommended buttons, the rest behind a disclosure, and points_to on both the preview and the commit", () => {
+  assert.ok(TOURN_JS.includes("o.recommended"), "the render forks on the route's judgement");
+  assert.ok(TOURN_JS.includes("<details"), "out-of-band counts sit behind a disclosure, offered but second");
+  assert.ok(TOURN_HTML.includes('id="plPoints"'), "the points field exists — settable points was half-built for six releases");
+  const preview = TOURN_JS.slice(TOURN_JS.indexOf("async function previewPlan"), TOURN_JS.indexOf("async function previewPlan") + 600);
+  assert.ok(preview.includes("points_to"), "the preview sends what the server always accepted");
+  const commit = TOURN_JS.slice(TOURN_JS.indexOf('$("plCommit").onclick'), TOURN_JS.indexOf('$("plCommit").onclick') + 600);
+  assert.ok(commit.includes("points_to"), "and the committed matches carry the same points");
+  // NC: the fork-needle is load-bearing.
+  const mutated = TOURN_JS.replace(/o\.recommended/g, "o.XXGONE");
+  assert.ok(!mutated.includes("o.recommended"), "the mutation landed");
+});

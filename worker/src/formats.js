@@ -77,6 +77,48 @@ export function equalGameOptions(teams, courts, maxRounds = 24) {
  */
 export const MIN_GAMES_PER_TEAM = 8;
 
+/**
+ * The ceiling, and the recommended top of pool play. Owner, v0.110.0 verbatim:
+ *
+ *   "generally in a standard tournament template - we would aim to run 8 games in pool play …
+ *    Usually though, we have 9-10 ROUNDS (not games) so we hit the 8 … This way the max games
+ *    players are playing are approximately 12-16. More than 16 become physically unplayable."
+ *
+ * MAX_GAMES_PER_TEAM lived in brackets.js from v0.110.0 (the bracket preview's over_ceiling
+ * check); T2-4 moved it HERE beside the floor because the options route needs both bounds and
+ * brackets.js already imports this file — one home per bound, the v0.109.0 floor precedent
+ * mirrored. The 16 is a TOTAL (pool + bracket): a pool-only count of 11–16 is playable by itself
+ * but leaves no room for the bracket that follows, which is why the recommended pool window
+ * closes at 10. The ceiling is judged before the floor everywhere both apply — short of games is
+ * a disappointment; past sixteen is an injury.
+ */
+export const MAX_GAMES_PER_TEAM = 16;
+export const RECOMMENDED_MAX_POOL_GAMES = 10;
+
+/**
+ * T2-4 (§-0 B9): the ONE judgement of which equal-game options a director would actually pick.
+ * ANNOTATES, never removes — chooseRounds consumes the raw list for its most-that-can-be
+ * fallback, and the {minGames} override is a league night's legitimate exit. Callers that OFFER
+ * options (the route, and through it the Plan-the-day buttons) read `recommended`; everything
+ * out of band carries a sentence saying why, because a greyed choice with no reason teaches an
+ * operator to distrust the screen.
+ */
+export function curatePoolOptions(options) {
+  return (options || []).map((o) => {
+    const g = o.gamesPerTeam;
+    if (g > MAX_GAMES_PER_TEAM) {
+      return { ...o, recommended: false, why: `${g} games each is past ${MAX_GAMES_PER_TEAM} — physically unplayable in a day.` };
+    }
+    if (g < MIN_GAMES_PER_TEAM) {
+      return { ...o, recommended: false, why: `${g} games each is under the ${MIN_GAMES_PER_TEAM}-game floor — pool play never offers less.` };
+    }
+    if (g > RECOMMENDED_MAX_POOL_GAMES) {
+      return { ...o, recommended: false, why: `${g} pool games is playable, but leaves no room for a bracket under ${MAX_GAMES_PER_TEAM} total.` };
+    }
+    return { ...o, recommended: true };
+  });
+}
+
 export function chooseRounds(teams, courts, targetGames, opts = {}) {
   const minGames = Number(opts.minGames) > 0 ? Number(opts.minGames) : MIN_GAMES_PER_TEAM;
   const all = equalGameOptions(teams, courts);
@@ -640,14 +682,24 @@ export async function formatsRoutes(request, env, url, ctx) {
     if (denied) return denied;
     const teams = Number(url.searchParams.get("teams"));
     const courts = Number(url.searchParams.get("courts"));
-    const options = equalGameOptions(teams, courts);
+    // T2-4: the raw list is computed as ever; the route hands back the CURATED view of it. The
+    // recommended window is the owner's own standard (8–10 pool games, bracket fits under 16
+    // total); everything else stays in the payload with its reason, because the operator
+    // overrides defaults — the screen just stops presenting twelve equal buttons as if a
+    // 1-game day and an 18-game day were choices anyone makes.
+    const options = curatePoolOptions(equalGameOptions(teams, courts));
+    const recommendedCount = options.filter((o) => o.recommended).length;
     return json({
       teams, courts,
       waiting_per_round: Number.isInteger(teams) && Number.isInteger(courts) ? teams - 2 * courts : null,
       options,
-      note: options.length
-        ? "Only these round counts give every team the same number of games."
-        : `${teams} teams on ${courts} courts doesn't leave anyone waiting — every team plays every round.`,
+      recommended_count: recommendedCount,
+      band: { floor: MIN_GAMES_PER_TEAM, aim_max: RECOMMENDED_MAX_POOL_GAMES, ceiling: MAX_GAMES_PER_TEAM },
+      note: !options.length
+        ? `${teams} teams on ${courts} courts doesn't leave anyone waiting — every team plays every round.`
+        : recommendedCount
+          ? "Only these round counts give every team the same number of games."
+          : `${teams} teams on ${courts} courts cannot reach the ${MIN_GAMES_PER_TEAM}-game floor with an equal count — the most is ${options[options.length - 1].gamesPerTeam} games each. Add a court, split the field, or pick a count below and run the pool twice.`,
     });
   }
 

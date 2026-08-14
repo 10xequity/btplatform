@@ -36,7 +36,7 @@
 import { bracketOrder } from "./scheduler.js";
 import { personName, CAPTAIN_JOIN, CAPTAIN_COLS } from "./names.js"; // v0.74.0 — one name rule
 import { courtsFor, allocate, slotsFrom, conflicts } from "./courts.js"; // v0.78.0 — fixed ranges, real times
-import { MIN_GAMES_PER_TEAM } from "./formats.js"; // v0.109.0 — ONE definition of the owner's floor
+import { MIN_GAMES_PER_TEAM, MAX_GAMES_PER_TEAM } from "./formats.js"; // v0.109.0 / v0.150.0 — ONE definition of the owner's floor AND ceiling
 
 /**
  * A best-of-3 match is worth 2.25 games. Owner, 2026-08-08: "Game matches (best of 3) are
@@ -73,8 +73,9 @@ export function guaranteedGames(poolGames, everyoneBreaks, bestOf) {
    gamesPerTeam as 2CR/N rather than R; this comment exists so the distinction survives into the
    wording of anything built on top. */
 
-/** Sixteen games is the wall. A planner that knows only a floor will happily recommend past it. */
-export const MAX_GAMES_PER_TEAM = 16;
+/* Sixteen games is the wall. A planner that knows only a floor will happily recommend past it.
+   The constant moved to formats.js in v0.150.0 (T2-4) so the options route can judge both bounds
+   from one home — imported below, exactly as the floor has been since v0.109.0. */
 
 /** Owner, 2026-08-08: "each match taking 20 minutes, Each 15 pt takes 15 minutes (3rd game)." */
 export const MINUTES_PER_MATCH = 20;

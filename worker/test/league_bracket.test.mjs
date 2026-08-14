@@ -585,9 +585,12 @@ test("a bracket not seeded by pool play says so — the two look identical other
       quarter of the time. That is where 2.25 came from, and it makes a best-of-3 match 23.75 minutes
       of expected clock — so the same template drives games AND minutes and they cannot disagree. */
 import {
-  MAX_GAMES_PER_TEAM, MINUTES_PER_MATCH, MINUTES_THIRD_GAME, BEST_OF_3_FROM_ROUND,
+  MINUTES_PER_MATCH, MINUTES_THIRD_GAME, BEST_OF_3_FROM_ROUND,
   gamesForRound, minutesForRound, bracketGames,
 } from "../src/brackets.js";
+// v0.150.0 (T2-4): the ceiling moved to formats.js beside the floor — one home per bound. This
+// file's PURPOSE (pin the value and the over-ceiling behaviour) is unchanged; only the address is.
+import { MAX_GAMES_PER_TEAM } from "../src/formats.js";
 
 test("the template: quarters are one game, semi and final are best of 3", () => {
   assert.equal(BEST_OF_3_FROM_ROUND, 2, "round 1 is the final and round 2 the semi");

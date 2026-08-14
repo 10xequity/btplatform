@@ -128,9 +128,19 @@
     const r = await api(`/api/admin/formats/options?teams=${t}&courts=${c}`);
     if (!r.ok) { $("plChoices").innerHTML = `<span class="muted">${r.data.error || "Couldn't work out the options."}</span>`; return; }
     const opts = r.data.options || [];
+    /* T2-4: the buttons are the RECOMMENDED window (the server says which — 8–10 pool games, so
+       the bracket fits under 16 total). The rest stay reachable behind a disclosure with the
+       server's reason on each, because these are defaults a director overrides, not refusals.
+       When nothing is recommended there is no disclosure to hide behind — the note explains the
+       shortfall and every count is offered directly, exactly as before this change. */
+    const btn = (o) => `<button class="btn ghost" data-plr="${o.rounds}" style="margin:0 6px 6px 0">
+        ${o.gamesPerTeam} games each · ${o.rounds} rounds${o.byesPerTeam ? ` · sits ${o.byesPerTeam}` : ""}</button>`;
+    const rec = opts.filter((o) => o.recommended);
+    const rest = opts.filter((o) => !o.recommended);
     $("plChoices").innerHTML = (r.data.note ? `<p class="muted" style="margin:0 0 6px">${r.data.note}</p>` : "") +
-      opts.map((o) => `<button class="btn ghost" data-plr="${o.rounds}" style="margin:0 6px 6px 0">
-        ${o.gamesPerTeam} games each · ${o.rounds} rounds${o.byesPerTeam ? ` · sits ${o.byesPerTeam}` : ""}</button>`).join("");
+      (rec.length ? rec.map(btn).join("") : opts.map(btn).join("")) +
+      (rec.length && rest.length ? `<details style="margin-top:6px"><summary class="muted" style="cursor:pointer;min-height:44px;display:flex;align-items:center">Show ${rest.length} more round count${rest.length === 1 ? "" : "s"}</summary>` +
+        rest.map((o) => `<div style="margin:6px 0">${btn(o)}<span class="muted" style="font-size:13px">${o.why || ""}</span></div>`).join("") + `</details>` : "");
     document.querySelectorAll("[data-plr]").forEach((b) => b.onclick = () => previewPlan(t, c, +b.dataset.plr));
     // One tap saved: if a listed option hits the asked-for games exactly, preview it right away.
     const want = +$("plGames").value || 8;
@@ -141,6 +151,7 @@
   async function previewPlan(t, c, rounds) {
     const r = await api("/api/admin/formats/plan", { method: "POST", body: JSON.stringify({
       teams: t, courts: c, rounds, target_games: +$("plGames").value || undefined,
+      points_to: +$("plPoints").value || undefined, // T2-4: the server accepted this for six releases; the screen finally sends it
     }) });
     if (!r.ok) { $("plSummary").textContent = r.data.error || "That plan didn't work out."; return; }
     plannedRounds = rounds;
@@ -154,7 +165,8 @@
 
   $("plCommit").onclick = async () => {
     if (!plannedRounds || !currentEvent) return;
-    const body = { courts: +$("plCourts").value, rounds: plannedRounds, assign_refs: true };
+    const body = { courts: +$("plCourts").value, rounds: plannedRounds, assign_refs: true,
+      points_to: +$("plPoints").value || undefined }; // T2-4: the committed matches carry the same points the preview showed
     let r = await api(`/api/admin/events/${currentEvent.id}/generate-schedule`, { method: "POST", body: JSON.stringify(body) });
     if (r.status === 409) {
       if (!confirm(`${r.data.error} Replace it with this plan?`)) return;
