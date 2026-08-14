@@ -335,3 +335,108 @@ test("SG-2 — the screen: the field, the save payload, and a count line that is
   assert.ok(!functionBodyAfter(mutated, "async function save").includes("min_signups"),
     "the mutated save() still matches — the containment check cannot fail and proves nothing");
 });
+
+/* ==================== SG-5 (§-1o): B16's SECOND CALLER — news to the participants ==================== */
+/* The owner, 2026-08-10 23:09: "That screen also needs to be able to contact and email the
+   participants with information or news." B16's own header promised this reuse in writing —
+   "the recipient selection is the reusable part, the cancellation copy is just this caller's
+   message" — so the news sender shares ONE selection with the cancel notifier (extracted, not
+   copied), writes kind='event_news' rows carrying the OPERATOR'S words, and reports email
+   honesty in the same three sentences. Render safety was measured before letting operator-typed
+   text into a notification body: home.js escapes title AND body; the email path runs escapeHtml. */
+
+test("SG-5 — news reaches ACTIVE participants only, one per member, with the operator's words", async () => {
+  const env = boot();
+  const { staff } = await tokens(env);
+  const r = await call(env, "POST", "/api/events/50/notify", { token: staff, body: { message: "Bring knee pads on Sunday." } });
+  assert.equal(r.status, 200, JSON.stringify(r.data).slice(0, 200));
+  const got = env.DB.query("SELECT contact_id, title, body FROM notifications WHERE kind='event_news' ORDER BY contact_id");
+  assert.deepEqual(got.map((x) => x.contact_id), [900, 902],
+    "expected exactly Ava (deduped from two registrations) and Cam; Ben's registration was already cancelled");
+  assert.match(got[0].title, /Thursday Coed 4s/, "the notification does not name the event");
+  assert.equal(got[0].body, "Bring knee pads on Sunday.", "the body is not the operator's words");
+  assert.equal(r.data.notified, 2);
+  const row = env.DB.one("SELECT detail_json FROM audit_log WHERE action='event.participants_notified' ORDER BY id DESC LIMIT 1");
+  assert.ok(row, "no audit row for the news send");
+  assert.equal(JSON.parse(row.detail_json || "{}").notified, 2);
+  env.DB.close();
+});
+
+test("SG-5 — the response is HONEST about email, keyless: who has an address, that nothing was emailed", async () => {
+  const env = boot();
+  const { staff } = await tokens(env);
+  const r = await call(env, "POST", "/api/events/50/notify", { token: staff, body: { message: "Court change: we are on court 2." } });
+  assert.equal(r.data.with_email, 1, "Ava has an address, Cam does not — with_email pins the would-email logic keyless");
+  assert.equal(r.data.emailed, 0);
+  assert.match(r.data.note, /nothing was emailed/i, "no mail key is set and the note does not say so");
+  assert.match(r.data.note, /inbox/i, "the note should say members still see it in their member inbox");
+  env.DB.close();
+});
+
+test("SG-5 — refusals refuse in sentences and write NOTHING: empty, over-long, member, missing event", async () => {
+  const env = boot();
+  const { staff, member } = await tokens(env);
+  const empty = await call(env, "POST", "/api/events/50/notify", { token: staff, body: { message: "   " } });
+  assert.equal(empty.status, 400);
+  assert.match(String(empty.data.error), /message/i, "the empty-message refusal has no sentence of its own");
+  const long = "x".repeat(2001);
+  assert.ok(long.length > 2000, "the mutation did not land — the over-long body is not over-long");
+  const big = await call(env, "POST", "/api/events/50/notify", { token: staff, body: { message: long } });
+  assert.equal(big.status, 400);
+  assert.match(String(big.data.error), /2,?000/, "the over-long refusal does not say what the limit is");
+  assert.equal((await call(env, "POST", "/api/events/50/notify", { token: member, body: { message: "hi" } })).status, 403);
+  assert.equal((await call(env, "POST", "/api/events/999/notify", { token: staff, body: { message: "hi" } })).status, 404);
+  assert.equal(env.DB.one("SELECT COUNT(*) AS n FROM notifications WHERE kind='event_news'").n, 0,
+    "a refused send still wrote a notification");
+  env.DB.close();
+});
+
+test("SG-5 — an event nobody signed up for reports the honest zero, not an error", async () => {
+  const env = boot();
+  const { staff } = await tokens(env);
+  const r = await call(env, "POST", "/api/events/53/notify", { token: staff, body: { message: "hello" } });
+  assert.equal(r.status, 200);
+  assert.equal(r.data.notified, 1, "event 53 has exactly Ben, paid — precondition for the zero test below");
+  env.DB.exec("UPDATE registrations SET status='cancelled' WHERE event_id=53");
+  const r2 = await call(env, "POST", "/api/events/53/notify", { token: staff, body: { message: "anyone there?" } });
+  assert.equal(r2.status, 200, "an empty guest list must not read as a failure — empty and broken look identical");
+  assert.equal(r2.data.notified, 0);
+  assert.match(String(r2.data.note), /nobody|no one/i, "the zero case needs its own sentence");
+  env.DB.close();
+});
+
+test("SG-5 — ONE recipient selection: news and cancel reach the SAME people, and the SQL lives once", async () => {
+  const env = boot();
+  const { staff } = await tokens(env);
+  await call(env, "POST", "/api/events/50/notify", { token: staff, body: { message: "See you Sunday." } });
+  const news = env.DB.query("SELECT contact_id FROM notifications WHERE kind='event_news' ORDER BY contact_id").map((x) => x.contact_id);
+  await call(env, "PATCH", "/api/events/50", { token: staff, body: { status: "cancelled" } });
+  assert.deepEqual(cancelled(env, 50), news,
+    "the news sender and the cancel notifier reached different people — the selections have drifted apart");
+  const src = readFileSync(new URL("../src/events_admin.js", import.meta.url), "utf8");
+  assert.equal(src.split("SELECT DISTINCT r.event_id, r.contact_id").length - 1, 1,
+    "the recipient SELECT is spelled more than once — two selections is how news and cancel disagree");
+  assert.ok(functionBodyAfter(src, "function activeRegistrantsOf"), "the shared selection helper is gone");
+  assert.ok(functionBodyAfter(src, "function notifyEventCancelled").includes("activeRegistrantsOf("),
+    "the cancel notifier stopped using the shared selection");
+  assert.ok(functionBodyAfter(src, "function notifyEventParticipants").includes("activeRegistrantsOf("),
+    "the news sender stopped using the shared selection");
+  env.DB.close();
+});
+
+test("SG-5 — the screen: the message card, the POST, and the honest note reaching the operator", () => {
+  const src = readFileSync(new URL("../../web/assets/admin-event.js", import.meta.url), "utf8");
+  assert.ok(src.includes('id="e_msg"'), "the message box is not on the event screen");
+  const send = functionBodyAfter(src, "async function sendNews");
+  assert.ok(send, "sendNews() went missing — the containment below would read the whole file instead");
+  assert.ok(send.includes("/notify"), "sendNews does not call the notify route");
+  assert.ok(send.includes(".note"), "the honest email note never reaches the operator — success it did not achieve");
+  // NC — mutate the real input and prove the containment can fail. The mutation must REMOVE
+  // the needle, not extend it: "/notifyZZ" still CONTAINS "/notify" as a substring, and this
+  // NC's first draft did exactly that and failed against the real source. The grain of a
+  // mutation is part of its truth, same as a needle's.
+  const mutated = src.split("/notify").join("/zz");
+  assert.ok(mutated !== src, "the mutation did not land — the source never calls the route");
+  assert.ok(!functionBodyAfter(mutated, "async function sendNews").includes("/notify"),
+    "the mutated sendNews still matches — the check above cannot fail and proves nothing");
+});

@@ -32,9 +32,21 @@
      so an unbuilt tab is absent rather than a dead button. A tab with more than one pane grows a
      sub-tab row — which is what "Waitlist is a sub section of registration" asks for. */
   const TABS = [
+    /* SG-5 (§-1o): the event's own FACE comes first — details, publish/cancel, the share link,
+       the minimum-to-run count line and the message-participants card all live on
+       admin-event.html, which learned the hub's ?event= spelling for exactly this frame. */
+    { key: "overview", label: "Overview", panes: [
+      { key: "event", label: "Overview", page: "admin-event.html" },
+    ] },
     { key: "registrations", label: "Registrations", panes: [
       { key: "list", label: "Registrations", page: "admin-registrations.html" },
       { key: "waitlist", label: "Waitlist", page: "admin-waitlists.html" },
+    ] },
+    /* SG-5: the megaphone sits beside the guest list — admin-marketing.html has spoken ?event=
+       since W-F ("Email these registrants": the segment form opens with this event chosen), so
+       Announce is that hand-off given a tab rather than a second sender. */
+    { key: "announce", label: "Announce", panes: [
+      { key: "compose", label: "Announce", page: "admin-marketing.html" },
     ] },
     { key: "divisions", label: "Divisions & Pools", panes: [
       { key: "divisions", label: "Divisions", page: "admin-divisions.html" },
@@ -73,11 +85,14 @@
      admin-brackets' own empty state plus its Generate panel IS that way in. So a league sees every
      tab, and the pages themselves say when they have nothing yet. */
   const TAB_TYPES = {
-    tournament:   ["registrations", "divisions", "scoring-links", "schedule", "scoring", "live", "bracket"],
-    league:       ["registrations", "divisions", "scoring-links", "schedule", "scoring", "live", "bracket"],
-    training:     ["registrations"],
-    event:        ["registrations"],
-    court_rental: ["registrations"],
+    tournament:   ["overview", "registrations", "announce", "divisions", "scoring-links", "schedule", "scoring", "live", "bracket"],
+    league:       ["overview", "registrations", "announce", "divisions", "scoring-links", "schedule", "scoring", "live", "bracket"],
+    /* SG-5: every type has a face and people worth telling something — a drop-in session is
+       the events program's common case (Cathy's Tuesdays), and for one this hub is now the
+       whole screen: the event's page, who is coming, and the megaphone. */
+    training:     ["overview", "registrations", "announce"],
+    event:        ["overview", "registrations", "announce"],
+    court_rental: ["overview", "registrations", "announce"],
   };
 
   /* Until the event loads we know no type, so nothing type-specific is rendered yet. */

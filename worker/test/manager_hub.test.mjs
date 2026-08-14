@@ -62,11 +62,11 @@ function tabs() {
   return found;
 }
 
-test("all seven tabs are declared in the owner's order, and only the built ones render", () => {
+test("the tab row: the owner's seven in his order, with SG-5's Overview first and Announce after Registrations", () => {
   const t = tabs();
   assert.deepEqual(t.map((x) => x.key),
-    ["registrations", "divisions", "scoring-links", "schedule", "scoring", "live", "bracket"],
-    "the tab order is the owner's item 7, verbatim — declaring all seven now fixes the order before H-2 fills them in");
+    ["overview", "registrations", "announce", "divisions", "scoring-links", "schedule", "scoring", "live", "bracket"],
+    "the owner's seven (item 7, verbatim) keep their relative order; Overview and Announce are §-1o SG-5's additions — the event's own face first, the megaphone beside the guest list (create → target → announce → watch)");
   // A tab with no pane yet must not render as a dead button: the list carries every tab, the
   // renderer filters on what is actually wired. Both halves asserted, or the filter is decoration.
   assert.match(HUB_JS, /\.filter\(\(?t\)? => t\.panes/,
@@ -80,10 +80,11 @@ test("all seven tabs are declared in the owner's order, and only the built ones 
 test("the sub-tabs are the owner's subsections: Waitlist under Registrations, Pools under Divisions", () => {
   const panes = [...HUB_JS.matchAll(/page:\s*"([a-z-]+\.html)"/g)].map((x) => x[1]);
   assert.deepEqual(panes,
-    ["admin-registrations.html", "admin-waitlists.html", "admin-divisions.html", "admin-pool-board.html",
-     "admin-score-links.html", "admin-schedule-editor.html", "tournament.html", "admin-league.html",
+    ["admin-event.html", "admin-registrations.html", "admin-waitlists.html", "admin-marketing.html",
+     "admin-divisions.html", "admin-pool-board.html", "admin-score-links.html",
+     "admin-schedule-editor.html", "tournament.html", "admin-league.html",
      "live.html", "admin-brackets.html"],
-    "each pane is an EXISTING page — a tab whose content is a new implementation is the rewrite this design refuses");
+    "each pane is an EXISTING page — a tab whose content is a new implementation is the rewrite this design refuses. SG-5's two additions (the event's own page, marketing) are existing pages framed, exactly per the rule");
 });
 
 /* ── the tab row is the shared component, not a new one ── */
@@ -203,15 +204,43 @@ test("the visibility map covers exactly the event types the SCHEMA allows — no
     "the visibility map and the schema's type list disagree — a type with no row renders nothing, and an invented type is a row nobody reaches");
 });
 
-test("a drop-in sheet shows only what a drop-in has; a competition event shows the lot", () => {
-  // SG-1's drop-in types: a sheet needs no pools, no schedule, no scoring, no bracket.
-  assert.deepEqual(typeRow("training"), ["registrations"], "a drop-in session needs only its sign-ups");
-  assert.deepEqual(typeRow("event"), ["registrations"], "a drop-in event needs only its sign-ups");
-  assert.deepEqual(typeRow("court_rental"), ["registrations"], "a facility booking has no pools or scoring");
+test("a drop-in shows its face, its sign-ups and the megaphone; a competition event shows the lot", () => {
+  // SG-1's drop-in types still need no pools, schedule, scoring or bracket. What changed with
+  // SG-5: every type gets Overview (the event's own page) and Announce, because a drop-in
+  // session IS the events program's common case (Cathy's Tuesdays) — the hub must be her whole
+  // screen: the event's face, who is coming, and a way to tell everyone something.
+  const dropIn = ["overview", "registrations", "announce"];
+  assert.deepEqual(typeRow("training"), dropIn, "a drop-in session: the face, the sign-ups, the megaphone — nothing else");
+  assert.deepEqual(typeRow("event"), dropIn, "a drop-in event: the same three");
+  assert.deepEqual(typeRow("court_rental"), dropIn, "a facility booking has no pools or scoring either");
   const tabKeys = tabs().map((x) => x.key);
   assert.deepEqual(typeRow("tournament"), tabKeys, "a tournament shows every tab");
   assert.deepEqual(typeRow("league"), tabKeys,
     "a league shows every tab too — hiding Bracket until one exists would delete the only way to generate one (WF-2's rule), and admin-brackets' own empty state is that way in");
+});
+
+/* ── SG-5 (§-1o): the hub IS the events management page ── */
+
+test("SG-5 — Overview frames the event's own page; Announce frames marketing; both ride the ONE ?event= contract", () => {
+  const overview = HUB_JS.match(/key: "overview",([\s\S]*?)key: "registrations",/);
+  assert.ok(overview, "the Overview tab lost its panes, or no longer sits before Registrations");
+  assert.match(overview[1], /admin-event\.html/,
+    "Overview must frame the event's own page — details, publish/cancel, the share link, SG-2's count line and the message card all live there");
+  const announce = HUB_JS.match(/key: "announce",([\s\S]*?)key: "divisions",/);
+  assert.ok(announce, "the Announce tab lost its panes, or no longer sits between Registrations and Divisions");
+  assert.match(announce[1], /admin-marketing\.html/,
+    "Announce must frame marketing — SG-4's segments and the composer already speak ?event= (the W-F hand-off)");
+  // The hub's contract is ?event= for every pane (frameFor composes it once). admin-event.js
+  // historically read ?id= alone — framed without the alias it says "No event selected."
+  // (D-29's class: two spellings of one parameter). Pinned here, beside the tab that needs it.
+  const aev = code("assets/admin-event.js");
+  assert.match(aev, /qs\.get\("id"\) \|\| qs\.get\("event"\)/,
+    "admin-event.js no longer accepts the hub's ?event= — the Overview tab renders 'No event selected.'");
+  // NC — the pin can fail: strip the alias from a copy and the regex above must not match it.
+  const mutated = aev.split('qs.get("event")').join('qs.get("eventZZ")');
+  assert.ok(mutated !== aev, "the mutation did not land — admin-event.js never reads ?event= at all");
+  assert.ok(!/qs\.get\("id"\) \|\| qs\.get\("event"\)/.test(mutated),
+    "the mutated copy still matches — this pin cannot fail and proves nothing");
 });
 
 test("a tab hidden by type is ABSENT, never disabled — and the filter runs at BOTH levels", () => {

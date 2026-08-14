@@ -52,15 +52,7 @@ export async function notifyEventCancelled(env, ctx, eventIds, orgId = ctx.orgId
   const ids = (eventIds || []).map(Number).filter(Boolean);
   if (!ids.length) { out.note = "No events needed notifications."; return out; }
 
-  const ph = ids.map((_, i) => `?${i + 2}`).join(",");
-  const rows = (await env.DB.prepare(
-    `SELECT DISTINCT r.event_id, r.contact_id, c.email, c.full_name, e.name AS event_name
-       FROM registrations r
-       JOIN contacts c ON c.id = r.contact_id AND c.deleted_at IS NULL
-       JOIN events e   ON e.id = r.event_id
-      WHERE r.org_id = ?1 AND r.event_id IN (${ph}) AND r.deleted_at IS NULL
-        AND r.status IN ${ACTIVE_REG}`
-  ).bind(orgId, ...ids).all()).results || [];
+  const rows = await activeRegistrantsOf(env, orgId, ids);
 
   for (const r of rows) {
     await env.DB.prepare(
@@ -82,13 +74,78 @@ export async function notifyEventCancelled(env, ctx, eventIds, orgId = ctx.orgId
     }
   }
 
-  out.note = env.BREVO_API_KEY
+  out.note = emailHonestyNote(env, out);
+  await audit(env, ctx, "event.cancel_notified", "events", ids[0],
+    { events: ids, notified: out.notified, with_email: out.with_email, emailed: out.emailed });
+  return out;
+}
+
+/**
+ * The ONE recipient selection — SG-5 made B16's promised reuse real. Both notifiers (cancel,
+ * news) read this and nothing else, so "who gets told" can never mean two different sets. One
+ * row per member per event (DISTINCT): two teams, one message. Statuses are ACTIVE_REG — a
+ * registration the member already cancelled hears nothing, from either caller.
+ */
+async function activeRegistrantsOf(env, orgId, ids) {
+  const ph = ids.map((_, i) => `?${i + 2}`).join(",");
+  return (await env.DB.prepare(
+    `SELECT DISTINCT r.event_id, r.contact_id, c.email, c.full_name, e.name AS event_name
+       FROM registrations r
+       JOIN contacts c ON c.id = r.contact_id AND c.deleted_at IS NULL
+       JOIN events e   ON e.id = r.event_id
+      WHERE r.org_id = ?1 AND r.event_id IN (${ph}) AND r.deleted_at IS NULL
+        AND r.status IN ${ACTIVE_REG}`
+  ).bind(orgId, ...ids).all()).results || [];
+}
+
+/** The mail-key honesty, verbatim across both notifiers — a control that reports success it
+    did not achieve is this project's most-paid-for defect, and it must not creep back through
+    a second spelling of these sentences. */
+function emailHonestyNote(env, out) {
+  return env.BREVO_API_KEY
     ? `Emailed ${out.emailed} of ${out.with_email} member(s) with an address.`
     : (out.with_email
       ? `${out.with_email} member(s) have an email address, but no mail key is set — nothing was emailed. Everyone still sees this in their member inbox.`
       : "No email addresses on file — members will see this in their member inbox.");
-  await audit(env, ctx, "event.cancel_notified", "events", ids[0],
-    { events: ids, notified: out.notified, with_email: out.with_email, emailed: out.emailed });
+}
+
+/**
+ * SG-5 (§-1o), the owner's 23:09 requirement: "That screen also needs to be able to contact and
+ * email the participants with information or news." B16's second caller, as its header promised
+ * — same selection, same honesty sentences, the operator's own words as the body. The inbox
+ * renderer (home.js) escapes title and body, and the email path runs escapeHtml, so typed text
+ * cannot become markup on either surface.
+ */
+export async function notifyEventParticipants(env, ctx, eventId, message, orgId = ctx.orgId) {
+  const out = { notified: 0, with_email: 0, emailed: 0, note: "" };
+  const rows = await activeRegistrantsOf(env, orgId, [Number(eventId)]);
+  if (!rows.length) {
+    out.note = "Nobody is signed up yet, so there was no one to tell.";
+    await audit(env, ctx, "event.participants_notified", "events", Number(eventId),
+      { notified: 0, with_email: 0, emailed: 0, chars: message.length });
+    return out;
+  }
+  for (const r of rows) {
+    await env.DB.prepare(
+      `INSERT INTO notifications (org_id, kind, target, contact_id, title, body, link, payload_json, sent_at)
+       VALUES (?1,'event_news','member',?2,?3,?4,'home.html',?5,datetime('now'))`
+    ).bind(orgId, r.contact_id, `Update: ${r.event_name}`, message,
+      JSON.stringify({ event_id: r.event_id })).run();
+    out.notified++;
+    if (r.email) {
+      out.with_email++;
+      if (env.BREVO_API_KEY) {
+        const first = String(r.full_name || "").split(/\s+/)[0] || "there";
+        const ok = await sendEmail(env, r.email, `Update: ${r.event_name}`,
+          `<p>Hi ${escapeHtml(first)},</p><p>${escapeHtml(message)}</p><p>— about ${escapeHtml(r.event_name)}</p>`,
+          orgId);
+        if (ok) out.emailed++;
+      }
+    }
+  }
+  out.note = emailHonestyNote(env, out);
+  await audit(env, ctx, "event.participants_notified", "events", Number(eventId),
+    { notified: out.notified, with_email: out.with_email, emailed: out.emailed, chars: message.length });
   return out;
 }
 
@@ -109,6 +166,7 @@ export async function eventsAdminRoutes(request, env, url, ctx) {
   if ((match = p.match(/^\/api\/events\/(\d+)\/save-as-template$/)) && m === "POST") return saveAsTemplate(request, env, ctx, +match[1]);
   if ((match = p.match(/^\/api\/events\/(\d+)\/duplicate$/)) && m === "POST") return duplicateEvent(request, env, ctx, +match[1]);
   if ((match = p.match(/^\/api\/events\/(\d+)\/registrations\.csv$/)) && m === "GET") return registrationsCsv(env, ctx, +match[1]);
+  if ((match = p.match(/^\/api\/events\/(\d+)\/notify$/)) && m === "POST") return notifyParticipants(request, env, ctx, +match[1]);
 
   if (p === "/api/admin/events/recurring" && m === "POST") return createRecurring(request, env, ctx);
   if ((match = p.match(/^\/api\/admin\/series\/([\w-]+)$/))) {
@@ -123,6 +181,23 @@ export async function eventsAdminRoutes(request, env, url, ctx) {
   if ((match = p.match(/^\/api\/admin\/programs\/(\d+)$/)) && m === "DELETE") return deleteProgram(env, ctx, +match[1]);
 
   return null;
+}
+
+/* SG-5: the route behind the event screen's "Message everyone signed up" card. Gates on the
+   EVENT'S org (patchEvent's shape — the event decides whose staff may speak to its people).
+   Refusals are sentences and write nothing; the honest zero is a 200, because an empty guest
+   list is not a failure. */
+async function notifyParticipants(request, env, ctx, eventId) {
+  const ev = await env.DB.prepare("SELECT id, org_id FROM events WHERE id=?1 AND deleted_at IS NULL").bind(eventId).first();
+  if (!ev) return json({ error: "Event not found." }, 404);
+  const deny = await requireStaff(env, ctx, ev.org_id);
+  if (deny) return deny;
+  const b = await request.json().catch(() => ({}));
+  const message = String(b.message || "").trim();
+  if (!message) return json({ error: "Write the message first — nothing was sent." }, 400);
+  if (message.length > 2000) return json({ error: "Keep the message under 2,000 characters — nothing was sent." }, 400);
+  const out = await notifyEventParticipants(env, ctx, eventId, message, ev.org_id);
+  return json({ ok: true, ...out });
 }
 
 /* ---------- shared ---------- */

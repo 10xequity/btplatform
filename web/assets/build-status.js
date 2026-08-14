@@ -61,7 +61,7 @@
     "admin-calendar.html":      { s: "live" },
     "admin-tryouts.html":       { s: "beta", n: "Evaluate players at a tryout: their registration details, your own notes, a 1-5 rating and offer / no. Your notes are private to you — the director sees everyone’s together. The drag-and-drop team builder that uses this data is the next piece." },
     "admin-event.html":         { s: "live" },
-    "admin-manager.html":       { s: "beta", n: "One page per event, with tabs across the top that do not reload. Two of the seven tabs are wired so far — Registrations (with Waitlist beside it) and Divisions & Pools. The other five arrive next, and every one of them still works on its own from the menu in the meantime." },
+    "admin-manager.html":       { s: "live", n: "One page per event, with tabs across the top that do not reload: Overview (the event's own page), Registrations with Waitlist, Announce, and — for tournaments and leagues — Divisions & Pools, Scoring Links, Schedule editor, Scoring Edit, the Live board and Bracket. Every page still works on its own from the menu too." },
     "tournament.html":          { s: "live" },
     "admin-league.html":        { s: "live" },
     "admin-schedule-editor.html": { s: "beta", n: "Drag matches between rounds and courts; drop on an occupied slot to swap. It never blocks a move — the panel just tells you what it did to fairness. Moving a match that already has a score asks first." },

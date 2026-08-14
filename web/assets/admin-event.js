@@ -27,7 +27,12 @@
      Change lands on admin-events.html via body[data-org-switch-href]: this event id doesn't
      exist under the new org, so a plain reload would 404. */
 
-  const id = Number(new URLSearchParams(location.search).get("id"));
+  // SG-5: the manager hub frames this page as its Overview tab and speaks ?event= to every
+  // pane (ONE contract, composed once in frameFor). ?id= stays first — every existing link
+  // uses it — but the hub's spelling must work too, or the framed page says "No event
+  // selected." (D-29's class: two spellings of one parameter).
+  const qs = new URLSearchParams(location.search);
+  const id = Number(qs.get("id") || qs.get("event"));
   const main = document.getElementById("main");
   if (!id) { main.innerHTML = `<div class="empty">No event selected. <a href="admin-events.html">Back to events →</a></div>`; return; }
 
@@ -132,6 +137,21 @@
         <button class="btn ghost" id="copyLink" style="margin-left:8px">Copy link</button>
       </div>
 
+      <!-- SG-5 (§-1o), the owner's words: the event screen "needs to be able to contact and
+           email the participants with information or news." B16's second caller: every ACTIVE
+           registrant gets an in-app note, email rides along only when a mail key exists, and
+           the report says exactly what did and did not happen. -->
+      <div class="card" style="padding:16px;margin-bottom:18px">
+        <h2 style="font-size:16px;margin:0 0 6px">Message everyone signed up</h2>
+        <p class="help-text">Sends an in-app note to every active registrant — court changes,
+          start times, what to bring. Email goes out too when the mail key is set; otherwise
+          members still see it on their home page.</p>
+        <div class="field"><label for="e_msg">Message</label>
+          <textarea id="e_msg" rows="3" maxlength="2000" placeholder="Court change: we're on court 2 this week."></textarea></div>
+        <button class="btn" id="msgBtn">Send to everyone signed up</button>
+        <span id="msgNotice" style="margin-left:10px" role="status"></span>
+      </div>
+
       <div class="card" style="padding:16px;margin-bottom:18px">
         <h2 style="font-size:16px;margin:0 0 6px">King of the Court</h2>
         <p class="help-text">Run a King or Queen of the Court night on this event: create a session,
@@ -153,6 +173,7 @@
       navigator.clipboard.writeText(regLink()).then(() => alert("Link copied.")));
     document.getElementById("kotcNew").addEventListener("click", newSession);
     document.getElementById("saveBtn").addEventListener("click", save);
+    document.getElementById("msgBtn").addEventListener("click", sendNews);
     document.getElementById("dupBtn").addEventListener("click", duplicate);
     document.getElementById("tplBtn").addEventListener("click", saveTemplate);
     document.getElementById("csvBtn").addEventListener("click", csv);
@@ -211,6 +232,18 @@
     if (!r.ok) return alert(r.data.error || "Duplicate failed.");
     if (r.data.square_note) alert(r.data.square_note); // K-15: only a WARNING rides this field — success is silent
     location.href = "admin-event.html?id=" + r.data.id;
+  }
+
+  // SG-5: the send reports what actually happened — including, honestly, that nothing was
+  // emailed when no mail key is set (the server's note carries those exact sentences).
+  async function sendNews() {
+    const box = document.getElementById("e_msg");
+    const n = document.getElementById("msgNotice");
+    const r = await api(`/api/events/${id}/notify`, { method: "POST", body: JSON.stringify({ message: box.value.trim() }) });
+    n.className = r.ok ? "notice-ok" : "notice-err";
+    if (!r.ok) { n.textContent = r.data.error || "Send failed."; return; }
+    n.textContent = `Told ${r.data.notified} member${r.data.notified === 1 ? "" : "s"} in-app. ${r.data.note}`;
+    if (r.data.notified) box.value = "";
   }
 
   async function saveTemplate() {
