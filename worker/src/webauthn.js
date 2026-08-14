@@ -66,7 +66,12 @@ async function registerOptions(env, ctx) {
       pubKeyCredParams: [{ type: "public-key", alg: -7 }, { type: "public-key", alg: -257 }],
       timeout: 60000,
       attestation: "none",
-      authenticatorSelection: { residentKey: "preferred", userVerification: "preferred" },
+      // S-4a (v0.152.0): NEW enrolments must verify the user — Face ID, fingerprint, or PIN.
+      // Enrolment-time strictness locks nobody out: an authenticator that cannot verify simply
+      // does not enrol (email sign-in still exists), and every credential born under this rule
+      // starts life with uv_required = 1. Login options stay "preferred" — enforcement there is
+      // per-credential (the ratchet in login()), which is what keeps S-4a lockout-free.
+      authenticatorSelection: { residentKey: "preferred", userVerification: "required" },
       excludeCredentials: existing.map((c) => ({ type: "public-key", id: c.credential_id })),
     },
   });
@@ -93,6 +98,11 @@ async function register(request, env, ctx) {
   const parsed = parseAuthData(authData);
   if (!(await rpIdHashOk(parsed.rpIdHash, env))) return H.json({ error: "Origin mismatch." }, 400);
   if (!parsed.userPresent) return H.json({ error: "That didn't go through. Try again." }, 400);
+  // S-4a: a new passkey must prove it can verify its user. The options above demand it, but an
+  // option is a hint — this flag check is the enforcement.
+  if (!parsed.userVerified) {
+    return H.json({ error: "Your device needs to confirm it's you — with your face, fingerprint, or PIN. Try again and approve that check." }, 400);
+  }
   if (!parsed.credentialId || !parsed.cosePublicKey) return H.json({ error: "Malformed credential." }, 400);
 
   // Validate the COSE key is an alg we can verify later.
@@ -102,7 +112,7 @@ async function register(request, env, ctx) {
   const credIdB64 = b64urlEncode(parsed.credentialId);
   const label = (body.label || "").slice(0, 60) || guessDeviceLabel(request);
   await env.DB.prepare(
-    "INSERT INTO webauthn_credentials (user_id, credential_id, public_key, counter, device_label) VALUES (?1, ?2, ?3, ?4, ?5)"
+    "INSERT INTO webauthn_credentials (user_id, credential_id, public_key, counter, device_label, uv_required) VALUES (?1, ?2, ?3, ?4, ?5, 1)"
   ).bind(ctx.userId, credIdB64, b64urlEncode(parsed.cosePublicKey), parsed.counter, label).run();
   await H.audit(env, ctx, "passkey.register", "webauthn_credentials", credIdB64.slice(0, 12), { label });
 
@@ -136,7 +146,7 @@ async function login(request, env) {
   if (!ok) return H.json({ error: "This request expired. Try again." }, 400);
 
   const cred = await env.DB.prepare(
-    "SELECT id, user_id, public_key, counter FROM webauthn_credentials WHERE credential_id=?1 AND deleted_at IS NULL"
+    "SELECT id, user_id, public_key, counter, uv_required FROM webauthn_credentials WHERE credential_id=?1 AND deleted_at IS NULL"
   ).bind(body.id).first();
   if (!cred) return H.json({ error: "We don't recognize this device. Use the email link instead." }, 401);
 
@@ -144,6 +154,13 @@ async function login(request, env) {
   const parsed = parseAuthData(authData, /*attested*/ false);
   if (!(await rpIdHashOk(parsed.rpIdHash, env))) return H.json({ error: "Origin mismatch." }, 400);
   if (!parsed.userPresent) return H.json({ error: "That didn't go through. Try again." }, 400);
+  // S-4a, the ratchet's teeth: a credential that has EVER verified its user (see the UPDATE
+  // below) must verify on every assertion — a verifying authenticator that suddenly stops is
+  // the shape of a cloned key, not a settings change. Credentials that have never verified are
+  // untouched; that restraint is what makes this lockout-free for the pre-S-4a credential.
+  if (cred.uv_required && !parsed.userVerified) {
+    return H.json({ error: "This passkey usually confirms it's you with your face, fingerprint, or PIN — that check didn't happen. Try again and approve it, or use the email link." }, 401);
+  }
 
   const clientHash = new Uint8Array(await crypto.subtle.digest("SHA-256", b64urlDecode(resp.clientDataJSON)));
   const signedBytes = concatBytes(authData, clientHash);
@@ -160,9 +177,11 @@ async function login(request, env) {
   if (parsed.counter > 0 && cred.counter > 0 && parsed.counter <= cred.counter) {
     return H.json({ error: "Security check failed. Use the email link and contact admin@boomtownvb.com." }, 401);
   }
+  // S-4a, the ratchet itself: a fully valid, VERIFIED login is the proof this authenticator can
+  // do Face ID/PIN — from here on it must. Written only after every check above has passed.
   await env.DB.prepare(
-    "UPDATE webauthn_credentials SET counter=?1, last_used_at=datetime('now') WHERE id=?2"
-  ).bind(parsed.counter, cred.id).run();
+    "UPDATE webauthn_credentials SET counter=?1, last_used_at=datetime('now'), uv_required=MAX(uv_required, ?3) WHERE id=?2"
+  ).bind(parsed.counter, cred.id, parsed.userVerified ? 1 : 0).run();
 
   return H.issueSession(env, cred.user_id, "passkey");
 }

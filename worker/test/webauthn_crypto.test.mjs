@@ -156,12 +156,14 @@ async function signAssertion(privateKey, authData, cdjBytes) {
   return raw; // caller DER-encodes (or tampers first)
 }
 
-/** Enroll a credential row directly — login is public, so login tests need no session. */
-function enrollDirect(env, { userId = 7, credId, cose, counter = 0 }) {
+/** Enroll a credential row directly — login is public, so login tests need no session.
+    `uvRequired` seeds S-4a's ratchet state: 0 is a legacy credential that has never demonstrated
+    Face ID/PIN (the live credential's state at deploy), 1 is one that has. */
+function enrollDirect(env, { userId = 7, credId, cose, counter = 0, uvRequired = 0 }) {
   env.DB.exec(`INSERT INTO users (id, email) VALUES (${userId}, 'pk${userId}@boomtown.test')`);
   env.DB.exec(
-    `INSERT INTO webauthn_credentials (user_id, credential_id, public_key, counter, device_label)
-     VALUES (${userId}, '${b64u(credId)}', '${b64u(cose)}', ${counter}, 'test key')`
+    `INSERT INTO webauthn_credentials (user_id, credential_id, public_key, counter, device_label, uv_required)
+     VALUES (${userId}, '${b64u(credId)}', '${b64u(cose)}', ${counter}, 'test key', ${uvRequired})`
   );
 }
 
@@ -193,7 +195,10 @@ test("register round-trip: a real attestation enrolls, and the stored bytes prov
 
   const { cose } = await p256Keys();
   const credId = crypto.getRandomValues(new Uint8Array(16));
-  const authData = await makeAuthData({ flags: 0x41, counter: 0, credId, cose }); // UP + AT
+  // v0.152.0 (S-4a): flags carry UV now — new enrolments must demonstrate Face ID/PIN, so the
+  // round-trip fixture enrols the way a real authenticator now has to. The offset assertions
+  // below are this test's PURPOSE and are unchanged.
+  const authData = await makeAuthData({ flags: 0x45, counter: 0, credId, cose }); // UP + UV + AT
   const reg = await call(env, "POST", "/api/passkey/register", { token, body: {
     label: "Test iPhone",
     response: { clientDataJSON: b64u(clientDataJson("webauthn.create", challenge)),
@@ -201,7 +206,7 @@ test("register round-trip: a real attestation enrolls, and the stored bytes prov
   } });
   assert.equal(reg.status, 200, `register refused a valid attestation: ${JSON.stringify(reg.data)}`);
 
-  const rows = env.DB.query("SELECT credential_id, public_key, counter FROM webauthn_credentials");
+  const rows = env.DB.query("SELECT credential_id, public_key, counter, uv_required FROM webauthn_credentials");
   assert.equal(rows.length, 1, "exactly one credential should exist");
   assert.equal(rows[0].credential_id, b64u(credId),
     "the credential id the offset walk extracted is not the one the fixture embedded");
@@ -210,6 +215,8 @@ test("register round-trip: a real attestation enrolls, and the stored bytes prov
   assert.equal(rows[0].public_key, b64u(cose),
     "the stored COSE key differs from the embedded one — the authData offset walk mis-sliced");
   assert.equal(rows[0].counter, 0, "the sign-count was not read from bytes 33-36");
+  assert.equal(rows[0].uv_required, 1,
+    "a credential enrolled WITH verification must be born requiring it — S-4a's new-credential half");
 });
 
 test("register fails CLOSED: truncated CBOR and a missing user-present flag both refuse, enrolling nothing", async () => {
@@ -388,14 +395,20 @@ test("RS256 branch: an RSA credential verifies, and its flipped signature refuse
   assert.equal(bad.status, 401, "a corrupted RS256 signature must refuse");
 });
 
-test("CURRENT CONTRACT, pinned deliberately: login succeeds WITHOUT the UV flag (S-4a is the owner's open call)", async () => {
-  // flags 0x01 is user-PRESENT only — no Face ID / PIN happened. The module computes
-  // parsed.userVerified and nothing reads it. If S-4a ships enforcement, REWRITE this test
-  // to assert the refusal; until then, this documents what the product actually promises.
+/* ============================ S-4a (§-0 B12): the UV ratchet ============================
+   The owner called the open call the old pin was waiting on. The design is a RATCHET, because
+   the plain fix ("required" everywhere) would lock out authenticators that cannot verify a user
+   — the exact trade-off §-1i flagged: a credential that has NEVER demonstrated Face ID/PIN keeps
+   working exactly as before (no lockout, the live credential's state at deploy); the moment one
+   demonstrates it — at enrolment or any login — every later assertion must carry it, because a
+   verifying authenticator that suddenly stops verifying is the shape of a cloned key, not a
+   settings change. The old "CURRENT CONTRACT" pin is REWRITTEN here to its surviving purpose. */
+
+test("S-4a NO LOCKOUT (the old pin's surviving half): a credential that never demonstrated UV still signs in without it — and does NOT silently ratchet", async () => {
   const env = makeEnv();
   const { kp, cose } = await p256Keys();
   const credId = crypto.getRandomValues(new Uint8Array(16));
-  enrollDirect(env, { credId, cose });
+  enrollDirect(env, { credId, cose }); // uvRequired 0 — the live credential's state at deploy
 
   const challenge = await freshLoginChallenge(env);
   const cdj = clientDataJson("webauthn.get", challenge);
@@ -404,5 +417,64 @@ test("CURRENT CONTRACT, pinned deliberately: login succeeds WITHOUT the UV flag 
   const raw = await signAssertion(kp.privateKey, authData, cdj);
   const res = await postLogin(env, credId, cdj, authData, rawToDer(raw));
   assert.equal(res.status, 200,
-    "login without UV was refused — if S-4a shipped, rewrite this test to pin the refusal");
+    "a UV-less login on a never-verified credential must still succeed — S-4a is a ratchet, not a lockout");
+  const row = env.DB.query("SELECT uv_required FROM webauthn_credentials")[0];
+  assert.equal(row.uv_required, 0, "a presence-only login must not flip the ratchet");
+});
+
+test("S-4a THE RATCHET: one verified login flips the bit, and a UV-less assertion is refused ever after — with its own sentence, not a generic error", async () => {
+  const env = makeEnv();
+  const { kp, cose } = await p256Keys();
+  const credId = crypto.getRandomValues(new Uint8Array(16));
+  enrollDirect(env, { credId, cose });
+
+  // Login WITH verification (flags 0x05 = UP + UV) — this is the owner's Windows Hello shape.
+  const ch1 = await freshLoginChallenge(env);
+  const cdj1 = clientDataJson("webauthn.get", ch1);
+  const withUv = await makeAuthData({ flags: 0x05, counter: 1 });
+  assert.equal(withUv[32] & 0x04, 0x04, "fixture error — UV bit not set");
+  const ok = await postLogin(env, credId, cdj1, withUv, rawToDer(await signAssertion(kp.privateKey, withUv, cdj1)));
+  assert.equal(ok.status, 200, `a verified login must succeed: ${JSON.stringify(ok.data)}`);
+  assert.equal(env.DB.query("SELECT uv_required FROM webauthn_credentials")[0].uv_required, 1,
+    "the verified login must flip the ratchet");
+
+  // The downgrade: same key, valid signature, UV bit cleared — the cloned-key shape.
+  const ch2 = await freshLoginChallenge(env);
+  const cdj2 = clientDataJson("webauthn.get", ch2);
+  const noUv = await makeAuthData({ flags: 0x01, counter: 2 });
+  assert.equal(noUv[32] & 0x04, 0, "mutation did not land — UV bit still set");
+  const bad = await postLogin(env, credId, cdj2, noUv, rawToDer(await signAssertion(kp.privateKey, noUv, cdj2)));
+  assert.equal(bad.status, 401, "a ratcheted credential asserting without UV must refuse");
+  // Absence and refusal share a status code — demand the refusal's own sentence.
+  assert.match(String(bad.data && bad.data.error), /face|fingerprint|PIN/i,
+    "the refusal must say what was missing in the member's own terms");
+
+  // And the same credential WITH UV keeps working — the refusal is the downgrade, not the key.
+  const ch3 = await freshLoginChallenge(env);
+  const cdj3 = clientDataJson("webauthn.get", ch3);
+  const again = await makeAuthData({ flags: 0x05, counter: 3 });
+  const good = await postLogin(env, credId, cdj3, again, rawToDer(await signAssertion(kp.privateKey, again, cdj3)));
+  assert.equal(good.status, 200, "a verified assertion on a ratcheted credential must still succeed");
+});
+
+test("S-4a AT THE FRONT DOOR: register-options demands verification, and an attestation WITHOUT it is refused with its own sentence", async () => {
+  const env = makeEnv();
+  const token = await signIn(env, "owner@boomtown.test");
+
+  const opts = await call(env, "GET", "/api/passkey/register-options", { token });
+  assert.equal(opts.data.publicKey.authenticatorSelection.userVerification, "required",
+    "new enrolments must ask the authenticator for Face ID/PIN outright — enrolment-time strictness locks nobody out");
+
+  const { cose } = await p256Keys();
+  const credId = crypto.getRandomValues(new Uint8Array(16));
+  const noUv = await makeAuthData({ flags: 0x41, counter: 0, credId, cose }); // UP + AT, no UV
+  assert.equal(noUv[32] & 0x04, 0, "mutation did not land — UV bit set on the no-UV fixture");
+  const reg = await call(env, "POST", "/api/passkey/register", { token, body: {
+    response: { clientDataJSON: b64u(clientDataJson("webauthn.create", opts.data.publicKey.challenge)),
+                attestationObject: b64u(attestationObject(noUv)) },
+  } });
+  assert.equal(reg.status, 400, "an enrolment that skipped verification must refuse");
+  assert.match(String(reg.data && reg.data.error), /face|fingerprint|PIN/i,
+    "and say why in the member's own terms — a generic error teaches nothing");
+  assert.equal(env.DB.query("SELECT id FROM webauthn_credentials").length, 0, "nothing may be stored");
 });

@@ -228,7 +228,7 @@ CREATE TABLE audit_log (
 
 -- ── added as the journey reached them (see header: an absent table raises "no such table") ──
 
-CREATE TABLE webauthn_credentials (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, credential_id TEXT NOT NULL UNIQUE, public_key TEXT NOT NULL, counter INTEGER NOT NULL DEFAULT 0, device_label TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), last_used_at TEXT, deleted_at TEXT);
+CREATE TABLE webauthn_credentials (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, credential_id TEXT NOT NULL UNIQUE, public_key TEXT NOT NULL, counter INTEGER NOT NULL DEFAULT 0, device_label TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), last_used_at TEXT, deleted_at TEXT, uv_required INTEGER NOT NULL DEFAULT 0);
 
 CREATE TABLE member_profiles (id INTEGER PRIMARY KEY AUTOINCREMENT, org_id INTEGER NOT NULL, contact_id INTEGER NOT NULL, avatar_r2_key TEXT, instagram_handle TEXT, bio TEXT, date_of_birth TEXT, visibility TEXT NOT NULL DEFAULT 'members', show_history INTEGER NOT NULL DEFAULT 1, show_instagram INTEGER NOT NULL DEFAULT 1, reminder_opt_in INTEGER NOT NULL DEFAULT 0, reminder_opt_in_at TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')), deleted_at TEXT, sub_opt_in INTEGER NOT NULL DEFAULT 0, sub_opt_in_at TEXT, positions TEXT, skill_level TEXT, gender_division TEXT, height_reach TEXT, dominant_hand TEXT, sub_mode TEXT NOT NULL DEFAULT 'passive', sub_level TEXT, sub_lfg_listing_id INTEGER REFERENCES lfg_listings(id), UNIQUE(org_id, contact_id));
 
