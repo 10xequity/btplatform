@@ -465,3 +465,42 @@ test("D-34 — the screen stops lying in the OTHER direction too: the events-lis
   const planted = ui + "\n// clear the price from the events list first";
   assert.ok(planted.includes("clear the price from the events list first"), "the plant did not land");
 });
+
+/* ══════════════ D-36 (§-1c): the writer feeds the reader, end to end ══════════════ */
+
+test("D-36 — a location WRITTEN through org settings is what the next catalog item rides; emptied, the platform default returns", async () => {
+  const env = boot({ orgLocation: null, platformLocation: "LOC_PLATFORM" });
+  const t = await staff(env);
+  const stub = stubSquare();
+  try {
+    // write the org's location through the REAL settings route — D-36's missing writer
+    const w = await call(env, "PUT", "/api/admin/org/profile", { token: t, body: { square_location_id: "LOC_WRITTEN" } });
+    assert.equal(w.status, 200, JSON.stringify(w.data).slice(0, 200));
+    // price an event: the item must land on the org's OWN location now
+    const r = await call(env, "PATCH", "/api/events/2", { token: t, body: { price_cents: 3000 } });
+    assert.equal(r.status, 200, JSON.stringify(r.data).slice(0, 200));
+    assert.equal(stub.calls.length, 1, "pricing made no catalog call — the end-to-end never ran");
+    assert.deepEqual(stub.calls[0].body.object.present_at_location_ids, ["LOC_WRITTEN"],
+      "the item did not ride the org's own location — the writer and the reader are not connected (D-36's whole point)");
+    // the sanctioned exit, live through the routes: empty the field, the platform default returns
+    const c = await call(env, "PUT", "/api/admin/org/profile", { token: t, body: { square_location_id: "" } });
+    assert.equal(c.status, 200, JSON.stringify(c.data).slice(0, 200));
+    const r2 = await call(env, "PATCH", "/api/events/1", { token: t, body: { price_cents: 4600 } });
+    assert.equal(r2.status, 200);
+    const last = stub.calls[stub.calls.length - 1];
+    assert.deepEqual(last.body.object.present_at_location_ids, ["LOC_PLATFORM"],
+      "with the org field emptied the platform fallback must return — the exit was deleted");
+  } finally { stub.restore(); }
+});
+
+test("D-36 — the settings screen carries the field, says where the id lives, and that empty means the platform default", () => {
+  const html = web("admin-org-settings.html");
+  assert.ok(html.includes('data-f="square_location_id"'),
+    "the field is not on the org settings screen — the column still has no writer a human can reach");
+  assert.match(html, /Square/, "the label/help never says this is the Square location");
+  assert.match(html, /platform|default/i, "the help does not say what EMPTY means — the operator cannot know the exit exists");
+  // NC — the needle can fail: strip the data-f binding and the presence check must go dark
+  const mutated = html.split('data-f="square_location_id"').join('data-x="zz"');
+  assert.ok(mutated !== html, "the mutation did not land");
+  assert.ok(!mutated.includes('data-f="square_location_id"'), "the mutated copy still matches — the pin proves nothing");
+});

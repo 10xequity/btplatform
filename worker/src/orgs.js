@@ -56,6 +56,14 @@ const EDITABLE = {
   state:                { max: 60,   trim: true },
   postal_code:          { max: 20,   trim: true },
   logo_url:             { max: 500,  trim: true, url: true },
+  /* D-36: the column shipped in migration 0047 (K-15) with readers on four sites — the catalog
+     writer and three payment-link paths, all `orgs.square_location_id || env.SQUARE_LOCATION_ID`
+     — and NO writer, so the owner's per-org-locations decision was unusable: NULL on all 6 live
+     orgs meant everything landed on the platform location. Empty stays expressible (buildPatch's
+     empty→NULL) and means exactly that fallback — the sanctioned exit. `token` refuses values
+     that are not even id-shaped; a WRONG-but-shaped id only fails at Square call time, which the
+     settings help text says out loud. */
+  square_location_id:   { max: 40,   trim: true, token: true },
 };
 
 /* The five tokens that refuse rather than fall back (standards §9.2), mapped to the columns that
@@ -127,6 +135,10 @@ export function buildPatch(body, current) {
     if (v.length > rule.max) { errors.push(`${key} is longer than ${rule.max} characters.`); continue; }
     if (v && rule.email && !isEmail(v)) { errors.push(`${key} does not look like an email address.`); continue; }
     if (v && rule.url && !isHttpUrl(v)) { errors.push(`${key} must start with http:// or https://.`); continue; }
+    if (v && rule.token && !/^[A-Za-z0-9_-]+$/.test(v)) {
+      errors.push(`${key} should be the short ID from Square's Locations page — letters, digits, dashes and underscores only.`);
+      continue;
+    }
 
     const was = String((current && current[key]) ?? "");
     if (v === was) continue;
@@ -144,7 +156,7 @@ async function orgRow(env, orgId) {
     `SELECT id, name, slug, active, logo_url, timezone,
             legal_entity, legal_entity_short, legal_entity_verified,
             admin_email, email_sender_name, email_sender_address, phone, website, rules_url,
-            address_line1, address_line2, city, state, postal_code,
+            address_line1, address_line2, city, state, postal_code, square_location_id,
             created_at, updated_at, deactivated_at
        FROM orgs WHERE id = ?1 AND deleted_at IS NULL`
   ).bind(orgId).first();

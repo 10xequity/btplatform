@@ -1,5 +1,5 @@
 # Boomtown Athletics Platform
-**Version:** v0.158.0 · **Date:** 2026-08-14 · **Supersedes:** README @ v0.86.0 (2026-08-04)
+**Version:** v0.159.0 · **Date:** 2026-08-14 · **Supersedes:** README @ v0.86.0 (2026-08-04)
 
 > **v0.140.0 rewrite (owner instruction, 2026-08-12: "update readme").** The previous README claimed
 > to be current "through v0.86.0" while the build shipped **v0.140.0**, its module table actually
@@ -80,13 +80,13 @@ that guard exists because this README was fifty-four releases stale.
 
 ## Architecture
 
-*Counts measured 2026-08-15 at v0.158.0. Re-measure with `preflight.mjs` rather than trusting them.*
+*Counts measured 2026-08-15 at v0.159.0. Re-measure with `preflight.mjs` rather than trusting them.*
 
 | Path | What | Deploy |
 |---|---|---|
 | `web/` | Static frontend on GitHub Pages. No build step; every page carries a `?v=` cache-bust (**415 across 68 files**). `404.html` and `index.html` ship from the repo **root**, not from here. | Push to `main` |
 | `worker/src/` | Cloudflare Worker API. **51 modules**; `index.js` mounts every one through a dispatch table. | Auto-deploys via Actions **Deploy Worker** on any `worker/**` push |
-| `worker/test/` | `node --test` suites. **1925 passing across 127 files** (measured, never projected), including a harness that drives the real router against a SQLite copy of the production schema. | — |
+| `worker/test/` | `node --test` suites. **1929 passing across 127 files** (measured, never projected), including a harness that drives the real router against a SQLite copy of the production schema. | — |
 | `db/migrations/` | Schema of record. **Ledger at 0049, 49 files**, all applied live to D1 `boomtown-prod`. Numbered SQL lives here and **nowhere else**. | Applied via Cloudflare MCP, **additive-only**. The files here are records — never re-run them. |
 | `docs/` | Specs, handoffs, the roadmap. Naming: `YYYY-MM-DD_name_vX_Y.md`. Start at `docs/INDEX.md`. | — |
 

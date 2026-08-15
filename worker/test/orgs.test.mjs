@@ -37,6 +37,10 @@ test("buildPatch: accepts an allow-listed field that changed", () => {
 });
 
 test("buildPatch: silently drops every field outside the allow-list", () => {
+  // REWRITTEN at D-36's close: `square_location_id` moved from this hostile list INTO the
+  // allow-list — that migration is the unit's whole point, so it now appears as a SECOND
+  // legitimate survivor rather than a forbidden field. The test's purpose (identity and
+  // lifecycle columns stay unwritable) is unchanged.
   const hostile = {
     id: 99, org_id: 99, slug: "hijack", active: 0, deleted_at: "2026-01-01",
     legal_entity_verified: 1, created_at: "2020-01-01", timezone: "UTC",
@@ -44,11 +48,11 @@ test("buildPatch: silently drops every field outside the allow-list", () => {
     phone: "3035550111",
   };
   const { bag } = buildPatch(hostile, ORG);
-  // Only the one legitimate field survives.
-  assert.deepEqual(Object.keys(bag), ["phone"]);
+  // The two legitimate fields survive; nothing else does.
+  assert.deepEqual(Object.keys(bag).sort(), ["phone", "square_location_id"]);
   for (const forbidden of ["id", "org_id", "slug", "active", "deleted_at",
                            "legal_entity_verified", "created_at", "timezone",
-                           "square_location_id", "is_owned", "brand_json"]) {
+                           "is_owned", "brand_json"]) {
     assert.equal(forbidden in bag, false, `${forbidden} must not be writable through this path`);
   }
 });
@@ -195,4 +199,34 @@ test("senderIdentity: truncates rather than emitting an oversized header", async
   const who = await senderIdentity(
     fakeEnv({ name: "x".repeat(400), email_sender_name: null, email_sender_address: "a@b.co" }), 1);
   assert.equal(who.name.length, 120);
+});
+
+/* ══════════════ D-36 (§-1c): the org's Square location gets its writer ══════════════
+   Recorded at K-15: `orgs.square_location_id` had NO writer — NULL on all 6 live orgs, so the
+   `orgs.square_location_id || env.SQUARE_LOCATION_ID` fallback the owner's per-org-locations
+   decision rides was permanently the platform half. The writer is the same machinery every
+   other org field uses: EDITABLE + buildPatch. Empty stays expressible and means "use the
+   platform location" — the fallback is the sanctioned exit and buildPatch's empty→NULL rule
+   provides it for free. Junk is refused in a sentence (a wrong-but-shaped id will only fail at
+   Square call time, so the least we do is refuse ids that are not even token-shaped). */
+
+test("D-36 — a Square location id is writable through the allow-list", () => {
+  const { bag, errors } = buildPatch({ square_location_id: "L4XVQBKR2ZVGG" }, ORG);
+  assert.deepEqual(errors, [], errors.join(" | "));
+  assert.equal(bag.square_location_id, "L4XVQBKR2ZVGG",
+    "the location never reached the bag — the owner's per-org-locations decision stays unusable (D-36)");
+});
+
+test("D-36 — junk is refused in a sentence and reaches nothing; empty clears to the platform default", () => {
+  const bad = buildPatch({ square_location_id: "not a location!" }, ORG);
+  assert.ok(bad.errors.length, "a non-token value sailed through — it would fail silently at Square call time instead");
+  assert.match(bad.errors.join(" "), /Square/i, "the refusal does not say what shape the field wants or where to find it");
+  assert.ok(!("square_location_id" in bad.bag), "a refused value reached the bag anyway");
+  const long = buildPatch({ square_location_id: "A".repeat(41) }, ORG);
+  assert.ok(long.errors.length, "an over-long id sailed through");
+  // the sanctioned exit: emptying the field returns the org to the platform location
+  const cleared = buildPatch({ square_location_id: "" }, { ...ORG, square_location_id: "L4XVQBKR2ZVGG" });
+  assert.deepEqual(cleared.errors, []);
+  assert.equal(cleared.bag.square_location_id, null,
+    "emptying the field must store NULL — the platform fallback is the exit, and it just got deleted");
 });
