@@ -235,7 +235,10 @@ async function update(request, env, ctx) {
 
 async function avatarUpload(request, env, url, ctx) {
   if (!ctx.session) return H.json({ error: "Sign in first." }, 401);
-  if (!env.AVATARS) return H.json({ error: "Photo storage isn't set up yet. Email admin@boomtownvb.com." }, 503);
+  // D-30: an unbound AVATARS binding is a PLATFORM fault — the org admin cannot fix it, so
+  // naming the org's address would send a member to someone powerless, and naming the
+  // platform's is the banned literal. No address; just the honest state.
+  if (!env.AVATARS) return H.json({ error: "Photo uploads aren't set up yet — check back soon." }, 503);
 
   const { self, ids } = await managedContactIds(env, ctx);
   const targetId = Number(url.searchParams.get("contact_id")) || self.id;

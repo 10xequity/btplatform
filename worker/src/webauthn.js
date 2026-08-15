@@ -175,7 +175,10 @@ async function login(request, env) {
   if (!valid) return H.json({ error: "That didn't go through. Try again, or use the email link below." }, 401);
 
   if (parsed.counter > 0 && cred.counter > 0 && parsed.counter <= cred.counter) {
-    return H.json({ error: "Security check failed. Use the email link and contact admin@boomtownvb.com." }, 401);
+    // D-30: this fires on an UNAUTHENTICATED path (org scope is an untrusted header), on the
+    // cloned-key shape of all things — no address belongs here. The email sign-in link is the
+    // sanctioned exit, and the sentence keeps naming it: a refusal must keep the way out.
+    return H.json({ error: "Security check failed. Sign in with the email link instead." }, 401);
   }
   // S-4a, the ratchet itself: a fully valid, VERIFIED login is the proof this authenticator can
   // do Face ID/PIN — from here on it must. Written only after every check above has passed.

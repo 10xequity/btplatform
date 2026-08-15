@@ -556,7 +556,17 @@ async function senderGate(env, ctx) {
     `SELECT id FROM member_mutes WHERE org_id=?1 AND contact_id=?2 AND deleted_at IS NULL
      AND (muted_until IS NULL OR muted_until > datetime('now'))`
   ).bind(ctx.orgId, g.me.id).first();
-  if (mute) return { err: H.json({ error: "Messaging is paused on your account. Email admin@boomtownvb.com if you think this is a mistake." }, 403) };
+  if (mute) {
+    // D-30: the pause is an ORG moderation action, so the org's own contact address (B29's
+    // orgs.admin_email — the one the operator sets on their settings screen) is the right door
+    // to knock on; the old literal sent Match Point and Colorado Boom members to Boomtown. An
+    // org that set no address gets a whole sentence, never a dangling "Email ."
+    const org = await env.DB.prepare("SELECT admin_email FROM orgs WHERE id=?1").bind(ctx.orgId).first();
+    const addr = String((org && org.admin_email) || "").trim();
+    return { err: H.json({ error: addr
+      ? `Messaging is paused on your account. Email ${addr} if you think this is a mistake.`
+      : "Messaging is paused on your account. If you think this is a mistake, contact your organization." }, 403) };
+  }
   return g;
 }
 

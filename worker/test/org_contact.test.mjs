@@ -59,6 +59,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { scriptsOf } from "../testkit/route-extract.mjs";
+import worker from "../src/index.js";              // D-30: the behavioral half drives real routes
+import { createD1 } from "../testkit/d1-memory.mjs";
 
 const WEB = new URL("../../web/", import.meta.url);
 const SRC = new URL("../src/", import.meta.url);
@@ -292,4 +294,131 @@ test("NC-6: comment stripping works both ways — a commented literal is invisib
 test("NC-7: an empty corpus cannot pass the self-counts", () => {
   assert.ok(!(new Map().size >= 20), "an empty script corpus must fail the floor");
   assert.notEqual(new Map().size, 17, "an empty page corpus must fail the ratchet");
+});
+
+/* ══════════════ D-30 (§-1c): the rule reaches the WORKER's member-facing strings ══════════════
+   D-28 fixed five member-PAGE sites; D-30 recorded three API error strings a member actually
+   reads. Each got its own judgement at this close, per the register row's own analysis:
+   · messages.js (mute 403): the pause is an ORG moderation action, so the ORG's own address
+     (orgs.admin_email — B29's column, the address the operator already sets) is named; a NULL
+     address degrades to a sentence naming the organization, never a dangling "Email ."
+   · profiles.js (storage 503): an unbound AVATARS binding is a PLATFORM fault the org admin
+     cannot fix — naming the org's address sends a member to someone powerless. NO address.
+   · webauthn.js (counter 401): fires on an UNAUTHENTICATED path where org scope is an untrusted
+     header, on the cloned-key shape of all things. NO address; the email sign-in link IS the
+     sanctioned exit and the sentence keeps naming it (a refusal must keep the way out).
+   THE CORPUS WIDENS TO worker/src IN THE SAME CHANGE, per the row's instruction — and the
+   widened scan's dry run found a FOURTH literal the register never named: push.js's VAPID
+   `sub` claim. Judged NOT member-facing (protocol contact metadata sent to push services,
+   RFC 8292; env VAPID_SUBJECT overrides it) and allow-listed BY NAME with that reason.
+   Fixture addresses are exempt by the RFC-reserved example.com DOMAIN, never by address. */
+
+const SRC_ALLOW = new Map([
+  ["push.js", ["info@boomtownvb.com"]], // VAPID subject — see the block above; positive-controlled below
+]);
+
+function srcOffences(name, text) {
+  const allow = new Set(SRC_ALLOW.get(name) || []);
+  return emailOffences(text).filter((a) => !a.endsWith("@example.com") && !allow.has(a));
+}
+
+test("D-30 — no worker module ships a literal address in its strings (corpus: all modules, block comments stripped)", () => {
+  const files = readdirSync(SRC).filter((f) => f.endsWith(".js"));
+  assert.equal(files.length, 51,
+    `the worker corpus moved (${files.length} modules) — re-derive this floor from preflight's module count before trusting the scan`);
+  const bad = [];
+  for (const f of files) for (const a of srcOffences(f, readSrc(f))) bad.push(`${f}: ${a}`);
+  assert.deepEqual(bad, [],
+    "a literal address is back in a worker string — two of three active orgs' members would be told to email the wrong organization");
+});
+
+test("D-30 NC — the widened scan can fail, and the allow-list is scoped to push.js, never blanket", () => {
+  const planted = readSrc("messages.js") + '\nconst zz = "admin@boomtownvb.com";';
+  assert.ok(srcOffences("messages.js", planted).includes("admin@boomtownvb.com"),
+    "a planted literal in a real module was not caught — the widened scan can find nothing");
+  assert.equal(srcOffences("messages.js", 'x = "info@boomtownvb.com"').length, 1,
+    "the VAPID exemption leaked beyond push.js — the allow-list went blanket");
+  assert.equal(srcOffences("push.js", readSrc("push.js")).length, 0,
+    "positive control: push.js's own VAPID literal moved or changed — re-judge the allow-list entry, don't widen it");
+});
+
+/* behavioral: the two org-scoped judgements, through the real router */
+
+const SCHEMA = readFileSync(new URL("../testkit/journey-schema.sql", import.meta.url), "utf8");
+const ORIGIN = "https://boomtown.test";
+
+function boot(adminEmail) {
+  const DB = createD1(SCHEMA);
+  DB.exec(`INSERT INTO orgs (id, name, slug, active, admin_email) VALUES (1,'Org One','org-one',1,${adminEmail === null ? "NULL" : `'${adminEmail}'`})`);
+  return { DB, APP_URL: ORIGIN, SITE_ORIGIN: ORIGIN, API_ORIGIN: ORIGIN, ALLOWED_ORIGINS: ORIGIN };
+}
+
+async function call(env, method, path, { body, token } = {}) {
+  const headers = { "Content-Type": "application/json", Origin: ORIGIN, "X-Org-Id": "1" };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const res = await worker.fetch(new Request(`${ORIGIN}${path}`, {
+    method, headers, body: body === undefined ? undefined : JSON.stringify(body),
+  }), env);
+  const t = await res.text();
+  let data = null;
+  try { data = t ? JSON.parse(t) : null; } catch { data = { _raw: t.slice(0, 300) }; }
+  return { status: res.status, data };
+}
+
+async function signIn(env, email) {
+  const asked = await call(env, "POST", "/api/auth/request-link", { body: { email } });
+  const v = await call(env, "POST", "/api/auth/verify", { body: { token: String(asked.data.dev_link).split("token=")[1] } });
+  return v.data.token;
+}
+
+/** A signed-in MEMBER with a contact row: the throwaway admin signs in first (fixture rule),
+ *  then the member, whose contact is inserted to match their sign-in email. */
+async function mutedMember(env) {
+  await signIn(env, "admin-throwaway@bt.test");
+  const token = await signIn(env, "mia@bt.test");
+  const admin = env.DB.one("SELECT id FROM users WHERE email='admin-throwaway@bt.test'");
+  env.DB.exec("INSERT INTO contacts (id, org_id, email, full_name) VALUES (700,1,'mia@bt.test','Mia Voss')");
+  env.DB.exec(`INSERT INTO member_mutes (org_id, contact_id, muted_by_user_id) VALUES (1,700,${admin.id})`);
+  return token;
+}
+
+test("D-30 — a paused member is pointed at THEIR organization's address, read from the org row", async () => {
+  const env = boot("hello@org-one.test");
+  const token = await mutedMember(env);
+  const r = await call(env, "POST", "/api/messages/start", { token, body: { to_contact_id: 700, body: "hi" } });
+  assert.equal(r.status, 403, JSON.stringify(r.data).slice(0, 200));
+  assert.match(String(r.data.error), /hello@org-one\.test/,
+    "the pause sentence does not name the org's own address — B29's column exists precisely for this");
+  assert.ok(!String(r.data.error).includes("boomtownvb"), "the hard-coded organization is back");
+});
+
+test("D-30 — an org with NO address gets a whole sentence, not a dangling 'Email .'", async () => {
+  const env = boot(null);
+  const token = await mutedMember(env);
+  const r = await call(env, "POST", "/api/messages/start", { token, body: { to_contact_id: 700, body: "hi" } });
+  assert.equal(r.status, 403, JSON.stringify(r.data).slice(0, 200));
+  assert.ok(!/[A-Za-z0-9._%+-]+@/.test(String(r.data.error)), "an address appeared from nowhere — whose?");
+  assert.match(String(r.data.error), /organization/i, "the fallback sentence should still say WHO to contact");
+  assert.ok(!/Email\s*[.]/.test(String(r.data.error)), "the sentence dangles — 'Email .' with nothing to email");
+});
+
+test("D-30 — a platform fault (storage unbound) names NO address: the org admin cannot fix it", async () => {
+  const env = boot("hello@org-one.test"); // env has NO AVATARS binding — the 503's exact trigger
+  await signIn(env, "admin-throwaway@bt.test");
+  const token = await signIn(env, "kai@bt.test");
+  env.DB.exec("INSERT INTO contacts (id, org_id, email, full_name) VALUES (701,1,'kai@bt.test','Kai Reed')");
+  const r = await call(env, "POST", "/api/profile/avatar", { token, body: {} });
+  assert.equal(r.status, 503, JSON.stringify(r.data).slice(0, 200));
+  assert.ok(!/[A-Za-z0-9._%+-]+@/.test(String(r.data.error)),
+    "the 503 names an address — the org's would be wrong (they cannot bind R2) and the platform's is a banned literal");
+  assert.match(String(r.data.error), /photo|upload/i, "the sentence stopped saying what is not set up");
+});
+
+test("D-30 — webauthn's counter refusal keeps the exit and drops the address", () => {
+  const src = readSrc("webauthn.js");
+  assert.ok(src.includes("Security check failed. Sign in with the email link instead."),
+    "the counter-regression sentence lost its sanctioned exit — a refusal that names no way out strands the one user it fires on");
+  const mutated = src.split("email link").join("zz");
+  assert.ok(mutated !== src && !mutated.includes("Security check failed. Sign in with the email link instead."),
+    "the mutation did not land — the presence pin above can find nothing");
 });
