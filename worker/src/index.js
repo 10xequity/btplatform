@@ -269,7 +269,7 @@ const wiredHelpers = {
   sendLoginLink,
   issueSession,
 };
-wire(wiredHelpers);
+wire({ ...wiredHelpers, ensureEventSquareItem }); // D-34 — patchEvent prices events now, so it is K-15's third writer; injected exactly as events_admin gets it (a direct import would cycle the same way)
 wireRegistrations(wiredHelpers);
 wireAdmin(wiredHelpers);
 wireSchedule(wiredHelpers);
@@ -406,7 +406,7 @@ export default {
         const session = await currentSession(request, env);
         res = session ? await listOrgs(env) : json({ error: "Sign in first." }, 401);
       } else if (url.pathname === "/api/health") {
-        res = json({ ok: true, version: "v0.156.0" });
+        res = json({ ok: true, version: "v0.157.0" });
       } else if (url.pathname === "/api/webhooks/square" && request.method === "POST") {
         res = await membershipWebhook(request, env); // verifies signature; forwards payment.* to squareWebhook
       } else if (url.pathname === "/api/public/org-brand" && request.method === "GET") {

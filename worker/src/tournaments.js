@@ -12,7 +12,7 @@ import {
 import { autoClaimForEvent, releaseAutoClaims } from "./facility.js";
 import { advanceBracketFor } from "./brackets.js"; // v0.67.0 — brackets.js imports only scheduler.js, no cycle
 import { personName, CAPTAIN_JOIN, CAPTAIN_COLS } from "./names.js"; // T2-3 — one captain shape, one place
-import { notifyEventCancelled, externalPriceConflict, cleanMinSignups } from "./events_admin.js"; // B16 — one recipient rule for all three cancel writers; PM-1 — one price/external rule for both write paths; SG-2 — one threshold spelling for both write paths; events_admin imports nothing, no cycle
+import { notifyEventCancelled, externalPriceConflict, cleanMinSignups, cleanPriceCapacity } from "./events_admin.js"; // B16 — one recipient rule for all three cancel writers; PM-1 — one price/external rule for every write path; SG-2/D-34 — one spelling per field rule; events_admin imports nothing, no cycle
 import { activeRegistrationCount } from "./waitlists.js"; // SG-2 — the ONE count the capacity gate, sheet and roster already read; waitlists imports only push.js, no cycle
 
 export async function tournamentRoutes(request, env, url, ctx) {
@@ -110,20 +110,22 @@ async function patchEvent(request, env, ctx, id) {
   const deny = await requireStaff(env, ctx, ev.org_id);
   if (deny) return deny;
   const b = await request.json();
-  // `external_url` and `external_label` join this list. `price_cents` deliberately does NOT:
-  // this route has never written it, the admin page has been sending it and being ignored, and
-  // quietly fixing that here would be a second change riding on this one (§-1c D-34). So the
-  // conflict this route can create is "a URL onto an already-priced event", and that is what the
-  // check below compares — the incoming URL against the price ALREADY STORED.
-  // SG-2: `min_signups` joins the list the day its field ships, or the event page would tell the
-  // operator "Saved." while dropping it — D-34's exact defect worn by the new field. Normalised
-  // through the ONE spelling (events_admin.js) that the bag path also uses.
+  // D-34 CLOSED (was: `price_cents` deliberately absent — from v0.147.0 to v0.156.0 this route
+  // dropped price and capacity while admin-event.js sent both on every submit and the notice
+  // said "Saved."; the register's row is the history). Both fields persist now, through the ONE
+  // junk spelling (cleanPriceCapacity — refusal in a sentence, never a silent free/unlimited).
+  // SG-2's `min_signups` rides its own ONE spelling the same way.
   const allowed = ["name", "starts_at", "location", "court_count", "status", "cash_option_enabled",
-    "config_json", "external_url", "external_label", "min_signups"];
+    "config_json", "external_url", "external_label", "min_signups", "price_cents", "capacity"];
   if ("min_signups" in b) b.min_signups = cleanMinSignups(b.min_signups);
+  const pcErr = cleanPriceCapacity(b);
+  if (pcErr) return json({ error: pcErr }, 400);
+  // PM-1 rule 3 on the RESULT of this write — BOTH fields merged over the stored row, because
+  // both are writable here now. Price-plus-clear-the-URL in one request is a fine result; a
+  // price onto an event that still points outward is not.
   const conflict = externalPriceConflict({
     external_url: "external_url" in b ? b.external_url : ev.external_url,
-    price_cents: ev.price_cents,
+    price_cents: "price_cents" in b ? b.price_cents : ev.price_cents,
   });
   if (conflict) return json({ error: conflict }, 400);
   const sets = [], vals = [];
@@ -132,14 +134,22 @@ async function patchEvent(request, env, ctx, id) {
   vals.push(id);
   await env.DB.prepare(`UPDATE events SET ${sets.join(",")}, updated_at=datetime('now') WHERE id=?${vals.length}`).bind(...vals).run();
   await audit(env, ctx, "event.update", "events", id, b);
+  // K-15's hook, third pricing writer: the event page can price an event now, so the catalog
+  // item must be offered here too (idempotent, keyless-silent — the hook re-reads the row and
+  // judges the result, so calling it is safe by its own contract).
+  let squareNote;
+  if ("price_cents" in b && Number(b.price_cents) > 0) {
+    const sq = await ensureEventSquareItem(env, id);
+    if (sq && sq.warning) squareNote = sq.warning;
+  }
   // B16 (v0.129.0): cancelling is the one status change the registered people must HEAR about,
   // and only on the TRANSITION — re-saving an already-cancelled event is not news. The event's
   // own org scopes the recipients (this route gates on ev.org_id, which may not be ctx.orgId).
   if (b.status === "cancelled" && ev.status !== "cancelled") {
     const notice = await notifyEventCancelled(env, ctx, [id], ev.org_id);
-    return json({ ok: true, cancelled_notice: notice });
+    return json({ ok: true, cancelled_notice: notice, square_note: squareNote });
   }
-  return json({ ok: true });
+  return json({ ok: true, square_note: squareNote });
 }
 
 /* T2-3 (v0.122.0): the captain rides along so a director can tell two similar team names apart.
@@ -388,5 +398,5 @@ async function getStandings(env, eventId) {
 }
 
 /* ---------- shared helpers (injected by index.js via ctx) ---------- */
-let json, audit, isStaff, requireStaff;
-export function wire(helpers) { ({ json, audit, isStaff, requireStaff } = helpers); }
+let json, audit, isStaff, requireStaff, ensureEventSquareItem;
+export function wire(helpers) { ({ json, audit, isStaff, requireStaff, ensureEventSquareItem } = helpers); }

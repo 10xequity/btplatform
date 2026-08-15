@@ -216,6 +216,35 @@ export function cleanMinSignups(v) {
   return Number.isFinite(n) && n >= 1 ? Math.round(n) : null;
 }
 
+/**
+ * D-34 (§-1c): the ONE spelling of what a price or capacity may be, on every route that writes
+ * them. Junk is REFUSED in a sentence, never coerced — this differs from cleanMinSignups on
+ * purpose: junk clearing a threshold turns a feature off, but junk silently making an event
+ * FREE or UNLIMITED changes money and admission. Price 0 = free and capacity NULL = unlimited
+ * are the UI's own conventions (an emptied field sends exactly those). Mutates the bag in
+ * place; returns a refusal sentence, or null when the state is fine.
+ */
+export function cleanPriceCapacity(bag) {
+  if ("price_cents" in bag) {
+    if (bag.price_cents === null || bag.price_cents === "") bag.price_cents = 0;
+    const p = Number(bag.price_cents);
+    if (!Number.isFinite(p) || p < 0) return "Price must be zero or more dollars — nothing was saved.";
+    bag.price_cents = Math.round(p);
+  }
+  if ("capacity" in bag) {
+    if (bag.capacity === null || bag.capacity === "") {
+      bag.capacity = null;
+    } else {
+      const c = Number(bag.capacity);
+      if (!Number.isFinite(c) || Math.round(c) < 1) {
+        return "Capacity must be a whole number of one or more — leave it empty for unlimited.";
+      }
+      bag.capacity = Math.round(c);
+    }
+  }
+  return null;
+}
+
 function cleanEventBag(src) {
   const out = {};
   for (const k of EVENT_FIELDS) if (k in src && src[k] !== undefined) out[k] = src[k];
@@ -397,6 +426,33 @@ async function editSeries(request, env, ctx, seriesId) {
   const from = await loadOrgEvent(env, ctx, Number(b.from_event_id));
   if (!from || from.series_id !== seriesId) return json({ error: "That event isn't part of this series (or not in this org)." }, 404);
   const bag = cleanEventBag(b.fields || {});
+  // D-34's junk rule rides every writer of price/capacity — one spelling, refused in a sentence.
+  const pcErr = cleanPriceCapacity(bag);
+  if (pcErr) return json({ error: pcErr }, 400);
+  // D-35: this was the third write path that skipped PM-1's rule 3 — a set-based UPDATE across
+  // "this and future" could price an outward instance (or point a priced one outward). The check
+  // is the RESULT PER INSTANCE (bulkEdit's clash shape, both directions): the incoming value
+  // wins where present, the stored one otherwise, and ONE clash refuses the WHOLE write —
+  // a half-applied series edit leaves the operator guessing which sessions took it.
+  const touchesPrice = "price_cents" in bag, touchesUrl = "external_url" in bag;
+  if (touchesPrice || touchesUrl) {
+    const rows = (await env.DB.prepare(
+      `SELECT id, starts_at, price_cents, external_url FROM events
+        WHERE series_id=?1 AND org_id=?2 AND starts_at>=?3 AND deleted_at IS NULL`
+    ).bind(seriesId, ctx.orgId, from.starts_at).all()).results || [];
+    const clash = rows.filter((e) => externalPriceConflict({
+      external_url: touchesUrl ? bag.external_url : e.external_url,
+      price_cents: touchesPrice ? bag.price_cents : e.price_cents,
+    }));
+    if (clash.length) {
+      return json({
+        error: externalPriceConflict({ external_url: "x", price_cents: 1 })
+          + ` ${clash.length === 1 ? "One session clashes" : `${clash.length} sessions clash`} (`
+          + clash.map((e) => String(e.starts_at || "").slice(0, 10)).join(", ")
+          + "); nothing in the series was changed.",
+      }, 400);
+    }
+  }
   const extra = {};
   if (b.fields && b.fields.status && STATUSES.includes(b.fields.status)) extra.status = b.fields.status;
   const sets = [], vals = [];
@@ -408,7 +464,17 @@ async function editSeries(request, env, ctx, seriesId) {
      WHERE series_id=?${vals.length - 2} AND org_id=?${vals.length - 1} AND starts_at>=?${vals.length} AND deleted_at IS NULL`
   ).bind(...vals).run();
   await audit(env, ctx, "series.edited", "event", from.id, { series_id: seriesId, fields: Object.keys(bag) });
-  return json({ ok: true, updated: r.meta.changes });
+  // K-15's hook, fourth pricing writer: a series priced HERE used to get no catalog items until
+  // a bulk reprice — the exact missed moment D-35's record named. The hook re-reads each row and
+  // is idempotent and keyless-silent, so every instance can be offered safely.
+  let squares = [];
+  if (touchesPrice && Number(bag.price_cents) > 0) {
+    const ids = (await env.DB.prepare(
+      `SELECT id FROM events WHERE series_id=?1 AND org_id=?2 AND starts_at>=?3 AND deleted_at IS NULL`
+    ).bind(seriesId, ctx.orgId, from.starts_at).all()).results || [];
+    for (const e of ids) squares.push(await ensureEventSquareItem(env, e.id));
+  }
+  return json({ ok: true, updated: r.meta.changes, square_note: squareNoteFrom(squares) });
 }
 
 async function cancelSeries(env, ctx, seriesId, url) {

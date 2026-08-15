@@ -19,7 +19,7 @@
   function fillWidgetSnippet() {
     const el = document.getElementById("widgetSnippet");
     if (!el) return;
-    const src = new URL("assets/signup-widget.js?v=0.156.0", location.href).href;
+    const src = new URL("assets/signup-widget.js?v=0.157.0", location.href).href;
     el.textContent = '<script src="' + src + '" data-org="boomtown" defer><' + '/script>';
   }
   fillWidgetSnippet();

@@ -118,7 +118,7 @@
           </div>
           <p class="help-text" style="margin:4px 0 8px">Leave the link empty to register people here.
             ${(ev.price_cents || 0) > 0
-              ? "<strong>This event has a price, so it cannot also link out</strong> — clear the price from the events list first."
+              ? "<strong>This event has a price, so it cannot also link out</strong> — set the price to 0 above if it should register elsewhere."
               : "An event that links out takes no price, no waiver and no check-in here."}</p>
           <label style="display:flex;gap:8px;align-items:center;font-size:14px;margin:8px 0">
             <input type="checkbox" id="e_cash" ${ev.cash_option_enabled ? "checked" : ""} /> Hidden cash option (admin-only, flags CASH-PENDING)</label>
@@ -211,7 +211,9 @@
     const r = await api("/api/events/" + id, { method: "PATCH", body: JSON.stringify(body) });
     const n = document.getElementById("saveNotice");
     n.className = r.ok ? "notice-ok" : "notice-err";
-    n.textContent = r.ok ? "Saved." : (r.data.error || "Save failed.");
+    // D-34 closed: price and capacity actually save from this page now; a Square warning from
+    // the pricing hook rides along rather than being swallowed (K-15's note-reaches-a-human rule).
+    n.textContent = r.ok ? ("Saved." + (r.data.square_note ? " " + r.data.square_note : "")) : (r.data.error || "Save failed.");
     if (r.ok) setTimeout(load, 600);
   }
 

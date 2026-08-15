@@ -145,25 +145,24 @@ test("PM-1 rule 3 — an external URL on a FREE event is ALLOWED, so the rule is
 test("PM-1 rule 3 — clear the price, THEN point outward: the rule is a conflict, not a life sentence", async () => {
   // Proves the check reads the CURRENT state rather than refusing any event that was ever priced.
   //
-  // IT TAKES TWO WRITES ON TWO ROUTES, AND THAT IS §-1c D-34 SHOWING THROUGH. The natural attempt
-  // is one PATCH carrying `price_cents: 0` and the URL together — and `PATCH /api/events/:id`
-  // silently drops the price, so the stored price survives and the conflict fires. Zeroing it has
-  // to go through bulk edit, the only route that writes a price. Recorded rather than fixed here:
-  // widening that allow-list is a change to a route this unit is not about. The consequence is
-  // real and is stated in the changelog — with 6 of 7 live events priced, converting one to an
-  // external link means clearing its price from the events list first.
+  // REWRITTEN AT D-34's CLOSE (v0.157.0) TO ITS SURVIVING PURPOSE. As first written this test
+  // pinned the WORKAROUND — two writes on two routes — because `PATCH /api/events/:id` silently
+  // dropped `price_cents`, so the natural one-write conversion refused on the STORED price; its
+  // own comment named that as "§-1c D-34 SHOWING THROUGH", a deliberate pin of the gap. D-34 is
+  // closed: the conflict judges the MERGED RESULT now, so the one-write conversion
+  // (`price_cents: 0` + the URL together) is exactly what must succeed — and a URL onto an
+  // event whose price actually still stands must refuse, same as ever.
   const env = boot();
   const token = await staff(env);
-  const blocked = await call(env, "PATCH", "/api/events/1", { token, body: { price_cents: 0, external_url: URL_A } });
+  const blocked = await call(env, "PATCH", "/api/events/1", { token, body: { external_url: URL_A } });
   assert.equal(blocked.status, 400, "a priced event must refuse the URL while the price still stands");
 
-  const cleared = await call(env, "PATCH", "/api/admin/events/bulk", { token, body: { ids: [1], fields: { price_cents: 0 } } });
-  assert.equal(cleared.status, 200, JSON.stringify(cleared.data).slice(0, 160));
-  assert.equal(env.DB.one("SELECT price_cents AS p FROM events WHERE id=1").p, 0, "precondition: the price is gone");
-
-  const ok = await call(env, "PATCH", "/api/events/1", { token, body: { external_url: URL_A } });
-  assert.equal(ok.status, 200, `with the price cleared the URL must be accepted: ${JSON.stringify(ok.data).slice(0, 160)}`);
-  assert.equal(env.DB.one("SELECT external_url AS u FROM events WHERE id=1").u, URL_A);
+  const ok = await call(env, "PATCH", "/api/events/1", { token, body: { price_cents: 0, external_url: URL_A } });
+  assert.equal(ok.status, 200,
+    `the one-write conversion (zero the price, point outward) must succeed now that the conflict reads the merged result: ${JSON.stringify(ok.data).slice(0, 160)}`);
+  const row = env.DB.one("SELECT price_cents AS p, external_url AS u FROM events WHERE id=1");
+  assert.equal(row.p, 0, "the zeroed price never reached the row");
+  assert.equal(row.u, URL_A);
 });
 
 test("PM-1 rule 3 — the columns are in the ONE write allow-list, not settable by a side door", () => {
