@@ -101,6 +101,19 @@
 */
 
 (function () {
+  /* D-41 (v0.166.0, owner-approved sweep): storage that cannot take the page down. A private-mode
+     or blocked-cookie profile THROWS on access rather than returning null, and this file runs on
+     nearly every page — so one bare touch here killed more screens than any per-page bug could.
+     Same shape v0.165.0 settled on for the grid files. The in-memory mirror is per-module by
+     nature: it keeps THIS file's own reads consistent within a page, it does not share state
+     with the other modules, and nothing persists across a reload while storage is refused. */
+  const btMem = new Map();
+  const safeGet = (k) => { try { const v = localStorage.getItem(k); if (v != null) return v; } catch (e) {} return btMem.has(k) ? btMem.get(k) : null; };
+  const safeSet = (k, v) => { btMem.set(k, v); try { localStorage.setItem(k, v); } catch (e) {} };
+  const safeDel = (k) => { btMem.delete(k); try { localStorage.removeItem(k); } catch (e) {} };
+  const ssGet = (k) => { try { return sessionStorage.getItem(k); } catch (e) { return null; } };
+  const ssSet = (k, v) => { try { sessionStorage.setItem(k, v); } catch (e) {} };
+  const ssDel = (k) => { try { sessionStorage.removeItem(k); } catch (e) {} };
   const API = (window.BT_CONFIG && window.BT_CONFIG.apiBase) || "";
 
   /* ---------- module registry (v0.128.0, roadmap §-1l P-1) ----------
@@ -321,8 +334,8 @@
     aside.className = "sidebar";
     aside.setAttribute("aria-label", "Admin sections");
     aside.innerHTML = NAV.map(g => `
-      <nav class="nav-group${localStorage.getItem("bt_navgrp_" + g.key) === "closed" ? " closed" : ""}" data-key="${g.key}">
-        <div class="nav-label" role="button" tabindex="0" aria-expanded="${localStorage.getItem("bt_navgrp_" + g.key) !== "closed"}">${g.label}<span class="grp-chev">${ICONS.chevron}</span></div>
+      <nav class="nav-group${safeGet("bt_navgrp_" + g.key) === "closed" ? " closed" : ""}" data-key="${g.key}">
+        <div class="nav-label" role="button" tabindex="0" aria-expanded="${safeGet("bt_navgrp_" + g.key) !== "closed"}">${g.label}<span class="grp-chev">${ICONS.chevron}</span></div>
         ${g.items.map(i => `
           <a class="nav-item" href="${i.href}" title="${i.text}">${ICONS[i.ico] || ""}<span class="txt">${i.text}</span></a>`).join("")}
       </nav>`).join("");
@@ -343,7 +356,7 @@
        here (idempotent for the JS-built fallback too). Pre-paint application of collapse
        state is the queued uiux-review §6 step-3 release, not this one. */
     aside.querySelectorAll(".nav-group").forEach(g => {
-      const closed = localStorage.getItem("bt_navgrp_" + g.dataset.key) === "closed";
+      const closed = safeGet("bt_navgrp_" + g.dataset.key) === "closed";
       g.classList.toggle("closed", closed);
       const lbl = g.querySelector(".nav-label");
       if (lbl) lbl.setAttribute("aria-expanded", String(!closed));
@@ -360,7 +373,7 @@
         const grp = lbl.closest(".nav-group");
         const closed = grp.classList.toggle("closed");
         lbl.setAttribute("aria-expanded", String(!closed));
-        localStorage.setItem("bt_navgrp_" + grp.dataset.key, closed ? "closed" : "open");
+        safeSet("bt_navgrp_" + grp.dataset.key, closed ? "closed" : "open");
       };
       lbl.addEventListener("click", toggle);
       lbl.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } });
@@ -379,7 +392,7 @@
          kept admin rights is worse than no preview. */
       const r = await api("/api/auth/act-as", { method: "POST", body: JSON.stringify({ role: "member" }) });
       if (!r.ok) { alert("Couldn't switch to the member view. Try again."); return; }
-      sessionStorage.setItem("bt_demo_member", "1");
+      ssSet("bt_demo_member", "1");
       location.href = "home.html";
     });
     aside.querySelector("#btTestData").addEventListener("click", async e => {
@@ -463,13 +476,13 @@
   }
 
   /* ---------- shared helpers ---------- */
-  const bearer = () => sessionStorage.getItem("bt_token");
+  const bearer = () => ssGet("bt_token");
 
   async function api(path, opts = {}) {
     const headers = Object.assign({ "content-type": "application/json" }, opts.headers || {});
     const t = bearer();
     if (t) headers["Authorization"] = "Bearer " + t;
-    const orgId = localStorage.getItem("bt_org");
+    const orgId = safeGet("bt_org");
     if (orgId) headers["X-Org-Id"] = orgId;
     try {
       const resp = await fetch(API + path, Object.assign({}, opts, { headers, credentials: "include" }));
@@ -513,7 +526,7 @@
   let _mePromise = null;
   async function guard() {
     // Admin pages exit member-demo mode automatically (View-as-member is presentation only).
-    if (sessionStorage.getItem("bt_demo_member") === "1") { location.replace("home.html"); return null; }
+    if (ssGet("bt_demo_member") === "1") { location.replace("home.html"); return null; }
     if (!bearer()) { location.replace("index.html"); return null; }
     if (!_mePromise) _mePromise = api("/api/me");
     const me = await _mePromise;
@@ -583,7 +596,7 @@
     if (!el) return;
     if (r && r.status === 403) {
       const ctx = await orgsReady;
-      const id = Number(localStorage.getItem("bt_org")) || 0;
+      const id = Number(safeGet("bt_org")) || 0;
       const hit = (ctx.all || []).find((o) => Number(o.id) === id);
       const org = hit ? hit.name : "this organization";
       el.innerHTML = `<div class="bt-fail"><b>You don't have access to ${esc(org)}.</b>
@@ -617,7 +630,7 @@
      tap, owner req #19), plus Generate test data where the seed can actually land (org 1). */
   function orgSwitchActions(box, ctx) {
     if (!box) return;
-    const current = Number(localStorage.getItem("bt_org")) || 0;
+    const current = Number(safeGet("bt_org")) || 0;
     (ctx.orgs || []).filter((o) => Number(o.id) !== current).forEach((o) => {
       const b = document.createElement("button");
       b.type = "button";
@@ -698,7 +711,7 @@
      composer clears the key once it has read it. */
   function emailDocument(eventId, subject, body) {
     try {
-      sessionStorage.setItem("bt_print_draft", JSON.stringify({
+      ssSet("bt_print_draft", JSON.stringify({
         event: Number(eventId) || 0, subject: String(subject || ""), body: String(body || ""),
       }));
     } catch (e) { /* private mode: the composer still opens, just without the draft */ }
@@ -719,8 +732,8 @@
     const img = document.querySelector(".wordmark .brand-logo");
     if (!img) return;
     const FALLBACK = img.getAttribute("src"); // the static fallback icon, buster included
-    const cacheKey = "bt_org_logo:" + (localStorage.getItem("bt_org") || "");
-    const cached = localStorage.getItem(cacheKey);
+    const cacheKey = "bt_org_logo:" + (safeGet("bt_org") || "");
+    const cached = safeGet(cacheKey);
     if (cached) img.src = cached;
     img.onerror = () => { // a dead cached URL falls back; a dead fallback removes cleanly
       if (img.src.indexOf("logo-boom-icon") === -1) { try { localStorage.removeItem(cacheKey); } catch (e) {} img.src = FALLBACK; }
@@ -729,7 +742,7 @@
     api("/api/admin/org/profile").then((r) => {
       if (!r.ok) return;
       const fresh = (r.data.org && r.data.org.logo_url) || "";
-      const prev = localStorage.getItem(cacheKey) || "";
+      const prev = safeGet(cacheKey) || "";
       if (fresh === prev) return;
       try { fresh ? localStorage.setItem(cacheKey, fresh) : localStorage.removeItem(cacheKey); } catch (e) {}
       img.src = fresh || FALLBACK;
@@ -762,12 +775,12 @@
         .map((x) => Number(x.org_id)));
       const orgs = all.filter((o) => roleIds.has(Number(o.id)));
       if (!orgs.length) { _orgsResolve({ orgs: [], all, current: null }); return; } // guard() already bounced non-staff
-      const stored = Number(localStorage.getItem("bt_org")) || 0;
+      const stored = Number(safeGet("bt_org")) || 0;
       let current = stored;
       if (!orgs.some((o) => Number(o.id) === current)) {
         current = Number(orgs[0].id);
         try { localStorage.setItem("bt_org", String(current)); } catch (e) {}
-        if (stored && Number(localStorage.getItem("bt_org")) === current) { location.reload(); return; } // heal, then re-fetch everything this page already loaded under the poisoned org
+        if (stored && Number(safeGet("bt_org")) === current) { location.reload(); return; } // heal, then re-fetch everything this page already loaded under the poisoned org
       }
       try { if (!localStorage.getItem("bt_org")) localStorage.setItem("bt_org", String(current)); } catch (e) {} // first visit: persist so api() sends X-Org-Id (admin.js precedent)
       sw.innerHTML = orgs.map((o) => `<option value="${o.id}" ${Number(o.id) === current ? "selected" : ""}>${esc(o.name)}</option>`).join("");
@@ -777,7 +790,7 @@
       _orgsResolve({ orgs, all, current });
     }).catch(() => _orgsResolve({ orgs: [], all: [], current: null }));
     sw.addEventListener("change", () => {
-      localStorage.setItem("bt_org", sw.value);
+      safeSet("bt_org", sw.value);
       const href = document.body.dataset.orgSwitchHref;
       if (href) location.href = href; else location.reload();
     });
@@ -882,7 +895,7 @@
       if (window.BT_STATUS || document.getElementById("bt-status-js")) return;
       var s = document.createElement("script");
       s.id = "bt-status-js";
-      s.src = "assets/build-status.js?v=0.165.0";
+      s.src = "assets/build-status.js?v=0.166.0";
       s.async = false;
       document.head.appendChild(s);
     } catch (e) { /* indicators are never load-blocking */ }

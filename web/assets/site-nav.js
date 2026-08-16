@@ -91,11 +91,24 @@
 */
 
 (function () {
+  /* D-41 (v0.166.0, owner-approved sweep): storage that cannot take the page down. A private-mode
+     or blocked-cookie profile THROWS on access rather than returning null, and this file runs on
+     nearly every page — so one bare touch here killed more screens than any per-page bug could.
+     Same shape v0.165.0 settled on for the grid files. The in-memory mirror is per-module by
+     nature: it keeps THIS file's own reads consistent within a page, it does not share state
+     with the other modules, and nothing persists across a reload while storage is refused. */
+  const btMem = new Map();
+  const safeGet = (k) => { try { const v = localStorage.getItem(k); if (v != null) return v; } catch (e) {} return btMem.has(k) ? btMem.get(k) : null; };
+  const safeSet = (k, v) => { btMem.set(k, v); try { localStorage.setItem(k, v); } catch (e) {} };
+  const safeDel = (k) => { btMem.delete(k); try { localStorage.removeItem(k); } catch (e) {} };
+  const ssGet = (k) => { try { return sessionStorage.getItem(k); } catch (e) { return null; } };
+  const ssSet = (k, v) => { try { sessionStorage.setItem(k, v); } catch (e) {} };
+  const ssDel = (k) => { try { sessionStorage.removeItem(k); } catch (e) {} };
   if (new URLSearchParams(location.search).get("embed") === "1") return;
 
   const API = (window.BT_CONFIG && window.BT_CONFIG.apiBase) || "";
   const here = location.pathname.split("/").pop() || "index.html";
-  const token = sessionStorage.getItem("bt_token");
+  const token = ssGet("bt_token");
 
   /* ---------- styles (tokens only, per design-system v1.0) ---------- */
   const css = `
@@ -174,7 +187,7 @@
         if (resp.ok) {
           signedIn = true;
           const me = await resp.json();
-          const orgId = Number(localStorage.getItem("bt_org")) || null;
+          const orgId = Number(safeGet("bt_org")) || null;
           /* v2.15: NO `|| roles[0]` fallback. A role in ANOTHER org is not a role HERE, and the
              fallback meant someone who is a plain member in the org on screen but staff somewhere
              else was shown the Admin link for an org they hold no role in. Presentation-only —
@@ -219,7 +232,7 @@
         { href: "membership.html", ico: "★", text: "Membership" },
         { href: "settings.html", ico: "⚙", text: "Settings" },
       ]});
-      const demoMember = sessionStorage.getItem("bt_demo_member") === "1";
+      const demoMember = ssGet("bt_demo_member") === "1";
       /* v2.11: header Admin switch — players who are also staff jump back to the Control
          Center from any member page. Presentation-only gating (v2.2 rule): the admin shell's
          own guard() + server requireStaff remain the enforcement. */
@@ -339,14 +352,14 @@
          an unchanged load never moves. WAAPI on the badge itself: CSS performance, no class a
          page stylesheet could restyle, and the preference check is explicit. */
       try {
-        const seen = sessionStorage.getItem("bt_mail_seen");
+        const seen = ssGet("bt_mail_seen");
         if (seen !== null && Number(seen) !== inboxUnread &&
             !matchMedia("(prefers-reduced-motion: reduce)").matches) {
           badge.animate(
             [{ transform: "scale(1)" }, { transform: "scale(1.15)" }, { transform: "scale(1)" }],
             { duration: 160, easing: "ease-out" });
         }
-        sessionStorage.setItem("bt_mail_seen", String(inboxUnread));
+        ssSet("bt_mail_seen", String(inboxUnread));
       } catch (e) { /* private mode: no baseline, no pop */ }
     } else if (badge) {
       badge.remove();
@@ -356,12 +369,12 @@
 
   /* v2.12: org-brand rail card. Cache ~5 min per org; fail closed to the default. */
   async function applyOrgBrand(aside) {
-    const org = localStorage.getItem("bt_org");
+    const org = safeGet("bt_org");
     if (!org || !API || API.includes("PENDING")) return;
     const KEY = "bt_org_brand:" + org;
     let brand = null;
     try {
-      const cached = JSON.parse(localStorage.getItem(KEY) || "null");
+      const cached = JSON.parse(safeGet(KEY) || "null");
       if (cached && (Date.now() - cached.at) < 5 * 60 * 1000) brand = cached.v;
     } catch (e) { /* bad cache = no cache */ }
     if (!brand) {
@@ -369,7 +382,7 @@
         const r = await fetch(API + "/api/public/org-brand?org=" + encodeURIComponent(org));
         if (!r.ok) return; // fail closed — default brand stays
         brand = await r.json();
-        localStorage.setItem(KEY, JSON.stringify({ at: Date.now(), v: brand }));
+        safeSet(KEY, JSON.stringify({ at: Date.now(), v: brand }));
       } catch (e) { return; } // offline = default brand stays
     }
     if (!brand) return;
@@ -445,7 +458,7 @@
   function authHeaders() {
     const h = { "content-type": "application/json" };
     if (token) h["Authorization"] = "Bearer " + token;
-    const org = localStorage.getItem("bt_org");
+    const org = safeGet("bt_org");
     if (org) h["X-Org-Id"] = org;
     return h;
   }
@@ -487,7 +500,7 @@
       if (window.BT_STATUS || document.getElementById("bt-status-js")) return;
       var s = document.createElement("script");
       s.id = "bt-status-js";
-      s.src = "assets/build-status.js?v=0.165.0";
+      s.src = "assets/build-status.js?v=0.166.0";
       s.async = false;
       document.head.appendChild(s);
     } catch (e) { /* indicators are never load-blocking */ }

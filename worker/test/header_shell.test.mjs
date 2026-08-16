@@ -80,11 +80,17 @@ function headerVerdict(html) {
   return { applies: true, ok: true, header: h };
 }
 
-/** admin-nav.js must own switcher population + change handling. */
+/** admin-nav.js must own switcher population + change handling.
+    The persistence link is anchored on WHAT IS GUARANTEED — the chosen org is written under the
+    `bt_org` key from the switcher's own value — not on which function does the writing. D-41
+    (v0.166.0) moved that write behind admin-nav's guarded `safeSet`, and this verdict, which
+    named `localStorage.setItem` literally, went red on a change that improved the very line it
+    guards. Fourth recorded instance of a control anchored on a spelling the fix relocated. */
+const persistsOrgChoice = (src) => /(?:safeSet|localStorage\.setItem)\("bt_org", sw\.value\)/.test(src);
 const navSwitcherVerdict = (src) =>
   src.includes('document.getElementById("orgSwitcher")') &&
   src.includes('api("/api/orgs")') &&
-  src.includes('localStorage.setItem("bt_org", sw.value)') &&
+  persistsOrgChoice(src) &&
   src.includes("dataset.orgSwitchHref");
 
 /** admin-nav.js must own the theme toggle listener — and since v0.160.0 (T2-15) the flip's
@@ -108,7 +114,9 @@ const pageCopyVerdict = (src) => {
   const hits = [];
   const swLines = src.split("\n").filter((l) => l.includes("orgSwitcher"));
   if (swLines.some((l) => !l.includes("single-source now"))) hits.push("orgSwitcher reference");
-  if (src.includes('localStorage.setItem("bt_theme"')) hits.push("theme persistence write");
+  // Both spellings: since D-41 a page could persist the theme through a guarded wrapper just as
+  // easily as through raw storage, and a forbid naming only the raw form would wave it past.
+  if (/(?:safeSet|localStorage\.setItem)\("bt_theme"/.test(src)) hits.push("theme persistence write");
   return { ok: hits.length === 0, hits };
 };
 
@@ -198,8 +206,13 @@ test("NC-2: a one-byte drift in one page's header breaks byte-identity", () => {
 });
 
 test("NC-3: stripping the change-persistence line from admin-nav.js fails the switcher verdict", () => {
-  const mutated = read("assets/admin-nav.js").replace('localStorage.setItem("bt_org", sw.value)', "");
+  const real = read("assets/admin-nav.js");
+  const mutated = real.replace(/(?:safeSet|localStorage\.setItem)\("bt_org", sw\.value\)/, "");
+  assert.notEqual(mutated, real, "the mutation did not land — the verdict's anchor moved again");
   assert.equal(navSwitcherVerdict(mutated), false, "an unpersisted switch must fail — X-Org-Id would go stale");
+  // And the re-anchored verdict must accept BOTH writers, or it forbids the guarded form.
+  assert.equal(persistsOrgChoice('localStorage.setItem("bt_org", sw.value);'), true);
+  assert.equal(persistsOrgChoice('safeSet("bt_org", sw.value);'), true);
 });
 
 test("NC-4: stripping either link of the theme chain fails its verdict", () => {

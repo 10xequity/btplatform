@@ -32,8 +32,8 @@
  * stops updating, and the ghost sits there forever. This is the single most common iCal bug.
  */
 
-let json, audit, requireStaff;
-export function wireCalendar(h) { ({ json, audit, requireStaff } = h); }
+let json, audit, requireStaff, contactForSession;
+export function wireCalendar(h) { ({ json, audit, requireStaff, contactForSession } = h); }
 
 const WINDOW_PAST_DAYS = 30;
 const WINDOW_FUTURE_DAYS = 365;
@@ -293,16 +293,12 @@ async function liveToken(env, orgId, kind, contactId) {
   ).bind(orgId, kind, contactId).first();
 }
 
-/** Session user → contact row in this org. Contacts key on email, users key on email. */
-async function contactForSession(env, ctx) {
-  if (!ctx || !ctx.userId) return null;
-  return env.DB.prepare(
-    `SELECT c.id, c.full_name FROM contacts c
-     JOIN users u ON lower(u.email) = lower(c.email)
-     WHERE u.id = ?1 AND u.deleted_at IS NULL AND c.org_id = ?2 AND c.deleted_at IS NULL
-     LIMIT 1`
-  ).bind(ctx.userId, ctx.orgId).first();
-}
+/* D-18 (v0.166.0): this module used to define its OWN `contactForSession` — the same name as the
+   shared helper, a different body, and the weakest rule of the five: it joined on email alone and
+   took LIMIT 1 with no ORDER BY at all, so with two contacts on one address it returned whichever
+   row the engine happened to hand back. It is gone; the wired shared helper (destructured at the
+   top of this file) is the one rule. Its old comment — "contacts key on email, users key on
+   email" — was the belief that produced the defect: a contact keys on the LINK where there is one. */
 
 function feedUrl(env, raw) {
   const base = env.API_ORIGIN || "https://boomtown-api.vvisuth.workers.dev";

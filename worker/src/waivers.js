@@ -27,7 +27,7 @@
  * failure this module exists to prevent.
  */
 
-let H = null; // wired: { json, audit, isStaff, requireStaff }
+let H = null; // wired: { json, audit, isStaff, requireStaff, contactForSession }
 export function wireWaivers(helpers) { H = helpers; }
 
 const LABEL_MAX = 40;
@@ -277,11 +277,10 @@ async function getVersionPublic(env, ctx, id) {
 async function getMine(env, ctx) {
   if (!ctx.session) return H.json({ error: "Sign in first." }, 401);
 
-  // Same resolution order as member_portal.ownContact — user_id wins over email match.
-  const user = await env.DB.prepare("SELECT id, email FROM users WHERE id=?1 AND deleted_at IS NULL").bind(ctx.userId).first();
-  const self = user && await env.DB.prepare(
-    "SELECT id FROM contacts WHERE org_id=?1 AND deleted_at IS NULL AND (user_id=?2 OR email=?3) ORDER BY user_id DESC LIMIT 1"
-  ).bind(ctx.orgId, user.id, user.email).first();
+  // D-18 (v0.166.0): resolved through the ONE shared rule. The inline copy this replaces cited
+  // "same resolution order as member_portal.ownContact" — a comment that stayed true while the
+  // rule quietly lived in four modules at once.
+  const self = await H.contactForSession(env, ctx);
   if (!self) return H.json({ signatures: [], needs_resign: false, current_version_id: null });
 
   const kids = (await env.DB.prepare(

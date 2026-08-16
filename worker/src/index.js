@@ -244,18 +244,32 @@ const LINKS_PER_DAY = 20;
 const SESSION_TTL_DAYS = 30;
 
 /**
- * The member record behind the current sign-in, scoped to the active org. Six modules had a
- * private copy of this query (consent, member_portal, messages, profiles, registrations,
- * calendar) with subtly different ORDER BY clauses. This is the shared one.
+ * The member record behind the current sign-in, scoped to the active org. THE one identity rule
+ * (D-18, v0.166.0) — every module that resolves "who is signed in" calls this, with exactly one
+ * exemption: profiles.js owns the LINKER (it writes contacts.user_id and creates the row when
+ * there is none), so it keeps its own query and matches by the same rule below.
+ *
+ * The rule: **a contact linked to this user by user_id IS that user's record, outright.** An
+ * email match is the fallback for a member who has never been linked. This matters because an
+ * admin can edit a member's address, and a member can change the address they sign in with —
+ * before v0.166.0 this query joined on EMAIL ALONE and only sorted by user_id, so either edit
+ * made the linked record invisible and orphaned the member from their own history.
+ *
+ * (The header this replaces claimed six modules had been consolidated into it. Measured at
+ * v0.166.0: consent and registrations really had been; member_portal, messages, profiles and
+ * calendar still carried their own copies — and those copies matched on user_id, so they were
+ * MORE correct than this one on the axis D-18 names. The rule was unified upward, not
+ * downward. Case is not part of the difference: contacts.email and users.email are both
+ * COLLATE NOCASE in D1, so `email = ?` was never case-sensitive.)
  */
 async function contactForSession(env, ctx) {
   if (!ctx || !ctx.userId) return null;
   return env.DB.prepare(
     `SELECT c.* FROM contacts c
-       JOIN users u ON lower(u.email) = lower(c.email)
+       JOIN users u ON (c.user_id = u.id OR lower(c.email) = lower(u.email))
       WHERE u.id = ?1 AND u.deleted_at IS NULL
         AND c.org_id = ?2 AND c.deleted_at IS NULL
-      ORDER BY c.user_id DESC, c.id ASC LIMIT 1`
+      ORDER BY CASE WHEN c.user_id = u.id THEN 0 ELSE 1 END, c.id ASC LIMIT 1`
   ).bind(ctx.userId, ctx.orgId).first();
 }
 
@@ -406,7 +420,7 @@ export default {
         const session = await currentSession(request, env);
         res = session ? await listOrgs(env) : json({ error: "Sign in first." }, 401);
       } else if (url.pathname === "/api/health") {
-        res = json({ ok: true, version: "v0.165.0" });
+        res = json({ ok: true, version: "v0.166.0" });
       } else if (url.pathname === "/api/webhooks/square" && request.method === "POST") {
         res = await membershipWebhook(request, env); // verifies signature; forwards payment.* to squareWebhook
       } else if (url.pathname === "/api/public/org-brand" && request.method === "GET") {

@@ -165,13 +165,21 @@ test("the switches exist in the markup of both pages", () => {
 const storageLines = (src) => blankComments(src).split("\n")
   .map((l) => l.trim()).filter((l) => /(local|session)Storage\./.test(l));
 
-test("B22: every storage touch in both files is inside a try — including the org header read", () => {
-  for (const [name, src] of [["tournament.js", TJS], ["admin-schedule-editor.js", EDJS]]) {
-    const lines = storageLines(src);
+/* The GUARDED CORPUS: every file that has been swept, listed by name so adding one is a
+   deliberate act. The two grid files (B22, v0.165.0) plus the three shared modules the owner
+   approved in D-41 (v0.166.0) — admin-nav.js, app.js and site-nav.js load on nearly every page,
+   so they were what actually died first in a blocked-storage profile. Files NOT on this list are
+   still unguarded on purpose; D-41 carries the count and the remaining decision. */
+const GUARDED = ["assets/tournament.js", "assets/admin-schedule-editor.js",
+  "assets/admin-nav.js", "assets/app.js", "assets/site-nav.js"];
+
+test("B22/D-41: every storage touch in the guarded corpus is inside a try — including the org header read", () => {
+  for (const name of GUARDED) {
+    const lines = storageLines(read(name));
     assert.ok(lines.length > 0, `${name}: the scan found no storage lines at all — it is not reading the file`);
     for (const line of lines) {
       assert.ok(/try \{/.test(line),
-        `${name}: a bare localStorage touch survives — a blocked-storage browser dies here: ${line}`);
+        `${name}: a bare storage touch survives — a blocked-storage browser dies here: ${line}`);
     }
   }
   // The choke point this rule exists for: tournament.js reads bt_org inside api(), which runs

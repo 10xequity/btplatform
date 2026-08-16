@@ -8,6 +8,19 @@
            Leagues area, Member Management, Settings) · site-nav sidebar on the dashboard. */
 
 (function () {
+  /* D-41 (v0.166.0, owner-approved sweep): storage that cannot take the page down. A private-mode
+     or blocked-cookie profile THROWS on access rather than returning null, and this file runs on
+     nearly every page — so one bare touch here killed more screens than any per-page bug could.
+     Same shape v0.165.0 settled on for the grid files. The in-memory mirror is per-module by
+     nature: it keeps THIS file's own reads consistent within a page, it does not share state
+     with the other modules, and nothing persists across a reload while storage is refused. */
+  const btMem = new Map();
+  const safeGet = (k) => { try { const v = localStorage.getItem(k); if (v != null) return v; } catch (e) {} return btMem.has(k) ? btMem.get(k) : null; };
+  const safeSet = (k, v) => { btMem.set(k, v); try { localStorage.setItem(k, v); } catch (e) {} };
+  const safeDel = (k) => { btMem.delete(k); try { localStorage.removeItem(k); } catch (e) {} };
+  const ssGet = (k) => { try { return sessionStorage.getItem(k); } catch (e) { return null; } };
+  const ssSet = (k, v) => { try { sessionStorage.setItem(k, v); } catch (e) {} };
+  const ssDel = (k) => { try { sessionStorage.removeItem(k); } catch (e) {} };
   const API = (window.BT_CONFIG && window.BT_CONFIG.apiBase) || "";
   const app = document.getElementById("app");
   const orgSwitcher = document.getElementById("orgSwitcher");
@@ -15,13 +28,13 @@
   const logoutBtn = document.getElementById("logoutBtn");
 
   /* ---------- theme (system preference honored, user override persisted) ---------- */
-  const savedTheme = localStorage.getItem("bt_theme");
+  const savedTheme = safeGet("bt_theme");
   const systemLight = window.matchMedia("(prefers-color-scheme: light)").matches;
   setTheme(savedTheme || (systemLight ? "light" : "dark"));
   themeToggle.addEventListener("click", () => {
     const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
     setTheme(next);
-    localStorage.setItem("bt_theme", next);
+    safeSet("bt_theme", next);
   });
   function setTheme(t) { document.documentElement.dataset.theme = t; }
 
@@ -32,7 +45,7 @@
   }
 
   /* ---------- session ---------- */
-  let bearer = sessionStorage.getItem("bt_token") || null;
+  let bearer = ssGet("bt_token") || null;
 
   /** HTML-escape anything that came from the server before it reaches innerHTML. */
   function esc(s) {
@@ -44,7 +57,7 @@
   async function api(path, opts = {}) {
     const headers = Object.assign({ "content-type": "application/json" }, opts.headers || {});
     if (bearer) headers["Authorization"] = "Bearer " + bearer;
-    const orgId = localStorage.getItem("bt_org");
+    const orgId = safeGet("bt_org");
     if (orgId) headers["X-Org-Id"] = orgId;
     try {
       const resp = await fetch(API + path, Object.assign({}, opts, { headers, credentials: "include" }));
@@ -75,7 +88,7 @@
     const r = await api("/api/auth/verify", { method: "POST", body: JSON.stringify({ token }) });
     if (r.ok) {
       bearer = r.data.token;
-      sessionStorage.setItem("bt_token", bearer);
+      ssSet("bt_token", bearer);
       route();
     } else {
       renderLogin(r.data.error || "Sign-in failed. Request a new link.");
@@ -93,7 +106,7 @@
     try {
       const q = (new URLSearchParams(location.search).get("org") || "").trim();
       if (q) return q;
-      return localStorage.getItem("bt_org") || null;
+      return safeGet("bt_org") || null;
     } catch (e) { return null; }
   }
 
@@ -106,7 +119,7 @@
     const KEY = "bt_org_brand:" + org;
     let brand = null;
     try {
-      const cached = JSON.parse(localStorage.getItem(KEY) || "null");
+      const cached = JSON.parse(safeGet(KEY) || "null");
       if (cached && (Date.now() - cached.at) < 5 * 60 * 1000) brand = cached.v;
     } catch (e) { /* bad cache = no cache */ }
     if (!brand) {
@@ -114,7 +127,7 @@
         const r = await fetch(API + "/api/public/org-brand?org=" + encodeURIComponent(org));
         if (!r.ok) return;                      // unknown org = the default lockup stays
         brand = await r.json();
-        localStorage.setItem(KEY, JSON.stringify({ at: Date.now(), v: brand }));
+        safeSet(KEY, JSON.stringify({ at: Date.now(), v: brand }));
       } catch (e) { return; }                   // offline = the default lockup stays
     }
     if (!brand || !brand.display_name) return;  // a nameless payload changes nothing
@@ -122,7 +135,7 @@
     if (nameEl) nameEl.textContent = brand.display_name;
     const img = document.getElementById("loginBrandLogo");
     if (img && brand.logo_url) {
-      img.onerror = () => { img.src = "assets/logo-boom-icon-512.png?v=0.165.0"; }; // fail closed on 404
+      img.onerror = () => { img.src = "assets/logo-boom-icon-512.png?v=0.166.0"; }; // fail closed on 404
       img.src = brand.logo_url;
     }
   }
@@ -130,14 +143,14 @@
   function renderLogin(errorMsg) {
     logoutBtn.hidden = true;
     orgSwitcher.hidden = true;
-    const savedRole = localStorage.getItem("bt_login_role") || "member";
+    const savedRole = safeGet("bt_login_role") || "member";
     const org = loginOrgHint();
     /* The lockup ships in the SYNCHRONOUS template, never injected after the fetch — D-15 closed
        exactly that defect on the member rail one release ago and the card is one await from it.
        The logo carries explicit width/height so it reserves its box before it loads, and the name
        fills sideways into a fixed-width card, so the swap changes no height. */
     const brandSlot = org
-      ? `<div class="login-brand"><img id="loginBrandLogo" src="assets/logo-boom-icon-512.png?v=0.165.0" alt="" width="36" height="36" /><span id="loginBrandName"></span></div>`
+      ? `<div class="login-brand"><img id="loginBrandLogo" src="assets/logo-boom-icon-512.png?v=0.166.0" alt="" width="36" height="36" /><span id="loginBrandName"></span></div>`
       : "";
     render(`
       <div class="login-wrap">
@@ -162,7 +175,7 @@
 
     const tabs = { member: document.getElementById("tabMember"), manager: document.getElementById("tabManager") };
     function pickRole(r) {
-      localStorage.setItem("bt_login_role", r);
+      safeSet("bt_login_role", r);
       tabs.member.classList.toggle("active", r === "member");
       tabs.manager.classList.toggle("active", r === "manager");
       tabs.member.setAttribute("aria-selected", r === "member");
@@ -213,10 +226,10 @@
 
     orgSwitcher.hidden = false;
     orgSwitcher.innerHTML = orgs.map((o) => `<option value="${Number(o.id)}">${esc(o.name)}</option>`).join("");
-    const savedOrg = localStorage.getItem("bt_org");
+    const savedOrg = safeGet("bt_org");
     if (savedOrg && orgs.some((o) => String(o.id) === savedOrg)) orgSwitcher.value = savedOrg;
-    else localStorage.setItem("bt_org", orgSwitcher.value);
-    orgSwitcher.onchange = () => { localStorage.setItem("bt_org", orgSwitcher.value); paint(); };
+    else safeSet("bt_org", orgSwitcher.value);
+    orgSwitcher.onchange = () => { safeSet("bt_org", orgSwitcher.value); paint(); };
 
     paint();
 
@@ -247,7 +260,7 @@
   logoutBtn.addEventListener("click", async () => {
     await api("/api/auth/logout", { method: "POST" });
     bearer = null;
-    sessionStorage.removeItem("bt_token");
+    ssDel("bt_token");
     renderLogin();
   });
 

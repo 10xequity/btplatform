@@ -17,7 +17,7 @@
  * Rental requests POST is in facility.js (/api/rental-request) — not duplicated here.
  */
 
-let H = null; // wired: { json, audit, isStaff, requireStaff, sendLoginLink }
+let H = null; // wired: { json, audit, isStaff, requireStaff, sendLoginLink, contactForSession }
 export function wireMemberPortal(helpers) { H = helpers; }
 
 export async function memberPortalRoutes(request, env, url, ctx) {
@@ -28,7 +28,7 @@ export async function memberPortalRoutes(request, env, url, ctx) {
 
 async function myAgreements(env, ctx) {
   if (!ctx.session) return H.json({ error: "Sign in first." }, 401);
-  const self = await ownContact(env, ctx);
+  const self = await H.contactForSession(env, ctx);
   if (!self) return H.json({ error: "No member record found for this account yet." }, 404);
 
   const kids = (await env.DB.prepare(
@@ -119,13 +119,7 @@ export function dedupeAgreements(sigs, waivers) {
   return out;
 }
 
-/** Same contact resolution rule as profiles.js (kept local — profiles doesn't export it). */
-async function ownContact(env, ctx) {
-  const user = await env.DB.prepare(
-    "SELECT id, email, display_name FROM users WHERE id=?1 AND deleted_at IS NULL"
-  ).bind(ctx.userId).first();
-  if (!user) return null;
-  return env.DB.prepare(
-    "SELECT * FROM contacts WHERE org_id=?1 AND deleted_at IS NULL AND (user_id=?2 OR email=?3) ORDER BY user_id DESC LIMIT 1"
-  ).bind(ctx.orgId, user.id, user.email).first();
-}
+/* D-18 (v0.166.0): the private copy is gone — this module resolves the signed-in member through
+   the ONE shared rule (H.contactForSession). Its old comment said "kept local — profiles doesn't
+   export it", which was the honest reason at the time and is exactly how one rule became four:
+   the shared helper now exists and is injected, so nothing has to be kept local. */

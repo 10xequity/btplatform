@@ -52,7 +52,7 @@
 
 import { sendEmail, escapeHtml } from "./registrations.js";
 
-let H = null; // wired: { json, audit, isStaff, requireStaff }
+let H = null; // wired: { json, audit, isStaff, requireStaff, contactForSession }
 export function wireMessages(helpers) { H = helpers; }
 
 const BODY_MAX = 2000;
@@ -155,7 +155,7 @@ export async function messagesRoutes(request, env, url, ctx) {
 async function librarySearch(env, url, ctx) {
   const signedIn = !!ctx.session;
   const staff = signedIn && (await H.isStaff(env, ctx));
-  const me = signedIn ? await ownContact(env, ctx) : null;
+  const me = signedIn ? await H.contactForSession(env, ctx) : null;
 
   const filter = {
     q: url.searchParams.get("q") || "",
@@ -543,7 +543,7 @@ async function adminResolveFlag(request, env, ctx) {
 
 async function requireMember(env, ctx) {
   if (!ctx.session) return { err: H.json({ error: "Sign in first." }, 401) };
-  const me = await ownContact(env, ctx);
+  const me = await H.contactForSession(env, ctx);
   if (!me) return { err: H.json({ error: "No member record found for this account yet." }, 404) };
   return { me };
 }
@@ -609,16 +609,11 @@ async function notifyAndRelay(env, ctx, me, to, threadId, body) {
   return ok ? "email" : "sandbox";
 }
 
-/** Same contact resolution rule as member_portal.js. */
-async function ownContact(env, ctx) {
-  const user = await env.DB.prepare(
-    "SELECT id, email FROM users WHERE id=?1 AND deleted_at IS NULL"
-  ).bind(ctx.userId).first();
-  if (!user) return null;
-  return env.DB.prepare(
-    "SELECT * FROM contacts WHERE org_id=?1 AND deleted_at IS NULL AND (user_id=?2 OR email=?3) ORDER BY user_id DESC LIMIT 1"
-  ).bind(ctx.orgId, user.id, user.email).first();
-}
+/* D-18 (v0.166.0): the private copy that used to live here is gone. This module resolves the
+   signed-in member through the ONE shared rule (index.js contactForSession, injected as
+   H.contactForSession) — see its header for why the link, not the address, is authoritative.
+   The old comment here said "same rule as member_portal.js", which was true and was the
+   problem: the rule existed in four places at once. */
 
 /* Changelog: v1.1 (2026-07-25) — one-click mute routes + sender_muted on flags (M16).
    v1.0 (2026-07-24) — initial messaging/relay module (M14 Phase B). */

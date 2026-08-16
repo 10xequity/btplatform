@@ -110,8 +110,14 @@ async function ownContact(env, ctx, createIfMissing = true) {
   ).bind(ctx.userId).first();
   if (!user) return null;
 
+  // D-18 (v0.166.0): this module is the ONE exemption from the shared resolver, because it is the
+  // LINKER — it writes contacts.user_id below and creates the row when there is none, which a
+  // read-only helper cannot do. It must therefore match by the SAME rule as index.js's
+  // contactForSession, or the linker and every reader disagree about which row is yours: the
+  // link decides outright, an email match is the fallback for a member never linked.
   let contact = await env.DB.prepare(
-    "SELECT * FROM contacts WHERE org_id=?1 AND deleted_at IS NULL AND (user_id=?2 OR email=?3) ORDER BY user_id DESC LIMIT 1"
+    `SELECT * FROM contacts WHERE org_id=?1 AND deleted_at IS NULL AND (user_id=?2 OR email=?3)
+      ORDER BY CASE WHEN user_id=?2 THEN 0 ELSE 1 END, id ASC LIMIT 1`
   ).bind(ctx.orgId, user.id, user.email).first();
 
   if (contact && !contact.user_id) {
