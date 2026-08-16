@@ -1,5 +1,9 @@
 /* Boomtown Platform — Tournament Ops styles
-   Version: v0.2 · Date: 2026-07-21
+   Version: v0.3 · Date: 2026-08-16
+   v0.3 (v0.163.0, §-1n P-E / §-0 B19): the day sheet — a print MODE of this page. #daySheet is
+   never visible on screen; body.print-day (set by tournament.js around print(), removed on
+   afterprint) makes it the ONLY printed document, one section per page. The pool sheet's own
+   print is untouched.
    Score sheet slides up 240ms ease-out (occasional action → animation allowed).
    Drag feedback is transform-only. Print = clipboard pool sheet. */
 
@@ -59,6 +63,16 @@ textarea { font: inherit; color: var(--text); background: var(--bg); border: 1px
 }
 .diff-chip:active { transform: scale(0.94); }
 
+/* P-E (v0.163.0): the day sheet — screen half. Hidden always; print-day mode reveals it. */
+#daySheet { display: none; }
+.ds-h { font-size: 20px; margin: 0 0 6px; }
+.ds-sub { font-size: 13px; margin: 0 0 8px; }
+.ds-section { margin: 0 0 14px; }
+.ds-section table { width: 100%; border-collapse: collapse; }
+.ds-section th, .ds-section td { border: 1px solid #000; padding: 4px 6px; text-align: left; font-size: 12px; color: #000; }
+.ds-section th { background: #eee; }
+.ds-note { font-size: 12px; margin: 4px 0; }
+
 /* print: the clipboard pool sheet */
 @media print {
   .no-print, .header { display: none !important; }
@@ -68,6 +82,13 @@ textarea { font: inherit; color: var(--text); background: var(--bg); border: 1px
   .match-cell .score { color: #000; }
   .print-title { display: block; }
   #standingsPanel { break-before: page; border: 0; }
+  /* P-E: print-day mode — the day sheet is the ONLY document in the job. */
+  body.print-day #daySheet { display: block; }
+  body.print-day #gridPanel { display: none !important; }
+  body.print-day #standingsPanel { display: none !important; }
+  body.print-day .print-title { display: none; }
+  .ds-section { break-before: page; }
+  .ds-section:first-of-type { break-before: auto; }
 }
 .print-title { display: none; font-size: 20px; margin: 0 0 6px; }
 @media print { .print-title { display: block; } #gridPanel[hidden], #standingsPanel[hidden] { display: none; } }

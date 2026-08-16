@@ -36,8 +36,12 @@ const TOURNAMENTS_SRC = readFileSync(new URL("../src/tournaments.js", import.met
 test("the button posts the MODERN route with the MODERN body key, and the legacy path is gone from the client", () => {
   const js = blankComments(TOURNAMENT_JS);
 
-  const modernCalls = js.match(/\/api\/admin\/events\/\$\{currentEvent\.id\}\/brackets`/g) || [];
-  assert.equal(modernCalls.length, 1, "exactly one modern bracket call site — uniqueness is the anchor's licence");
+  /* v0.163.0 (P-E/B19): the day sheet added a GET of this same route (a READ — the pool board
+     and bracket sections compose from existing reads). The uniqueness this pin licences was
+     always about the GENERATE — one writer, one body key — so the anchor moved to the POST
+     grain: the route followed by a method option. The read is deliberately not counted. */
+  const modernPosts = js.match(/\/api\/admin\/events\/\$\{currentEvent\.id\}\/brackets`, \{ method: "POST"/g) || [];
+  assert.equal(modernPosts.length, 1, "exactly one modern bracket GENERATE site — uniqueness is the anchor's licence");
   assert.match(js, /a_size:\s*\+\$\("aSize"\)\.value/,
     "the body must send a_size — the engine ignores unknown keys, so the legacy key aSize would " +
     "produce a defaulted bracket with a 200: success it did not achieve");

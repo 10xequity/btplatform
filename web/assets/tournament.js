@@ -371,4 +371,112 @@
       ...sheetRows().map((r) => `Round ${r[0]} · Court ${r[1]}: ${r[2] || "TBD"} vs ${r[3] || "TBD"}${r[4] ? ` (ref ${r[4]})` : ""}`)].join("\n");
     window.BT_ADMIN.emailDocument(currentEvent.id, `${currentEvent.name} — pool sheet`, body);
   };
+
+  /* ---------- the day sheet (§-1n P-E / §-0 B19) ----------
+     The printed artifact the desk holds: schedule, pools and bracket, ONE print job with a page
+     break per section (the pool sheet already breaks standings to its own page — literal
+     single-sheet was never this product's meaning). A print MODE of this page, H-3's precedent:
+     no new page, no new route — the Pools and Bracket sections read the pool board's and
+     admin-brackets' own GETs, both already called by their screens; Schedule reuses sheetRows(),
+     so the printed games and the emailed/CSV games can never disagree. ONE composer, two
+     outputs (print HTML + email text) — the WF-6 one-row-builder rule, applied whole. */
+  const dsEsc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  /* The two score spellings, computed OUTSIDE the html statements so every interpolation that
+     reaches innerHTML is a single dsEsc(...) call — the shape day_sheet.test.mjs enforces. */
+  const rowScore = (r) => (r[5] !== "" || r[6] !== "" ? `${r[5]}–${r[6]}` : "");
+  const mtScore = (mt) => (mt.winner ? `${mt.score_a ?? ""}–${mt.score_b ?? ""}` : "");
+
+  async function composeDaySheet() {
+    const [board, br] = await Promise.all([
+      api(`/api/admin/events/${currentEvent.id}/board`),
+      api(`/api/admin/events/${currentEvent.id}/brackets`),
+    ]);
+    const text = [`${currentEvent.name} — day sheet`, ""];
+    let html = `<h3 class="ds-h">${dsEsc(currentEvent.name)} — day sheet</h3>`;
+
+    // 1. Schedule — the same rows the CSV and the emailed pool sheet are built from.
+    const rows = sheetRows();
+    html += `<div class="ds-section"><h4 class="ds-h">Schedule</h4>` + (rows.length
+      ? `<table><tr><th>Round</th><th>Court</th><th>Team A</th><th>Team B</th><th>Ref</th><th>Score</th></tr>` +
+        rows.map((r) => `<tr><td>${dsEsc(r[0])}</td><td>${dsEsc(r[1])}</td><td>${dsEsc(r[2] || "TBD")}</td><td>${dsEsc(r[3] || "TBD")}</td><td>${dsEsc(r[4])}</td><td>${dsEsc(rowScore(r))}</td></tr>`).join("") + `</table>`
+      : `<p class="ds-note">No pool games yet — generate the schedule first.</p>`) + `</div>`;
+    text.push("SCHEDULE", ...(rows.length
+      ? rows.map((r) => `Round ${r[0]} · Court ${r[1]}: ${r[2] || "TBD"} vs ${r[3] || "TBD"}${r[4] ? ` (ref ${r[4]})` : ""}`)
+      : ["No pool games yet."]), "");
+
+    // 2. Pools — the board's own read; who is in which pool, with the frozen team number.
+    html += `<div class="ds-section"><h4 class="ds-h">Pools</h4>`;
+    if (!board.ok) {
+      html += `<p class="ds-note">Couldn't load the pool board right now.</p>`;
+      text.push("POOLS", "Couldn't load the pool board right now.", "");
+    } else {
+      const pools = board.data.pools || [];
+      const teams = board.data.teams || [];
+      const divName = Object.fromEntries((board.data.divisions || []).map((d) => [d.id, d.name]));
+      text.push("POOLS");
+      if (!pools.length) {
+        html += `<p class="ds-note">No pool board saved yet.</p>`;
+        text.push("No pool board saved yet.");
+      } else {
+        for (const pool of pools) {
+          const inPool = teams.filter((t) => t.pool_id === pool.id);
+          const courts = pool.court_from ? ` · courts ${pool.court_from}–${pool.court_to || pool.court_from}` : "";
+          const division = divName[pool.division_id] ? `${divName[pool.division_id]} · ` : "";
+          const meta = `${division}${inPool.length} teams${courts}`;
+          html += `<p class="ds-sub"><b>${dsEsc(pool.name)}</b> (${dsEsc(meta)})</p>` +
+            `<table><tr><th>#</th><th>Team</th><th>Level</th></tr>` +
+            inPool.map((t) => `<tr><td>${dsEsc(t.board_no)}</td><td>${dsEsc(t.name)}</td><td>${dsEsc(t.level || "")}</td></tr>`).join("") + `</table>`;
+          text.push(`${pool.name} (${meta})`,
+            ...inPool.map((t) => `  #${t.board_no} ${t.name}${t.level ? ` (${t.level})` : ""}`));
+        }
+      }
+      text.push("");
+    }
+    html += `</div>`;
+
+    // 3. Bracket — admin-brackets' own read; pairings by round, the stored score pair printed
+    //    as it is stored, TBD where a slot waits on a result.
+    html += `<div class="ds-section"><h4 class="ds-h">Bracket</h4>`;
+    if (!br.ok) {
+      html += `<p class="ds-note">Couldn't load the bracket right now.</p>`;
+      text.push("BRACKET", "Couldn't load the bracket right now.");
+    } else {
+      const list = br.data.brackets || [];
+      text.push("BRACKET");
+      if (!list.length) {
+        html += `<p class="ds-note">No bracket yet — it appears here once pool play breaks.</p>`;
+        text.push("No bracket yet.");
+      } else {
+        for (const b of list) {
+          html += `<p class="ds-sub"><b>${dsEsc(b.name)} bracket</b>${b.champion ? ` — 🏆 ${dsEsc(b.champion)}` : ""}</p>`;
+          text.push(`${b.name} bracket${b.champion ? ` — winner: ${b.champion}` : ""}`);
+          for (const round of b.rounds || []) {
+            html += `<p class="ds-sub">${dsEsc(round.label)}</p><table><tr><th>Team A</th><th>Team B</th><th>Score</th></tr>` +
+              (round.matches || []).map((mt) => `<tr><td>${dsEsc(mt.team_a || mt.waiting_a || "TBD")}</td><td>${dsEsc(mt.team_b || mt.waiting_b || "TBD")}</td><td>${dsEsc(mtScore(mt))}</td></tr>`).join("") + `</table>`;
+            text.push(`  ${round.label}: ` + (round.matches || []).map((mt) =>
+              `${mt.team_a || mt.waiting_a || "TBD"} vs ${mt.team_b || mt.waiting_b || "TBD"}${mt.winner ? ` (${mtScore(mt)})` : ""}`).join(" · "));
+          }
+        }
+      }
+    }
+    html += `</div>`;
+
+    $("daySheet").innerHTML = html;
+    return text.join("\n");
+  }
+
+  $("daySheetBtn").onclick = async () => {
+    if (!currentEvent) return;
+    await composeDaySheet();
+    document.body.classList.add("print-day");
+    addEventListener("afterprint", () => document.body.classList.remove("print-day"), { once: true });
+    print();
+  };
+
+  $("dayEmailBtn").onclick = async () => {
+    if (!currentEvent) return;
+    const body = await composeDaySheet();
+    window.BT_ADMIN.emailDocument(currentEvent.id, `${currentEvent.name} — day sheet`, body);
+  };
 })();
