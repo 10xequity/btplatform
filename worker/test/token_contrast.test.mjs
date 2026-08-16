@@ -71,6 +71,17 @@ const DARK = themeTokens(CSS, '[data-theme="dark"]');
 /** Dark overrides light — that is how the cascade resolves a page with `data-theme="dark"`. */
 const themes = { light: LIGHT, dark: { ...LIGHT, ...DARK } };
 
+/* v1.1 (v0.160.0, §-1j T2-15 / §-0 B13): the four W1 templates join the corpus. Each
+   `[data-template="…"]` block is colour-SELF-SUFFICIENT — it declares every colour token
+   (theme_tokens.test.mjs enforces that), so spreading over LIGHT alone equals the real cascade
+   (:root → mode block → template block) for every colour token; the spread from LIGHT only
+   supplies non-colour tokens (shape/type/motion) the pairings never read. themeTokens() itself
+   asserts each selector exists, so deleting a block reddens here as well as in the vocabulary
+   guard. */
+for (const key of ["daylight", "chalk", "midnight", "court-navy"]) {
+  themes[key] = { ...LIGHT, ...themeTokens(CSS, `[data-template="${key}"]`) };
+}
+
 const AA = 4.5, AA_UI = 3.0;
 
 /**

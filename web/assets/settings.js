@@ -1,5 +1,7 @@
 /* Boomtown Platform — Settings
-   File: web/assets/settings.js · Version: v1.1 · Date: 2026-07-25 · Ships in: v0.6.0 (v1.1 in v0.20.0)
+   File: web/assets/settings.js · Version: v1.2 · Date: 2026-08-16 · Ships in: v0.6.0 (v1.2 in v0.160.0)
+   v1.2 (T2-15/W1): the Appearance card gains the colour-template chips (BT_THEME.mountPicker —
+   the ONE picker, shared with the admin shell) and #themeNow reads BT_THEME.describe().
    v1.1: Push-notification row in the Reminders card (BT_PUSH from push.js).
    Sections: Account (name/email/photo — edits live on the Profile page; email is your
    sign-in identity, changed by staff on request), Sign-in & security (passkeys replace
@@ -48,7 +50,6 @@
     const staff = role === "admin" || role === "staff";
     const p = prof.profile || prof || {};
     const name = p.full_name || (prof.contact && prof.contact.full_name) || me.user.full_name || "";
-    const theme = document.documentElement.dataset.theme;
     const remindersOn = !!(p.reminders_opt_in || prof.reminders_opt_in);
 
     app.innerHTML = `
@@ -112,8 +113,13 @@
         <h3 id="sApp">Appearance</h3>
         <div class="settings-row">
           <div class="grow"><div class="k">Theme</div>
-            <div class="v" id="themeNow">${theme === "dark" ? "Dark (black &amp; gold)" : "Light (white &amp; navy)"}</div></div>
+            <div class="v" id="themeNow">${esc(window.BT_THEME ? BT_THEME.describe() : "")}</div></div>
           <button class="btn ghost" onclick="document.getElementById('themeToggle').click()">Switch theme</button>
+        </div>
+        <div class="settings-row">
+          <div class="grow"><div class="k">Colour template</div>
+            <div class="v">Four looks, plus the plain light and dark defaults. Applies on every page, on this device.</div>
+            <div id="tplPick" class="tpl-chips"></div></div>
         </div>
       </section>
 
@@ -157,6 +163,13 @@
     `;
 
     document.getElementById("signOut2").addEventListener("click", () => document.getElementById("logoutBtn").click());
+
+    /* T2-15/W1: the template chips — one shared picker (config.js). The ◐ toggle's own label
+       update lives in site-nav's single-source listener; this callback covers picks made HERE. */
+    if (window.BT_THEME) BT_THEME.mountPicker(document.getElementById("tplPick"), () => {
+      const lbl = document.getElementById("themeNow");
+      if (lbl) lbl.textContent = BT_THEME.describe();
+    });
 
     /* v0.143.0 (§-0 B29): the "Request change" anchor above carries [data-org-contact] and ships
        href="help.html". site-nav.js fills every such anchor with the ORGANIZATION's own contact

@@ -1,16 +1,19 @@
 /* Boomtown Platform — Design Tokens
-   Version: v0.6.0 · Date: 2026-08-02 (v0.1 base 2026-07-21 · v0.2.1 contrast recovery · v0.3.0 F-23
+   Version: v0.7.0 · Date: 2026-08-16 (v0.1 base 2026-07-21 · v0.2.1 contrast recovery · v0.3.0 F-23
     · v0.4.0 F-35 focus-ring scope + F-36 body-size reconciliation · v0.5.0 contrast pass:
     --emphasis / --gold-ink / --ok, v0.46.0 · v0.6.0 chrome-glass to the demo-v4 treatment,
-    ships in v0.52.0)
+    ships in v0.52.0 · v0.7.0 the four W1 colour templates, ships in v0.160.0)
    THIS FILE IS THE SOURCE OF TRUTH for colour, shape, type and motion. Nothing overrides it.
    Cited by: docs/2026-07-21_design-handoff_v0.1.md · 2026-07-27_standards_v0.32.1-r1.md §1
    (v0.2.1 pointed at "design spec §4" — boomtown-design-spec_v0_1/_v0_2 were deleted, see
     library_v1_0 §3. A citation to a deleted file is worse than no citation. Removed.)
    Dark = black/gold (first-class). Light = white/navy + yellow. Requirement 13. */
 
-:root {
-  /* Light theme */
+:root,
+[data-theme="light"] {
+  /* Light theme. The [data-theme="light"] co-selector (v0.7.0) states no second value: it lets
+     an ELEMENT carry the light palette inside a dark page — the template picker's default-Light
+     swatch — exactly as [data-theme="dark"] below already works on any element. */
   --bg: #FFFFFF;
   --surface: #F7F7F5;
   --surface-raised: #FFFFFF;
@@ -243,3 +246,123 @@ body { font-size: var(--font-size-body); } /* v0.4.0 F-36 — was a bare 17px, d
    deliberate inset styling on a dense court grid, not drift. Confirm with the owner before
    normalising it — a 2px outset ring on .fc-block would overlap adjacent blocks.
    ============================================================ */
+
+/* ============================================================
+   v0.7.0 additions · 2026-08-16 · Ships in: v0.160.0 · §-1j T2-15 / §-0 B13 / work-order W1
+   THE FOUR COLOUR TEMPLATES — Daylight, Chalk, Midnight, Court Navy.
+   Values are the demo's TEMPLATES object (docs/2026-08-01_demo_admin-shell_v4_0.html:211-216),
+   accepted as W1 on 2026-08-03, promoted VERBATIM — with three compositions the demo's
+   16-variable map never carried, taken from the matching mode's shipped tokens above:
+   --positive (the demo's `ok` literal), --warn and --danger. Every pairing was computed
+   before these values landed (64 pairings, all AA; theme_tokens.test.mjs keeps them so).
+
+   HOW A TEMPLATE COMPOSES. `data-theme` on <html> stays the binary MODE — every existing
+   selector and JS comparison is untouched. `data-template` is a SECOND attribute, applied
+   pre-paint by a one-line companion script on every page and written by BT_THEME (config.js).
+   These blocks sit AFTER the mode blocks and the color-scheme rules above, so at equal
+   attribute-selector specificity they win the tie — and each block is deliberately
+   COLOUR-SELF-SUFFICIENT (every colour token + color-scheme), so a stale or mismatched
+   bt_theme/bt_template pair still renders one coherent palette, and a picker swatch carrying
+   the attribute paints truthfully inside any page. An unknown template value matches no block
+   and falls back to the plain mode — junk degrades to today's look by construction.
+
+   NOT PROMOTED: the demo map's --band-bg/--band-ink — zero consumers in shipped CSS (grepped,
+   iteration 91); a token nobody reads is a value that can rot unmeasured. Add them the day a
+   band component ships. The demo's custom hex pickers are W1's LATER half (admin-writable,
+   D1-backed) and are deliberately not here — members pick templates, they do not author hex.
+
+   Two light templates keep the light mode's composed extras; two dark templates keep the
+   dark mode's. Aliases are re-declared per block (the --warning precedent above: a nested
+   scope must not inherit an ancestor's computed value). */
+
+[data-template="daylight"] {
+  color-scheme: light;
+  --bg: #FBF6EC;
+  --surface: #F1E7D0;
+  --surface-raised: #FCF8F0;
+  --surface-2: #E7DCC0;
+  --text: #101418;
+  --text-muted: #5E5647;
+  --primary: #1B2A4A;
+  --primary-contrast: #FFFFFF;
+  --accent: #E8B62C;
+  --focus-ring: #1B2A4A;
+  --positive: #0F7B3E;
+  --warn: #8F6200;
+  --danger: #B3261E;
+  --border: #E2D4B4;
+  --emphasis: #1B2A4A;
+  --gold-ink: #101418;
+  --warning: var(--warn);
+  --text-dim: var(--text-muted);
+  --ok: var(--positive);
+}
+
+[data-template="chalk"] {
+  color-scheme: light;
+  --bg: #FFFFFF;
+  --surface: #EEF1F6;
+  --surface-raised: #FFFFFF;
+  --surface-2: #E3E8F0;
+  --text: #131722;
+  --text-muted: #5B6472;
+  --primary: #1B2A4A;
+  --primary-contrast: #FFFFFF;
+  --accent: #C79200;
+  --focus-ring: #1B2A4A;
+  --positive: #0F7B3E;
+  --warn: #8F6200;
+  --danger: #B3261E;
+  --border: #DCE2EC;
+  --emphasis: #1B2A4A;
+  --gold-ink: #131722;
+  --warning: var(--warn);
+  --text-dim: var(--text-muted);
+  --ok: var(--positive);
+}
+
+[data-template="midnight"] {
+  color-scheme: dark;
+  --bg: #0B0B0D;
+  --surface: #141417;
+  --surface-raised: #1B1B1F;
+  --surface-2: #1B1B1F;
+  --text: #F2F0EA;
+  --text-muted: #A8A49A;
+  --primary: #D4AF37;
+  --primary-contrast: #0B0B0D;
+  --accent: #D4AF37;
+  --focus-ring: #F2F0EA;
+  --positive: #5FD08A;
+  --warn: #E8B54A;
+  --danger: #F2555A;
+  --border: #26262B;
+  --emphasis: #D4AF37;
+  --gold-ink: #0B0B0D;
+  --warning: var(--warn);
+  --text-dim: var(--text-muted);
+  --ok: var(--positive);
+}
+
+[data-template="court-navy"] {
+  color-scheme: dark;
+  --bg: #0C1220;
+  --surface: #141E33;
+  --surface-raised: #1B2843;
+  --surface-2: #1B2843;
+  --text: #EAF0FF;
+  --text-muted: #9FB0CE;
+  --primary: #E8B62C;
+  --primary-contrast: #0C1220;
+  --accent: #E8B62C;
+  --focus-ring: #EAF0FF;
+  --positive: #5FD08A;
+  --warn: #E8B54A;
+  --danger: #F2555A;
+  --border: #24324F;
+  --emphasis: #E8B62C;
+  --gold-ink: #0C1220;
+  --warning: var(--warn);
+  --text-dim: var(--text-muted);
+  --ok: var(--positive);
+}

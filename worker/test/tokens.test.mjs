@@ -46,7 +46,14 @@ function blockFor(css, selector) {
       else if (clean[j] === "}") depth--;
       j++;
     }
-    if (sel === selector) return clean.slice(open + 1, j - 1);
+    /* v0.160.0 (T2-15): match a selector LIST too — tokens.css's light block became
+       `:root, [data-theme="light"]` so a picker swatch can carry the light palette inside a
+       dark page. CSS semantics: a rule whose selector list contains the target applies to it,
+       so a query for ":root" must find that block. Exact-match-only was the guard pinning a
+       shape rather than a meaning. */
+    if (sel === selector || sel.split(",").map((s) => s.trim()).includes(selector)) {
+      return clean.slice(open + 1, j - 1);
+    }
     // descend into @supports / @media so nested rules are still reachable
     if (sel.startsWith("@")) {
       const inner = blockFor(clean.slice(open + 1, j - 1), selector);

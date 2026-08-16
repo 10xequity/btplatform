@@ -1,5 +1,6 @@
 /* Boomtown Platform — App Shell Styles
-   Version: v0.8.0 · Date: 2026-08-02 (v0.1 base 2026-07-21)
+   Version: v0.9.0 · Date: 2026-08-16 (v0.1 base 2026-07-21)
+   v0.9.0 (v0.160.0, T2-15/W1): the colour-template picker chips — see the block at the foot.
    v0.8.0 (v0.52.0): static admin header (uiux-review §6 step 4) — .wordmark becomes a flex
    row and .brand-logo / .hdr-mail move here from the admin-nav.js injected <style>, because
    the header is now fully static markup and must be styled on frame one, before any script.
@@ -317,3 +318,24 @@ body.embed .admin-main { padding: 12px 14px; }
 body.embed .wrap, body.embed main { padding-left: 14px; padding-right: 14px; }
 /* No page scrollbar inside a frame: the hub sizes the frame to the height the page reports. */
 body.embed { overflow-y: hidden; }
+
+/* ── v0.9.0 (v0.160.0, §-1j T2-15 / W1): the colour-template picker ──
+   One picker, both shells (BT_THEME.mountPicker in config.js builds this markup; settings.js
+   and admin-nav.js mount it). Swatch stripes read the CSS variables THROUGH the data-theme /
+   data-template attribute on .tpl-sw, so each swatch previews the palette it applies — no hex
+   is restated here and none can drift. Chips clear the 44px target; the active state marks
+   with border + the dot idiom in --emphasis, never a gold text. */
+.tpl-chips { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
+.tpl-chip { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 8px 14px 8px 8px;
+  font: inherit; font-size: 15px; color: var(--text); cursor: pointer;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-control); }
+.tpl-chip.active { border-color: var(--emphasis); }
+.tpl-chip.active .tpl-name::after { content: " ●"; color: var(--emphasis); }
+.tpl-sw { display: inline-flex; overflow: hidden; border: 1px solid var(--border);
+  border-radius: calc(var(--radius-control) - 2px); }
+.tpl-sw i { width: 12px; height: 26px; }
+.tpl-sw .sw-bg { background: var(--bg); }
+.tpl-sw .sw-primary { background: var(--primary); }
+.tpl-sw .sw-surface { background: var(--surface); }
+.tpl-sw .sw-accent { background: var(--accent); }
+.tpl-hint { margin: 0 0 10px; color: var(--text-muted); font-size: 14px; }

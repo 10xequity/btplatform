@@ -1,4 +1,11 @@
 /* Boomtown Platform — Site-wide sidebar navigation (shared)
+   v2.19 (v0.160.0, §-1j T2-15 / W1): the ◐ toggle's body delegates the flip to the theme
+   service (config.js's BT_THEME — the one theme-state writer, both shells; the call literal
+   appears ONLY in code so header_shell's verdict cannot be satisfied by this comment —
+   D-33's class). The toggle STAYS an instant mode flip
+   with a single marker-gated listener (the v0.52.0 double-bind rule is unchanged); what changed
+   is that flipping now returns you to the colour template you last used on that side, and the
+   settings label reads BT_THEME.describe() instead of restating the two default names.
    v2.18 (v0.143.0, §-0 B29 / §-1c D-28): the member-facing contact link resolves through the
    organization instead of a hard-coded address. applyOrgBrand now fills any [data-org-contact]
    anchor from the brand payload's admin_email, and the filler is exposed as window.btOrgContact
@@ -135,12 +142,12 @@
   if (canonHdr) {
     const tt = document.getElementById("themeToggle");
     if (tt) tt.addEventListener("click", () => {
-      const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
-      document.documentElement.dataset.theme = next;
-      try { localStorage.setItem("bt_theme", next); } catch (e) {}
+      /* v2.19 (T2-15): the flip is BT_THEME's — mode toggles instantly, and the side you land
+         on restores the template you last used there (or the plain default). */
+      BT_THEME.toggleMode();
       syncThemeColor();
       const lbl = document.getElementById("themeNow"); /* settings.html label, if present */
-      if (lbl) lbl.textContent = next === "dark" ? "Dark (black & gold)" : "Light (white & navy)";
+      if (lbl) lbl.textContent = BT_THEME.describe();
     });
     const lo = document.getElementById("logoutBtn");
     /* v2.14: reveal from the LOCAL token, synchronously. Waiting on /api/me meant a slow or
@@ -462,7 +469,7 @@
       if (window.BT_STATUS || document.getElementById("bt-status-js")) return;
       var s = document.createElement("script");
       s.id = "bt-status-js";
-      s.src = "assets/build-status.js?v=0.159.0";
+      s.src = "assets/build-status.js?v=0.160.0";
       s.async = false;
       document.head.appendChild(s);
     } catch (e) { /* indicators are never load-blocking */ }

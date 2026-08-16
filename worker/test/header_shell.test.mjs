@@ -87,10 +87,18 @@ const navSwitcherVerdict = (src) =>
   src.includes('localStorage.setItem("bt_org", sw.value)') &&
   src.includes("dataset.orgSwitchHref");
 
-/** admin-nav.js must own the theme toggle listener. */
+/** admin-nav.js must own the theme toggle listener — and since v0.160.0 (T2-15) the flip's
+    PERSISTENCE lives in BT_THEME (config.js), so the listener's load-bearing line is the
+    delegation. The reverts-on-next-page failure this verdict exists for is now caught by
+    themePersistVerdict below, which follows the write to its one home. */
 const navThemeVerdict = (src) =>
   src.includes('document.getElementById("themeToggle")') &&
-  src.includes('localStorage.setItem("bt_theme", next)');
+  src.includes("BT_THEME.toggleMode()");
+/** config.js's BT_THEME must actually persist a flip: choose() writes the mode through put(),
+    and put() is a real setItem. Strip either and every toggle reverts on the next page. */
+const themePersistVerdict = (src) =>
+  src.includes('put("bt_theme", mode)') &&
+  src.includes("localStorage.setItem(k, v)");
 
 /** A page script keeps NO switcher/theme copy. The signatures scanned are the two deleted
     blocks' load-bearing lines — population markup and the toggle's persistence write. Every
@@ -133,6 +141,8 @@ test("admin-nav.js owns org-switcher population, persistence and the data-org-sw
 test("admin-nav.js owns the theme toggle listener", () => {
   assert.ok(navThemeVerdict(read("assets/admin-nav.js")),
     "theme toggle listener missing in admin-nav.js — 27 header buttons just went dead");
+  assert.ok(themePersistVerdict(read("assets/config.js")),
+    "BT_THEME no longer persists the flip — every toggle reverts on the next page");
 });
 
 test("no admin page script keeps a switcher/theme copy (the 12 deleted blocks must not return)", () => {
@@ -192,9 +202,17 @@ test("NC-3: stripping the change-persistence line from admin-nav.js fails the sw
   assert.equal(navSwitcherVerdict(mutated), false, "an unpersisted switch must fail — X-Org-Id would go stale");
 });
 
-test("NC-4: stripping the theme persistence write from admin-nav.js fails the theme verdict", () => {
-  const mutated = read("assets/admin-nav.js").replace('localStorage.setItem("bt_theme", next)', "");
-  assert.equal(navThemeVerdict(mutated), false, "an unpersisted theme flip must fail — it reverts on the next page");
+test("NC-4: stripping either link of the theme chain fails its verdict", () => {
+  // Link 1: the listener stops routing through the one writer.
+  const nav = read("assets/admin-nav.js");
+  const navMutated = nav.replace("BT_THEME.toggleMode()", "");
+  assert.notEqual(navMutated, nav, "the nav mutation did not land — this control tests nothing");
+  assert.equal(navThemeVerdict(navMutated), false, "a flip that bypasses BT_THEME must fail");
+  // Link 2: the writer stops persisting.
+  const cfg = read("assets/config.js");
+  const cfgMutated = cfg.replace('put("bt_theme", mode)', "");
+  assert.notEqual(cfgMutated, cfg, "the config mutation did not land — this control tests nothing");
+  assert.equal(themePersistVerdict(cfgMutated), false, "an unpersisted theme flip must fail — it reverts on the next page");
 });
 
 test("NC-5: a re-added per-page theme block fails the no-copy scan", () => {
@@ -241,9 +259,10 @@ function memberHeaderVerdict(html) {
   return { ok: true, header: h };
 }
 
-/* site-nav.js single-source behavior verdicts */
+/* site-nav.js single-source behavior verdicts. The theme flip delegates to BT_THEME since
+   v0.160.0 (T2-15); persistence is asserted at its one home by themePersistVerdict above. */
 const siteNavThemeVerdict = (src) =>
-  src.includes('tt.addEventListener("click"') && src.includes('localStorage.setItem("bt_theme"');
+  src.includes('tt.addEventListener("click"') && src.includes("BT_THEME.toggleMode()");
 const siteNavLogoutVerdict = (src) =>
   src.includes('lo.addEventListener("click"') && src.includes('"/api/auth/logout"');
 /* a member page-script keeping a theme copy double-binds → dead button (v0.52.0 class) */
@@ -338,8 +357,11 @@ test("NC-M4: a member header carrying an org switcher fails (members act in one 
   assert.equal(memberHeaderVerdict(html).ok, false);
 });
 
-test("NC-M5: stripping the bt_theme write from site-nav.js fails the theme verdict", () => {
-  assert.equal(siteNavThemeVerdict(read("assets/site-nav.js").replace('localStorage.setItem("bt_theme"', "x(")), false);
+test("NC-M5: stripping the theme-service delegation from site-nav.js fails the theme verdict", () => {
+  const src = read("assets/site-nav.js");
+  const mutated = src.replace("BT_THEME.toggleMode()", "x()");
+  assert.notEqual(mutated, src, "the mutation did not land — this control tests nothing");
+  assert.equal(siteNavThemeVerdict(mutated), false);
 });
 
 test("NC-M6: a re-added per-page theme copy fails the no-copy scan (exact subject line)", () => {

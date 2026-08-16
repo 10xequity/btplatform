@@ -1,5 +1,12 @@
 /* Boomtown Platform — Admin sidebar (shared)
-   Version: v2.22 · Date: 2026-08-05 · Ships in: v0.89.0
+   Version: v2.23 · Date: 2026-08-16 · Ships in: v0.160.0
+   v2.23 (§-1j T2-15 / W1): the ◐ toggle's body delegates the flip to the theme service
+   (config.js's BT_THEME — the one theme-state writer, both shells; the call literal appears
+   ONLY in code so header_shell's verdict cannot be satisfied by this comment — D-33's class),
+   and an "Appearance" button is JS-injected beside it
+   opening the shared template picker in the existing modal — W1 places templates behind a NAMED
+   row, out of the high-frequency toggle's way, and injection keeps 38 static admin headers
+   untouched. The listener stays single-bound (the v0.52.0 rule).
    v2.22: ORG HONESTY (roadmap §-1 Block B, audit R1 — the root cause of most of the tester round).
    B1: the switcher offers ONLY orgs where /api/me reports an admin/staff role; the old block
    populated straight from /api/orgs and offered an org the owner had no role in, and one click
@@ -808,10 +815,24 @@
     const t = document.getElementById("themeToggle");
     if (!t) return;
     t.addEventListener("click", () => {
-      const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
-      document.documentElement.dataset.theme = next;
-      try { localStorage.setItem("bt_theme", next); } catch (e) {}
+      /* v2.23 (T2-15): the flip is BT_THEME's — mode toggles instantly, and the side you land
+         on restores the template you last used there (or the plain default). */
+      BT_THEME.toggleMode();
       syncThemeColor();
+    });
+    /* v2.23 (T2-15/W1): the Appearance entry — the template picker behind a NAMED control,
+       injected so the static headers stay untouched. Shares config.js's one picker. */
+    const ap = document.createElement("button");
+    ap.type = "button";
+    ap.id = "btAppearance";
+    ap.className = "btn ghost";
+    ap.textContent = "Appearance";
+    t.insertAdjacentElement("afterend", ap);
+    ap.addEventListener("click", () => {
+      openModal(`<h3 style="margin:0 0 10px">Appearance</h3>
+        <p class="tpl-hint">Four looks, plus the plain light and dark defaults. Applies on every page, on this device.</p>
+        <div id="btTplPick" class="tpl-chips"></div>`);
+      BT_THEME.mountPicker(document.getElementById("btTplPick"), () => syncThemeColor());
     });
   })();
 
@@ -861,7 +882,7 @@
       if (window.BT_STATUS || document.getElementById("bt-status-js")) return;
       var s = document.createElement("script");
       s.id = "bt-status-js";
-      s.src = "assets/build-status.js?v=0.159.0";
+      s.src = "assets/build-status.js?v=0.160.0";
       s.async = false;
       document.head.appendChild(s);
     } catch (e) { /* indicators are never load-blocking */ }

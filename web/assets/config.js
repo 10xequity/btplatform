@@ -89,3 +89,91 @@ window.BT_SIGNUP = function (event) {
   });
   window.addEventListener("load", post);
 })();
+
+/* THE THEME SERVICE — v0.7.0 (v0.160.0, §-1j T2-15 / §-0 B13 / work-order W1).
+   ONE place a theme choice becomes state. It sits here for BT_SIGNUP's exact reason: config.js
+   is the only script both shells load, and the alternative was a second copy of this logic in
+   site-nav.js and admin-nav.js — the D-32 two-consumer shape from birth.
+
+   THE STATE MODEL. `data-theme` on <html> keeps its day-one meaning: the binary MODE
+   (light|dark) — every existing selector, JS comparison and the widget's embed contract are
+   untouched. `data-template` is a SECOND attribute naming one of W1's four palettes
+   (tokens.css owns the values; theme_tokens.test.mjs pins that this list and those blocks are
+   one set). Storage: `bt_theme` = mode, unchanged; `bt_template` = the ACTIVE template or
+   absent; `bt_template_light`/`bt_template_dark` remember the last pick per mode ("" = the
+   plain default), which is the demo's lastLight/lastDark behaviour — the ◐ toggle stays an
+   instant mode flip and returns you to the template you used on that side, or the default if
+   you never picked one. A user who never touches the picker has no template keys and gets
+   byte-for-byte today's behaviour.
+
+   The pre-paint half lives in each page's head (the byte-identical bt_template line, applied
+   before the first stylesheet); this service is the WRITE side. */
+window.BT_THEME = (function () {
+  const TEMPLATES = [
+    { key: "daylight", label: "Daylight", mode: "light" },
+    { key: "chalk", label: "Chalk", mode: "light" },
+    { key: "midnight", label: "Midnight", mode: "dark" },
+    { key: "court-navy", label: "Court Navy", mode: "dark" },
+  ];
+  const byKey = (k) => TEMPLATES.find((t) => t.key === k) || null;
+  const root = () => document.documentElement;
+  const get = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+  const put = (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) {} };
+
+  function state() {
+    const tpl = byKey(root().dataset.template || "");
+    return { mode: root().dataset.theme === "light" ? "light" : "dark", template: tpl ? tpl.key : "" };
+  }
+  /* choose() takes one of SIX values: "light" / "dark" (the plain defaults) or a template key.
+     A template carries its own mode, so choosing one can never produce the junk pairing the
+     CSS is defensive about. Unknown keys degrade to the dark default — the same fail-open the
+     pre-paint line has. */
+  function choose(key) {
+    const tpl = byKey(key);
+    const mode = tpl ? tpl.mode : (key === "light" ? "light" : "dark");
+    if (tpl) root().dataset.template = tpl.key; else delete root().dataset.template;
+    root().dataset.theme = mode;
+    put("bt_theme", mode);
+    put("bt_template", tpl ? tpl.key : null);
+    put("bt_template_" + mode, tpl ? tpl.key : "");
+    return state();
+  }
+  /* The ◐ toggle: flip the mode, restore that side's remembered template (or its default). */
+  function toggleMode() {
+    const next = state().mode === "dark" ? "light" : "dark";
+    return choose(get("bt_template_" + next) || next);
+  }
+  /* The human name of the current choice — settings.html's #themeNow label reads this. */
+  function describe() {
+    const s = state();
+    const tpl = byKey(s.template);
+    return tpl ? tpl.label : (s.mode === "dark" ? "Dark (black & gold)" : "Light (white & navy)");
+  }
+  /* ONE picker, both shells. Six chips; swatches paint themselves from tokens.css by carrying
+     the data-theme/data-template attribute — no hex is restated here, so the swatch cannot
+     drift from the palette it advertises. */
+  function mountPicker(container, onChange) {
+    const CHOICES = [
+      { key: "light", label: "Light", attr: 'data-theme="light"' },
+      { key: "dark", label: "Dark", attr: 'data-theme="dark"' },
+    ].concat(TEMPLATES.map((t) => ({ key: t.key, label: t.label, attr: 'data-template="' + t.key + '"' })));
+    const active = state().template || state().mode;
+    container.innerHTML = CHOICES.map((c) => (
+      '<button type="button" class="tpl-chip' + (c.key === active ? " active" : "") + '" data-choose="' + c.key + '" aria-pressed="' + (c.key === active) + '">' +
+      '<span class="tpl-sw" ' + c.attr + ' aria-hidden="true"><i class="sw-bg"></i><i class="sw-primary"></i><i class="sw-surface"></i><i class="sw-accent"></i></span>' +
+      '<span class="tpl-name">' + c.label + "</span></button>"
+    )).join("");
+    container.addEventListener("click", (e) => {
+      const b = e.target.closest("[data-choose]");
+      if (!b) return;
+      choose(b.dataset.choose);
+      container.querySelectorAll(".tpl-chip").forEach((chip) => {
+        const on = chip.dataset.choose === b.dataset.choose;
+        chip.classList.toggle("active", on);
+        chip.setAttribute("aria-pressed", String(on));
+      });
+      if (onChange) onChange(state());
+    });
+  }
+  return { templates: TEMPLATES, state, choose, toggleMode, describe, mountPicker };
+})();
