@@ -1,4 +1,7 @@
 /* Boomtown Platform — Site-wide sidebar navigation (shared)
+   v2.20 (v0.162.0, §-1h M-4 / §-0 B15): the header ✉ badge pops (1→1.15→1, 160ms, WAAPI) ONLY
+   when the unread count changed within the session; first sight sets the baseline silently and
+   reduced motion is checked explicitly. Guarded by home_motion.test.mjs.
    v2.19 (v0.160.0, §-1j T2-15 / W1): the ◐ toggle's body delegates the flip to the theme
    service (config.js's BT_THEME — the one theme-state writer, both shells; the call literal
    appears ONLY in code so header_shell's verdict cannot be satisfied by this comment —
@@ -331,8 +334,23 @@
         a.appendChild(badge);
       }
       badge.textContent = inboxUnread > 9 ? "9+" : String(inboxUnread);
+      /* v2.20 (M-4, v0.162.0): pop ONLY when the count CHANGED within this session — state
+         indication, never decoration. First sight of a session sets the baseline silently, so
+         an unchanged load never moves. WAAPI on the badge itself: CSS performance, no class a
+         page stylesheet could restyle, and the preference check is explicit. */
+      try {
+        const seen = sessionStorage.getItem("bt_mail_seen");
+        if (seen !== null && Number(seen) !== inboxUnread &&
+            !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+          badge.animate(
+            [{ transform: "scale(1)" }, { transform: "scale(1.15)" }, { transform: "scale(1)" }],
+            { duration: 160, easing: "ease-out" });
+        }
+        sessionStorage.setItem("bt_mail_seen", String(inboxUnread));
+      } catch (e) { /* private mode: no baseline, no pop */ }
     } else if (badge) {
       badge.remove();
+      try { sessionStorage.setItem("bt_mail_seen", "0"); } catch (e) {}
     }
   }
 
@@ -469,7 +487,7 @@
       if (window.BT_STATUS || document.getElementById("bt-status-js")) return;
       var s = document.createElement("script");
       s.id = "bt-status-js";
-      s.src = "assets/build-status.js?v=0.161.0";
+      s.src = "assets/build-status.js?v=0.162.0";
       s.async = false;
       document.head.appendChild(s);
     } catch (e) { /* indicators are never load-blocking */ }

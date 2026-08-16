@@ -1,5 +1,9 @@
 /* Boomtown Platform — My Dashboard
-   File: web/home.js · Version: v2.0.0 · Date: 2026-08-02 · Ships in: v0.14.0 (v2.0.0 in v0.50.0)
+   File: web/home.js · Version: v2.1.0 · Date: 2026-08-16 · Ships in: v0.14.0 (v2.1.0 in v0.162.0)
+   v2.1.0 (§-1h M-4 / §-0 B15): the motion pass — the arrival stagger (once per session, class
+   removed after it plays), fill() (first-fill fade; re-renders stay instant), collapse()
+   (dismiss/mute closes the list around the item; reduced motion checked in JS because a fenced
+   transition never fires transitionend). Values are M-4's, guarded by home_motion.test.mjs.
    v2.0.0 (R3, owner 2026-08-02): announcement/news box from /api/home/feed — admin CTA pinned
    (non-mutable, server-enforced), aggregated news/events/my-events/messages/subs/community
    groups, per-item ✕ + per-category mutes stored SERVER-SIDE (announcement_mutes; the
@@ -40,9 +44,53 @@
     return isNaN(d) ? s : d.toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
   };
 
+  /* M-4: a container's FIRST fill fades in (120ms opacity, fenced in the page CSS); every later
+     re-render — mutes, invites, show-all — stays instant. A daily screen earns restraint. */
+  function fill(el, html) {
+    if (!el) return;
+    el.innerHTML = html;
+    if (el.dataset.btFilled) return;
+    el.dataset.btFilled = "1";
+    el.classList.add("hm-fill");
+    el.addEventListener("animationend", () => el.classList.remove("hm-fill"), { once: true });
+  }
+
+  /* M-4: the list closes around a dismissed item (height+opacity, 200ms — the one deliberate
+     non-compositor exception; rare and user-initiated). The preference is checked HERE, not
+     only in CSS: a fenced transition never runs for reduced-motion users, so transitionend
+     would never fire and the caller's await would hang — the check keeps the promise honest. */
+  function collapse(el) {
+    return new Promise(res => {
+      if (!el || matchMedia("(prefers-reduced-motion: reduce)").matches) { res(); return; }
+      el.style.height = el.scrollHeight + "px";
+      el.style.overflow = "hidden";
+      void el.offsetHeight;
+      el.style.transition = "height 200ms var(--ease-out), opacity 200ms var(--ease-out)";
+      el.style.height = "0px";
+      el.style.opacity = "0";
+      let done = false;
+      const fin = () => { if (!done) { done = true; res(); } };
+      el.addEventListener("transitionend", fin, { once: true });
+      setTimeout(fin, 260); // an interrupted or hidden transition still resolves
+    });
+  }
+
   boot();
   async function boot() {
     if (!token) { location.href = "index.html"; return; }
+    /* M-4: the arrival stagger — once per session, before the first await so it starts with the
+       first paint. The class is removed after the run so panels revealed later (Agreements,
+       Court time) never play a late entrance. */
+    try {
+      if (!sessionStorage.getItem("bt_home_arrived")) {
+        sessionStorage.setItem("bt_home_arrived", "1");
+        const grid = document.querySelector(".hm-grid");
+        if (grid) {
+          grid.classList.add("hm-arrive");
+          setTimeout(() => grid.classList.remove("hm-arrive"), 900);
+        }
+      }
+    } catch (e) { /* private mode: no flag, no stagger — the page still works */ }
     const me = await api("/api/profile/me");
     if (!me.ok) { location.href = "index.html"; return; }
     const first = ((me.data.contact && me.data.contact.full_name) || "").split(/\s+/)[0];
@@ -60,7 +108,7 @@
   async function loadAgreements() {
     const r = await api("/api/me/agreements");
     const strip = $("statusStrip");
-    if (!r.ok) { if (strip) strip.innerHTML = ""; $("agrList").innerHTML = `<p class="help-text" style="margin:0">Couldn't load your agreements right now.</p>`; return; }
+    if (!r.ok) { if (strip) strip.innerHTML = ""; fill($("agrList"), `<p class="help-text" style="margin:0">Couldn't load your agreements right now.</p>`); return; }
     const st = r.data.status || {};
     const chips = [];
     const one = (c, who) => chips.push(c.waiver_ok
@@ -79,12 +127,12 @@
         <div class="sub">For ${esc(a.subject_name)} · signed by ${esc(a.signed_name)}${a.on_behalf ? " (guardian)" : ""}${a.expires_at ? " · expires " + esc(String(a.expires_at).slice(0, 10)) : ""}</div>
       </div>`).join("");
     if (!rows.length) {
-      $("agrList").innerHTML = `<p class="help-text" style="margin:0">Nothing signed yet — your waiver appears here after your first registration.</p>`;
+      fill($("agrList"), `<p class="help-text" style="margin:0">Nothing signed yet — your waiver appears here after your first registration.</p>`);
       return;
     }
     const first = rows.slice(0, 5);
-    $("agrList").innerHTML = render(first) + (rows.length > 5
-      ? `<button class="btn ghost" id="agrMore" style="margin-top:8px">Show all ${rows.length}</button>` : "");
+    fill($("agrList"), render(first) + (rows.length > 5
+      ? `<button class="btn ghost" id="agrMore" style="margin-top:8px">Show all ${rows.length}</button>` : ""));
     const more = $("agrMore");
     if (more) more.onclick = () => { $("agrList").innerHTML = render(rows); };
   }
@@ -118,7 +166,7 @@
   async function loadFeed() {
     const r = await api("/api/home/feed");
     const groups = $("feedGroups");
-    if (!r.ok) { groups.innerHTML = `<p class="help-text" style="margin:0">Couldn't load updates right now.</p>`; return; }
+    if (!r.ok) { fill(groups, `<p class="help-text" style="margin:0">Couldn't load updates right now.</p>`); return; }
     renderCtas(r.data.ctas || []);
     renderGroups(r.data.categories || {}, r.data.muted_categories || []);
     renderPrefs(r.data.muted_categories || []);
@@ -190,15 +238,18 @@
         <a class="feed-item" href="lfg.html" style="text-decoration:none;color:inherit"><div class="fx"><b>${esc(what(o))}</b>
           <span>${[o.skill_level !== "any" ? String(o.skill_level).toUpperCase() : null, o.game_type !== "any" ? o.game_type : null, o.play_at ? fmt(o.play_at) : null].filter(Boolean).map(esc).join(" · ")}</span></div></a>`).join("") + `</div>`);
     }
-    $("feedGroups").innerHTML = out.join("") ||
-      `<p class="help-text" style="margin:0">Quiet for now — events, messages, and community posts land here.</p>`;
-    $("feedGroups").querySelectorAll(".feed-mute").forEach(b => b.onclick = () => mute(b.dataset.mscope, b.dataset.mkey));
+    fill($("feedGroups"), out.join("") ||
+      `<p class="help-text" style="margin:0">Quiet for now — events, messages, and community posts land here.</p>`);
+    $("feedGroups").querySelectorAll(".feed-mute").forEach(b => b.onclick = () => mute(b.dataset.mscope, b.dataset.mkey, b));
   }
 
-  async function mute(scope, key) {
+  async function mute(scope, key, btn) {
     const body = scope === "item" ? { scope, announcement_id: Number(key) } : { scope, category: key };
     const r = await api("/api/announcements/mute", { method: "POST", body: JSON.stringify(body) });
     if (!r.ok) { $("status").innerHTML = `<p class="notice-err">${esc(r.data.error || "Couldn't hide that.")}</p>`; return; }
+    /* M-4: the list closes around the removed item (or group) before the repaint — the refusal
+       above keeps the item still, because motion on a failed action would lie about the state. */
+    await collapse(btn && (scope === "item" ? btn.closest(".feed-item") : btn.closest(".feed-group")));
     loadFeed();
   }
 
@@ -233,6 +284,7 @@
     $("feedGroups").prepend(el);
     el.querySelectorAll(".ntf").forEach(x => x.onclick = async () => {
       await api(`/api/notifications/${x.dataset.id}/read`, { method: "POST" });
+      await collapse(x); // M-4: same dismiss shape as a mute — the list closes, never jump-cuts
       x.remove();
     });
   }
@@ -265,11 +317,11 @@
   async function loadAchievements() {
     const r = await api("/api/profile/resume");
     const box = $("achBox");
-    if (!r.ok) { box.innerHTML = `<p class="help-text" style="margin:0">Play your first event and your results start here.</p>`; return; }
+    if (!r.ok) { fill(box, `<p class="help-text" style="margin:0">Play your first event and your results start here.</p>`); return; }
     const t = r.data.totals || {};
     const rows = (r.data.results || []).slice(0, 3);
-    if (!t.events) { box.innerHTML = `<p class="help-text" style="margin:0">Play your first event and your results start here.</p>`; return; }
-    box.innerHTML = `
+    if (!t.events) { fill(box, `<p class="help-text" style="margin:0">Play your first event and your results start here.</p>`); return; }
+    fill(box, `
       <div class="ach-tot">
         <div><span class="n">${t.events}</span><span class="l">events</span></div>
         <div><span class="n">${t.wins || 0}&ndash;${t.losses || 0}</span><span class="l">record</span></div>
@@ -278,17 +330,17 @@
       </div>` + rows.map(x => `
       <div class="feed-item"><div class="fx"><b>${esc(x.name)}</b>
         <span>${esc(x.team_name || "")}${x.rank ? ` · finished #${x.rank} of ${x.teams_in_event}` : ""} · ${x.wins || 0}&ndash;${x.losses || 0}</span></div></div>`).join("") +
-      `<a class="btn ghost" href="profile.html" style="text-decoration:none;margin-top:8px;display:inline-block">Full résumé</a>`;
+      `<a class="btn ghost" href="profile.html" style="text-decoration:none;margin-top:8px;display:inline-block">Full résumé</a>`);
   }
 
   /* ---------------- messages summary card ---------------- */
   async function loadMessagesCard() {
     const r = await api("/api/messages/unread-count");
     const n = r.ok ? r.data.unread || 0 : 0;
-    $("msgBox").innerHTML = `
+    fill($("msgBox"), `
       <div class="feed-item"><div class="fx"><b>${n ? n + " unread message" + (n > 1 ? "s" : "") : "No unread messages"}</b>
         <span>${n ? "Someone's waiting on you." : "Community play and team threads land here."}</span></div>
-        <a class="btn ${n ? "" : "ghost"}" style="text-decoration:none" href="member-inbox.html">Open inbox</a></div>`;
+        <a class="btn ${n ? "" : "ghost"}" style="text-decoration:none" href="member-inbox.html">Open inbox</a></div>`);
   }
 
   /* ---------------- CTA-row panels ---------------- */
@@ -310,7 +362,7 @@
   async function loadTeams() {
     const r = await api("/api/profile/teams");
     const teams = r.ok ? r.data.teams || [] : [];
-    $("teamList").innerHTML = teams.length ? teams.map(t => `
+    fill($("teamList"), teams.length ? teams.map(t => `
       <div style="padding:10px 0;border-bottom:1px solid var(--border)">
         <div style="font-weight:700">${esc(t.name)} <span class="help-text" style="font-weight:400">· ${esc(t.event_name)}</span></div>
         ${t.members.map(m => `
@@ -323,7 +375,7 @@
                 : `<span class="st">${m.email_on_file ? (m.invited ? "Invited" : "Not connected") : "No email on file"}</span>`}
           </div>`).join("")}
       </div>`).join("") :
-      `<p class="help-text" style="margin:0">No teams yet — register for an event and your team shows up here.</p>`;
+      `<p class="help-text" style="margin:0">No teams yet — register for an event and your team shows up here.</p>`);
     $("teamList").querySelectorAll("[data-invite]").forEach(b => b.onclick = async () => {
       b.disabled = true;
       const r2 = await api(`/api/team-members/${b.dataset.invite}/invite`, { method: "POST" });
@@ -337,11 +389,11 @@
     const box = $("memBox");
     if (!box) return;
     const r = await api("/api/profile/subscription");
-    if (!r.ok) { box.innerHTML = `<p class="help-text">Membership plans are coming soon.</p>`; return; }
+    if (!r.ok) { fill(box, `<p class="help-text">Membership plans are coming soon.</p>`); return; }
     const s = r.data.subscription;
     if (!s || s.status === "canceled" || s.status === "deactivated") {
-      box.innerHTML = `<p class="help-text" style="margin:0">No membership yet.</p>
-        <a class="btn" href="membership.html" style="margin-top:10px;display:inline-block;text-decoration:none">See plans</a>`;
+      fill(box, `<p class="help-text" style="margin:0">No membership yet.</p>
+        <a class="btn" href="membership.html" style="margin-top:10px;display:inline-block;text-decoration:none">See plans</a>`);
       return;
     }
     const price = "$" + (s.price_cents / 100).toFixed(2) + (s.billing_interval === "ANNUAL" ? "/yr" : "/mo");
@@ -350,9 +402,9 @@
       : s.status === "pending"
         ? `Payment pending — finish checkout from the Membership page.`
         : `Active · renews ${s.current_period_end ? s.current_period_end.slice(0, 10) : "on schedule"}`;
-    box.innerHTML = `<div style="font-weight:700">${esc(s.plan_name)} <span style="color:var(--text-muted);font-weight:600">${price}</span></div>
+    fill(box, `<div style="font-weight:700">${esc(s.plan_name)} <span style="color:var(--text-muted);font-weight:600">${price}</span></div>
       <p class="help-text" style="margin:6px 0 10px">${line}</p>
-      <a class="btn ghost" href="membership.html" style="text-decoration:none">Manage membership</a>`;
+      <a class="btn ghost" href="membership.html" style="text-decoration:none">Manage membership</a>`);
   }
 
 })();

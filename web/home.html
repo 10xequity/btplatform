@@ -1,5 +1,11 @@
 <!DOCTYPE html>
-<!-- Boomtown Platform — My Dashboard · Version: v2.0.0 · Date: 2026-08-02 · Ships in: v0.10.0 (v2.0.0 in v0.50.0)
+<!-- Boomtown Platform — My Dashboard · Version: v2.1.0 · Date: 2026-08-16 · Ships in: v0.10.0 (v2.1.0 in v0.162.0)
+     v2.1.0 (§-1h M-4 / §-0 B15): the motion pass — arrival stagger, first-fill fade, dismiss
+     collapse (home.js) and the header badge pop (site-nav.js). All motion here is DECLARED
+     inside the reduced-motion-permitting media fence (the positive fence; the literal lives
+     ONLY in the CSS so home_motion.test.mjs's extractor cannot be satisfied by this comment —
+     D-33's class), because tokens.css's global reduced-motion kill leaves 0.01ms transforms
+     that land as jump-cuts; motion never declared cannot jump.
      v2.0.0 (R3, owner 2026-08-02): member home restructure — announcement/news box (admin CTA
      pinned, non-mutable; per-item + per-category mutes; aggregated events/my-events/messages/
      subs/community feed via /api/home/feed), results/messages/my-events cards, sub-play CTA
@@ -23,8 +29,8 @@
   <link rel="apple-touch-icon" href="assets/logo-boom-icon-512.png" />
   <script>/* Pre-paint theme (v0.53.0): saved bt_theme, else system preference, applied before the first stylesheet — the member header paints the right theme on frame one (admin pre-paint v2 precedent, theme half only; member pages carry no rail-collapse state). site-nav.js v2.12 owns the toggle listener. */(function(){try{var t=(window.localStorage&&localStorage.getItem("bt_theme"))||(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.dataset.theme=t;}catch(e){}})();</script>
   <script>try{var btTpl=localStorage.getItem("bt_template");if(btTpl)document.documentElement.dataset.template=btTpl;}catch(e){}</script>
-  <link rel="stylesheet" href="assets/tokens.css?v=0.161.0" />
-  <link rel="stylesheet" href="assets/app.css?v=0.161.0" />
+  <link rel="stylesheet" href="assets/tokens.css?v=0.162.0" />
+  <link rel="stylesheet" href="assets/app.css?v=0.162.0" />
   <style>
     .hm-wrap { max-width: 760px; margin: 0 auto; padding: 16px; }
     .hm-grid { display: grid; gap: 14px; }
@@ -99,6 +105,25 @@
     .ach-tot .n { font-size: 20px; font-weight: 800; color: var(--emphasis); display: block; }
     .ach-tot .l { font-size: 12px; color: var(--text-muted); }
     @media (prefers-reduced-motion: reduce) { .feed-mute:active, .cta-tile:active { transform: none; } }
+    /* v2.1.0 (M-4): the motion pass. DECLARED ONLY inside the positive fence below — never rely
+       on tokens.css's global reduced-motion kill (0.01ms transforms still jump). The stagger
+       class is added by home.js once per session and REMOVED after it plays, so panels revealed
+       later (Agreements, Court time) never play a late entrance. hm-fill fires on a container's
+       FIRST fill only (home.js tracks it) — re-renders stay instant. */
+    @media (prefers-reduced-motion: no-preference) {
+      .hm-arrive > * { animation: hmRise 220ms var(--ease-out) backwards; }
+      .hm-arrive > :nth-child(2) { animation-delay: 40ms; }
+      .hm-arrive > :nth-child(3) { animation-delay: 80ms; }
+      .hm-arrive > :nth-child(4) { animation-delay: 120ms; }
+      .hm-arrive > :nth-child(5) { animation-delay: 160ms; }
+      .hm-arrive > :nth-child(6) { animation-delay: 200ms; }
+      .hm-arrive > :nth-child(7) { animation-delay: 240ms; }
+      .hm-arrive > :nth-child(8) { animation-delay: 280ms; }
+      .hm-arrive > :nth-child(n+9) { animation-delay: 320ms; }
+      .hm-fill { animation: hmFade 120ms ease-out; }
+    }
+    @keyframes hmRise { from { opacity: 0; transform: translateY(8px); } }
+    @keyframes hmFade { from { opacity: 0; } }
   </style>
   <script>
     (function () {
@@ -109,7 +134,7 @@
 </head>
 <body>
     <header class="header chrome-glass no-print">
-    <a class="wordmark" href="index.html" style="text-decoration:none;color:inherit"><img class="brand-logo" src="assets/logo-boom-icon-512.png?v=0.161.0" alt="" width="22" height="22" />Boomtown <span>Athletics</span></a>
+    <a class="wordmark" href="index.html" style="text-decoration:none;color:inherit"><img class="brand-logo" src="assets/logo-boom-icon-512.png?v=0.162.0" alt="" width="22" height="22" />Boomtown <span>Athletics</span></a>
     <div class="spacer"></div>
     <a id="btHdrAdmin" class="btn ghost hdr-admin" href="admin.html" aria-label="Switch to admin view" hidden>Admin</a>
     <a id="btHdrMail" class="btn ghost hdr-mail" href="member-inbox.html" aria-label="Messages">✉</a>
@@ -194,9 +219,9 @@
     <div id="status" role="status" aria-live="polite" style="margin-top:10px"></div>
   </main>
 
-  <script src="assets/config.js?v=0.161.0"></script>
-  <script src="assets/site-nav.js?v=0.161.0" defer></script>
-  <script src="home.js?v=0.161.0" defer></script>
+  <script src="assets/config.js?v=0.162.0"></script>
+  <script src="assets/site-nav.js?v=0.162.0" defer></script>
+  <script src="home.js?v=0.162.0" defer></script>
   <script>if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(function(){});</script>
 </body>
 </html>
