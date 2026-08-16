@@ -1,5 +1,7 @@
 /* Boomtown Platform — Registrations Admin
-   Version: v0.3.1 · Date: 2026-08-02
+   Version: v0.4.0 · Date: 2026-08-16
+   v0.4.0 (v0.161.0, §-0 B14 / T2-9a): team names in the list are the roster button — one tap
+   opens BT_ROSTER (W-A's modal), which the server payload has carried team_id for all along.
    Staff-gated. Unpaid list + 1-click reminder (≤3 clicks per spec §4), cash collect,
    Google Forms CSV import (client-side RFC-4180 parse + header auto-mapping), captain score links. */
 
@@ -148,7 +150,9 @@
         <th>Team</th><th>Captain</th><th>Email</th><th>Status</th><th>Waivers</th><th>Registered</th><th>Reminded</th><th></th>
       </tr></thead><tbody>` +
       regs.map((x) => `<tr>
-        <td>${esc(x.team_name)}${x.level ? ` <span style="opacity:.6">(${esc(x.level)})</span>` : ""}</td>
+        <td>${x.team_id
+          ? `<button class="btn ghost" type="button" data-roster="${x.team_id}" aria-label="Open the roster for ${esc(x.team_name || "this team")}">${esc(x.team_name || "Team")}</button>`
+          : esc(x.team_name)}${x.level ? ` <span style="opacity:.6">(${esc(x.level)})</span>` : ""}</td>
         <td>${esc(x.captain_name || "")}</td>
         <td>${esc(x.email || "")}</td>
         <td><span class="chip ${esc(x.status)}">${esc(x.status)}</span></td>
@@ -162,6 +166,12 @@
       </tr>`).join("") + "</tbody></table>";
     document.querySelectorAll("[data-remind]").forEach((b) => { b.onclick = () => remind(b.dataset.remind, b); });
     document.querySelectorAll("[data-cash]").forEach((b) => { b.onclick = () => markPaid(b.dataset.cash); });
+    /* B14/T2-9a (v0.161.0): the team a registration created is one tap away HERE too — the
+       server has returned team_id for exactly this button since W-A ("so the registrations
+       table can link to the roster", registrations.js's own header); the list rendered the
+       name as dead text. Fresh nodes each render, so binding here cannot stack (D-6). */
+    document.querySelectorAll("[data-roster]").forEach((b) => { b.onclick = () =>
+      window.BT_ROSTER && window.BT_ROSTER.open(Number(b.dataset.roster)); });
   }
 
   /* WF-4 (v0.136.0): the waiver mark the owner asked for. Counts arrive from the server through

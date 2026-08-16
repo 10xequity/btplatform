@@ -147,3 +147,39 @@ test("a team outside the caller's org answers 404 — and a nameless rename is r
   expectStatus(blank, 400, "a blank team name must be refused with a human sentence");
   assert.ok(blank.data.error, "the refusal carries a sentence");
 });
+
+/* ── the modal's callers (v0.161.0, §-0 B14 / T2-9a): pages and emitters correspond, BOTH
+      directions — team-roster.js's own header says "from wherever a team appears", and until
+      B14 exactly two pages qualified while the registrations LIST rendered team names as dead
+      text (the server had returned r.team_id for this button since W-A, per registrations.js's
+      own header: "so the registrations table can link to the roster"). A script tag with no
+      emitter is dead weight; an emitter with no script tag is a dead button. ── */
+import { readdirSync } from "node:fs";
+
+const WEB_URL = new URL("../../web/", import.meta.url);
+const readWeb = (rel) => readFileSync(new URL(rel, WEB_URL), "utf8");
+
+test("BT_ROSTER mounts: loader pages and button emitters are the same set, and it now includes the registrations list", () => {
+  const pages = readdirSync(WEB_URL).filter((f) => f.endsWith(".html"));
+  assert.ok(pages.length >= 40, `page corpus shrank: ${pages.length}`);
+  const loaders = pages.filter((p) => readWeb(p).includes("assets/team-roster.js")).sort();
+  assert.deepEqual(loaders, ["admin-event.html", "admin-league.html", "admin-registrations.html"],
+    "the pages loading team-roster.js changed — if a page joined, its JS must emit the button below; if one left, its teams just became unreachable");
+  for (const p of loaders) {
+    const js = "assets/" + p.replace(".html", ".js");
+    assert.ok(readWeb(js).includes('data-roster="'), `${p} loads the modal but ${js} never emits a roster button — a script tag with no caller`);
+  }
+  // The other direction, DERIVED from the assets themselves — an emitter whose page forgot the
+  // script tag renders buttons that do nothing when tapped.
+  const assets = readdirSync(new URL("assets/", WEB_URL)).filter((f) => f.endsWith(".js") && f !== "team-roster.js");
+  const emitters = assets.filter((f) => readWeb("assets/" + f).includes('data-roster="')).sort();
+  assert.deepEqual(emitters.map((f) => f.replace(".js", ".html")), loaders,
+    "a script emits data-roster buttons but its page does not load team-roster.js (or vice versa) — the two lists must be one set");
+});
+
+test("NC — a loader whose script stops emitting the button is caught, and the mutation lands", () => {
+  const src = readWeb("assets/admin-registrations.js");
+  const mutated = src.split('data-roster="').join('data-rosterZZ="');
+  assert.notEqual(mutated, src, "the mutation did not land — admin-registrations.js never emits the button at all");
+  assert.equal(mutated.includes('data-roster="'), false, "the needle survived the mutation — this control tests nothing");
+});

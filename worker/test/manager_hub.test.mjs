@@ -77,14 +77,35 @@ test("the tab row: the owner's seven in his order, with SG-5's Overview first an
   assert.deepEqual(built, t.map((x) => x.key), "every declared tab must be wired now that H-2 has shipped");
 });
 
-test("the sub-tabs are the owner's subsections: Waitlist under Registrations, Pools under Divisions", () => {
+test("the sub-tabs are the owner's subsections: Waitlist and Check-in under Registrations, Pools under Divisions", () => {
   const panes = [...HUB_JS.matchAll(/page:\s*"([a-z-]+\.html)"/g)].map((x) => x[1]);
   assert.deepEqual(panes,
-    ["admin-event.html", "admin-registrations.html", "admin-waitlists.html", "admin-marketing.html",
+    ["admin-event.html", "admin-registrations.html", "admin-waitlists.html", "admin-checkin.html",
+     "admin-marketing.html",
      "admin-divisions.html", "admin-pool-board.html", "admin-score-links.html",
      "admin-schedule-editor.html", "tournament.html", "admin-league.html",
      "live.html", "admin-brackets.html"],
-    "each pane is an EXISTING page — a tab whose content is a new implementation is the rewrite this design refuses. SG-5's two additions (the event's own page, marketing) are existing pages framed, exactly per the rule");
+    "each pane is an EXISTING page — a tab whose content is a new implementation is the rewrite this design refuses. SG-5's two additions (the event's own page, marketing) and B14's Check-in (v0.161.0 — the owner's T2-9a complaint was precisely that check-in was 'not linked from the flow') are existing pages framed, exactly per the rule");
+});
+
+test("B14: the Check-in pane exists, is scoped to team events, and the page refuses non-open events in a sentence", () => {
+  // The pane rides the Registrations tab between Waitlist and nothing — the desk flow: who
+  // signed up, who is waiting, who is here.
+  const regs = HUB_JS.match(/key: "registrations",([\s\S]*?)key: "announce",/);
+  assert.ok(regs, "the Registrations tab lost its panes, or no longer sits before Announce");
+  assert.match(regs[1], /admin-checkin\.html/, "Check-in is not a Registrations sub-pane");
+  // Scoped to team events, MEASURED not chosen: the door roster walks team_members JOIN teams
+  // (checkin.js), so a drop-in's sheet sign-ups (team_id NULL, SG-1's design) are invisible to
+  // it — an unscoped pane would show Cathy a false "No roster yet" over 20 real sign-ups.
+  // That gap is recorded as §-1c D-38, not silently papered over with a hidden tab.
+  const checkinPane = regs[1].match(/page: "admin-checkin\.html"[^}]*/);
+  assert.ok(checkinPane, "could not isolate the Check-in pane's declaration");
+  assert.match(checkinPane[0], /types: \["tournament", "league"\]/,
+    "the Check-in pane must be scoped to the team event types the door roster can actually see");
+  // The deep link refuses honestly: check-in only serves published/in_progress events, and a
+  // framed draft must get a sentence, not a silent picker reset.
+  assert.match(code("assets/admin-checkin.js"), /isn't open for check-in/,
+    "admin-checkin.js lost the honest refusal for a deep link to a non-open event");
 });
 
 /* ── the tab row is the shared component, not a new one ── */
@@ -160,7 +181,9 @@ test("EVERY page can go chromeless, from ONE rule set in the stylesheet every pa
 /* ── the tab pages still work on their own: the design's reversibility claim ── */
 
 test("the preselect is ADDITIVE — each tab page still works standalone from the rail", () => {
-  for (const f of ["assets/admin-registrations.js", "assets/admin-divisions.js", "assets/admin-pool-board.js"]) {
+  // v0.161.0 (B14): admin-checkin.js joins the corpus — the hub's Check-in pane frames it, and
+  // standalone from the rail its picker + today-preselect must keep working unchanged.
+  for (const f of ["assets/admin-registrations.js", "assets/admin-divisions.js", "assets/admin-pool-board.js", "assets/admin-checkin.js"]) {
     const src = code(f);
     // Pin the BEHAVIOUR — reads an "event" parameter into the fallback-guarded variable — never
     // the spelling of how URLSearchParams is constructed. The first draft required

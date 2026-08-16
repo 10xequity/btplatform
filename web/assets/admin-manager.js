@@ -41,6 +41,13 @@
     { key: "registrations", label: "Registrations", panes: [
       { key: "list", label: "Registrations", page: "admin-registrations.html" },
       { key: "waitlist", label: "Waitlist", page: "admin-waitlists.html" },
+      /* B14/T2-9a (v0.161.0): the desk flow completed — who signed up, who is waiting, who is
+         HERE. The owner's tester complaint was that check-in was "not linked from the flow";
+         this pane is that link, with the ?event= context the standalone rail page never had.
+         Scoped to team types because the door roster walks team_members JOIN teams — a
+         drop-in's sheet sign-ups (team_id NULL) are invisible to it and an unscoped pane
+         would show a false "No roster yet" (recorded: §-1c D-38). */
+      { key: "checkin", label: "Check-in", page: "admin-checkin.html", types: ["tournament", "league"] },
     ] },
     /* SG-5: the megaphone sits beside the guest list — admin-marketing.html has spoken ?event=
        since W-F ("Email these registrants": the segment form opens with this event chosen), so

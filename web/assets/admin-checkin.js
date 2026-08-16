@@ -1,5 +1,9 @@
 /* Boomtown Platform — Door Check-in
-   File: web/assets/admin-checkin.js · Version: v1.2 · Date: 2026-08-02 · Ships in: v0.21.0
+   File: web/assets/admin-checkin.js · Version: v1.3 · Date: 2026-08-16 · Ships in: v0.161.0
+   v1.3 (§-0 B14 / T2-9a): the hub's ?event= deep link — the additive-preselect contract every
+   hub pane speaks (manager_hub.test.mjs pins the shape). A deep link to an event that is not
+   open for check-in (not published/in_progress) is refused in a sentence rather than silently
+   resetting to the picker. Standalone from the rail — no ?event= — nothing changes.
    v1.1 (M16): balance-due chip (Gymdesk pattern) — a team that still owes shows
    "Owes $X · mark paid" beside its team header; one tap → confirm → mark-paid
    (cash-collected rail) → roster reloads. Chip lives on the header, not the player
@@ -31,6 +35,15 @@
     sel.innerHTML = `<option value="">Choose event…</option>` +
       evs.map(e => `<option value="${e.id}">${esc(e.name)}${e.starts_at ? " · " + esc(e.starts_at.slice(0, 10)) : ""}</option>`).join("");
     sel.onchange = () => { eventId = +sel.value || null; $("qrCard").hidden = true; eventId ? load() : null; };
+    // v1.3 (B14): the hub's deep link outranks the today-heuristic — but only for an event the
+    // door can actually serve. The check-in surface exists for published/in-progress events
+    // (the filter above); a framed draft gets the sentence, not a silent picker reset.
+    const fromUrl = Number(new URLSearchParams(location.search).get("event")) || null;
+    if (fromUrl) {
+      if (evs.some(e => e.id === fromUrl)) { sel.value = fromUrl; eventId = fromUrl; load(); return; }
+      say("This event isn't open for check-in yet — only published or in-progress events have a door roster.", false);
+      return;
+    }
     // Preselect today's event if there's exactly one starting today.
     const today = new Date().toISOString().slice(0, 10);
     const todays = evs.filter(e => (e.starts_at || "").slice(0, 10) === today);
