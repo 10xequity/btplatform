@@ -67,13 +67,31 @@ export function makeDocument() {
   return { document, el };
 }
 
-function makeStorage(seed = {}) {
+/**
+ * A localStorage stand-in. `opts.throwOnGet` / `opts.throwOnSet` reproduce the browsers this
+ * whole guard class exists for: private-mode and blocked-cookie profiles throw on ACCESS, they
+ * do not return null. A page that reads storage bare dies there, so tests need to inject the
+ * throw rather than argue about it.
+ */
+export function makeStorage(seed = {}, opts = {}) {
   const m = new Map(Object.entries(seed));
+  const boom = (what) => { throw new Error(`storage ${what} blocked (test injection)`); };
   return {
-    getItem: (k) => (m.has(k) ? m.get(k) : null),
-    setItem: (k, v) => m.set(k, String(v)),
-    removeItem: (k) => m.delete(k),
+    getItem: (k) => (opts.throwOnGet ? boom("read") : m.has(k) ? m.get(k) : null),
+    setItem: (k, v) => (opts.throwOnSet ? boom("write") : void m.set(k, String(v))),
+    removeItem: (k) => (opts.throwOnSet ? boom("write") : void m.delete(k)),
     _map: m,
+  };
+}
+
+/** Records window-level listeners so a test can dispatch `storage`, `beforeunload`, etc. */
+function makeWindowEvents() {
+  const listeners = {};
+  return {
+    addEventListener: (t, fn) => { (listeners[t] ||= []).push(fn); },
+    removeEventListener: (t, fn) => { listeners[t] = (listeners[t] || []).filter((x) => x !== fn); },
+    fire: (t, ev = {}) => (listeners[t] || []).slice().forEach((fn) => fn(ev)),
+    count: (t) => (listeners[t] || []).length,
   };
 }
 
@@ -85,11 +103,12 @@ export const settle = () => new Promise((r) => setImmediate(r));
  * `routes(path, opts)` returns { ok?, status?, data } for each api() call the page makes.
  * Returns handles: el(id), document, printed() count, fireGlobal(type) for afterprint, emails[].
  */
-export async function runTournament(js, routes) {
+export async function runTournament(js, routes, opts = {}) {
   const { document, el } = makeDocument();
   const emails = [];
   let printed = 0;
   const globalListeners = {};
+  const winEvents = makeWindowEvents();
   const window = {
     BT_CONFIG: { apiBase: "https://t.test" },
     BT_ADMIN: {
@@ -98,6 +117,8 @@ export async function runTournament(js, routes) {
       emailDocument: (id, subject, body) => emails.push({ id, subject, body }),
     },
     matchMedia: () => ({ matches: false }),
+    addEventListener: winEvents.addEventListener,
+    removeEventListener: winEvents.removeEventListener,
   };
   const fetch = async (url, opts) => {
     const path = String(url).replace("https://t.test", "");
@@ -106,19 +127,23 @@ export async function runTournament(js, routes) {
       json: async () => hit.data || {} };
   };
   const addEventListener = (t, fn) => { (globalListeners[t] ||= new Set()).add(fn); };
-  const localStorage = makeStorage();
+  const localStorage = opts.localStorage || makeStorage();
+  const location = { href: "https://t.test/tournament.html", search: opts.search || "" };
   const run = new Function(
     "window", "document", "sessionStorage", "localStorage", "location",
     "fetch", "print", "addEventListener", "confirm", "alert",
     js);
-  run(window, document, makeStorage({ bt_token: "tok" }), localStorage,
-    { href: "https://t.test/tournament.html", search: "" },
+  run(window, document, opts.sessionStorage || makeStorage({ bt_token: "tok" }), localStorage,
+    location,
     fetch, () => { printed++; }, addEventListener, () => true, () => {});
   await settle();
   return {
-    el, document, window, emails, localStorage,
+    el, document, window, emails, localStorage, location,
     printed: () => printed,
     fireGlobal: (t) => { const set = globalListeners[t] || new Set(); const fns = [...set]; set.clear(); fns.forEach((fn) => fn()); },
+    /** Dispatch a window event (`storage` from another tab, etc.) at the page's own listeners. */
+    fireWindow: (t, ev = {}) => winEvents.fire(t, ev),
+    windowListeners: (t) => winEvents.count(t),
   };
 }
 
@@ -126,8 +151,9 @@ export async function runTournament(js, routes) {
  * Run web/assets/admin-schedule-editor.js against a mocked BT_ADMIN.api.
  * `apiMock(path, opts)` returns { ok, status?, data }. DOMContentLoaded is fired for the caller.
  */
-export async function runScheduleEditor(js, apiMock) {
+export async function runScheduleEditor(js, apiMock, opts = {}) {
   const { document, el } = makeDocument();
+  const winEvents = makeWindowEvents();
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const BT_ADMIN = {
@@ -140,12 +166,17 @@ export async function runScheduleEditor(js, apiMock) {
   const window = {
     BT_ADMIN,
     confirm: () => true,
-    addEventListener() {},
+    addEventListener: winEvents.addEventListener,
+    removeEventListener: winEvents.removeEventListener,
   };
   const run = new Function("window", "document", "localStorage", "location", "BT_ADMIN", js);
-  const localStorage = makeStorage();
+  const localStorage = opts.localStorage || makeStorage();
   run(window, document, localStorage, { search: "" }, BT_ADMIN);
   document._fire("DOMContentLoaded");
   await settle();
-  return { el, document, localStorage };
+  return {
+    el, document, localStorage, window,
+    fireWindow: (t, ev = {}) => winEvents.fire(t, ev),
+    windowListeners: (t) => winEvents.count(t),
+  };
 }

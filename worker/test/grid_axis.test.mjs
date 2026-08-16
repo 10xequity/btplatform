@@ -20,7 +20,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { blankComments } from "../testkit/route-extract.mjs";
-import { runTournament, runScheduleEditor } from "../testkit/page-harness.mjs";
+import { runTournament, runScheduleEditor, makeStorage } from "../testkit/page-harness.mjs";
 
 const WEB = new URL("../../web/", import.meta.url);
 const read = (rel) => readFileSync(new URL(rel, WEB), "utf8");
@@ -99,7 +99,9 @@ test("the pool grid's switch flips to the old shape, remembers it, and flips bac
 test("NC: the default-orientation check has teeth — a source forced to the old default reddens it", async () => {
   // Positive control for the harness itself: neuter the axis helper so the page always renders
   // the legacy shape, and the default assertion above must fail against it.
-  const forced = TJS.replace(/localStorage\.getItem\("bt_grid_axis"\)/, '"rounds-down"');
+  // Anchored on the helper the axis actually reads through (B22 moved this off bare storage;
+  // the NC's old anchor named `localStorage.getItem` and went stale the moment it did).
+  const forced = TJS.replace(/safeGet\("bt_grid_axis"\)/, '"rounds-down"');
   assert.notEqual(forced, TJS, "the mutation did not land — the axis helper was not found");
   const page = await runTournament(forced, tournamentRoutes());
   assert.doesNotMatch(page.el("poolGrid").innerHTML, /^<tr><th>Court<\/th>/,
@@ -147,4 +149,114 @@ test("the editor's arrow keys follow the VISUAL axes in both orientations", () =
 test("the switches exist in the markup of both pages", () => {
   assert.match(read("tournament.html"), /id="axisBtn"/, "Tournament Ops lost its axis switch");
   assert.match(read("admin-schedule-editor.html"), /id="sAxis"/, "the Schedule Editor lost its axis switch");
+});
+
+/* ═══ B22: blocked storage, and the other tab ═══
+   A private-mode or blocked-cookie profile THROWS on localStorage access — it does not return
+   null — so a bare read takes the whole page down at the line that made it. These pin that
+   every storage touch in both files is guarded, that the page survives both directions of
+   throw, and that the switch still WORKS in-session when the write is refused (a control that
+   silently does nothing is the failure this project keeps paying for; the in-memory mirror is
+   what keeps it honest — it stops remembering across reloads, it does not stop working). */
+
+/** Every line touching EITHER store — sessionStorage throws in exactly the same profiles, and
+ *  tournament.js reads it on the IIFE's first statement, earlier than any localStorage call.
+ *  Comments blanked so prose about storage cannot satisfy the rule (D-33's class). */
+const storageLines = (src) => blankComments(src).split("\n")
+  .map((l) => l.trim()).filter((l) => /(local|session)Storage\./.test(l));
+
+test("B22: every storage touch in both files is inside a try — including the org header read", () => {
+  for (const [name, src] of [["tournament.js", TJS], ["admin-schedule-editor.js", EDJS]]) {
+    const lines = storageLines(src);
+    assert.ok(lines.length > 0, `${name}: the scan found no storage lines at all — it is not reading the file`);
+    for (const line of lines) {
+      assert.ok(/try \{/.test(line),
+        `${name}: a bare localStorage touch survives — a blocked-storage browser dies here: ${line}`);
+    }
+  }
+  // The choke point this rule exists for: tournament.js reads bt_org inside api(), which runs
+  // during boot() — bare, it kills the page before the grid ever renders, and no axis fix helps.
+  assert.match(blankComments(TJS), /const orgId = safeGet\("bt_org"\)/,
+    "api()'s org read went back to bare storage — the axis toggle is not the choke point, this is");
+});
+
+test("B22 NC: the guarded-storage scan fires on a planted bare read, and passes a guarded one", () => {
+  const planted = storageLines('const orgId = localStorage.getItem("bt_org");\n');
+  assert.equal(planted.length, 1, "the scan missed a line it must find");
+  assert.equal(/try \{/.test(planted[0]), false, "the scan cannot fire on a bare read — it asserts nothing");
+  const guarded = storageLines('try { localStorage.setItem(k, v); } catch (e) {}\n');
+  assert.equal(guarded.length, 1);
+  assert.ok(/try \{/.test(guarded[0]), "the scan rejects the guarded form it is supposed to accept");
+});
+
+test("B22: a blocked WRITE never throws, and the switch still flips for the session", async () => {
+  const page = await runTournament(TJS, tournamentRoutes(),
+    { localStorage: makeStorage({}, { throwOnSet: true }) });
+  assert.match(page.el("poolGrid").innerHTML, /^<tr><th>Court<\/th>/, "the page did not survive boot with a blocked write");
+  await page.el("axisBtn").onclick();   // must not throw — an uncaught error here fails the test
+  assert.match(page.el("poolGrid").innerHTML, /^<tr><th>Round<\/th><th>Court 1<\/th>/,
+    "the switch is a dead control when storage is blocked — press it, nothing happens");
+});
+
+test("B22: a blocked READ never throws — the grid renders, and a blocked TOKEN exits cleanly", async () => {
+  const page = await runTournament(TJS, tournamentRoutes(),
+    { localStorage: makeStorage({}, { throwOnGet: true }) });
+  assert.match(page.el("poolGrid").innerHTML, /^<tr><th>Court<\/th>/,
+    "a throwing read killed the page — boot never reached renderGrid");
+
+  // And with the SESSION store blocked too — this file's first statement is the bearer read,
+  // earlier than any axis code — the page must fail the way a signed-out visit already fails:
+  // a clean redirect to sign-in, NOT an exception. (Asserting a rendered grid here would be
+  // asserting something that cannot happen: with no token, boot() returns before it loads one.)
+  const noToken = await runTournament(TJS, tournamentRoutes(), {
+    localStorage: makeStorage({}, { throwOnGet: true }),
+    sessionStorage: makeStorage({ bt_token: "tok" }, { throwOnGet: true }),
+  });
+  assert.equal(noToken.location.href, "index.html",
+    "an unreadable token did not take the normal signed-out route — boot threw instead of redirecting");
+  assert.equal(noToken.el("poolGrid").innerHTML, "", "a signed-out page must not render a grid");
+});
+
+test("B22: the editor survives blocked storage in both directions", async () => {
+  const blockedWrite = await runScheduleEditor(EDJS, editorApi,
+    { localStorage: makeStorage({}, { throwOnSet: true }) });
+  assert.ok(blockedWrite.el("sGrid").innerHTML.length > 0, "the editor did not survive boot with a blocked write");
+  await blockedWrite.el("sAxis").click();
+  assert.match(blockedWrite.el("sGrid").innerHTML, /<th scope="col">Round<\/th><th scope="col">Court 1<\/th>/,
+    "the editor's switch is a dead control when storage is blocked");
+  const blockedRead = await runScheduleEditor(EDJS, editorApi,
+    { localStorage: makeStorage({}, { throwOnGet: true }) });
+  assert.ok(blockedRead.el("sGrid").innerHTML.length > 0, "a throwing read killed the editor at boot");
+});
+
+test("B22: a storage event from ANOTHER TAB repaints both views — and only for its own key", async () => {
+  // The writing tab never receives its own storage event (that is the spec), so this is the
+  // only path by which a flip in one tab reaches the other.
+  const page = await runTournament(TJS, tournamentRoutes());
+  assert.equal(page.windowListeners("storage"), 1, "tournament.js registers no storage listener");
+  assert.match(page.el("poolGrid").innerHTML, /^<tr><th>Court<\/th>/);
+  page.localStorage.setItem("bt_grid_axis", "rounds-down");           // the other tab's write
+  page.fireWindow("storage", { key: "bt_grid_axis", newValue: "rounds-down" });
+  assert.match(page.el("poolGrid").innerHTML, /^<tr><th>Round<\/th><th>Court 1<\/th>/,
+    "the other tab's flip never reached this one");
+  // Teeth: a storage event for a DIFFERENT key must not repaint, or the listener is just
+  // repainting on every storage write and the assertion above proves nothing.
+  page.localStorage.setItem("bt_grid_axis", "courts-down");
+  page.fireWindow("storage", { key: "bt_theme", newValue: "light" });
+  assert.match(page.el("poolGrid").innerHTML, /^<tr><th>Round<\/th>/,
+    "an unrelated storage key repainted the grid — the listener does not filter by key");
+});
+
+test("B22: the editor repaints on another tab's flip — and only for its own key", async () => {
+  const page = await runScheduleEditor(EDJS, editorApi);
+  assert.equal(page.windowListeners("storage"), 1, "admin-schedule-editor.js registers no storage listener");
+  assert.match(page.el("sGrid").innerHTML, /<th scope="col">Court<\/th>/);
+  page.localStorage.setItem("bt_grid_axis", "rounds-down");
+  page.fireWindow("storage", { key: "bt_grid_axis", newValue: "rounds-down" });
+  assert.match(page.el("sGrid").innerHTML, /<th scope="col">Round<\/th><th scope="col">Court 1<\/th>/,
+    "the other tab's flip never reached the editor");
+  page.localStorage.setItem("bt_grid_axis", "courts-down");
+  page.fireWindow("storage", { key: "bt_nav", newValue: "min" });
+  assert.match(page.el("sGrid").innerHTML, /<th scope="col">Round<\/th>/,
+    "an unrelated storage key repainted the editor grid");
 });

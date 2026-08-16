@@ -195,6 +195,32 @@ test("RUNTIME: the print/email buttons disable while composing, and the hatch ac
   assert.equal(page.emails.length, 1);
 });
 
+test("B22 RUNTIME: Escape leaves print-day — and fires for nothing else", async () => {
+  // The hatch is a screen-only button; a keyboard user should not have to find it with a mouse.
+  const page = await runTournament(RAWJS, hostileRoutes());
+  await page.el("daySheetBtn").onclick();
+  assert.equal(page.document.body.classList.contains("print-day"), true, "the mode never got set");
+  // Teeth first: any other key must leave the mode alone, or "Escape works" proves nothing.
+  page.document._fire("keydown", { key: "a" });
+  assert.equal(page.document.body.classList.contains("print-day"), true,
+    "an unrelated key exited print mode — the handler does not check which key");
+  page.document._fire("keydown", { key: "Escape" });
+  assert.equal(page.document.body.classList.contains("print-day"), false,
+    "Escape does not leave print mode — the hatch is mouse-only");
+  // And Escape with the mode already off is a harmless no-op (this throws if it is not).
+  page.document._fire("keydown", { key: "Escape" });
+  assert.equal(page.document.body.classList.contains("print-day"), false);
+});
+
+test("B22: the Escape handler is gated on the MODE, not just the key", () => {
+  // Without the class check this listener would fight every other Escape on the page (the
+  // score sheet has its own). The gate is what keeps them from colliding.
+  assert.match(JS, /e\.key === "Escape" && document\.body\.classList\.contains\("print-day"\)/,
+    "the Escape hatch stopped checking that print-day is actually on");
+  const mutated = JS.replace(/classList\.contains\("print-day"\)/, 'classList.contains("XXGONE")');
+  assert.notEqual(mutated, JS, "the mutation did not land");
+});
+
 /* ═══ negative controls ═══ */
 
 test("NC-1: stripping the afterprint cleanup is caught, and the mutation lands", () => {

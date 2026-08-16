@@ -39,8 +39,19 @@
   let redoStack = [];
   /* Grid axis (owner, 2026-08-16): the ONE preference Tournament Ops shares — courts down the
      side by default, the old rounds-down shape one press away. Cells keep data-round/data-court
-     either way, so the mover, the drops and the apply payload never notice the orientation. */
-  const courtsDown = () => localStorage.getItem("bt_grid_axis") !== "rounds-down";
+     either way, so the mover, the drops and the apply payload never notice the orientation.
+     B22 (v0.165.0): read and written through one guarded pair — a private-mode or blocked-cookie
+     profile THROWS on storage access rather than returning null, and this read runs at first
+     render. The in-memory mirror keeps the switch working for the session when the write is
+     refused; it stops remembering across reloads, it does not stop working. Same shape as
+     Tournament Ops' pair and as config.js's closure-private get/put. */
+  const mem = new Map();
+  const safeGet = (k) => {
+    try { const v = localStorage.getItem(k); if (v != null) return v; } catch (e) {}
+    return mem.has(k) ? mem.get(k) : null;
+  };
+  const safeSet = (k, v) => { mem.set(k, v); try { localStorage.setItem(k, v); } catch (e) {} };
+  const courtsDown = () => safeGet("bt_grid_axis") !== "rounds-down";
 
   /* ---------- render ---------- */
 
@@ -322,9 +333,12 @@
     });
     $("sReload").addEventListener("click", () => { if (confirmDiscard("Reload")) loadSchedule(); });
     $("sAxis").addEventListener("click", () => {
-      localStorage.setItem("bt_grid_axis", courtsDown() ? "rounds-down" : "courts-down");
+      safeSet("bt_grid_axis", courtsDown() ? "rounds-down" : "courts-down");
       render(); // held state and history are untouched — only where the cells are drawn moves
     });
+    /* B22: the other tab's flip. render() redraws from `data`, so held moves and the undo
+       history survive a repaint — the same reason the switch above can call it directly. */
+    window.addEventListener("storage", (e) => { if (e.key === "bt_grid_axis") render(); });
     $("sSave").addEventListener("click", save);
     $("sUndo").addEventListener("click", undo);
     $("sRedo").addEventListener("click", redo);

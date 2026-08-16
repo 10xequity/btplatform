@@ -24,7 +24,23 @@
       "<div class='card'><h1>One moment</h1><p>The app is still loading its latest settings. Hold <strong>Ctrl</strong> and press <strong>F5</strong> to refresh. If this message stays after a few minutes, tell Claude.</p></div>";
     return;
   }
-  let bearer = sessionStorage.getItem("bt_token") || null;
+  /* B22 (v0.165.0): storage that cannot take the page down. A private-mode or blocked-cookie
+     profile THROWS on access rather than returning null — and both reads below run during
+     boot, so one bare touch kills the page before a single row renders. config.js's BT_THEME
+     uses this same get/put shape; its copy is closure-private, so this is the page's own.
+     The in-memory mirror is deliberate: where storage is blocked the axis switch stops
+     REMEMBERING across reloads, it does not stop working — a control that silently does
+     nothing is the worse failure. Every raw touch in this file lives in the three lines
+     below, which is the rule grid_axis.test.mjs enforces. */
+  const mem = new Map();
+  const safeGet = (k) => {
+    try { const v = localStorage.getItem(k); if (v != null) return v; } catch (e) {}
+    return mem.has(k) ? mem.get(k) : null;
+  };
+  const safeSet = (k, v) => { mem.set(k, v); try { localStorage.setItem(k, v); } catch (e) {} };
+  const safeSession = (k) => { try { return sessionStorage.getItem(k); } catch (e) { return null; } };
+
+  let bearer = safeSession("bt_token") || null;
   let currentEvent = null, teams = [], teamName = {}, teamCaptain = {}, matches = [], formats = {};
   /** "Net Assets — Ava S." where a captain is known; the bare name otherwise (T2-3). */
   const teamLabel = (id) => teamName[id] + (teamCaptain[id] ? ` — ${teamCaptain[id]}` : "");
@@ -34,7 +50,7 @@
   async function api(path, opts = {}) {
     const headers = Object.assign({ "content-type": "application/json" }, opts.headers || {});
     if (bearer) headers["Authorization"] = "Bearer " + bearer;
-    const orgId = localStorage.getItem("bt_org");
+    const orgId = safeGet("bt_org");
     if (orgId) headers["X-Org-Id"] = orgId;
     try {
       const resp = await fetch(API + path, Object.assign({}, opts, { headers, credentials: "include" }));
@@ -240,11 +256,16 @@
      DEFAULT; the old shape stays one press away, remembered per device under the ONE key the
      Schedule Editor shares. Cells keep data-round/data-court in both shapes, so scoring, drag
      and the PATCH payload never notice the orientation. */
-  const courtsDown = () => localStorage.getItem("bt_grid_axis") !== "rounds-down";
+  const courtsDown = () => safeGet("bt_grid_axis") !== "rounds-down";
   $("axisBtn").onclick = () => {
-    localStorage.setItem("bt_grid_axis", courtsDown() ? "rounds-down" : "courts-down");
+    safeSet("bt_grid_axis", courtsDown() ? "rounds-down" : "courts-down");
     renderGrid();
   };
+  /* B22: the OTHER tab's flip. A tab never receives its own storage event, so this fires only
+     when the Schedule Editor (or a second copy of this page) changed the preference — which is
+     the whole reason the key is shared. Filtered by key: this page must not repaint on every
+     unrelated write (bt_theme, bt_org, the nav state). */
+  window.addEventListener("storage", (e) => { if (e.key === "bt_grid_axis") renderGrid(); });
 
   function renderGrid() {
     const grid = $("poolGrid");
@@ -499,6 +520,11 @@
      listeners, which is why the exit is named rather than inline. */
   const exitPrintDay = () => document.body.classList.remove("print-day");
   $("dayPrintClose").onclick = exitPrintDay;
+  /* B22: the same exit from the keyboard. Gated on the MODE as well as the key, so this never
+     competes with the score sheet's own Escape — with print-day off it does nothing at all. */
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && document.body.classList.contains("print-day")) exitPrintDay();
+  });
 
   const whileBusy = async (btn, job) => {
     const was = btn.textContent;
