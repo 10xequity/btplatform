@@ -65,6 +65,11 @@ textarea { font: inherit; color: var(--text); background: var(--bg); border: 1px
 
 /* P-E (v0.163.0): the day sheet — screen half. Hidden always; print-day mode reveals it. */
 #daySheet { display: none; }
+/* B21: the escape hatch — screen-only, and only while the mode is set. A stale print-day is
+   invisible on screen (the swap rules are print-scoped); its one cost is the NEXT print job
+   printing the wrong document, and this button is the visible way out. */
+.ds-close { display: none; }
+body.print-day .ds-close { display: inline-block; }
 .ds-h { font-size: 20px; margin: 0 0 6px; }
 .ds-sub { font-size: 13px; margin: 0 0 8px; }
 .ds-section { margin: 0 0 14px; }
@@ -87,6 +92,7 @@ textarea { font: inherit; color: var(--text); background: var(--bg); border: 1px
   body.print-day #gridPanel { display: none !important; }
   body.print-day #standingsPanel { display: none !important; }
   body.print-day .print-title { display: none; }
+  .ds-close { display: none !important; }
   .ds-section { break-before: page; }
   .ds-section:first-of-type { break-before: auto; }
 }

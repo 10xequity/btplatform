@@ -1,5 +1,7 @@
 /* Boomtown Platform — Schedule editor (admin page script)
-   File: web/assets/admin-schedule-editor.js · Version: v1.0 · Date: 2026-08-03 · Ships in: v0.65.0
+   File: web/assets/admin-schedule-editor.js · Version: v1.1 · Date: 2026-08-16 · Ships in: v0.164.0
+   v1.1 (owner request): courts down the side / rounds across the top by default, with a switch
+   back — the one bt_grid_axis preference shared with Tournament Ops; arrows follow the visual axes.
 
    Drag a match to another round or court. Drop on an occupied slot and the two swap.
 
@@ -35,6 +37,10 @@
   let baseline = new Map();  // match id → {round, court} as last saved/loaded
   let undoStack = [];        // each entry: list of {id, round, court} to restore (the inverse)
   let redoStack = [];
+  /* Grid axis (owner, 2026-08-16): the ONE preference Tournament Ops shares — courts down the
+     side by default, the old rounds-down shape one press away. Cells keep data-round/data-court
+     either way, so the mover, the drops and the apply payload never notice the orientation. */
+  const courtsDown = () => localStorage.getItem("bt_grid_axis") !== "rounds-down";
 
   /* ---------- render ---------- */
 
@@ -59,18 +65,31 @@
     if (!matches.length) { $("sGrid").innerHTML = ""; renderSide(); return; }
 
     const at = (r, c) => matches.find((m) => m.round === r && m.court === c);
-    let html = `<table class="ed-grid"><caption class="sr-only">Matches by round and court</caption><thead><tr><th scope="col">Round</th>`;
-    for (let c = 1; c <= courts; c++) html += `<th scope="col">Court ${c}</th>`;
-    html += `</tr></thead><tbody>`;
-    for (let r = 1; r <= rounds; r++) {
-      html += `<tr><th scope="row">${r}</th>`;
+    const slot = (r, c) => `<td class="ed-slot" data-round="${r}" data-court="${c}">${matchCell(at(r, c))}</td>`;
+    let html = `<table class="ed-grid"><caption class="sr-only">Matches by round and court</caption><thead><tr>`;
+    if (courtsDown()) {
+      // Grid axis (owner, 2026-08-16): courts down the side, rounds across the top — the default.
+      html += `<th scope="col">Court</th>`;
+      for (let r = 1; r <= rounds; r++) html += `<th scope="col">Round ${r}</th>`;
+      html += `</tr></thead><tbody>`;
       for (let c = 1; c <= courts; c++) {
-        html += `<td class="ed-slot" data-round="${r}" data-court="${c}">${matchCell(at(r, c))}</td>`;
+        html += `<tr><th scope="row">${c}</th>`;
+        for (let r = 1; r <= rounds; r++) html += slot(r, c);
+        html += `</tr>`;
       }
-      html += `</tr>`;
+    } else {
+      html += `<th scope="col">Round</th>`;
+      for (let c = 1; c <= courts; c++) html += `<th scope="col">Court ${c}</th>`;
+      html += `</tr></thead><tbody>`;
+      for (let r = 1; r <= rounds; r++) {
+        html += `<tr><th scope="row">${r}</th>`;
+        for (let c = 1; c <= courts; c++) html += slot(r, c);
+        html += `</tr>`;
+      }
     }
     html += `</tbody></table>`;
     $("sGrid").innerHTML = html;
+    $("sAxis").textContent = courtsDown() ? "Courts across the top" : "Courts down the side";
     wireGrid();
     renderSide();
   }
@@ -229,7 +248,11 @@
           $("sDelta").textContent = "Cancelled.";
           return;
         }
-        const deltas = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] };
+        // (round delta, court delta) — which pair an arrow means depends on which axis is
+        // drawn down the page, so the keys always move along the VISUAL grid.
+        const deltas = courtsDown()
+          ? { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] }
+          : { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] };
         if (!deltas[e.key]) return;
         e.preventDefault();
         const [dr, dc] = deltas[e.key];
@@ -298,6 +321,10 @@
       eventId = Number($("sEvent").value); loadSchedule();
     });
     $("sReload").addEventListener("click", () => { if (confirmDiscard("Reload")) loadSchedule(); });
+    $("sAxis").addEventListener("click", () => {
+      localStorage.setItem("bt_grid_axis", courtsDown() ? "rounds-down" : "courts-down");
+      render(); // held state and history are untouched — only where the cells are drawn moves
+    });
     $("sSave").addEventListener("click", save);
     $("sUndo").addEventListener("click", undo);
     $("sRedo").addEventListener("click", redo);

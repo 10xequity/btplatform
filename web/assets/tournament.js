@@ -1,5 +1,9 @@
 /* Boomtown Platform — Tournament Ops
-   Version: v0.4.0 · Date: 2026-08-05 · Ships in: v0.94.0
+   Version: v0.5.0 · Date: 2026-08-16 · Ships in: v0.164.0
+   v0.5.0 (owner request + B21): the pool grid defaults to courts down the side / rounds across
+   the top with a switch back (shared key bt_grid_axis, cells keep their round/court identity);
+   the day-sheet buttons disable while composing, print-day gains one named exit shared by
+   afterprint and the on-screen hatch.
    v0.4.0 (§-1b W-C): "Plan the day" — the formats planner (options → plan → commit) finally has
    a screen. It shows equal-game round options, the plain-sentence plan summary, and the owner's
    pool-split defaults (6–11 per pool, 15→8+7, 16→8+8, 17→9+8, 19→10+9; a 5-team pool doubles its
@@ -232,25 +236,45 @@
       : "";
   }
 
+  /* Grid axis (owner, 2026-08-16): courts down the side and rounds across the top is the
+     DEFAULT; the old shape stays one press away, remembered per device under the ONE key the
+     Schedule Editor shares. Cells keep data-round/data-court in both shapes, so scoring, drag
+     and the PATCH payload never notice the orientation. */
+  const courtsDown = () => localStorage.getItem("bt_grid_axis") !== "rounds-down";
+  $("axisBtn").onclick = () => {
+    localStorage.setItem("bt_grid_axis", courtsDown() ? "rounds-down" : "courts-down");
+    renderGrid();
+  };
+
   function renderGrid() {
     const grid = $("poolGrid");
     if (!matches.length) { $("gridPanel").hidden = true; return; }
     $("gridPanel").hidden = false;
     const rounds = [...new Set(matches.map((m) => m.round))].sort((a, b) => a - b);
     const courts = [...new Set(matches.map((m) => m.court))].sort((a, b) => a - b);
-    let html = `<tr><th>Round</th>${courts.map((c) => `<th>Court ${c}</th>`).join("")}<th>Bye / Work</th></tr>`;
-    for (const r of rounds) {
-      const inRound = matches.filter((m) => m.round === r);
-      const playing = new Set(inRound.flatMap((m) => [m.team_a_id, m.team_b_id]));
-      const byes = teams.filter((t) => !playing.has(t.id)).map((t) => t.name).join(", ");
-      html += `<tr><td class="round-label">${r}</td>`;
+    const cellAt = (r, c) => {
+      const m = matches.find((x) => x.round === r && x.court === c);
+      return `<td data-round="${r}" data-court="${c}" class="drop-cell">` + (m ? matchCell(m) : "") + `</td>`;
+    };
+    const byesIn = (r) => {
+      const playing = new Set(matches.filter((m) => m.round === r).flatMap((m) => [m.team_a_id, m.team_b_id]));
+      return teams.filter((t) => !playing.has(t.id)).map((t) => t.name).join(", ") || "—";
+    };
+    let html;
+    if (courtsDown()) {
+      html = `<tr><th>Court</th>${rounds.map((r) => `<th>Round ${r}</th>`).join("")}</tr>`;
       for (const c of courts) {
-        const m = inRound.find((x) => x.court === c);
-        html += `<td data-round="${r}" data-court="${c}" class="drop-cell">` + (m ? matchCell(m) : "") + `</td>`;
+        html += `<tr><td class="round-label">${c}</td>${rounds.map((r) => cellAt(r, c)).join("")}</tr>`;
       }
-      html += `<td class="bye-col">${byes || "—"}</td></tr>`;
+      html += `<tr><td class="round-label">Bye / Work</td>${rounds.map((r) => `<td class="bye-col">${byesIn(r)}</td>`).join("")}</tr>`;
+    } else {
+      html = `<tr><th>Round</th>${courts.map((c) => `<th>Court ${c}</th>`).join("")}<th>Bye / Work</th></tr>`;
+      for (const r of rounds) {
+        html += `<tr><td class="round-label">${r}</td>${courts.map((c) => cellAt(r, c)).join("")}<td class="bye-col">${byesIn(r)}</td></tr>`;
+      }
     }
     grid.innerHTML = html;
+    $("axisBtn").textContent = courtsDown() ? "Courts across the top" : "Courts down the side";
 
     grid.querySelectorAll(".match-cell").forEach((el) => {
       el.onclick = () => openScoreSheet(+el.dataset.id);
@@ -466,17 +490,38 @@
     return text.join("\n");
   }
 
-  $("daySheetBtn").onclick = async () => {
-    if (!currentEvent) return;
-    await composeDaySheet();
-    document.body.classList.add("print-day");
-    addEventListener("afterprint", () => document.body.classList.remove("print-day"), { once: true });
-    print();
+  /* B21 (v0.164.0, owner-forwarded review): the buttons hold still while they work — a second
+     tap during a slow read must not stack sends or print dialogs. ONE named exit from print-day
+     serves the afterprint listener and the on-screen hatch. A stale print-day changes nothing
+     on screen (every swap rule is print-scoped); its one real cost is the NEXT print job
+     printing the wrong document — when a browser opens no dialog and afterprint never comes,
+     the hatch is the visible way out. Re-adding the SAME function reference cannot stack
+     listeners, which is why the exit is named rather than inline. */
+  const exitPrintDay = () => document.body.classList.remove("print-day");
+  $("dayPrintClose").onclick = exitPrintDay;
+
+  const whileBusy = async (btn, job) => {
+    const was = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "Composing…";
+    try { await job(); } finally { btn.disabled = false; btn.textContent = was; }
   };
 
-  $("dayEmailBtn").onclick = async () => {
+  $("daySheetBtn").onclick = () => {
     if (!currentEvent) return;
-    const body = await composeDaySheet();
-    window.BT_ADMIN.emailDocument(currentEvent.id, `${currentEvent.name} — day sheet`, body);
+    return whileBusy($("daySheetBtn"), async () => {
+      await composeDaySheet();
+      document.body.classList.add("print-day");
+      addEventListener("afterprint", exitPrintDay, { once: true });
+      print();
+    });
+  };
+
+  $("dayEmailBtn").onclick = () => {
+    if (!currentEvent) return;
+    return whileBusy($("dayEmailBtn"), async () => {
+      const body = await composeDaySheet();
+      window.BT_ADMIN.emailDocument(currentEvent.id, `${currentEvent.name} — day sheet`, body);
+    });
   };
 })();
