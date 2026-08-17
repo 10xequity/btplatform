@@ -21,7 +21,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { isLive, muteKeyValid, normalizeSubBody, CATEGORIES } from "../src/announcements.js";
-import { statementFrom } from "../testkit/route-extract.mjs"; // v0.111.0 §-1c D-17b — regions, not distances
+import { statementFrom, mountsAndWires } from "../testkit/route-extract.mjs"; // v0.111.0 §-1c D-17b — regions, not distances
 
 const SRC = readFileSync(new URL("../src/announcements.js", import.meta.url), "utf8");
 const INDEX = readFileSync(new URL("../src/index.js", import.meta.url), "utf8");
@@ -132,7 +132,7 @@ test("the public org-brand SELECT carries exactly the four PUBLICATION fields (s
 test("index.js mounts the module: dispatch table + wire call + public brand route (F-15/§6.5)", () => {
   assert.ok(/\["announcements",\s+announcementsRoutes\],/.test(INDEX),
     "dispatch table must call announcementsRoutes — an import line alone is built-but-uncalled (failure class 1)");
-  assert.ok(/wireAnnouncements\(\s*\{?\s*(?:\.\.\.)?wiredHelpers/.test(INDEX),
+  assert.ok(mountsAndWires(INDEX, "Announcements"),
     "wireAnnouncements(helpers) must be called or every helper is undefined at first request");
   // D-17b: was a 400-character window between the pathname test and the handler call. The branch
   // is brace-matched now, so a comment added inside it cannot push the call out of range.

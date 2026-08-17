@@ -4,6 +4,7 @@
    never just the import line) + a source-level org-scope guard with a negative control
    that PROVES the guard can fail (tokens.test.mjs precedent). */
 import { test } from "node:test";
+import { mountsAndWires } from "../testkit/route-extract.mjs";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -83,7 +84,7 @@ test("index.js DISPATCHES faqRoutes in the route chain (not just the import line
 });
 
 test("index.js CALLS wireFaq with the shared helpers", () => {
-  assert.match(indexSrc, /wireFaq\(\s*\{?\s*(?:\.\.\.)?wiredHelpers/);
+  assert.ok(mountsAndWires(indexSrc, "Faq"), "wireFaq must be called with the shared helpers");
 });
 
 /* ---------------- org-scope source guard + negative control ---------------- */

@@ -13,6 +13,7 @@
       that pushes a winner forward once at score time passes the happy path and strands the wrong
       team in the semi-final forever. */
 import { test } from "node:test";
+import { mountsAndWires } from "../testkit/route-extract.mjs";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import worker from "../src/index.js";
@@ -446,7 +447,7 @@ test("the module is actually mounted (failure class 1)", () => {
   // Built, tested, and never called is the defect this repo keeps rediscovering. Assert the wiring
   // from source, not from a document that claims it was done.
   assert.match(IDX, /import \{ bracketRoutes, wireBrackets \} from "\.\/brackets\.js"/);
-  assert.match(IDX, /wireBrackets\(\s*\{?\s*(?:\.\.\.)?wiredHelpers/);
+  assert.ok(mountsAndWires(IDX, "Brackets"), "wireBrackets must be called with the shared helpers");
   // v0.77.0: the `||` chain became an isolated dispatch TABLE, so the mount is a table entry.
   assert.match(IDX, /\["bracket",\s+bracketRoutes\],/,
     "bracketRoutes must appear in the dispatch table, not merely on an import line (§6.5)");

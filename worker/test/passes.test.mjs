@@ -11,7 +11,7 @@ import worker from "../src/index.js";
 import { createD1 } from "../testkit/d1-memory.mjs";
 import { passStatus, normalizePassInput, monthKey, guestPassName, PASS_USED_SQL } from "../src/passes.js";
 import { computePay, hoursBetween, pickRate, normalizeRateInput, PAY_BASES, MAX_RATE_CENTS } from "../src/staff_pay.js";
-import { templateTailsAfter } from "../testkit/route-extract.mjs"; // v0.111.0 §-1c D-17b — regions, not distances
+import { templateTailsAfter, mountsAndWires } from "../testkit/route-extract.mjs"; // v0.111.0 §-1c D-17b — regions, not distances
 
 const PASSES_SRC = readFileSync(new URL("../src/passes.js", import.meta.url), "utf8");
 const PAY_SRC = readFileSync(new URL("../src/staff_pay.js", import.meta.url), "utf8");
@@ -145,8 +145,8 @@ test("§6.5: both modules are MOUNTED and WIRED (F-15 — call sites, not import
   ]) {
     assert.ok(call.test(INDEX_SRC), `not dispatched: ${call} — built-but-uncalled (failure class 1)`);
   }
-  assert.match(INDEX_SRC, /wirePasses\(\s*\{?\s*(?:\.\.\.)?wiredHelpers/);
-  assert.match(INDEX_SRC, /wireStaffPay\(\s*\{?\s*(?:\.\.\.)?wiredHelpers/);
+  assert.ok(mountsAndWires(INDEX_SRC, "Passes"), "wirePasses must be called with the shared helpers");
+  assert.ok(mountsAndWires(INDEX_SRC, "StaffPay"), "wireStaffPay must be called with the shared helpers");
 });
 
 test("NC-4: the mount gate can fail", () => {

@@ -3,6 +3,7 @@
    Pure decisions · source guards (§6.5/F-15 + org scope) · live routes on the in-memory harness.
    Every guard ships a negative control that mutates real input and proves it can fail. */
 import { test } from "node:test";
+import { mountsAndWires } from "../testkit/route-extract.mjs";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import worker from "../src/index.js";
@@ -102,7 +103,7 @@ test("NC-3: rollUp copes with a player nobody evaluated", () => {
 test("§6.5: the module is MOUNTED and WIRED (F-15)", () => {
   assert.ok(/\["tryouts",\s+tryoutsRoutes\],/.test(INDEX_SRC),
     "tryoutsRoutes is imported but never dispatched — built-but-uncalled (failure class 1)");
-  assert.match(INDEX_SRC, /wireTryouts\(\s*\{?\s*(?:\.\.\.)?wiredHelpers/);
+  assert.ok(mountsAndWires(INDEX_SRC, "Tryouts"), "wireTryouts must be called with the shared helpers");
 });
 
 test("NC-4: the mount gate can fail", () => {

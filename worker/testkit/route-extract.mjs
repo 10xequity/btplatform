@@ -272,3 +272,37 @@ export function functionBodyAfter(t, signature) {
  */
 export const scriptsOf = (html) =>
   [...html.matchAll(/<script\b[^>]*src="([^"?]+)(?:\?[^"]*)?"/g)].map((m) => m[1]);
+
+/**
+ * Is `wire<Name>` actually CALLED in index.js with the shared helper bag? (v0.169.0)
+ *
+ * WHY THIS EXISTS, AND WHY IN ONE PLACE. Ten module guards each hand-rolled their own literal
+ * anchor for this one fact — `/wireTryouts\(wiredHelpers\)/` and nine like it. v0.168.0's SG-3a
+ * changed the call shape to `wireTryouts({ ...wiredHelpers, requireStaff: staffGateFor("tryouts") })`
+ * and every one of them broke at once, each needing the same edit in a different file. That is the
+ * rule-in-one-room problem: a fact asserted in ten places is a fact that has to be corrected in ten
+ * places, and the next change to the mount shape would have cost the same again.
+ *
+ * IT READS COMMENT-BLANKED SOURCE, WHICH THE TEN ANCHORS DID NOT. Measured 2026-08-17: all eleven
+ * accepted a mount that had been COMMENTED OUT, because they matched raw source — so a mount
+ * disabled with `//` would have satisfied every "the module is actually mounted" guard in the
+ * suite while the module served nothing. The gate scanners in this same file have blanked comments
+ * since v0.102.0 for exactly this reason (`a gate DEFINITION is not a gate`); the mount guards
+ * never got the same treatment. `blankComments` preserves offsets, so nothing else shifts.
+ *
+ * WHAT IT DOES NOT DO: it does not check WHICH helpers are passed, or whether the mount is bound
+ * to the right grant key. `staff_gate_wiring.test.mjs` owns that question with a paren-balanced
+ * parser and pins every mount in both directions. This answers only "is it wired at all" —
+ * failure class 1, the module built and never mounted.
+ *
+ * @param {string} indexSrc raw text of worker/src/index.js
+ * @param {string} name     the wire function's suffix, e.g. "Tryouts" for `wireTryouts`
+ * @returns {boolean}
+ */
+export function mountsAndWires(indexSrc, name) {
+  const t = blankComments(indexSrc);
+  // `wireX(` followed by the shared bag in either shape: `wiredHelpers` or `{ ...wiredHelpers`.
+  // Anything else — `wireX()`, or a bag built from something other than the shared helpers — is
+  // not a mount this function will vouch for.
+  return new RegExp(String.raw`\bwire${name}\(\s*\{?\s*(?:\.\.\.)?wiredHelpers\b`).test(t);
+}

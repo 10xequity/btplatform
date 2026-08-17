@@ -6,6 +6,7 @@
    signature-before-DB order guard for the public webhook. Every guard ships a negative
    control that PROVES it can fail (standards §6, tokens.test.mjs precedent). */
 import { test } from "node:test";
+import { mountsAndWires } from "../testkit/route-extract.mjs";
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -109,7 +110,7 @@ test("index.js mounts smsRoutes in the dispatch table (§6.5)", () => {
 });
 
 test("index.js calls wireSms with the injected helpers (§6.5)", () => {
-  assert.ok(/wireSms\(\s*\{?\s*(?:\.\.\.)?wiredHelpers/.test(indexSrc),
+  assert.ok(mountsAndWires(indexSrc, "Sms"),
     "wireSms is never called — module helpers would be undefined at runtime");
 });
 
