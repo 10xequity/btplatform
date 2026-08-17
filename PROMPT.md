@@ -78,6 +78,29 @@ disagrees, run `node worker/scripts/sweep-buster.mjs` (no `--write`) and believe
 
 Cloudflare MCP: database `boomtown-prod`, uuid `6cde5d11-4199-4e57-b10f-2b7e968264ea`, via
 `d1_database_query`. **Bound `params` for every variable value.**
+
+**D1 IS NOT PLAIN SQLITE, AND THREE OF THE STANDARD TABLE-REBUILD SAFEGUARDS DO NOT WORK ON IT.**
+All measured against live `boomtown-prod` on 2026-08-16, prompted by an external review of
+migration 0050. Do not re-derive these; do not trust a textbook SQLite rebuild recipe here.
+
+| Safeguard | What D1 actually does | Consequence |
+|---|---|---|
+| `BEGIN IMMEDIATE; … COMMIT;` | **REJECTED**, error `7500` — "use the state.storage.transaction() APIs instead of SQL BEGIN TRANSACTION or SAVEPOINT" | A rebuild wrapped this way FAILS OUTRIGHT. |
+| `PRAGMA foreign_keys = OFF` | **SILENTLY IGNORED.** Returns `success: true`, changes nothing — `PRAGMA foreign_keys` on the very next statement of the SAME call still reads `1` | **The most dangerous of the three:** it looks like it worked. An author who wraps a rebuild in it believes FK enforcement is off when it is fully on. |
+| Multi-statement = atomic | **NO.** Four statements return four separate result objects with four separate `meta` blocks — sequential, individually auto-committed | One call removes the NETWORK failure window (no 403 can land mid-sequence). It does **not** remove the SQL failure window. |
+
+**`PRAGMA foreign_keys` is `1` on live D1 — enforcement is ON** — and pragmas are per-connection,
+so nothing you set persists to the next call. **For a rebuild of a table that HAS inbound foreign
+keys, none of the above will protect you; the only real atomicity primitive is `env.DB.batch()`
+from a Worker, which the MCP HTTP path cannot reach.** Measure inbound references first with
+`SELECT … FROM sqlite_master WHERE sql LIKE '%REFERENCES <table>%'`; if the count is not zero,
+STOP and say so rather than rebuilding through the MCP.
+
+**To enumerate what is attached to a table, query `tbl_name`, NOT `sql LIKE`.** Auto-created
+indexes (from PRIMARY KEY / UNIQUE) carry `sql IS NULL` and a `sqlite_autoindex_*` name, so a
+`sql LIKE '%table%'` scan cannot see them and will under-report. Migration 0050's original check
+used the `LIKE` form; it reached the right answer, but by an instrument that could not have found
+the thing it was looking for. `WHERE tbl_name = '<table>'` is the correct form.
 Live worker: `https://boomtown-api.vvisuth.workers.dev`. Pages: `/web/`, never the repo root.
 A flap to the PREVIOUS release during sampling is normal. **CI ~1–1.5 min; `gh run watch <id>
 --exit-status` beats sampling.**
