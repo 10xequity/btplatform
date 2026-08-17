@@ -1,0 +1,22 @@
+{
+  "name": "btplatform",
+  "private": true,
+  "type": "module",
+  "description": "Boomtown Platform — Cloudflare Worker API, D1 schema, and the static app. Root manifest exists to pin the Wrangler version and give the commands in CLAUDE.md a single entry point. 'type: module' declares what worker/src already is: every module there is ESM, and without it Node reparses each one and warns on every test run that imports index.js. The shipped browser corpus under web/ is classic script and is never loaded by Node — preflight compiles it with vm.Script — so it is unaffected.",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test \"worker/test/*.mjs\"",
+    "preflight": "node worker/scripts/preflight.mjs",
+    "preflight:offline": "node worker/scripts/preflight.mjs --no-net",
+    "dev": "wrangler dev",
+    "deploy:dry": "wrangler deploy --dry-run",
+    "tail": "wrangler tail",
+    "db:seed:local": "node worker/scripts/seed-local.mjs",
+    "db:reset:local": "node worker/scripts/seed-local.mjs --reset"
+  },
+  "devDependencies": {
+    "wrangler": "4.123.0"
+  }
+}

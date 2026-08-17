@@ -6,3 +6,24 @@
 # Scratch body file for changelog-entry.mjs. Written at the repo root mid-release;
 # an uncommitted copy would trip the loop's own dirty-tree gate (RALPH.md D3).
 /entry.md
+
+# Local development (`npm run dev`). None of this is part of a release.
+#
+# node_modules/ — the pinned wrangler and its runtime (workerd, esbuild). package.json and
+#               package-lock.json ARE committed; the installed tree is not. `npm ci` rebuilds it.
+# .wrangler/  — miniflare's local simulation state: the local D1 file, local R2 objects,
+#               and caches. It is a THROWAWAY replica, never the live database. Deleting it
+#               costs nothing but `npm run db:reset:local`, which rebuilds the schema from
+#               worker/testkit/journey-schema.sql. (That line used to read "costs nothing but a
+#               re-seed (see below)" and there was no below: nothing in the repo could rebuild a
+#               local database, and the one that existed was missing ten tables.
+#               worker/scripts/seed-local.mjs is now the below.)
+# .dev.vars   — local values for the bindings wrangler.toml does not carry. It is the local
+#               twin of `wrangler secret`, so it must never be committed even when it holds
+#               only placeholders today. Real secrets stay in GitHub repo secrets (§2).
+#
+# All three are untracked on purpose: an uncommitted copy would trip the dirty-tree gate the
+# same way /entry.md does.
+node_modules/
+.wrangler/
+.dev.vars*

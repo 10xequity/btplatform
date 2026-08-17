@@ -50,7 +50,8 @@ Two things are sandboxed platform-wide and are **deliberate, not defects**:
 ## Working on it
 
 ```bash
-node worker/scripts/preflight.mjs            # must print CLEAR before you commit
+npm install                                  # once per clone — pins wrangler, nothing else
+npm run preflight                            # must print CLEAR before you commit
 node worker/scripts/sweep-buster.mjs --write # after any version bump
 node worker/scripts/sync-rail.mjs --write    # only after adding an admin page
 ```
@@ -59,6 +60,44 @@ node worker/scripts/sync-rail.mjs --write    # only after adding an admin page
 test-file parity, the *measured* suite count, schema vs live D1, and version parity against both
 `/api/health` and GitHub Pages. **A `WARN` is never a `PASS`** — a check that could not run says so
 and is named in the summary.
+
+### Running it locally
+
+**Nothing here touches production.** The suite runs against an in-memory SQLite copy of the schema,
+and `npm run dev` runs the Worker on `workerd` against a local D1 and a local R2 — the same engine
+Cloudflare runs, on your machine. The only command in this repo that reaches live data is a deploy,
+and deploys belong to CI. There is deliberately **no `npm run deploy`**.
+
+```bash
+npm test                 # the full suite — no network, no wrangler, no live database
+npm run db:reset:local   # rebuild the local D1 schema (destroys local data, never remote)
+npm run dev              # Worker on http://127.0.0.1:8787 — Ctrl-C to stop
+npm run deploy:dry       # bundle and resolve bindings without uploading
+npm run tail             # stream live production logs (read-only)
+```
+
+**Seed the local database before the first `npm run dev`**, or every route answers 500 against a
+database with no tables in it. `db:reset:local` builds the schema from
+`worker/testkit/journey-schema.sql` — the same fixture the test suite runs against, so local dev and
+`node --test` never disagree about what the schema is. It then **verifies** what it built: every
+table the fixture promises must be present, and the ledger maximum must match the highest migration
+in `db/migrations/`. It refuses to overwrite an existing local database without `--reset`, and it
+cannot be pointed at remote D1 — `--local` is hardcoded and `--remote` is rejected at startup.
+
+Why the fixture and not a replay of `db/migrations/`: **the migration folder cannot rebuild this
+schema.** Migrations 0004–0007 and 0011 were pruned from the repo after being applied, so
+`schema_migrations` is the record and the folder is not. Replaying what remains would produce a
+schema that has never existed anywhere.
+
+A running `npm run dev` holds the local database files open, so `db:reset:local` will refuse while
+it is up. Stop the dev server first — the seeder says so rather than failing with an `EPERM`.
+
+`.dev.vars` holds local values for bindings `wrangler.toml` does not carry; it is the local twin of
+`wrangler secret` and is never committed. Local D1 and R2 are throwaway replicas: deleting
+`.wrangler/` costs one `npm run db:reset:local`.
+
+For test *data* on top of the schema, use the staff-gated sandbox generator in `worker/src/sandbox.js`
+rather than writing rows by hand.
 
 **sweep-buster** rewrites every `?v=` cache-buster to the version in `worker/src/index.js`. Any
 release that bumps the version must sweep.
