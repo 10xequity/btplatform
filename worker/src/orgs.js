@@ -66,6 +66,33 @@ const EDITABLE = {
   square_location_id:   { max: 40,   trim: true, token: true },
 };
 
+/* ── MODULE_KEYS — the grant vocabulary (v0.168.0, roadmap §-1q, SG-3a) ──────────────────────────
+ *
+ * THE FOURTEEN KEYS OF `window.BT_MODULES` IN web/assets/admin-nav.js, PLUS `events`.
+ *
+ * A DELIBERATE COPY, and the second one in this codebase (ACTIVE_REG across events_admin/waitlists
+ * is the precedent). The browser and the worker cannot import from each other, and a gate that does
+ * not know the vocabulary cannot refuse an unknown key — so the worker needs its own list. The copy
+ * is pinned BYTE-EQUAL to admin-nav.js by `module_keys.test.mjs`, which parses the real BT_MODULES
+ * literal out of the real file. Drift is therefore a red test, not a silent divergence.
+ *
+ * WHY `events` IS HERE AND NOT IN BT_MODULES. BT_MODULES drives the P-1 *view* filter — which
+ * modules an org hides from its own menu — and events is never hideable, because an organisation
+ * with no events screen is not running. But a HOST is a different question: Cathy gets events and
+ * tournaments and nothing else, so `events` must be GRANTABLE even though it is not HIDEABLE. The
+ * two lists answer different questions and this is the one place they differ.
+ *
+ * NOT A CHECK CONSTRAINT in migration 0051, deliberately — see that file. A mutable vocabulary in a
+ * CHECK is what made migration 0050 a table rebuild.
+ *
+ * A key here grants a MODULE. Core surfaces — orgs, security, sandbox, users, admin — have NO key
+ * by design and keep the unbound gate, so a host can never reach them however many grants they hold. */
+export const MODULE_KEYS = [
+  "registrations", "tryouts", "facility", "tournaments", "leagues", "kotc", "reports",
+  "pos", "memberships", "staffpay", "announcements", "marketing", "waivers", "library",
+  "events",
+];
+
 /* The five tokens that refuse rather than fall back (standards §9.2), mapped to the columns that
    feed them. The settings screen shows completeness against this list, so the operator sees what
    publish will refuse on BEFORE they open the document editor rather than after. */
@@ -237,9 +264,16 @@ export async function orgRoutes(request, env, url, ctx) {
      Which modules this org HIDES from its admin menu, as a slug array. A VIEW filter, never a
      permission: nothing anywhere reads this for authorization, and org_modules.test.mjs asserts a
      hidden module's routes answer exactly as before. The server stores an opaque sanitized list
-     and keeps NO registry of its own — web/assets/admin-nav.js's BT_MODULES is the single
-     semantic source, so the meaning of a key cannot drift between two copies. Separate from the
-     profile PUT because that flow is per-field text rules and this is one atomic list. */
+     and this ROUTE still keeps no registry of its own — it validates nothing about the keys it is
+     handed, because hiding an unknown key is harmless. Separate from the profile PUT because that
+     flow is per-field text rules and this is one atomic list.
+
+     CORRECTED v0.168.0: this comment used to end "and keeps NO registry of its own … so the meaning
+     of a key cannot drift between two copies", and that is no longer true of the MODULE. §-1q's
+     grants need the worker to know the vocabulary — a gate cannot refuse an unknown key it has
+     never heard of — so `MODULE_KEYS` now exists at the top of this file. Drift is prevented by a
+     byte-equal guard against admin-nav.js rather than by there being nothing to drift from. The
+     VIEW filter below is unchanged and still authorization-free. */
 
   if (p === "/api/admin/org/modules" && m === "GET") {
     const deny = await H.requireStaff(env, ctx); if (deny) return deny;

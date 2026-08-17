@@ -1115,3 +1115,18 @@ CREATE TABLE uploads (
   deleted_at TEXT
 );
 CREATE TABLE webauthn_challenges (id INTEGER PRIMARY KEY AUTOINCREMENT, challenge TEXT NOT NULL UNIQUE, user_id INTEGER, kind TEXT NOT NULL, expires_at TEXT NOT NULL, used_at TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')));
+
+-- migration 0051 (SG-3a, §-1q). The partial UNIQUE index is carried here too, not just the table:
+-- "at most one LIVE grant per (org, account, module), while revocations stay on the record" is
+-- BEHAVIOUR, and a fixture without the index would let a test insert a duplicate that live D1
+-- refuses. The fixture must be able to fail the same way production does.
+CREATE TABLE user_module_grants (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  org_id INTEGER NOT NULL REFERENCES orgs(id),
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  module_key TEXT NOT NULL,
+  granted_by INTEGER REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  deleted_at TEXT
+);
+CREATE UNIQUE INDEX idx_umg_live ON user_module_grants (org_id, user_id, module_key) WHERE deleted_at IS NULL;

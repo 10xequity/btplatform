@@ -146,7 +146,7 @@ test("pad produces the 4-digit form used in filenames and the ledger", () => {
   assert.equal(pad(2026), "2026");
 });
 
-test("the real db/migrations directory parses cleanly and reports 0050", () => {
+test("the real db/migrations directory parses cleanly and reports 0051", () => {
   // This number is a deliberate ratchet, not a nuisance: it reddens on every new migration and
   // makes whoever added one confirm the scanner still reads the whole directory. Bump it in the
   // same commit as the migration, AFTER the ledger row exists in live D1 (v0.60.0 → 0036;
@@ -190,10 +190,15 @@ test("the real db/migrations directory parses cleanly and reports 0050", () => {
   // (2026-07-22 17:06:26), and no orphan `user_org_roles_new` survived the rename. All four
   // statements ran in ONE multi-statement call: sequenced separately there is a window between
   // DROP and RENAME where the table `requireStaff` reads does not exist, and the connector had
-  // already thrown one transient 403 that session, so the window was not theoretical.)
+  // already thrown one transient 403 that session, so the window was not theoretical.
+  // ELEVENTH time 2026-08-16: migration 0051 (user_module_grants, SG-3a / §-1q) — additive again,
+  // a new table plus one PARTIAL UNIQUE index on the live rows only. Moved once live D1 answered
+  // MAX(id)=51, COUNT(*)=51, MAX(version)='0051', `tbl_name='user_module_grants'` showed exactly
+  // 2 objects (the table and idx_umg_live), and the row count came back 0: nothing can read a
+  // grant until `staffGateFor` ships, so the deploy changes no behaviour for anyone.)
   const { highest, files, unparseable } = scanMigrations(DEFAULT_DIR);
   assert.deepEqual(unparseable, [], `unparseable migration filenames: ${unparseable.join(", ")}`);
-  assert.equal(highest, 50);
+  assert.equal(highest, 51);
   assert.ok(files >= 20, `expected at least 20 .sql files, saw ${files}`);
 });
 
