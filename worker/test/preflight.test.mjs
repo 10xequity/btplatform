@@ -8,8 +8,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { parseTestTotals, sourceVersion, schemaVerdict, gitVerdict, syntaxErrorFor, pagesVerdict, REPO } from "../scripts/preflight.mjs";
-import { versionFromIndex, bustersIn } from "../scripts/sweep-buster.mjs";
+import { parseTestTotals, sourceVersion, schemaVerdict, gitVerdict, syntaxErrorFor, pagesVerdict, REPO,
+  classicSyntaxErrorFor, inlineScriptsIn, webSyntaxVerdict } from "../scripts/preflight.mjs";
+import { versionFromIndex, bustersIn, sweepCorpus } from "../scripts/sweep-buster.mjs";
 
 /* ---------- syntaxErrorFor ---------- */
 
@@ -163,4 +164,55 @@ test("NC-10: two different busters on one page report a partial build, not a pas
 
 test("NC-11: no version in index.js FAILS — the check cannot silently have nothing to compare", () => {
   assert.equal(pagesVerdict(null, REAL_WEB_INDEX).status, "fail");
+});
+
+/* ---------- websyntax (v1.2) — the shipped browser corpus was parsed by nothing ----------
+ *
+ * Every NC below mutates a REAL shipped file. The first draft of NC-13 did not: it replaced the
+ * first "function" in config.js, which lives in a COMMENT on line 27, so the mutation produced
+ * valid JavaScript and the guard correctly accepted it. The CONTROL was broken, not the guard —
+ * the trap this repo has paid for more than once. Each anchor is asserted unique for that reason.
+ */
+
+test("the real shipped corpus compiles — and is big enough to mean something", () => {
+  const files = sweepCorpus(REPO).filter((f) => f.endsWith(".js"));
+  assert.ok(files.length >= 40, `expected 40+ shipped scripts, walked ${files.length} — then the corpus is wrong, not the code`);
+  for (const f of files) {
+    assert.equal(classicSyntaxErrorFor(readFileSync(join(REPO, f), "utf8")), null, `${f} does not compile`);
+  }
+});
+
+test("NC-12: a real page with one inline block broken is caught", () => {
+  const anchor = 'var btTpl=localStorage.getItem("bt_template");';
+  const page = readFileSync(join(REPO, "web", "tournament.html"), "utf8");
+  assert.equal(page.split(anchor).length - 1, 1, "anchor must occur exactly once or this NC proves nothing");
+  assert.ok(inlineScriptsIn(page).every((b) => !classicSyntaxErrorFor(b.code)), "the real page must compile first");
+  assert.ok(inlineScriptsIn(page.replace(anchor, "var btTpl= = ")).some((b) => classicSyntaxErrorFor(b.code)));
+});
+
+test("NC-13: a real .js asset broken in EXECUTABLE code is caught", () => {
+  const src = readFileSync(join(REPO, "web", "assets", "config.js"), "utf8");
+  const anchor = "window.BT_SIGNUP = function (event) {";
+  assert.equal(src.split(anchor).length - 1, 1, "anchor must be unique — see the comment above");
+  assert.equal(classicSyntaxErrorFor(src), null, "the real file must compile, or the mutation proves nothing");
+  assert.notEqual(classicSyntaxErrorFor(src.replace(anchor, "window.BT_SIGNUP = function function (event) {")), null);
+});
+
+test("NC-14: classic-script semantics — a top-level return is REJECTED", () => {
+  // Why vm.Script and not `--input-type=commonjs`: commonjs wraps the source in a function, so this
+  // exact line PASSES there while a browser throws on it. Measured 2026-08-16.
+  assert.notEqual(classicSyntaxErrorFor("return 42;"), null);
+  assert.equal(classicSyntaxErrorFor("with(Math){var y=PI;}"), null, "`with` is legal classic script; module mode would wrongly reject it");
+});
+
+test("NC-15: a shrunken corpus FAILS rather than reporting clean (C13/C14)", () => {
+  assert.equal(webSyntaxVerdict([], { js: 2, html: 2, blocks: 0 }).status, "fail");
+  assert.equal(webSyntaxVerdict([], { js: 67, html: 64, blocks: 142 }).status, "ok");
+  assert.equal(webSyntaxVerdict(["x.js: boom"], { js: 67, html: 64, blocks: 142 }).status, "fail");
+});
+
+test("NC-16: src= tags and non-JS typed blocks are skipped, not parsed as JavaScript", () => {
+  assert.equal(inlineScriptsIn('<script src="x.js?v=1"></script>').length, 0);
+  assert.equal(inlineScriptsIn('<script type="application/json">{"a":1,}</script>').length, 0);
+  assert.equal(inlineScriptsIn("<script>var a=1;</script>").length, 1, "a plain block must still be seen, or the filter has eaten everything");
 });

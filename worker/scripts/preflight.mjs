@@ -1,6 +1,8 @@
 /**
  * Boomtown Platform — Pre-commit / session preflight
- * File: worker/scripts/preflight.mjs · Version: v1.0 · Date: 2026-08-02 · Ships in: v0.54.0
+ * File: worker/scripts/preflight.mjs · Version: v1.2 · Date: 2026-08-16 · Ships in: v0.54.0
+ * (v1.1 2026-08-06 added `pages`; v1.2 2026-08-16 added `websyntax` and made the git fetch default.
+ *  The header line said v1.0 through all of v1.1 — corrected here rather than left to drift again.)
  *
  * WHY THIS EXISTS
  * ---------------
@@ -22,6 +24,7 @@
  *
  *   git        · branch, uncommitted work, and behind/ahead vs origin/main   (local-only drift)
  *   syntax     · node --check on every worker/src/*.js                       (CI gate step 1)
+ *   websyntax  · every shipped browser script + inline block compiles        (NO CI equivalent)
  *   parity     · every file in worker/test/ matches test/*.mjs  (F-37)       (CI gate step 2)
  *   suite      · node --test test/*.mjs, counts MEASURED not projected       (CI gate step 3)
  *   schema     · highest migration in db/migrations/ vs live D1              (CI gate step 5)
@@ -43,6 +46,18 @@
  * that actually carries `?v=`, and a response with no buster in it WARNS — an absence must never
  * read as agreement (C10).
  *
+ * THE OTHER HALF OF THE SHIP WAS NEVER PARSED (added 2026-08-16, v1.2). `syntax` read `worker/src`
+ * and stopped there. The static app — 67 scripts and 142 inline blocks, ~80KB of browser code — was
+ * checked by no standing gate at all: not here, not in CI, not by the deploy assertion. The session
+ * ritual covered it with a sentence of prose ("node --check each edited asset by hand"), and a hand
+ * step described in prose is a step that eventually does not happen. `websyntax` executes it. It
+ * compiles with classic-script semantics via `vm.Script`, because the corpus is 100% classic
+ * scripts and both obvious alternatives are wrong in opposite directions — see classicSyntaxErrorFor.
+ *
+ * THE GIT CHECK NOW FETCHES BY DEFAULT (same date, same reason). It used to fetch only under
+ * `--session`, so the loop's bare invocation compared against a stale ref and could only WARN,
+ * pushing yet another settle-it-by-hand step into the ritual. It is one second. It now just runs.
+ *
  * FAIL CLOSED, AND NEVER LAUNDER AN UNKNOWN INTO A PASS. A check that cannot run reports WARN
  * and is named in the summary; it never reports OK. The v0.33.1 lesson is that a projected
  * number reads exactly like a measured one once it is in a summary line, so every count here
@@ -53,8 +68,8 @@
  * --------
  *   node worker/scripts/preflight.mjs [--session] [--no-net] [--json]
  *
- *   --session   also fetch origin and report sync state (the CLAUDE.md §1 ritual)
- *   --no-net    skip every network check (offline; those checks WARN)
+ *   --session   accepted, no-op — the origin fetch it enabled is now the default
+ *   --no-net    skip every network check, INCLUDING the git fetch (offline; those checks WARN)
  *   --json      machine-readable result on stdout, nothing else
  *
  *   exit 0  every check passed (warnings allowed — they are printed and counted)
@@ -66,10 +81,13 @@ import { readdirSync, existsSync, readFileSync } from "node:fs";
 import { dirname, resolve, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
+import vm from "node:vm";
 import { scanMigrations, pad } from "./schema-gate.mjs";
 // Reuse the sweeper's own idioms rather than re-deriving them here. C14: a check that parses the
 // version a second way is not an independent check, it is a second thing that can disagree.
-import { versionFromIndex, bustersIn } from "./sweep-buster.mjs";
+// `sweepCorpus` is reused for the same reason: the web syntax check must scan the SAME set the
+// buster sweep scans, or the two disagree about what "the shipped corpus" means.
+import { versionFromIndex, bustersIn, sweepCorpus } from "./sweep-buster.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const REPO = resolve(HERE, "..", "..");
@@ -152,9 +170,18 @@ export function gitVerdict(g) {
 const run = (cmd, args, opts = {}) =>
   execFileSync(cmd, args, { cwd: REPO, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], ...opts });
 
-function checkGit(session) {
+/**
+ * @param {boolean} fetchFirst refresh origin refs before comparing.
+ *
+ * FETCHES BY DEFAULT as of 2026-08-16 (was: only under `--session`). Without a fetch this compared
+ * HEAD against a possibly stale local `origin/main` ref, so it could only ever WARN — and the
+ * session ritual therefore carried a hand step, "settle `git log main..origin/main` both ways by
+ * hand", which is the same prose-instead-of-code defect the web syntax check exists to close. One
+ * `git fetch` costs under a second and turns a standing manual step into an answered one.
+ */
+function checkGit(fetchFirst) {
   let fetched = false;
-  if (session) {
+  if (fetchFirst) {
     try { run("git", ["fetch", "origin", "--quiet"]); fetched = true; } catch { /* offline — stays false */ }
   }
   const branch = run("git", ["rev-parse", "--abbrev-ref", "HEAD"]).trim();
@@ -203,6 +230,111 @@ function checkSyntax() {
   return broken.length
     ? { status: "fail", detail: `${broken.length} module(s) will not parse:\n      ${broken.join("\n      ")}` }
     : { status: "ok", detail: `${files.length} modules parse (stdin form — see syntaxErrorFor).` };
+}
+
+/**
+ * Syntax-check ONE browser script. Returns the error message, or null when it compiles.
+ *
+ * NOT `syntaxErrorFor`. That one parses as an ES MODULE, which is correct for `worker/src` and
+ * WRONG here: the shipped web corpus is 100% classic scripts (measured 2026-08-16 — 329 script
+ * tags, zero `type="module"`, no file using `import`/`export`). Module mode is strict mode, so it
+ * rejects legitimate classic constructs — a `with` statement parses in a browser and fails as a
+ * module. A check that invents failures gets switched off, and then it guards nothing.
+ *
+ * NOT `--input-type=commonjs` either, which was the obvious alternative and is subtly blind:
+ * commonjs wraps the source in a function, so a top-level `return` — a hard SyntaxError in a real
+ * browser script tag — PASSES. Verified 2026-08-16: vm rejects it, commonjs accepts it.
+ *
+ * `new vm.Script()` compiles with exactly classic-script semantics and never executes a byte. It
+ * is also in-process, which matters: the corpus is 67 files plus 142 inline blocks, and spawning
+ * 209 node processes on Windows would put this check on the wrong side of "cheap enough to run".
+ *
+ * @param {string} src script source text
+ * @returns {string|null}
+ */
+export function classicSyntaxErrorFor(src) {
+  try {
+    new vm.Script(src);
+    return null;
+  } catch (e) {
+    return String(e.message || "failed to parse").split("\n")[0].trim();
+  }
+}
+
+/**
+ * Every inline `<script>` body in a page, with the 1-based line it starts on.
+ *
+ * A `src=` tag has no body to check — the .js half of the corpus covers those. A TYPED script that
+ * is not JavaScript (JSON-LD, an HTML template) is SKIPPED: feeding a JSON blob to a JS parser
+ * invents a failure. The corpus has zero typed scripts today; the filter exists so the first one
+ * somebody adds does not turn this check red for no reason.
+ *
+ * @param {string} html
+ * @returns {Array<{line:number, code:string, module:boolean}>}
+ */
+export function inlineScriptsIn(html) {
+  const out = [];
+  for (const m of String(html).matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi)) {
+    const attrs = m[1] || "";
+    if (/\bsrc\s*=/i.test(attrs)) continue;
+    const t = /\btype\s*=\s*["']?([^"'\s>]+)/i.exec(attrs);
+    const type = t ? t[1].toLowerCase() : "";
+    if (type && !/^(module|text\/javascript|application\/javascript)$/.test(type)) continue;
+    if (!m[2].trim()) continue;
+    out.push({ line: html.slice(0, m.index).split("\n").length, code: m[2], module: type === "module" });
+  }
+  return out;
+}
+
+/**
+ * Shape the web-syntax verdict. Pure, so the failing case is unit-testable without a broken repo.
+ *
+ * A SHRUNKEN CORPUS FAILS rather than reporting clean. This is the C13/C14 lesson borrowed from
+ * `sweep-buster.mjs`: a check that "passes" having opened four files is the miss wearing a success
+ * message, and the whole reason this check exists is that a green summary hid a broken page.
+ *
+ * @param {string[]} broken  human-readable "file: error" lines
+ * @param {{js:number, html:number, blocks:number}} counts
+ * @returns {{status:'ok'|'fail', detail:string}}
+ */
+export function webSyntaxVerdict(broken, counts) {
+  const total = counts.js + counts.html;
+  if (total < 40) {
+    return { status: "fail", detail: `the web walk found only ${total} .html/.js files — expected 40+. Refusing to call a corpus this small clean (C13/C14).` };
+  }
+  return broken.length
+    ? { status: "fail", detail: `${broken.length} web asset(s) will not parse — the page ships broken:\n      ${broken.join("\n      ")}` }
+    : { status: "ok", detail: `${counts.js} scripts + ${counts.blocks} inline blocks across ${counts.html} pages compile (classic-script mode).` };
+}
+
+/**
+ * §-1c — THE HOLE THIS CLOSES. Until 2026-08-16 `syntax` read `worker/src` and nothing else, so
+ * every release that touched `web/**` shipped with its browser code unparsed by any standing
+ * check. The session ritual said "node --check each edited asset by hand", and a hand step that is
+ * described in prose rather than executed by a script is a step that eventually does not happen.
+ * A broken page could ship with preflight, CI and the deploy assertion all green, because not one
+ * of them opened the file.
+ */
+function checkWebSyntax() {
+  const corpus = sweepCorpus();
+  const js = corpus.filter((f) => f.endsWith(".js"));
+  const html = corpus.filter((f) => f.endsWith(".html"));
+  const broken = [];
+  let blocks = 0;
+
+  for (const f of js) {
+    const err = classicSyntaxErrorFor(readFileSync(join(REPO, f), "utf8"));
+    if (err) broken.push(`${f}: ${err}`);
+  }
+  for (const f of html) {
+    for (const s of inlineScriptsIn(readFileSync(join(REPO, f), "utf8"))) {
+      blocks++;
+      // A `type="module"` block really is a module; parse it as one rather than as a script.
+      const err = s.module ? syntaxErrorFor(s.code) : classicSyntaxErrorFor(s.code);
+      if (err) broken.push(`${f}:${s.line} (inline): ${err}`);
+    }
+  }
+  return webSyntaxVerdict(broken, { js: js.length, html: html.length, blocks });
 }
 
 /** F-37: a test file the glob cannot match contributes zero and the suite still reports green. */
@@ -346,9 +478,11 @@ const ICON = { ok: "PASS", warn: "WARN", fail: "FAIL" };
 
 async function main() {
   const argv = process.argv.slice(2);
-  const session = argv.includes("--session");
   const noNet = argv.includes("--no-net");
   const asJson = argv.includes("--json");
+  // `--session` is kept as an accepted no-op: the fetch it used to enable now happens by default,
+  // and silently rejecting a flag the ritual still types would be a confusing way to say "already".
+  void argv.includes("--session");
 
   if (!existsSync(join(WORKER, "src")) || !existsSync(join(REPO, "db", "migrations"))) {
     console.error("PREFLIGHT: cannot run — expected worker/src and db/migrations relative to this script.");
@@ -356,8 +490,9 @@ async function main() {
   }
 
   const checks = {};
-  checks.git = checkGit(session);
+  checks.git = checkGit(!noNet);
   checks.syntax = checkSyntax();
+  checks.websyntax = checkWebSyntax();
   checks.parity = checkTestParity();
   checks.changelog = checkChangelog(); // D-31 — before the suite, because it is instant and it blocks
   checks.suite = checkSuite();

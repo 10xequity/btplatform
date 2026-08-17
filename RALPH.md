@@ -1,10 +1,14 @@
 # RALPH LOOP — Boomtown Platform (btplatform)
 
-**File:** `RALPH.md` · **Version:** v3.2 · **Created:** 2026-08-04 · **Updated:** 2026-08-10
+**File:** `RALPH.md` · **Version:** v3.3 · **Created:** 2026-08-04 · **Updated:** 2026-08-16
 **Status:** ACTIVE — the loop's instruction set. Re-read from disk every iteration.
-**Supersedes:** v3.1 (2026-08-06). Adds §A (how the session-closing prompt must be written so that
-it reads as what it is — maintenance on the owner's own system) and §B (when to ask the owner a
-question, and where to put it). Both are owner requests, 2026-08-10.
+**Supersedes:** v3.2 (2026-08-12 — the header line read v3.2 while the body already carried §B.1;
+corrected here). Adds §C (what to distrust and what to stop re-measuring), the RELEASE CADENCE
+batching rule in PHASE 3, and `PROMPT.md` as the session prompt of record. Retires two hand steps
+that `preflight` v1.2 now executes. Owner decisions, 2026-08-16.
+**Earlier:** v3.2 added §B.1. v3.1 (2026-08-06) → v3.2 added §A (how the session-closing prompt
+must be written so that it reads as what it is — maintenance on the owner's own system) and §B
+(when to ask the owner a question, and where to put it). Both owner requests, 2026-08-10.
 
 ---
 
@@ -49,6 +53,15 @@ prompt true about itself.** Six rules:
 "do not believe this prompt" discipline all stay — they are what makes the loop work. §A changes the
 framing and the ordering, never the content.
 
+**§A.1 — THE STANDING HALF NOW LIVES IN `PROMPT.md` (owner decision 2026-08-16).** The prompt had
+grown to ~4,000 words re-typed by hand every iteration, and it grew a permanent clause for every
+failure the loop survived while never losing one. Everything that does not change between sessions
+— §A's who-and-why, the permissions and their limits, the method traps, the tooling rules, the
+read order, the deploy hazards — is now `PROMPT.md` at the repo root, read from disk. **The pasted
+prompt carries only the volatile half: the owner's word, the gate, the unit.** `PROMPT.md` §7 holds
+the template and is the shape to emit at PHASE 4. The six §A rules still govern it — a short prompt
+must still open with who and why, and must still carry the off-ramp.
+
 ## §B. QUESTIONS FOR THE OWNER — when, where, and with what (owner request 2026-08-10)
 
 **Where.** All questions go in ONE block at the very END of the reply, immediately before the fenced
@@ -85,6 +98,35 @@ and iterations 64 and 65 violated all three:
    Live tab keep polling while it is hidden, or stop until it is opened?"* is a question. *"I
    recommend X"* is a decision and belongs in the body. **If the block cannot be written as
    sentences ending in question marks, there is nothing to ask — omit it.**
+
+## §C. WHAT TO DISTRUST, AND WHAT TO STOP RE-MEASURING (owner decision 2026-08-16)
+
+**The rule "believe no document" is right and it stays.** It has caught real defects — iteration
+97's register row was wrong twice and backwards, and following it literally would have regressed
+four modules. But applied to EVERYTHING it has a cost that compounds: a fact re-measured every
+iteration is paid for every iteration, forever, and the prompt has grown a permanent clause for
+every failure the loop has ever survived while never losing one. **That is the defect. The rule
+needs a scope and a discharge path.**
+
+**SCOPE — distrust prose. Trust a green assertion.**
+
+| Source | Standing | Why |
+|---|---|---|
+| A register row, roadmap line, owner brief, review, handoff row, code comment, or a premise in the session prompt | **DISTRUST — measure it** | All prose. Every one of these has been wrong at least once. |
+| Your own enumeration, draft, probe, or negative control | **DISTRUST — positive-control it** | A search that cannot match reports clean. |
+| A check in the suite that is green, ships a negative control, and was watched failing | **TRUST IT** | That is what a test IS. Re-deriving it by hand is not a second opinion, it is a second thing that can disagree. |
+| A number preflight MEASURED this session | **TRUST IT** | It parsed real output. Believe it over your own grep — that is already the standing rule. |
+
+**DISCHARGE — a fact re-measured three times becomes a test, and then stops being re-measured.**
+When an iteration finds itself checking something a previous iteration already checked, that is the
+signal: spend the unit turning it into an assertion with a negative control, then DELETE the prose
+that told the loop to check it by hand. **A hand step described in prose is a step that eventually
+does not happen** — 2026-08-16 closed two of them (the web corpus went unparsed by any gate for the
+whole project's life, and the git sync check warned rather than fetching). Both are now `preflight`
+lines. Neither needs a sentence in a prompt again.
+
+**Removing a clause that a test now covers is not weakening the discipline — it is banking it.**
+Say in the ledger which clause you retired and which assertion replaced it.
 
 ---
 
@@ -136,10 +178,16 @@ PHASE 0 — ORIENT (always)
 4. Do NOT read standards / roadmap / INDEX in full. Open the section your PHASE 2 unit
    needs, and name which you opened in the ledger.
 
-**Two preflight WARNs are EXPECTED when offline and are not failures:**
-  - `git` — sync state vs origin not checked · `schema` — live D1 not read locally.
-  If the Cloudflare MCP and git remote ARE reachable this session, verify both instead:
-  `git fetch && git log main..origin/main` empty, and `schema_migrations` max == repo highest.
+**ONE preflight WARN is expected and is not a failure** (changed 2026-08-16, preflight v1.2):
+  - `schema` — live D1 not read locally. It needs `CLOUDFLARE_API_TOKEN` with D1:Read in the
+    environment; without it the check WARNs, which is honest. CI's schema gate reads live D1 and
+    fails closed on every push, so the repo-vs-D1 half is enforced there. To settle it in-session,
+    read `schema_migrations` via Cloudflare MCP and say the numbers.
+  - `git` NO LONGER WARNS when online. Preflight fetches origin itself now, so
+    `git log main..origin/main` both ways is ANSWERED by the `git` line — do not re-do it by hand.
+    A `git` WARN now means genuinely offline, and then the sync state really is unknown.
+  - `websyntax` is new and covers the shipped browser corpus — 67 scripts and 142 inline blocks.
+    **Do not `node --check` web assets by hand any more; preflight parses all of them.**
 
 ═══════════════════════════════════════════════════════════════════════════════
 PHASE 1 — THE DRIFT GATE. The kill switch. Run it before anything else.
@@ -249,7 +297,24 @@ HOUSE RULES:
   No org email in member-facing copy. Score entry copy speaks in DIFFERENTIALS.
 - Never round-trip a UTF-8 file through PowerShell `Get-Content`/`Set-Content`.
 
-RELEASE, only if the unit changed `worker/**` or `web/**`:
+**RELEASE CADENCE — BATCH, DO NOT SHIP ONE VERSION PER UNIT (owner decision 2026-08-16).**
+Measured that day: 170 versions in 26 days, and release v0.167.0 touched **77 files to change 6** —
+the other ~69 were the buster sweep re-stamping the same string. Every version drags seven
+artifacts behind it (bump · sweep · CHANGELOG · README counts · INDEX row · handoff row · LOOP
+row), and that tax is identical whether the release carries one unit or five. So:
+
+  · **Commit freely between releases.** A green preflight is the bar to commit and push, and that
+    has not changed. Committing is cheap; VERSIONING is what costs.
+  · **Cut a version when a user-visible change is ready to be seen, or when the accumulated units
+    are worth one deploy** — not reflexively at the end of every iteration. A no-bump iteration
+    that commits code is now a NORMAL outcome, not a failure. Record it as `NO-BUMP` in `LOOP.md`
+    with the units it banked.
+  · **A version still ships as ONE push with all seven artifacts.** Batching reduces how OFTEN the
+    ritual runs; it never licenses a partial one.
+  · Anything the owner is waiting to look at ships immediately. Throughput is the point of this
+    rule — never let batching become a reason he waits.
+
+RELEASE, only if the unit changed `worker/**` or `web/**` AND the cadence rule above says cut one:
     1. bump `version:` in worker/src/index.js — byte-verify a ONE-LINE diff
     2. node worker/scripts/sweep-buster.mjs --write   ← ANY release that bumps the version
        sweeps, including worker-only (the C6 guard ties the buster to index.js, and it is right)
