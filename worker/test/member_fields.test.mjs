@@ -117,7 +117,7 @@ test("NC-3: an over-long value is refused rather than silently truncated", () =>
 test("§6.5: index.js MOUNTS and WIRES the module (F-15 — call sites, not imports)", () => {
   assert.ok(/\["memberFields",\s+memberFieldsRoutes\],/.test(INDEX_SRC),
     "memberFieldsRoutes is imported but never dispatched — built-but-uncalled (failure class 1)");
-  assert.match(INDEX_SRC, /wireMemberFields\(wiredHelpers\)/,
+  assert.match(INDEX_SRC, /wireMemberFields\(\s*\{?\s*(?:\.\.\.)?wiredHelpers/,
     "wireMemberFields is never called — every helper would be undefined at runtime");
 });
 

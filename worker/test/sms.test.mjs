@@ -109,7 +109,7 @@ test("index.js mounts smsRoutes in the dispatch table (§6.5)", () => {
 });
 
 test("index.js calls wireSms with the injected helpers (§6.5)", () => {
-  assert.ok(/wireSms\(wiredHelpers\)/.test(indexSrc),
+  assert.ok(/wireSms\(\s*\{?\s*(?:\.\.\.)?wiredHelpers/.test(indexSrc),
     "wireSms is never called — module helpers would be undefined at runtime");
 });
 

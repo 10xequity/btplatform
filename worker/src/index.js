@@ -212,7 +212,7 @@ import { calendarRoutes, wireCalendar, icsFeed } from "./calendar.js"; // v0.23.
 import { consentRoutes, wireConsent } from "./consent.js"; // v0.25.0 teammate self-sign + media consent
 import { tiersRoutes, wireTiers } from "./tiers.js"; // v0.26.0 membership tiers, grants, bulk member actions
 import { familyRoutes, wireFamily } from "./family.js"; // v0.27.0 guardians, minors, families
-import { orgRoutes, wireOrgs, senderIdentity } from "./orgs.js"; // v0.31.0 org profile, identity, sender
+import { orgRoutes, wireOrgs, senderIdentity, MODULE_KEYS, MODULE_LABELS } from "./orgs.js"; // v0.31.0 org profile, identity, sender; v0.168.0 the grant vocabulary (SG-3a)
 import { documentRoutes, wireDocuments } from "./documents.js"; // v0.28.0 document library + requirements
 import { uploadRoutes, wireUploads } from "./uploads.js"; // v0.30.0 generic file uploads (R2 + D1 index)
 import { subsRoutes, wireSubs } from "./subs.js"; // v0.38.0 league sub finder (owner req #7, migration 0026)
@@ -283,49 +283,63 @@ const wiredHelpers = {
   sendLoginLink,
   issueSession,
 };
-wire({ ...wiredHelpers, ensureEventSquareItem }); // D-34 — patchEvent prices events now, so it is K-15's third writer; injected exactly as events_admin gets it (a direct import would cycle the same way)
-wireRegistrations(wiredHelpers);
-wireAdmin(wiredHelpers);
-wireSchedule(wiredHelpers);
-wireEventsAdmin({ ...wiredHelpers, sendEmail, escapeHtml, ensureEventSquareItem }); // B16 — sendEmail injected, waitlists precedent, no cycle; K-15 — the Square writer injected the same way (a direct import would cycle: events_admin ← tournaments ← registrations ← memberships)
-wireProfiles(wiredHelpers);
+/* THE MOUNTS (v0.168.0, SG-3a). A mount that passes `requireStaff: staffGateFor(<keys>)` binds its
+   module's gate to those grant keys; a mount that passes plain `wiredHelpers` keeps the UNSCOPED
+   gate and therefore refuses every host. UNBOUND IS THE SAFE DEFAULT AND THE DELIBERATE ONE: a
+   module nobody bound refuses hosts, which is a complaint somebody can make, where a module bound
+   to the wrong key admits a host silently. Keys come from BT_MODULES' own `pages` lists — the
+   module that owns the admin screen the routes serve — and `staff_gate_wiring.test.mjs` pins every
+   line below in BOTH directions, so a new mount with no decision is a red test rather than a
+   default. Core stays unbound by design: admin (users and roles), orgs, security, sandbox. */
+wire({ ...wiredHelpers, requireStaff: staffGateFor("tournaments"), ensureEventSquareItem }); // D-34 — patchEvent prices events now, so it is K-15's third writer; injected exactly as events_admin gets it (a direct import would cycle the same way)
+wireRegistrations({ ...wiredHelpers, requireStaff: staffGateFor("registrations") });
+wireAdmin(wiredHelpers); // CORE — users and roles. Unbound: a host must never manage accounts.
+wireSchedule({ ...wiredHelpers, requireStaff: staffGateFor("tournaments", "leagues") }); // the schedule editor has TWO owners in BT_MODULES; either key passes
+wireEventsAdmin({ ...wiredHelpers, requireStaff: staffGateFor("events"), sendEmail, escapeHtml, ensureEventSquareItem }); // B16 — sendEmail injected, waitlists precedent, no cycle; K-15 — the Square writer injected the same way (a direct import would cycle: events_admin ← tournaments ← registrations ← memberships)
+wireProfiles(wiredHelpers); // unbound — its staff routes are season-points seeding, which owns no menu module
 wireWebauthn(wiredHelpers);
-wireLeagues(wiredHelpers);
-wireReports(wiredHelpers);
-wireCheckin(wiredHelpers);
-wireMemberships(wiredHelpers);
-wireSandbox(wiredHelpers);
-wireFacility(wiredHelpers);
-wireSecurity(wiredHelpers);
+wireLeagues({ ...wiredHelpers, requireStaff: staffGateFor("leagues") });
+wireReports({ ...wiredHelpers, requireStaff: staffGateFor("reports") });
+wireCheckin({ ...wiredHelpers, requireStaff: staffGateFor("registrations") });
+wireMemberships({ ...wiredHelpers, requireStaff: staffGateFor("memberships") });
+wireSandbox(wiredHelpers); // CORE — S-2a's rescue link lives here. Unbound: closed to hosts by construction.
+wireFacility({ ...wiredHelpers, requireStaff: staffGateFor("facility") });
+wireSecurity(wiredHelpers); // CORE — the audit surface.
 wireMemberPortal(wiredHelpers);
-wireMarketing(wiredHelpers);
-wireMessages(wiredHelpers);
-wirePos(wiredHelpers);
-wireWaitlists({ ...wiredHelpers, sendEmail, escapeHtml }); // sendEmail injected — no circular import
-wireSubs({ ...wiredHelpers, sendEmail, escapeHtml }); // v0.38.0 — same injection pattern
-wireKiosk(wiredHelpers); // v0.39.0
-wireFaq(wiredHelpers); // v0.40.0
-wireSms(wiredHelpers); // v0.42.0 — fails closed until TWILIO_* secrets exist
-wireLfg(wiredHelpers); // v0.45.0
-wireAnnouncements(wiredHelpers); // v0.50.0
-wireMemberFields(wiredHelpers); // v0.57.0
-wirePasses(wiredHelpers); // v0.58.0
-wireStaffPay(wiredHelpers); // v0.58.0
-wireTryouts(wiredHelpers); // v0.60.0
-wireFormats(wiredHelpers); // v0.62.0
-wireBrackets(wiredHelpers); // v0.66.0
-wireKotc(wiredHelpers);
-wireDivisions(wiredHelpers); // v0.69.0
+wireMarketing({ ...wiredHelpers, requireStaff: staffGateFor("marketing") });
+wireMessages({ ...wiredHelpers, requireStaff: staffGateFor("marketing") });
+wirePos({ ...wiredHelpers, requireStaff: staffGateFor("pos") });
+wireWaitlists({ ...wiredHelpers, requireStaff: staffGateFor("registrations"), sendEmail, escapeHtml }); // sendEmail injected — no circular import
+wireSubs({ ...wiredHelpers, requireStaff: staffGateFor("leagues"), sendEmail, escapeHtml }); // v0.38.0 — same injection pattern
+wireKiosk(wiredHelpers); // v0.39.0 — no requireStaff call sites, so there is no gate to bind
+wireFaq({ ...wiredHelpers, requireStaff: staffGateFor("library") }); // v0.40.0
+wireSms({ ...wiredHelpers, requireStaff: staffGateFor("marketing") }); // v0.42.0 — fails closed until TWILIO_* secrets exist
+wireLfg(wiredHelpers); // v0.45.0 — unbound: community moderation owns no menu module
+wireAnnouncements({ ...wiredHelpers, requireStaff: staffGateFor("announcements") }); // v0.50.0
+wireMemberFields({ ...wiredHelpers, requireStaff: staffGateFor("memberships") }); // v0.57.0
+wirePasses({ ...wiredHelpers, requireStaff: staffGateFor("memberships") }); // v0.58.0
+wireStaffPay({ ...wiredHelpers, requireStaff: staffGateFor("staffpay") }); // v0.58.0
+wireTryouts({ ...wiredHelpers, requireStaff: staffGateFor("tryouts") }); // v0.60.0
+wireFormats({ ...wiredHelpers, requireStaff: staffGateFor("tournaments") }); // v0.62.0
+wireBrackets({ ...wiredHelpers, requireStaff: staffGateFor("tournaments") }); // v0.66.0
+wireKotc({ ...wiredHelpers, requireStaff: staffGateFor("kotc") });
+wireDivisions({ ...wiredHelpers, requireStaff: staffGateFor("tournaments") }); // v0.69.0
 wireLive({ json }); // v0.73.0 — read-only, so it needs nothing but json
-wirePush(wiredHelpers); // v0.20.0
-wireWaivers(wiredHelpers); // v0.22.0
-wireCalendar(wiredHelpers); // v0.23.0
-wireConsent(wiredHelpers); // v0.25.0
-wireTiers(wiredHelpers); // v0.26.0
+wirePush(wiredHelpers); // v0.20.0 — unbound: /api/admin/push/test targets the caller's own devices
+wireWaivers({ ...wiredHelpers, requireStaff: staffGateFor("waivers") }); // v0.22.0
+wireCalendar(wiredHelpers); // v0.23.0 — unbound: it mints the ORG-WIDE public feed, an org-level setting
+wireConsent(wiredHelpers); // v0.25.0 — unbound: media consent is compliance, not the waivers screen
+/* tiers.js is the ONE bound module that also carries CORE routes — `/api/admin/org` (writes the
+   org's timezone, which reaches every calendar emission) and `/api/admin/members/bulk` (exports the
+   whole member CSV and writes tags across the directory). §-1q puts the members directory and org
+   settings out of a host's reach, so those two routes take `requireCoreStaff` — the UNBOUND gate,
+   passed only here — while tiers, grants and plans take the memberships binding. Measured
+   2026-08-17: no other bound module carries a route outside its own module's concern. */
+wireTiers({ ...wiredHelpers, requireStaff: staffGateFor("memberships"), requireCoreStaff: requireStaff }); // v0.26.0
 wireFamily(wiredHelpers); // v0.27.0
-wireDocuments(wiredHelpers); // v0.28.0
-wireUploads(wiredHelpers); // v0.30.0
-wireOrgs(wiredHelpers);    // v0.31.0
+wireDocuments({ ...wiredHelpers, requireStaff: staffGateFor("library") }); // v0.28.0
+wireUploads({ ...wiredHelpers, requireStaff: staffGateFor("library") }); // v0.30.0
+wireOrgs(wiredHelpers);    // v0.31.0 — CORE: the switch that turns modules back on.
 
 /** ctx carries the caller's session + selected org for role checks. */
 async function buildCtx(request, env) {
@@ -374,6 +388,103 @@ async function requireStaff(env, ctx, orgId = ctx.orgId) {
   return null;
 }
 
+/* ══ staffGateFor — THE MODULE-BOUND STAFF GATE (v0.168.0, roadmap §-1q, build unit SG-3a) ══════
+ *
+ * WHAT IT IS FOR, in one sentence: a `host` is an admin of SOME screens and not others, and the
+ * module axis is bound HERE, at the one mounting site, rather than at any of the ~180 gate calls.
+ *
+ * WHY AT THE MOUNT. Every routes-module receives `requireStaff` by injection (`wireXxx(helpers)`),
+ * so binding the axis at the mount changes the gate's BEHAVIOUR without changing its SHAPE: the
+ * arity is identical, every existing call site is untouched, and no caller can forget to pass the
+ * axis — because no caller passes it. (That is the D-29/BT_SIGNUP lesson applied to gates: an
+ * argument every one of 180 sites must remember is an argument one of them will not.)
+ *
+ * WHO PASSES, AND THE ORDER MATTERS:
+ *   · admin  → passes. Unchanged, and provably so: the first thing this does is call the REAL
+ *              `requireStaff`, so the admin/staff path is not a re-implementation of it.
+ *   · staff  → passes, UNSCOPED. Deliberate. Nobody holds `staff` (live D1: zero staff rows have
+ *              ever existed), and it stays the tier that sees everything.
+ *   · host   → passes ONLY with a live grant row for THIS org AND one of THIS mount's keys.
+ *              Otherwise 403 carrying its own sentence, which names the module and the org so the
+ *              refusal is actionable rather than a generic denial.
+ *   · anyone else → the original refusal, byte for byte. A member's 403 must not change wording
+ *              because hosts now exist.
+ *
+ * REVOKING ONLY EVER NARROWS, and it is structural rather than careful. A host is not staff
+ * (`isStaff` recognises only admin and staff — the line above), so removing every grant leaves a
+ * host passing nothing; there is no path by which losing a grant widens anyone into a higher tier.
+ * A grant is also required to be held by a HOST: a grant row on a member account grants nothing,
+ * so the mechanism cannot be entered sideways.
+ *
+ * CORE MODULES HAVE NO KEY AND KEEP THE UNBOUND GATE — orgs, security, sandbox, users, admin. A
+ * host reaches none of them however many grants they hold, so S-2a's rescue link (which in keyless
+ * sandbox mode returns a working sign-in link for any account to the caller) is closed to hosts BY
+ * CONSTRUCTION and stays open to the staff tier. `staff_gate_wiring.test.mjs` asserts that in both
+ * directions, because a bound gate that is defined and never wired is the failure this ships
+ * silently. */
+
+/** The caller's role in ONE org, honouring the F-1 privilege drop.
+ *
+ *  A SECOND READ RATHER THAN A REFACTOR OF `isStaff`, ON PURPOSE. `authorization_matrix`'s NC-F1
+ *  and NC-F2 assert that the acting-role check appears inside `isStaff`'s OWN body; making isStaff
+ *  delegate to this would blind two negative controls in order to save one round trip. The read
+ *  only happens after `requireStaff` has ALREADY refused, so admin and staff never pay for it and a
+ *  host pays one extra query on a tier that has no holders yet. */
+async function roleFor(env, ctx, orgId) {
+  if (!ctx || !ctx.userId) return null;
+  if (ctx.actingRole === "member") return "member";
+  const row = await env.DB.prepare(
+    "SELECT role FROM user_org_roles WHERE user_id=?1 AND org_id=?2 AND deleted_at IS NULL"
+  ).bind(ctx.userId, orgId).first();
+  return row ? row.role : null;
+}
+
+/** Does this account hold a LIVE grant for ANY of these modules in THIS org?
+ *  `deleted_at IS NULL` is the whole revocation model, and migration 0051's partial unique index on
+ *  exactly these columns is this query's index. Keys reach here already validated against
+ *  MODULE_KEYS (see staffGateFor), and are bound as values regardless. */
+async function hasModuleGrant(env, userId, orgId, keys) {
+  if (!userId || !keys.length) return false;
+  const marks = keys.map((_, i) => `?${i + 3}`).join(",");
+  const row = await env.DB.prepare(
+    `SELECT 1 AS ok FROM user_module_grants
+      WHERE org_id = ?1 AND user_id = ?2 AND module_key IN (${marks}) AND deleted_at IS NULL
+      LIMIT 1`
+  ).bind(orgId, userId, ...keys).first();
+  return !!row;
+}
+
+/** The menu's own words for these keys — "Tournaments or Leagues" for a two-owner screen. The
+ *  refusal has to name the module the way the operator saw it when they granted it. */
+function moduleNames(keys) {
+  const names = keys.map((k) => MODULE_LABELS[k] || k);
+  return names.length < 2 ? names[0] : `${names.slice(0, -1).join(", ")} or ${names[names.length - 1]}`;
+}
+
+/** A gate bound to one or more module keys. A mount with TWO keys mirrors P-1's own rule for a
+ *  screen with two owners — it hides only when EVERY owner is off, so holding EITHER key passes. */
+function staffGateFor(...keys) {
+  /* FAIL AT BOOT, NOT AT REQUEST TIME. A mistyped key would otherwise build a gate that refuses
+     every host forever, naming a module that does not exist, and nothing would report it until
+     somebody was locked out of a screen they had been granted. This runs at module scope, so a bad
+     key is a dead worker the suite catches long before a deploy. */
+  const unknown = keys.filter((k) => !MODULE_KEYS.includes(k));
+  if (!keys.length || unknown.length) {
+    throw new Error(`staffGateFor: not a module key: ${JSON.stringify(unknown.length ? unknown : keys)}`);
+  }
+  return async function requireStaffForModule(env, ctx, orgId = ctx.orgId) {
+    const refusal = await requireStaff(env, ctx, orgId);
+    if (!refusal) return null;                        // admin or staff — the unscoped tier, unchanged
+    if (refusal.status !== 403) return refusal;       // 401 "Sign in first." — nothing to widen
+    if (ctx.actingRole === "member") return refusal;  // the F-1 drop binds every tier, hosts included
+    if ((await roleFor(env, ctx, orgId)) !== "host") return refusal;
+    if (await hasModuleGrant(env, ctx.userId, orgId, keys)) return null;
+    const org = await env.DB.prepare("SELECT name FROM orgs WHERE id = ?1").bind(orgId).first();
+    const where = org && org.name ? org.name : "this organization";
+    return json({ error: `Your account doesn't include ${moduleNames(keys)} for ${where}.` }, 403);
+  };
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -420,7 +531,7 @@ export default {
         const session = await currentSession(request, env);
         res = session ? await listOrgs(env) : json({ error: "Sign in first." }, 401);
       } else if (url.pathname === "/api/health") {
-        res = json({ ok: true, version: "v0.167.0" });
+        res = json({ ok: true, version: "v0.168.0" });
       } else if (url.pathname === "/api/webhooks/square" && request.method === "POST") {
         res = await membershipWebhook(request, env); // verifies signature; forwards payment.* to squareWebhook
       } else if (url.pathname === "/api/public/org-brand" && request.method === "GET") {

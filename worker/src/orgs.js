@@ -93,6 +93,35 @@ export const MODULE_KEYS = [
   "events",
 ];
 
+/* THE SAME KEYS, WITH THE MENU'S OWN WORDS — because the gate has to write a sentence.
+ *
+ * `staffGateFor`'s refusal reads "Your account doesn't include <module> for <org>." and standards §8
+ * requires that to be a human sentence. With keys alone it would say "doesn't include staffpay" and
+ * "doesn't include kotc", which is a slug leaking into an error a person has to act on.
+ *
+ * A SECOND DELIBERATE COPY, pinned the same way. `module_keys.test.mjs` parses the real BT_MODULES
+ * literal and asserts each label BYTE-EQUAL to the menu's, so the refusal always names the module by
+ * the name the operator sees on the screen where they granted it. `events` has no BT_MODULES entry
+ * (it is grantable but never hideable — see above), so its label is declared here and the guard
+ * knows to expect exactly that one. */
+export const MODULE_LABELS = {
+  registrations: "Registrations & Check-in",
+  tryouts:       "Tryouts & Squads",
+  facility:      "Facility Calendar",
+  tournaments:   "Tournaments",
+  leagues:       "Leagues",
+  kotc:          "Court Board (KOTC)",
+  reports:       "Sales & Reports",
+  pos:           "Point of Sale",
+  memberships:   "Memberships & Passes",
+  staffpay:      "Staff Pay",
+  announcements: "Announcements",
+  marketing:     "Marketing, Email & SMS",
+  waivers:       "Waivers",
+  library:       "Documents, Help & Files",
+  events:        "Events",
+};
+
 /* The five tokens that refuse rather than fall back (standards §9.2), mapped to the columns that
    feed them. The settings screen shows completeness against this list, so the operator sees what
    publish will refuse on BEFORE they open the document editor rather than after. */

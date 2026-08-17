@@ -40,30 +40,45 @@ export const blankComments = (s) =>
 
 export const lineOf = (t, i) => t.slice(0, i).split("\n").length;
 
-const GATE_RE = /(?:H\.)?require(?:Staff|Admin)\s*\(/g;
+/* ── THE GATE VOCABULARY, DECLARED ONCE (v0.168.0, SG-3a) ──────────────────────────────────────
+   `requireCoreStaff` is the FOURTH gating style. SG-3a binds a module's `requireStaff` to a grant
+   key at the mount, so a bound module that still owns a CORE route hands that route the UNBOUND
+   gate under a second name. It admits admin or staff and refuses hosts — it IS `requireStaff`
+   before binding, not a new tier — so its kind is "staff". `tiers.js` (`/api/admin/org`) is the
+   only holder today; `staff_gate_wiring.test.mjs` pins the complete list of its call sites.
 
-/** Gate CALL offsets. An occurrence preceded by `function` (with or without `async`) is a
-    DEFINITION and is rejected — the exact error that produced the original false "clean". */
+   BOTH READERS ARE BUILT FROM THIS ONE ALTERNATION, and that is the repair, not a tidy-up. They
+   carried a copy each, under a comment on `gateKindCallsIn` promising the two "can never drift" —
+   a promise made by PROSE about two separate regex literals, which is not a mechanism. Teaching a
+   fourth style to one and not the other is precisely the drift the prose did not prevent. Adding
+   `requireCoreStaff` to tiers.js reddened the S-1a ratchet AND the authorization matrix at once,
+   both reporting an ungated route that was gated the whole time — a guard blind to a legitimate
+   style accuses the code instead of itself, which costs more than an honest gap.
+
+   `CoreStaff` precedes `Staff` in the alternation so the longer name wins the leftmost match. */
+const GATE_NAMES = "CoreStaff|Staff|Admin";
+const gateRe = () => new RegExp(`(?:H\\.)?require(${GATE_NAMES})\\s*\\(`, "g");
+
+/** A `function` (with or without `async`) immediately before an occurrence makes it a DEFINITION,
+    not a call — the exact error that produced the original false "clean". */
+const isDefinition = (t, i) => /\bfunction\s+$/.test(t.slice(Math.max(0, i - 24), i));
+
+/** Gate CALL offsets. */
 export function gateCallsIn(t) {
-  const out = [];
-  for (const m of t.matchAll(GATE_RE)) {
-    if (/\bfunction\s+$/.test(t.slice(Math.max(0, m.index - 24), m.index))) continue;
-    out.push(m.index);
-  }
-  return out;
+  return gateKindCallsIn(t).map((g) => g.index);
 }
 
-/** Gate call sites WITH which gate was called. Same definition-rejection as `gateCallsIn` — this
-    is that function plus the one fact the authorization matrix needs and the S-1a ratchet did not:
-    `requireStaff` admits admin OR staff, `requireAdmin` admits admin only, and "is there a gate"
-    cannot tell them apart. Kept beside `gateCallsIn` so the two can never drift in what counts as
-    a call site; `gateCallsIn` is asserted to be exactly this function's offsets in the matrix's
-    own tests. */
+/** Gate call sites WITH which gate was called — the one fact the authorization matrix needs and
+    the S-1a ratchet did not: `requireStaff`/`requireCoreStaff` admit admin OR staff, `requireAdmin`
+    admits admin only, and "is there a gate" cannot tell them apart. `gateCallsIn` is now literally
+    this function's offsets rather than a second regex asserted to agree with it, so the two cannot
+    disagree about what counts as a call site even in principle. */
 export function gateKindCallsIn(t) {
   const out = [];
-  for (const m of t.matchAll(/(?:H\.)?require(Staff|Admin)\s*\(/g)) {
-    if (/\bfunction\s+$/.test(t.slice(Math.max(0, m.index - 24), m.index))) continue;
-    out.push({ index: m.index, kind: m[1].toLowerCase() }); // "staff" | "admin"
+  for (const m of t.matchAll(gateRe())) {
+    if (isDefinition(t, m.index)) continue;
+    // "CoreStaff" collapses to "staff": same tier, same admissions, different binding.
+    out.push({ index: m.index, kind: m[1] === "Admin" ? "admin" : "staff" });
   }
   return out;
 }

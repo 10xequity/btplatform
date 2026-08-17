@@ -83,7 +83,7 @@ test("index.js DISPATCHES faqRoutes in the route chain (not just the import line
 });
 
 test("index.js CALLS wireFaq with the shared helpers", () => {
-  assert.match(indexSrc, /wireFaq\(wiredHelpers\)/);
+  assert.match(indexSrc, /wireFaq\(\s*\{?\s*(?:\.\.\.)?wiredHelpers/);
 });
 
 /* ---------------- org-scope source guard + negative control ---------------- */

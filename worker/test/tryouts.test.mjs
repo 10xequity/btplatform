@@ -102,7 +102,7 @@ test("NC-3: rollUp copes with a player nobody evaluated", () => {
 test("§6.5: the module is MOUNTED and WIRED (F-15)", () => {
   assert.ok(/\["tryouts",\s+tryoutsRoutes\],/.test(INDEX_SRC),
     "tryoutsRoutes is imported but never dispatched — built-but-uncalled (failure class 1)");
-  assert.match(INDEX_SRC, /wireTryouts\(wiredHelpers\)/);
+  assert.match(INDEX_SRC, /wireTryouts\(\s*\{?\s*(?:\.\.\.)?wiredHelpers/);
 });
 
 test("NC-4: the mount gate can fail", () => {

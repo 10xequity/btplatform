@@ -530,7 +530,7 @@ test("the engine is reachable: kotcplay.js is MOUNTED and WIRED (§6.5)", () => 
   const index = readFileSync(new URL("../src/index.js", import.meta.url), "utf8");
   assert.match(index, /\["kotc",\s+kotcRoutes\],/,
     "kotcRoutes must appear in the dispatch table, not merely on an import line");
-  assert.match(index, /wireKotc\(wiredHelpers\)/, "wireKotc must be called, or the helpers are undefined");
+  assert.match(index, /wireKotc\(\s*\{?\s*(?:\.\.\.)?wiredHelpers/, "wireKotc must be called, or the helpers are undefined");
   assert.match(index, /import \{[^}]*\bkotcRoutes\b/, "and it must be imported");
 
   // The ENGINE stays pure. Routes live in kotcplay.js so this module remains testable with no fixture,

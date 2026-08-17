@@ -232,9 +232,17 @@ export async function tiersRoutes(request, env, url, ctx) {
     });
   }
 
-  /* ---------- staff: org settings (timezone) ---------- */
+  /* ---------- staff: org settings (timezone) ----------
+     CORE ROUTE IN A BOUND MODULE — `requireCoreStaff`, not `requireStaff` (v0.168.0, SG-3a).
+     This module's gate is bound to the `memberships` grant so a host granted Memberships & Passes
+     reaches tiers, grants and plans. This route is not that: its PUT writes the org's timezone,
+     which reaches every calendar emission the organization makes. §-1q keeps org settings out of a
+     host's reach, so it takes the UNBOUND gate — admin or staff only, hosts refused however many
+     grants they hold. `requireCoreStaff` is passed to THIS module alone (index.js's mount block says
+     why), and `staff_gate_wiring.test.mjs` pins the complete list of its call sites, so a third one
+     has to be recorded rather than discovered. */
   if (p === "/api/admin/org") {
-    const deny = await H.requireStaff(env, ctx); if (deny) return deny;
+    const deny = await H.requireCoreStaff(env, ctx); if (deny) return deny;
     if (m === "GET") {
       const org = await env.DB.prepare(
         "SELECT id, name, slug, timezone FROM orgs WHERE id=?1 AND deleted_at IS NULL"

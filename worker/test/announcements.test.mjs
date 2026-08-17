@@ -132,7 +132,7 @@ test("the public org-brand SELECT carries exactly the four PUBLICATION fields (s
 test("index.js mounts the module: dispatch table + wire call + public brand route (F-15/§6.5)", () => {
   assert.ok(/\["announcements",\s+announcementsRoutes\],/.test(INDEX),
     "dispatch table must call announcementsRoutes — an import line alone is built-but-uncalled (failure class 1)");
-  assert.ok(INDEX.includes("wireAnnouncements(wiredHelpers)"),
+  assert.ok(/wireAnnouncements\(\s*\{?\s*(?:\.\.\.)?wiredHelpers/.test(INDEX),
     "wireAnnouncements(helpers) must be called or every helper is undefined at first request");
   // D-17b: was a 400-character window between the pathname test and the handler call. The branch
   // is brace-matched now, so a comment added inside it cannot push the call out of range.

@@ -269,7 +269,7 @@ test("K-15 — the wiring exists at every layer: index.js injects it, events_adm
   const memberSrc = blankComments(src("memberships.js"));
 
   assert.match(memberSrc, /export async function ensureEventSquareItem/, "memberships.js exports the writer");
-  assert.match(indexSrc, /wireEventsAdmin\(\{[^)]*ensureEventSquareItem/, "index.js passes it in the wiring bag");
+  assert.match(indexSrc, /wireEventsAdmin\(\{[^}]*ensureEventSquareItem/, "index.js passes it in the wiring bag");
 
   const wireBody = functionBodyAfter(adminSrc, "export function wireEventsAdmin");
   assert.ok(wireBody && wireBody.includes("ensureEventSquareItem"), "wireEventsAdmin destructures it");
