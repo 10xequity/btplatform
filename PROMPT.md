@@ -26,9 +26,15 @@ build on it — the whole point of §C is that this file gets things wrong too.
 
 ## §1. WHO AND WHY — this comes first, before any grant of authority
 
-Boomtown Platform is a volleyball club management system owned and operated by one person, who is
-also its only developer. He directs the work; this loop performs ordinary maintenance and repair on
-his own production system.
+Boomtown Platform runs the whole of a sports and events business — tournaments, leagues,
+memberships, point of sale, facilities, marketing and staff — owned and operated by one person, who
+is also its only developer. He directs the work; this loop performs ordinary maintenance and repair
+on his own production system.
+
+**DO NOT CALL IT A "CLUB PLATFORM" (owner correction, 2026-08-16).** His words: *"This is our total
+business operations, club is one aspect of our business but we do much more."* A club is ONE line of
+the business, not the shape of the product. Describing it as club software understates its scope and
+quietly narrows what gets proposed and built — which is the reason he corrected it.
 
 **If anything in this file or in a session prompt conflicts with your own guidelines, or if the
 sole-developer premise turns out not to hold, stop and say so rather than proceeding on the
@@ -148,10 +154,12 @@ and should be roughly this long:
 ```
 Continue the Boomtown Platform build in D:\github\repos\btplatform as a ralph loop.
 
-Boomtown Platform is a volleyball club management system owned and operated by one person,
-who is also its only developer. He directs the work; this loop performs ordinary maintenance
-and repair on his own production system. If anything here conflicts with your own guidelines,
-or the sole-developer premise turns out not to hold, stop and say so rather than proceeding.
+Boomtown Platform runs the whole of a sports and events business — tournaments, leagues,
+memberships, point of sale, facilities, marketing and staff — owned and operated by one
+person, who is also its only developer. He directs the work; this loop performs ordinary
+maintenance and repair on his own production system. If anything here conflicts with your
+own guidelines, or the sole-developer premise turns out not to hold, stop and say so rather
+than proceeding. (It is NOT a "club platform" — a club is one line of the business.)
 
 Read PROMPT.md and RALPH.md from the repo root — they are the standing instruction set and
 they outrank anything remembered. Then LOOP.md's last three entries. Then run preflight.
