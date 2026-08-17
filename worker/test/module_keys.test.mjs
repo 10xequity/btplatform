@@ -1,5 +1,10 @@
 /* Boomtown Platform — MODULE_KEYS is pinned byte-equal to admin-nav.js's BT_MODULES
-   File: worker/test/module_keys.test.mjs · Version: v1.0 · Date: 2026-08-16 · Ships in: (no bump)
+   File: worker/test/module_keys.test.mjs · Version: v1.1 · Date: 2026-08-17 · Ships in: (no bump)
+   v1.1 — external review 2026-08-17: all three quote styles parsed (was double-quote only), the
+   pin compares as a SET rather than by order (reordering the menu was a false positive), duplicates
+   asserted separately since a set hides them, and NC-4/NC-5 added for the two new properties.
+   NC-3 was challenged as possibly vacuous and MEASURED SOUND: without blankComments the naive
+   regex really does find a commented-out key.
    Roadmap §-1q, build unit SG-3a.
 
    WHAT THIS GUARDS. `MODULE_KEYS` in worker/src/orgs.js is a DELIBERATE COPY of the fourteen keys
@@ -25,13 +30,26 @@ import { blankComments } from "../testkit/route-extract.mjs";
 const NAV = readFileSync(new URL("../../web/assets/admin-nav.js", import.meta.url), "utf8");
 
 /** The keys of the real `window.BT_MODULES` literal, read out of the real file.
+ *
  *  Comments are blanked first: a `key:` inside a commented-out entry is not a shipped key, and
- *  org_modules.test.mjs already established this idiom against this exact file. */
+ *  org_modules.test.mjs already established this idiom against this exact file. NC-3 proves the
+ *  blanking is load-bearing rather than decorative — measured 2026-08-17, a naive regex without it
+ *  really does find a commented-out key.
+ *
+ *  ALL THREE QUOTE STYLES (v1.1, external review 2026-08-17). The first version demanded double
+ *  quotes. That was not SILENT — single-quoting the whole file drops the parse to zero keys and the
+ *  corpus-size assertion below fires — but it fails with the WRONG STORY: the suite would report
+ *  that MODULE_KEYS disagrees with the menu when what actually happened is that a formatter
+ *  normalised the quotes. A guard that reddens for the wrong reason costs a session. The quote
+ *  character is captured and back-referenced so `'a"b'` cannot be mis-split. */
 function navKeys(src = NAV) {
   const m = blankComments(src).match(/window\.BT_MODULES\s*=\s*(\[[\s\S]*?\]);/);
   assert.ok(m, "admin-nav.js no longer defines window.BT_MODULES as a literal array — this guard is blind until that is fixed");
-  return [...m[1].matchAll(/\bkey:\s*"([^"]+)"/g)].map((x) => x[1]);
+  return [...m[1].matchAll(/\bkey\s*:\s*(["'`])(.+?)\1/g)].map((x) => x[2]);
 }
+
+/** Order-free comparison. See the ordering test for why this is not `deepEqual`. */
+const sorted = (a) => [...a].sort();
 
 /* `events` is grantable but never hideable — the ONE deliberate difference between the two lists.
    Named here as a constant so the asymmetry is declared rather than buried in an off-by-one. */
@@ -43,8 +61,19 @@ test("the corpus is real — BT_MODULES parses and is big enough to mean somethi
   assert.equal(new Set(keys).size, keys.length, `BT_MODULES contains a duplicate key: ${keys.join(", ")}`);
 });
 
-test("MODULE_KEYS is BT_MODULES' keys plus exactly the grant-only additions, in order", () => {
-  assert.deepEqual(MODULE_KEYS, [...navKeys(), ...GRANT_ONLY]);
+test("MODULE_KEYS is BT_MODULES' keys plus exactly the grant-only additions", () => {
+  // SET comparison, not order-sensitive (v1.1, external review 2026-08-17). MODULE_KEYS is a
+  // VOCABULARY — the gate asks "is this key in the list", never "is it the fourth entry". The
+  // menu's own order is display order and a designer may reorder it; failing the build for that
+  // is a false positive that teaches people the guard cries wolf. Duplicates are asserted
+  // separately below, because a Set comparison alone would hide them.
+  assert.deepEqual(sorted(MODULE_KEYS), sorted([...navKeys(), ...GRANT_ONLY]));
+});
+
+test("neither list contains a duplicate — the thing a set comparison would otherwise hide", () => {
+  assert.equal(new Set(MODULE_KEYS).size, MODULE_KEYS.length, `MODULE_KEYS has a duplicate: ${MODULE_KEYS.join(", ")}`);
+  const nav = navKeys();
+  assert.equal(new Set(nav).size, nav.length, `BT_MODULES has a duplicate key: ${nav.join(", ")}`);
 });
 
 test("every hideable module is grantable — a menu entry with no key cannot be given to a host", () => {
@@ -69,7 +98,7 @@ test("NC-1: a key ADDED to the menu and not to MODULE_KEYS is caught", () => {
   const keys = navKeys(mutated);
   assert.ok(keys.includes("newthing"), "the mutation must land in the parsed list, or this NC proves nothing");
   assert.ok(!MODULE_KEYS.includes("newthing"), "a menu key absent from MODULE_KEYS must be detectable");
-  assert.notDeepEqual(MODULE_KEYS, [...keys, ...GRANT_ONLY]);
+  assert.notDeepEqual(sorted(MODULE_KEYS), sorted([...keys, ...GRANT_ONLY]));
 });
 
 test("NC-2: a key RENAMED in the menu is caught — not just additions", () => {
@@ -77,7 +106,27 @@ test("NC-2: a key RENAMED in the menu is caught — not just additions", () => {
   assert.equal(NAV.split(anchor).length - 1, 1, "anchor must be unique");
   const keys = navKeys(NAV.replace(anchor, '{ key: "courtboard",'));
   assert.ok(keys.includes("courtboard") && !keys.includes("kotc"), "the rename must land");
-  assert.notDeepEqual(MODULE_KEYS, [...keys, ...GRANT_ONLY]);
+  assert.notDeepEqual(sorted(MODULE_KEYS), sorted([...keys, ...GRANT_ONLY]));
+});
+
+test("NC-4: single-quoted and backtick keys are still read — a formatter must not blind this", () => {
+  // The gap the external review pointed at: nothing proved the quote assumption either way.
+  const real = navKeys();
+  const single = NAV.replace(/\bkey: "([a-z]+)"/g, "key: '$1'");
+  assert.notEqual(single, NAV, "the mutation must land, or this NC proves nothing");
+  assert.deepEqual(navKeys(single), real, "single-quoting the menu must not change the parsed keys");
+  const tick = NAV.replace(/\bkey: "([a-z]+)"/g, "key: `$1`");
+  assert.deepEqual(navKeys(tick), real, "backtick keys must parse identically too");
+});
+
+test("NC-5: REORDERING the menu is deliberately NOT a failure — the false positive being avoided", () => {
+  // This is the property the set comparison buys, asserted rather than left implicit. If someone
+  // later "tightens" this back to deepEqual, this test goes red and explains why not to.
+  const keys = navKeys();
+  const reversed = [...keys].reverse();
+  assert.notDeepEqual(reversed, keys, "the reversal must actually change the order");
+  assert.deepEqual(sorted(MODULE_KEYS), sorted([...reversed, ...GRANT_ONLY]),
+    "reordering the menu must NOT fail the pin — MODULE_KEYS is a vocabulary, not a sequence");
 });
 
 test("NC-3: the parser reads SHIPPED keys, not commented-out ones", () => {
