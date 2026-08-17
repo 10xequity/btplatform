@@ -33,6 +33,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
+import { createD1 } from "../testkit/d1-memory.mjs";
 import { migrationNumber, isNonMigration, gateDecision, scanMigrations, pad, DEFAULT_DIR }
   from "../scripts/schema-gate.mjs";
 
@@ -145,7 +146,7 @@ test("pad produces the 4-digit form used in filenames and the ledger", () => {
   assert.equal(pad(2026), "2026");
 });
 
-test("the real db/migrations directory parses cleanly and reports 0049", () => {
+test("the real db/migrations directory parses cleanly and reports 0050", () => {
   // This number is a deliberate ratchet, not a nuisance: it reddens on every new migration and
   // makes whoever added one confirm the scanner still reads the whole directory. Bump it in the
   // same commit as the migration, AFTER the ledger row exists in live D1 (v0.60.0 → 0036;
@@ -180,10 +181,19 @@ test("the real db/migrations directory parses cleanly and reports 0049", () => {
   // (events.min_signups, SG-2 / §-1o) — moved only once live D1 answered MAX(id)=49,
   // COUNT(*)=49, MAX(version)='0049', pragma_table_info('events') showed the column, and the
   // non-NULL count came back 0 of 7: no event has a minimum until an operator types one, so the
-  // deploy changes no screen.)
+  // deploy changes no screen. TENTH time 2026-08-16: migration 0050 (user_org_roles.role CHECK
+  // widened to admit 'host', SG-3a / §-1q) — AND IT IS THE FIRST NON-ADDITIVE ONE. Every move
+  // above added a column; this one REBUILT a table, because SQLite cannot ALTER a CHECK. It ran
+  // on the owner's explicit go with the SQL shown first, and this line moved only once live D1
+  // answered MAX(id)=50, COUNT(*)=50, MAX(version)='0050', sqlite_master's SQL for the table
+  // carried 'host', the 3 pre-existing rows read back unchanged with their original timestamps
+  // (2026-07-22 17:06:26), and no orphan `user_org_roles_new` survived the rename. All four
+  // statements ran in ONE multi-statement call: sequenced separately there is a window between
+  // DROP and RENAME where the table `requireStaff` reads does not exist, and the connector had
+  // already thrown one transient 403 that session, so the window was not theoretical.)
   const { highest, files, unparseable } = scanMigrations(DEFAULT_DIR);
   assert.deepEqual(unparseable, [], `unparseable migration filenames: ${unparseable.join(", ")}`);
-  assert.equal(highest, 49);
+  assert.equal(highest, 50);
   assert.ok(files >= 20, `expected at least 20 .sql files, saw ${files}`);
 });
 
@@ -211,12 +221,29 @@ test("journey-schema.sql contains every table the migrations create", () => {
      table called `statements` that has never existed. A guard that scans prose as if it were code
      reports defects nobody can fix, and the cure for that is people stopping trusting the guard. */
   const stripComments = (sql) => sql.replace(/--[^\n]*/g, "").replace(/\/\*[\s\S]*?\*\//g, "");
+
+  /* THE CORPUS IS REPLAYED IN ORDER, not merely scanned for CREATEs (changed 2026-08-16, migration
+     0050). Until 0050 every migration was additive, so "every table ever created" and "every table
+     that exists at the end" were the same set and the difference could not show. 0050 is a REBUILD —
+     SQLite cannot ALTER a CHECK, so it creates `user_org_roles_new`, copies, drops the original and
+     renames. `user_org_roles_new` is scaffolding that does not outlive its own migration, and the
+     scan-only form demanded the fixture carry it.
+
+     The fix is NOT to filter names ending in `_new`. That anchors on a spelling, and the next
+     rebuild that picks a different suffix silently reintroduces the failure. It replays what the
+     SQL actually does: CREATE adds, DROP removes, RENAME moves. What survives to the end is what
+     the harness must mirror — which is the thing this guard was always trying to say. */
+  const live = new Map();             // table -> migration that last created it
+  const STMT = /CREATE TABLE (?:IF NOT EXISTS )?[`"']?([A-Za-z_][A-Za-z0-9_]*)[`"']?|DROP TABLE (?:IF EXISTS )?[`"']?([A-Za-z_][A-Za-z0-9_]*)[`"']?|ALTER TABLE [`"']?([A-Za-z_][A-Za-z0-9_]*)[`"']?\s+RENAME TO [`"']?([A-Za-z_][A-Za-z0-9_]*)[`"']?/gi;
   for (const f of readdirSync(migDir).filter((x) => x.endsWith(".sql")).sort()) {
     const sql = stripComments(readFileSync(new URL(f, migDir), "utf8"));
-    for (const m of sql.matchAll(/CREATE TABLE (?:IF NOT EXISTS )?[`"']?([A-Za-z_][A-Za-z0-9_]*)[`"']?/gi)) {
-      if (!created.has(m[1])) created.set(m[1], f);
+    for (const m of sql.matchAll(STMT)) {
+      if (m[1]) { if (!live.has(m[1])) live.set(m[1], f); }
+      else if (m[2]) live.delete(m[2]);
+      else if (m[3]) { const from = live.get(m[3]) || f; live.delete(m[3]); live.set(m[4], from); }
     }
   }
+  for (const [t, f] of live) created.set(t, f);
   const schema = readFileSync(new URL("../testkit/journey-schema.sql", import.meta.url), "utf8");
   const inHarness = new Set(
     [...schema.matchAll(/CREATE TABLE (?:IF NOT EXISTS )?[`"']?([A-Za-z_][A-Za-z0-9_]*)[`"']?/gi)].map((m) => m[1]));
@@ -241,4 +268,48 @@ test("NC: that coverage check can fail — a table removed from the harness is c
     [...mutated.matchAll(/CREATE TABLE (?:IF NOT EXISTS )?[`"']?([A-Za-z_][A-Za-z0-9_]*)[`"']?/gi)].map((m) => m[1]));
   assert.ok(!inMutated.has("announcements"), "a removed table must be detectable as missing");
   assert.ok(inMutated.has("campaigns"), "and its neighbours must be unaffected");
+});
+
+/* ══════════ MIGRATION 0050 — THE CHECK ITSELF, NOT THE FILE THAT CLAIMS IT ══════════
+ *
+ * The ratchet above counts FILES. It would read 0050 and go green even if the fixture still
+ * carried the three-value CHECK, because scanMigrations never opens a database. This pair is the
+ * behavioural half: it builds the real fixture and asks SQLite, which is the only authority on
+ * what a CHECK admits.
+ *
+ * BOTH DIRECTIONS ARE ASSERTED ON PURPOSE. A widened CHECK that admits everything is not a
+ * widened CHECK, it is a deleted one — and the failure would look identical from the 'host' side.
+ */
+
+const HOST_SCHEMA = readFileSync(new URL("../testkit/journey-schema.sql", import.meta.url), "utf8");
+
+/** The fixture's `orgs` carries `slug NOT NULL UNIQUE`. The first draft of these two tests omitted
+ *  it, so BOTH died on `NOT NULL constraint failed: orgs.slug` — before reaching the CHECK they
+ *  exist to exercise. A control that fails in its own setup proves nothing about its subject. */
+async function seedHost(db, n) {
+  await db.prepare("INSERT INTO users (id, email) VALUES (?1, ?2)").bind(n, `u${n}@example.test`).run();
+  await db.prepare("INSERT INTO orgs (id, name, slug) VALUES (?1, ?2, ?3)").bind(n, `Org ${n}`, `org-${n}`).run();
+}
+
+test("migration 0050: the fixture's user_org_roles ADMITS 'host'", async () => {
+  const db = createD1(HOST_SCHEMA);
+  await seedHost(db, 9001);
+  await db.prepare("INSERT INTO user_org_roles (user_id, org_id, role) VALUES (?1, ?1, 'host')").bind(9001).run();
+  const row = await db.prepare("SELECT role FROM user_org_roles WHERE user_id = ?1").bind(9001).first();
+  assert.equal(row.role, "host", "the widened CHECK must accept the value migration 0050 exists to admit");
+});
+
+test("NC: the CHECK still REFUSES a role outside the four — widening is not deleting", async () => {
+  const db = createD1(HOST_SCHEMA);
+  await seedHost(db, 9002);
+  // The seed must SUCCEED first, or a rejection below would prove only that the setup was broken —
+  // which is exactly how the first draft of this control failed.
+  await db.prepare("INSERT INTO user_org_roles (user_id, org_id, role) VALUES (?1, ?1, 'member')").bind(9002).run();
+  await assert.rejects(
+    () => db.prepare("UPDATE user_org_roles SET role = 'superuser' WHERE user_id = ?1").bind(9002).run(),
+    (e) => /CHECK constraint failed|constraint failed/i.test(String(e.message)),
+    "must be refused BY THE CHECK — a CHECK that accepts an unknown role is not a constraint at all",
+  );
+  const still = await db.prepare("SELECT role FROM user_org_roles WHERE user_id = ?1").bind(9002).first();
+  assert.equal(still.role, "member", "the refused write must not have landed");
 });

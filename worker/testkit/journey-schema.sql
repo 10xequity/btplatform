@@ -77,7 +77,10 @@ CREATE TABLE magic_links (
 CREATE TABLE user_org_roles (
   user_id INTEGER NOT NULL REFERENCES users(id),
   org_id INTEGER NOT NULL REFERENCES orgs(id),
-  role TEXT NOT NULL CHECK (role IN ('admin','staff','member')),
+  -- 'host' admitted by migration 0050 (SG-3a, §-1q). A host passes NO existing gate; it opens
+  -- one module at a time via user_module_grants. Live D1 carries the same four values — if this
+  -- line and live ever disagree, the fixture is testing a database that does not exist.
+  role TEXT NOT NULL CHECK (role IN ('admin','staff','member','host')),
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),
   deleted_at TEXT,
