@@ -109,7 +109,10 @@ export async function runTournament(js, routes, opts = {}) {
   let printed = 0;
   const globalListeners = {};
   const winEvents = makeWindowEvents();
-  const window = {
+  /* `opts.window` lets two page scripts run against ONE window object, which is the only way to
+     test what two modules SHARE on a real page (D-42's unified fallback map). Assign onto the
+     caller's object rather than replacing it, so anything a previous run parked there survives. */
+  const window = Object.assign(opts.window || {}, {
     BT_CONFIG: { apiBase: "https://t.test" },
     BT_ADMIN: {
       csvRow: (a) => a.join(","),
@@ -119,7 +122,7 @@ export async function runTournament(js, routes, opts = {}) {
     matchMedia: () => ({ matches: false }),
     addEventListener: winEvents.addEventListener,
     removeEventListener: winEvents.removeEventListener,
-  };
+  });
   const fetch = async (url, opts) => {
     const path = String(url).replace("https://t.test", "");
     const hit = routes(path, opts) || {};
@@ -163,12 +166,12 @@ export async function runScheduleEditor(js, apiMock, opts = {}) {
     loadFail: (id, r) => { el(id).innerHTML = "load failed"; },
     orgEmptyState: (id) => { el(id).innerHTML = "empty org"; },
   };
-  const window = {
+  const window = Object.assign(opts.window || {}, {
     BT_ADMIN,
     confirm: () => true,
     addEventListener: winEvents.addEventListener,
     removeEventListener: winEvents.removeEventListener,
-  };
+  });
   const run = new Function("window", "document", "localStorage", "location", "BT_ADMIN", js);
   const localStorage = opts.localStorage || makeStorage();
   run(window, document, localStorage, { search: "" }, BT_ADMIN);

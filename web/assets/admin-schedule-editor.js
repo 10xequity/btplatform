@@ -42,15 +42,25 @@
      either way, so the mover, the drops and the apply payload never notice the orientation.
      B22 (v0.165.0): read and written through one guarded pair — a private-mode or blocked-cookie
      profile THROWS on storage access rather than returning null, and this read runs at first
-     render. The in-memory mirror keeps the switch working for the session when the write is
-     refused; it stops remembering across reloads, it does not stop working. Same shape as
-     Tournament Ops' pair and as config.js's closure-private get/put. */
-  const mem = new Map();
+     render. The fallback keeps the switch working for the session when the write is refused; it
+     stops remembering across reloads, it does not stop working. Same shape as Tournament Ops'
+     pair and as config.js's — and since D-42 below, the same MAP as both. */
+  /* D-42 (v0.167.0): ONE fallback map per PAGE, not one per module. v0.166.0 gave each guarded
+     file its own closure-private Map, which is coherent inside a file and incoherent across a
+     page: with storage blocked, this module's write was invisible to every other module on the
+     same page, so two of them disagreed about state they both read from one place (measured:
+     `bt_org` and `bt_token` are touched by four guarded modules; tournament.html co-loads
+     admin-nav.js, which WRITES bt_org, with this page's reader). The map hangs off `window`
+     so every guarded file on the page shares one object for the page's lifetime; the
+     `x || (x = new Map())` form is load-order-independent, so whichever script runs first
+     creates it and the rest join it. Storage stays the source of truth whenever it works —
+     the map is consulted only when a read throws or comes back empty. */
+  const localMem = window.BT_MEM_FALLBACK || (window.BT_MEM_FALLBACK = new Map());
   const safeGet = (k) => {
     try { const v = localStorage.getItem(k); if (v != null) return v; } catch (e) {}
-    return mem.has(k) ? mem.get(k) : null;
+    return localMem.has(k) ? localMem.get(k) : null;
   };
-  const safeSet = (k, v) => { mem.set(k, v); try { localStorage.setItem(k, v); } catch (e) {} };
+  const safeSet = (k, v) => { localMem.set(k, v); try { localStorage.setItem(k, v); } catch (e) {} };
   const courtsDown = () => safeGet("bt_grid_axis") !== "rounds-down";
 
   /* ---------- render ---------- */

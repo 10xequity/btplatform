@@ -212,6 +212,24 @@ test("B22 RUNTIME: Escape leaves print-day — and fires for nothing else", asyn
   assert.equal(page.document.body.classList.contains("print-day"), false);
 });
 
+test("D-40: the score sheet detaches its Escape listener on EVERY close, not only on Escape", () => {
+  // The listener was added on every openScoreSheet and removed only when Escape was actually
+  // pressed, so closing by Cancel or by scoring stacked one more each time. A shape pin, and said
+  // so: the harness cannot reach openScoreSheet (it is wired per rendered cell, and
+  // querySelectorAll is a stub), so this asserts the code shape rather than a listener count.
+  const sheet = JS.slice(JS.indexOf("function openScoreSheet"), JS.indexOf("/* ---------- standings"));
+  assert.match(sheet, /function closeSheet\(\)[^}]*removeEventListener\("keydown", onEsc\)/,
+    "closeSheet does not detach the Escape listener — every Cancel or score leaves one attached");
+  assert.match(sheet, /document\.addEventListener\("keydown", onEsc\)/,
+    "the listener is not added by NAMED REFERENCE — an inline function cannot be removed later");
+  assert.doesNotMatch(sheet, /addEventListener\("keydown", function esc/,
+    "the self-removing inline handler is back — that is the accumulating shape");
+  // NC: both needles are load-bearing.
+  const mutated = sheet.replace(/removeEventListener\("keydown", onEsc\)/, "");
+  assert.notEqual(mutated, sheet, "the mutation did not land");
+  assert.doesNotMatch(mutated, /function closeSheet\(\)[^}]*removeEventListener\("keydown", onEsc\)/);
+});
+
 test("B22: the Escape handler is gated on the MODE, not just the key", () => {
   // Without the class check this listener would fight every other Escape on the page (the
   // score sheet has its own). The gate is what keeps them from colliding.

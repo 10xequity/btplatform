@@ -101,19 +101,24 @@
 */
 
 (function () {
-  /* D-41 (v0.166.0, owner-approved sweep): storage that cannot take the page down. A private-mode
-     or blocked-cookie profile THROWS on access rather than returning null, and this file runs on
-     nearly every page — so one bare touch here killed more screens than any per-page bug could.
-     Same shape v0.165.0 settled on for the grid files. The in-memory mirror is per-module by
-     nature: it keeps THIS file's own reads consistent within a page, it does not share state
-     with the other modules, and nothing persists across a reload while storage is refused. */
-  const btMem = new Map();
-  const safeGet = (k) => { try { const v = localStorage.getItem(k); if (v != null) return v; } catch (e) {} return btMem.has(k) ? btMem.get(k) : null; };
-  const safeSet = (k, v) => { btMem.set(k, v); try { localStorage.setItem(k, v); } catch (e) {} };
-  const safeDel = (k) => { btMem.delete(k); try { localStorage.removeItem(k); } catch (e) {} };
-  const ssGet = (k) => { try { return sessionStorage.getItem(k); } catch (e) { return null; } };
-  const ssSet = (k, v) => { try { sessionStorage.setItem(k, v); } catch (e) {} };
-  const ssDel = (k) => { try { sessionStorage.removeItem(k); } catch (e) {} };
+  /* D-42 (v0.167.0): ONE fallback map per PAGE, not one per module. v0.166.0 gave each guarded
+     file its own closure-private Map, which is coherent inside a file and incoherent across a
+     page: with storage blocked, this module's write was invisible to every other module on the
+     same page, so two of them disagreed about state they both read from one place (measured:
+     `bt_org` and `bt_token` are touched by four guarded modules; tournament.html co-loads
+     admin-nav.js, which WRITES bt_org, with this page's reader). The map hangs off `window`
+     so every guarded file on the page shares one object for the page's lifetime; the
+     `x || (x = new Map())` form is load-order-independent, so whichever script runs first
+     creates it and the rest join it. Storage stays the source of truth whenever it works —
+     the map is consulted only when a read throws or comes back empty. */
+  const localMem = window.BT_MEM_FALLBACK || (window.BT_MEM_FALLBACK = new Map());
+  const sessionMem = window.BT_SESSION_FALLBACK || (window.BT_SESSION_FALLBACK = new Map());
+  const safeGet = (k) => { try { const v = localStorage.getItem(k); if (v != null) return v; } catch (e) {} return localMem.has(k) ? localMem.get(k) : null; };
+  const safeSet = (k, v) => { localMem.set(k, v); try { localStorage.setItem(k, v); } catch (e) {} };
+  const safeDel = (k) => { localMem.delete(k); try { localStorage.removeItem(k); } catch (e) {} };
+  const ssGet = (k) => { try { const v = sessionStorage.getItem(k); if (v != null) return v; } catch (e) {} return sessionMem.has(k) ? sessionMem.get(k) : null; };
+  const ssSet = (k, v) => { sessionMem.set(k, v); try { sessionStorage.setItem(k, v); } catch (e) {} };
+  const ssDel = (k) => { sessionMem.delete(k); try { sessionStorage.removeItem(k); } catch (e) {} };
   const API = (window.BT_CONFIG && window.BT_CONFIG.apiBase) || "";
 
   /* ---------- module registry (v0.128.0, roadmap §-1l P-1) ----------
@@ -895,7 +900,7 @@
       if (window.BT_STATUS || document.getElementById("bt-status-js")) return;
       var s = document.createElement("script");
       s.id = "bt-status-js";
-      s.src = "assets/build-status.js?v=0.166.0";
+      s.src = "assets/build-status.js?v=0.167.0";
       s.async = false;
       document.head.appendChild(s);
     } catch (e) { /* indicators are never load-blocking */ }

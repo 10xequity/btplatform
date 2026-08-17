@@ -117,8 +117,18 @@ window.BT_THEME = (function () {
   ];
   const byKey = (k) => TEMPLATES.find((t) => t.key === k) || null;
   const root = () => document.documentElement;
-  const get = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
-  const put = (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) {} };
+  /* D-42 (v0.167.0): this pair joins the page-level fallback map. bt_theme's only two writers are
+     app.js and this service; app.js already reads through the shared map, so a private one here
+     would leave the theme split in a blocked-storage profile — the exact split D-42 removes. */
+  const localMem = window.BT_MEM_FALLBACK || (window.BT_MEM_FALLBACK = new Map());
+  const get = (k) => {
+    try { const v = localStorage.getItem(k); if (v != null) return v; } catch (e) {}
+    return localMem.has(k) ? localMem.get(k) : null;
+  };
+  const put = (k, v) => {
+    v == null ? localMem.delete(k) : localMem.set(k, v);
+    try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) {}
+  };
 
   function state() {
     const tpl = byKey(root().dataset.template || "");

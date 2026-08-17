@@ -26,19 +26,33 @@
   }
   /* B22 (v0.165.0): storage that cannot take the page down. A private-mode or blocked-cookie
      profile THROWS on access rather than returning null — and both reads below run during
-     boot, so one bare touch kills the page before a single row renders. config.js's BT_THEME
-     uses this same get/put shape; its copy is closure-private, so this is the page's own.
-     The in-memory mirror is deliberate: where storage is blocked the axis switch stops
-     REMEMBERING across reloads, it does not stop working — a control that silently does
-     nothing is the worse failure. Every raw touch in this file lives in the three lines
-     below, which is the rule grid_axis.test.mjs enforces. */
-  const mem = new Map();
+     boot, so one bare touch kills the page before a single row renders. The fallback is
+     deliberate: where storage is blocked the axis switch stops REMEMBERING across reloads, it
+     does not stop working — a control that silently does nothing is the worse failure. Every
+     raw touch in this file lives in the wrappers below, which is what grid_axis.test.mjs
+     enforces. (This block used to say config.js kept its own closure-private copy of the same
+     shape; D-42 below ended that — config.js now shares the page map too.) */
+  /* D-42 (v0.167.0): ONE fallback map per PAGE, not one per module. v0.166.0 gave each guarded
+     file its own closure-private Map, which is coherent inside a file and incoherent across a
+     page: with storage blocked, this module's write was invisible to every other module on the
+     same page, so two of them disagreed about state they both read from one place (measured:
+     `bt_org` and `bt_token` are touched by four guarded modules; tournament.html co-loads
+     admin-nav.js, which WRITES bt_org, with this page's reader). The map hangs off `window`
+     so every guarded file on the page shares one object for the page's lifetime; the
+     `x || (x = new Map())` form is load-order-independent, so whichever script runs first
+     creates it and the rest join it. Storage stays the source of truth whenever it works —
+     the map is consulted only when a read throws or comes back empty. */
+  const localMem = window.BT_MEM_FALLBACK || (window.BT_MEM_FALLBACK = new Map());
+  const sessionMem = window.BT_SESSION_FALLBACK || (window.BT_SESSION_FALLBACK = new Map());
   const safeGet = (k) => {
     try { const v = localStorage.getItem(k); if (v != null) return v; } catch (e) {}
-    return mem.has(k) ? mem.get(k) : null;
+    return localMem.has(k) ? localMem.get(k) : null;
   };
-  const safeSet = (k, v) => { mem.set(k, v); try { localStorage.setItem(k, v); } catch (e) {} };
-  const safeSession = (k) => { try { return sessionStorage.getItem(k); } catch (e) { return null; } };
+  const safeSet = (k, v) => { localMem.set(k, v); try { localStorage.setItem(k, v); } catch (e) {} };
+  const safeSession = (k) => {
+    try { const v = sessionStorage.getItem(k); if (v != null) return v; } catch (e) {}
+    return sessionMem.has(k) ? sessionMem.get(k) : null;
+  };
 
   let bearer = safeSession("bt_token") || null;
   let currentEvent = null, teams = [], teamName = {}, teamCaptain = {}, matches = [], formats = {};
@@ -367,8 +381,12 @@
       const d = +e.target.value;
       if (winner && d >= 1) send(d);
     });
-    function closeSheet() { sheet.hidden = true; sheet.classList.remove("open"); }
-    document.addEventListener("keydown", function esc(e) { if (e.key === "Escape") { closeSheet(); document.removeEventListener("keydown", esc); } });
+    /* D-40 (v0.167.0): the listener used to be an inline function that removed itself ONLY when
+       Escape was actually pressed — so closing by Cancel or by scoring left it attached, and every
+       subsequent open added another. Named handler, detached on EVERY close path. */
+    function onEsc(e) { if (e.key === "Escape") closeSheet(); }
+    function closeSheet() { sheet.hidden = true; sheet.classList.remove("open"); document.removeEventListener("keydown", onEsc); }
+    document.addEventListener("keydown", onEsc);
   }
 
   /* ---------- standings + bracket ---------- */

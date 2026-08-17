@@ -255,6 +255,83 @@ test("B22: a storage event from ANOTHER TAB repaints both views — and only for
     "an unrelated storage key repainted the grid — the listener does not filter by key");
 });
 
+/* ═══ D-42: ONE fallback map per PAGE, not one per module ═══
+   v0.166.0 gave each guarded file its own closure-private Map. That is coherent within a file and
+   incoherent across a page: with storage blocked, module A's write is invisible to module B, so
+   the two disagree about state they are both supposed to read from one place. MEASURED before
+   building — the contention is real but narrow: `bt_org` and `bt_token` are touched by four of the
+   five guarded modules, and the pages that actually co-load two of them are **tournament.html
+   (admin-nav writes bt_org, tournament.js reads it)** and the app.js+site-nav page. On
+   admin-schedule-editor.html the two guarded modules share NO key, so nothing diverged there.
+   `bt_theme` is the case that forced config.js into this change: its only two writers are
+   app.js (guarded, own map) and config.js's BT_THEME (guarded, NO map at all). */
+
+const UNIFIED = ["assets/tournament.js", "assets/admin-schedule-editor.js",
+  "assets/admin-nav.js", "assets/app.js", "assets/site-nav.js", "assets/config.js"];
+
+test("D-42: every guarded module takes its fallback map from the ONE page-level home", () => {
+  for (const name of UNIFIED) {
+    const src = blankComments(read(name));
+    assert.match(src, /window\.BT_MEM_FALLBACK \|\| \(window\.BT_MEM_FALLBACK = new Map\(\)\)/,
+      `${name} still builds its own local-storage fallback map — two modules on one page will disagree`);
+    assert.doesNotMatch(src, /const (?:mem|btMem) = new Map\(\)/,
+      `${name} kept a closure-private map beside the shared one — the split is still there`);
+  }
+});
+
+test("D-42: the session fallback is shared too, wherever a module touches sessionStorage", () => {
+  // Only the modules that actually read/write sessionStorage declare it — a file that does not
+  // touch the session store must NOT claim the map, or the assertion above stops meaning anything.
+  const touchesSession = UNIFIED.filter((n) => /sessionStorage\./.test(blankComments(read(n))));
+  assert.ok(touchesSession.length >= 2, `expected at least two session-touching modules, saw ${touchesSession.length}`);
+  for (const name of touchesSession) {
+    assert.match(blankComments(read(name)), /window\.BT_SESSION_FALLBACK \|\| \(window\.BT_SESSION_FALLBACK = new Map\(\)\)/,
+      `${name} touches sessionStorage but keeps a private session fallback`);
+  }
+});
+
+test("D-42 RUNTIME: with storage blocked, one module's write is readable by ANOTHER module on the same page", async () => {
+  // The proof the static pins cannot give: two page scripts, ONE window, storage fully dead.
+  // tournament.js and admin-schedule-editor.js are the pair that share a key (bt_grid_axis) AND
+  // both run in this harness. They do not co-load in production today — the mechanism is what is
+  // under test; the pair that DOES co-load is admin-nav + tournament.js on bt_org.
+  const page = {};                                   // the shared window
+  const dead = () => makeStorage({}, { throwOnGet: true, throwOnSet: true });
+
+  const t = await runTournament(TJS, tournamentRoutes(), { window: page, localStorage: dead() });
+  assert.match(t.el("poolGrid").innerHTML, /^<tr><th>Court<\/th>/, "the tournament page did not survive dead storage");
+  await t.el("axisBtn").onclick();                    // writes bt_grid_axis into the shared map
+  assert.match(t.el("poolGrid").innerHTML, /^<tr><th>Round<\/th>/, "the switch did not flip in-session");
+
+  // A SECOND module boots on that same page, with its own dead storage handle.
+  const ed = await runScheduleEditor(EDJS, editorApi, { window: page, localStorage: dead() });
+  assert.match(ed.el("sGrid").innerHTML, /<th scope="col">Round<\/th><th scope="col">Court 1<\/th>/,
+    "the second module read its own private fallback — the two modules disagree about the same key");
+
+  // And the map really is ONE object, not two that happen to agree.
+  assert.equal(typeof page.BT_MEM_FALLBACK, "object", "no page-level fallback map was created");
+  assert.equal(page.BT_MEM_FALLBACK.get("bt_grid_axis"), "rounds-down",
+    "the shared map does not hold the value the first module wrote");
+});
+
+test("D-42 NC: the runtime proof fails against per-module maps — and the mutation lands", async () => {
+  // Positive control for the test above: give each module its own map again (exactly v0.166.0's
+  // shape) and the second module must NOT see the first's write.
+  const split = (src) => src.replace(
+    /window\.BT_MEM_FALLBACK \|\| \(window\.BT_MEM_FALLBACK = new Map\(\)\)/, "new Map()");
+  const splitT = split(TJS), splitE = split(EDJS);
+  assert.notEqual(splitT, TJS, "the mutation did not land in tournament.js");
+  assert.notEqual(splitE, EDJS, "the mutation did not land in admin-schedule-editor.js");
+
+  const page = {};
+  const dead = () => makeStorage({}, { throwOnGet: true, throwOnSet: true });
+  const t = await runTournament(splitT, tournamentRoutes(), { window: page, localStorage: dead() });
+  await t.el("axisBtn").onclick();
+  const ed = await runScheduleEditor(splitE, editorApi, { window: page, localStorage: dead() });
+  assert.match(ed.el("sGrid").innerHTML, /<th scope="col">Court<\/th>/,
+    "the split-map source still shared state — the runtime proof above asserts nothing");
+});
+
 test("B22: the editor repaints on another tab's flip — and only for its own key", async () => {
   const page = await runScheduleEditor(EDJS, editorApi);
   assert.equal(page.windowListeners("storage"), 1, "admin-schedule-editor.js registers no storage listener");
