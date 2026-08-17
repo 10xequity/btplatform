@@ -1,6 +1,9 @@
 # RALPH LOOP — Boomtown Platform (btplatform)
 
-**File:** `RALPH.md` · **Version:** v3.3 · **Created:** 2026-08-04 · **Updated:** 2026-08-16
+**File:** `RALPH.md` · **Version:** v3.4 · **Created:** 2026-08-04 · **Updated:** 2026-08-16
+**v3.4 adds §B.2** — a total stop is reported in the first line, an empty queue obliges a proposal
+of what to build next, and **"or say later" is NOT offered when every route is blocked.** Owner
+instruction, 2026-08-16, and it overrides §B where the two conflict.
 **Status:** ACTIVE — the loop's instruction set. Re-read from disk every iteration.
 **Supersedes:** v3.2 (2026-08-12 — the header line read v3.2 while the body already carried §B.1;
 corrected here). Adds §C (what to distrust and what to stop re-measuring), the RELEASE CADENCE
@@ -98,6 +101,26 @@ and iterations 64 and 65 violated all three:
    Live tab keep polling while it is hidden, or stop until it is opened?"* is a question. *"I
    recommend X"* is a decision and belongs in the body. **If the block cannot be written as
    sentences ending in question marks, there is nothing to ask — omit it.**
+
+**§B.2 — A TOTAL STOP IS REPORTED IMMEDIATELY, AND "LATER" IS NOT OFFERED (owner instruction,
+2026-08-16).** His words: *"You need to tell me immediately if there is nothing to do and then
+clearly tell me modules need to be built and added. If something is blocked, clearly list out the
+questions and details with recommendations. If all work is stopping, do not advise later, this must
+be addressed immediately."* Four consequences, and they OVERRIDE §B where they conflict:
+
+1. **"Nothing to do" is the FIRST line of the reply, not a conclusion at the end.** If the queue is
+   empty and no gate is open, say so before anything else. Do not narrate a clean preflight for
+   three paragraphs and then reveal there was no work.
+2. **An empty queue obliges a PROPOSAL, not just a report.** Name the modules and fixes that should
+   be built next, with what each is for. "The queue is empty" is a statement about the ledger, not
+   about the product — the product is not finished, and saying only the former is unhelpful.
+3. **Blocked work is reported as questions with details and a recommendation each** — §B's format
+   still governs the shape.
+4. **WHEN EVERY ROUTE IS BLOCKED, DO NOT OFFER "or say later".** §B mandates that offer and it is
+   right in the normal case, where deferring one item still leaves work to do. It is wrong when
+   deferring means the loop does nothing at all: that turns his deferral into an accidental stop.
+   Say plainly that all work is halted, name the single smallest decision that unblocks the most,
+   and ask for it now. **Offering "later" on a total block is a defect, not politeness.**
 
 ## §C. WHAT TO DISTRUST, AND WHAT TO STOP RE-MEASURING (owner decision 2026-08-16)
 
