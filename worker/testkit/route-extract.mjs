@@ -33,10 +33,125 @@
  */
 
 /** Blank comment bytes to spaces, keeping newlines. Length is preserved exactly, so offsets and
-    line numbers both stay true — the failure that made an earlier scan's line numbers worthless. */
-export const blankComments = (s) =>
-  s.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "))
-   .replace(/\/\/[^\n]*/g, (m) => " ".repeat(m.length));
+ *  line numbers both stay true — the failure that made an earlier scan's line numbers worthless.
+ *
+ *  THIS WAS TWO `String.replace` CALLS UNTIL 2026-08-18, AND THEY ATE LIVE CODE IN 98 OF THE 118
+ *  SHIPPED JS FILES. Block comments were blanked FIRST, over the whole text, with no notion of what
+ *  a string or a line comment is — so any `/*` sequence appearing inside a line comment or a string
+ *  literal opened a phantom block comment that ran to the next close-comment token and blanked
+ *  everything in between.
+ *  `index.js:572` is the worked example:
+ *
+ *      ["waiver",        waiverRoutes],   // v0.22.0 — /api/waiver/* + /api/admin/waiver/*
+ *
+ *  The `/*` in `/api/waiver/*` swallowed 155 live lines of index.js, INCLUDING 40 of the 43
+ *  dispatch-table entries and 2 of the 43 wire calls. Measured with a parse oracle: the old
+ *  blanker's output no longer parsed for 11 of 51 worker modules and 6 of 67 browser scripts, which
+ *  is the honest test for "did the blanker delete code" and is now `comment_blanking.test.mjs`.
+ *
+ *  WHY IT WAS INVISIBLE. Every consumer asserts PRESENCE of a needle it cares about, and each of
+ *  those needles happened to sit outside an eaten span. A file's comments only have to change for a
+ *  guard to go red on correct code, or — the direction that stays quiet — for an ABSENCE assertion
+ *  to stop seeing the 155 lines it was supposed to police. 34 test files import this function.
+ *
+ *  So it is a lexer now: strings, template literals and their holes, and regex literals are
+ *  copied verbatim, and only real comment bytes are blanked. AMBIGUOUS `/` RESOLVES TOWARDS REGEX
+ *  ON PURPOSE — see regexAllowed. Nothing here executes a byte of the source. */
+export function blankComments(src) {
+  const n = src.length;
+  const out = new Array(n);
+  const keep = (i) => { out[i] = src[i]; };
+  const blank = (i) => { const c = src[i]; out[i] = (c === "\n" || c === "\r") ? c : " "; };
+
+  /* Contexts: "code" carries its own brace depth so a `}` can tell "the end of a template hole" from
+     "the end of a block". "tpl" is a template literal's text. */
+  const stack = [{ kind: "code", depth: 0 }];
+  let i = 0;
+
+  /* Is this `/` a regex literal or a division? Look back over whitespace at the previous token.
+     AMBIGUITY RESOLVES TOWARDS REGEX ON PURPOSE: a regex body is COPIED verbatim, so calling a
+     division a regex can only make this function skip a span it would otherwise have inspected for
+     comments — the old behaviour, for a few bytes, and it cannot delete anything. Calling a regex a
+     division is what lets `[/*]` inside a pattern open a phantom comment, which is the failure
+     being repaired, so the two mistakes are not symmetric and this leans away from the bad one. */
+  const KEYWORD_BEFORE_REGEX = new Set(["return", "typeof", "case", "in", "of", "new", "delete",
+    "void", "instanceof", "do", "else", "yield", "await", "throw"]);
+  const regexAllowed = (at) => {
+    let j = at - 1;
+    while (j >= 0 && /\s/.test(src[j])) j--;
+    if (j < 0) return true;
+    const c = src[j];
+    if (c === ")" || c === "]") return false;                    /* (…)/2 and a[0]/2 are division */
+    if (/[A-Za-z0-9_$]/.test(c)) {                               /* an identifier or a number */
+      let k = j;
+      while (k >= 0 && /[A-Za-z0-9_$]/.test(src[k])) k--;
+      return KEYWORD_BEFORE_REGEX.has(src.slice(k + 1, j + 1));
+    }
+    return true;                                                 /* ( , = : [ ! & | ? ; { } … */
+  };
+
+  while (i < n) {
+    const top = stack[stack.length - 1];
+
+    if (top.kind === "tpl") {
+      const c = src[i];
+      if (c === "\\") { keep(i); if (i + 1 < n) keep(i + 1); i += 2; continue; }
+      if (c === "`") { keep(i); i++; stack.pop(); continue; }
+      if (c === "$" && src[i + 1] === "{") { keep(i); keep(i + 1); i += 2; stack.push({ kind: "code", depth: 0 }); continue; }
+      keep(i); i++; continue;
+    }
+
+    const c = src[i], d = src[i + 1];
+
+    if (c === "/" && d === "/") {
+      while (i < n && src[i] !== "\n" && src[i] !== "\r") blank(i++);
+      continue;
+    }
+    if (c === "/" && d === "*") {
+      let j = i + 2;
+      while (j < n && !(src[j] === "*" && src[j + 1] === "/")) j++;
+      const end = Math.min(j + 2, n);
+      while (i < end) blank(i++);
+      continue;
+    }
+    if (c === '"' || c === "'") {
+      keep(i++);
+      while (i < n && src[i] !== c && src[i] !== "\n") {
+        if (src[i] === "\\") { keep(i); if (i + 1 < n) keep(i + 1); i += 2; continue; }
+        keep(i++);
+      }
+      if (i < n && src[i] === c) keep(i++);
+      continue;
+    }
+    if (c === "`") { keep(i++); stack.push({ kind: "tpl" }); continue; }
+    if (c === "{") { keep(i++); top.depth++; continue; }
+    if (c === "}") {
+      keep(i++);
+      if (top.depth === 0 && stack.length > 1) stack.pop();       /* closes a template hole */
+      else if (top.depth > 0) top.depth--;
+      continue;
+    }
+    if (c === "/" && regexAllowed(i)) {
+      /* Consume the pattern. A newline before the closing `/` means it was not a regex after all,
+         so nothing is consumed and the `/` is copied as an operator — the safety valve that stops a
+         wrong guess from running away. */
+      let j = i + 1, cls = false, closed = false;
+      while (j < n) {
+        const e = src[j];
+        if (e === "\n" || e === "\r") break;
+        if (e === "\\") { j += 2; continue; }
+        if (cls) { if (e === "]") cls = false; j++; continue; }
+        if (e === "[") { cls = true; j++; continue; }
+        if (e === "/") { closed = true; break; }
+        j++;
+      }
+      if (closed) { while (i <= j) keep(i++); continue; }
+      keep(i++); continue;
+    }
+    keep(i++);
+  }
+  return out.join("");
+}
 
 export const lineOf = (t, i) => t.slice(0, i).split("\n").length;
 
@@ -305,4 +420,30 @@ export function mountsAndWires(indexSrc, name) {
   // Anything else — `wireX()`, or a bag built from something other than the shared helpers — is
   // not a mount this function will vouch for.
   return new RegExp(String.raw`\bwire${name}\(\s*\{?\s*(?:\.\.\.)?wiredHelpers\b`).test(t);
+}
+
+/**
+ * The dispatch table's route functions, IN TABLE ORDER, comment-blind.
+ *
+ * WIRING AND DISPATCH ARE TWO DIFFERENT FACTS and only the first had an owner. `mountsAndWires`
+ * answers "is `wireX` called with the shared helpers"; this answers "is X in the `const table = [`
+ * that decides who gets a request". A module can be wired and never dispatched — failure class 1
+ * with every helper correctly injected.
+ *
+ * IT IS HERE BECAUSE THE FACT WAS DERIVED FOUR TIMES IN ONE FILE. `resilience.test.mjs` cut the
+ * table region and re-ran the same regex over RAW source in four places, and 2026-08-18 measured
+ * what that cost: commenting out `["bracket", bracketRoutes],` in the real index.js left the
+ * suite's widest both-ways mount guard green, and no other guard in the suite caught it either.
+ * Order is preserved because that file also asserts first and last, which decides who wins an
+ * overlapping path.
+ *
+ * @param {string} indexSrc raw text of worker/src/index.js
+ * @returns {string[]} e.g. ["uploadRoutes", "documentRoutes", …]
+ */
+export function dispatchTableIn(indexSrc) {
+  const t = blankComments(indexSrc);
+  const start = t.indexOf("const table = [");
+  if (start < 0) return [];
+  const region = t.slice(start, t.indexOf("];", start));
+  return [...region.matchAll(/\["[a-zA-Z]+",\s+([a-zA-Z]+)\],/g)].map((m) => m[1]);
 }

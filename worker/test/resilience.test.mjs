@@ -17,9 +17,19 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { dispatch, readParts, degradedNote } from "../src/resilience.js";
+import { blankComments, dispatchTableIn } from "../testkit/route-extract.mjs";
 
 const SRC_DIR = new URL("../src/", import.meta.url);
-const INDEX = readFileSync(new URL("index.js", SRC_DIR), "utf8");
+
+/* TWO VIEWS OF THE ROUTER, AND THE DEFAULT IS THE BLANKED ONE. Every structural claim below is
+   about LIVE code, and until 2026-08-18 they were all made against raw source: commenting out
+   `["bracket", bracketRoutes],` in the real index.js left this file — the suite's widest both-ways
+   mount guard — green, and no other guard in the suite caught it either. `INDEX_RAW` exists only so
+   the negative controls can mutate what actually ships. */
+const INDEX_RAW = readFileSync(new URL("index.js", SRC_DIR), "utf8");
+const INDEX = blankComments(INDEX_RAW);
+const moduleFiles = () => readdirSync(SRC_DIR).filter((x) => x.endsWith(".js"));
+const moduleSrc = (f) => blankComments(readFileSync(new URL(f, SRC_DIR), "utf8"));
 
 /* ================================ 1. isolation ================================ */
 
@@ -122,10 +132,15 @@ test("requireStaff is a returned value, not a throw — so an error path cannot 
      — a Response, on the success path. `dispatch` only ever turns a THROW into a decline, and a decline
      is never a 200. So the isolation cannot convert a 403 into access. Asserted on the widest set
      rather than trusted: every module that guards a route must use the returning form. */
-  const files = readdirSync(SRC_DIR).filter((f) => f.endsWith(".js"));
+  const files = moduleFiles();
   let checked = 0;
   for (const f of files) {
-    const src = readFileSync(new URL(f, SRC_DIR), "utf8");
+    /* BLANKED, so the corpus is the modules that actually CALL a gate. On raw source a module whose
+       only mention of `requireStaff` was in a comment counted towards the floor below — 43 modules
+       "checked" where 40 really gate. The absence assertion is correspondingly loosened: a throw
+       written inside a comment no longer reddens this, which is right, because a comment cannot let
+       anybody through. */
+    const src = moduleSrc(f);
     if (!/requireStaff/.test(src)) continue;
     checked++;
     // No module may throw from an authorization decision.
@@ -142,15 +157,12 @@ test("every *Routes module in worker/src is in the dispatch table, and vice vers
      no test file has no mount guard at all — and "built, tested and uncalled" is failure class 1. This
      checks the WIDEST set, in both directions, so neither a new module nor a deleted one can drift. */
   const exported = new Set();
-  for (const f of readdirSync(SRC_DIR).filter((x) => x.endsWith(".js"))) {
-    const src = readFileSync(new URL(f, SRC_DIR), "utf8");
-    for (const m of src.matchAll(/export\s+(?:async\s+)?function\s+([a-zA-Z]+Routes)\b/g)) {
+  for (const f of moduleFiles()) {
+    for (const m of moduleSrc(f).matchAll(/export\s+(?:async\s+)?function\s+([a-zA-Z]+Routes)\b/g)) {
       exported.add(m[1]);
     }
   }
-  const tableStart = INDEX.indexOf("const table = [");
-  const table = INDEX.slice(tableStart, INDEX.indexOf("];", tableStart));
-  const mounted = new Set([...table.matchAll(/\["[a-zA-Z]+",\s+([a-zA-Z]+)\],/g)].map((m) => m[1]));
+  const mounted = new Set(dispatchTableIn(INDEX_RAW));
 
   assert.ok(exported.size >= 40, `expected 40+ route modules, found ${exported.size}`);
 
@@ -169,26 +181,50 @@ test("every *Routes module in worker/src is in the dispatch table, and vice vers
   }
 });
 
-test("NC: the table guard can fail — removing an entry is caught in both directions", () => {
+test("NC: the table guard can fail — DELETING an entry is caught in both directions", () => {
   // The assertions above are all `deepEqual([], [])`, which is also what a guard reading the wrong
   // region returns. So a real entry is removed and the guard must notice.
-  const tableStart = INDEX.indexOf("const table = [");
-  const table = INDEX.slice(tableStart, INDEX.indexOf("];", tableStart));
-  assert.match(table, /\["bracket",\s+bracketRoutes\],/, "precondition: the entry exists");
+  assert.ok(dispatchTableIn(INDEX_RAW).includes("bracketRoutes"), "precondition: the entry exists");
+  const anchor = /\["bracket",\s+bracketRoutes\],/;
+  assert.equal((INDEX_RAW.match(new RegExp(anchor, "g")) || []).length, 1, "the anchor must be unique");
 
-  const mutated = table.replace(/\["bracket",\s+bracketRoutes\],/, "");
-  assert.notEqual(mutated, table, "the mutation must land, or this control proves nothing");
-  const mounted = new Set([...mutated.matchAll(/\["[a-zA-Z]+",\s+([a-zA-Z]+)\],/g)].map((m) => m[1]));
+  const mutated = INDEX_RAW.replace(anchor, "");
+  const mounted = new Set(dispatchTableIn(mutated));
   assert.ok(!mounted.has("bracketRoutes"), "a removed entry must be detectable as unmounted");
   assert.ok(mounted.has("divisionRoutes"), "and its neighbours must be unaffected");
+});
+
+test("NC: a COMMENTED-OUT entry is caught too — the defect this file shipped with", () => {
+  /* MEASURED 2026-08-18, BEFORE THE FIX: commenting this line out in the real index.js left all 18
+     tests here green, and mount_wiring, staff_gate_wiring, admin_route_gating and route_reachability
+     green as well. The module stays imported and wired, so nothing else even looks wrong — the
+     dispatch table is the only place that decides who answers a request. */
+  const anchor = '    ["bracket",';
+  assert.equal(INDEX_RAW.split(anchor).length - 1, 1, "the anchor must match exactly once");
+  const mutated = INDEX_RAW.split(anchor).join('    // ["bracket",');
+
+  const mounted = new Set(dispatchTableIn(mutated));
+  assert.ok(!mounted.has("bracketRoutes"), "a commented-out entry is NOT a mount");
+  assert.ok(mounted.has("divisionRoutes"), "and its neighbours must be unaffected");
+  assert.ok(mutated.includes('bracketRoutes],'), "the bytes are still there — only a // was added");
+});
+
+test("NC: a COMMENTED-OUT export is not an exported module either", () => {
+  const f = "brackets.js";
+  const raw = readFileSync(new URL(f, SRC_DIR), "utf8");
+  const anchor = "export async function bracketRoutes";
+  assert.equal(raw.split(anchor).length - 1, 1, "the anchor must match exactly once");
+  const seen = (t) => [...blankComments(t).matchAll(/export\s+(?:async\s+)?function\s+([a-zA-Z]+Routes)\b/g)]
+    .map((m) => m[1]);
+  assert.ok(seen(raw).includes("bracketRoutes"), "precondition: it is exported today");
+  assert.ok(!seen(raw.split(anchor).join("// " + anchor)).includes("bracketRoutes"),
+    "a commented-out export must not count as exported — otherwise the both-ways check is vacuous");
 });
 
 test("the dispatch table preserves the order the || chain had", () => {
   // Order decides which module wins an overlapping path. The restructure had to be order-preserving,
   // and the first and last entries are the ones a careless edit moves.
-  const tableStart = INDEX.indexOf("const table = [");
-  const table = INDEX.slice(tableStart, INDEX.indexOf("];", tableStart));
-  const order = [...table.matchAll(/\["[a-zA-Z]+",\s+([a-zA-Z]+)\],/g)].map((m) => m[1]);
+  const order = dispatchTableIn(INDEX_RAW);
   assert.equal(order[0], "uploadRoutes", "uploadRoutes was first in the chain and must stay first");
   assert.equal(order[order.length - 1], "registrationRoutes",
     "registrationRoutes was the chain's last resort before the 404 and must stay last");
