@@ -39,6 +39,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { blankComments, adminDispatchesIn, dispatchRegion } from "../testkit/route-extract.mjs";
 
 const ROOT = new URL("../../", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1");
 const read = (p) => readFileSync(join(ROOT, p), "utf8");
@@ -139,6 +140,72 @@ test("NC: giving the keyboard its own mover is caught", () => {
   assert.notEqual(mutated, BOARD_JS, "NC did not mutate anything — the guard is testing nothing");
   assert.ok(moveWriters(mutated) > 1,
     "NC FAILED: a second move writer went undetected, so the parity check above proves nothing");
+});
+
+/* RF-6 — THE CONTRACT BETWEEN THE TWO RULES BELOW, which is exactly where the defect lived.
+   The page is forbidden to patch its own board (the next test), and it renders the withdrawn list
+   from `data.roster` on purpose — the server keeps those people off the bench so they cannot be
+   dragged back onto a net by accident. Those two facts only compose if EVERY response that REPLACES
+   `data` carries `roster`. `/move` did not, so one drag emptied the list and took the only undo for a
+   mis-tap with it. Each guard was right; nothing checked the seam between them, and the owner
+   reported the result as "court board is not working".
+
+   DERIVED IN BOTH DIRECTIONS, NOT PINNED. The route set is read off the CLIENT — every `api()` call
+   whose response is assigned to `data` — and each one is then checked in the WORKER for the spread.
+   `/round` is deliberately absent from that set because `nextRound()` re-reads through GET, and that
+   is the point of deriving rather than listing: a new render-from-response route fails here instead
+   of shipping the same hole. Both files are read comment-blind, so a call site switched off with
+   `//` cannot vouch for itself. Shapes come from the shared extractor, so the two sides cannot
+   drift into different vocabularies. */
+const renderedRoutes = (clientSrc) => {
+  const t = blankComments(clientSrc);
+  const out = new Set();
+  for (const m of t.matchAll(/api\(`([^`]+)`/g)) {
+    if (/\bdata = r\.data\b/.test(t.slice(m.index, m.index + 900))) {
+      out.add(m[1].replace(/\$\{[^}]*\}/g, "*"));
+    }
+  }
+  return out;
+};
+
+const rosterInRegionOf = (workerSrc, shape) => {
+  const t = blankComments(workerSrc);
+  const site = adminDispatchesIn(t).find((s) => s.shape === shape);
+  assert.ok(site, `no dispatch site in kotcplay.js for ${shape} — the shape vocabulary drifted`);
+  return /\.\.\.\(await roster\(/.test(dispatchRegion(t, site.index));
+};
+
+test("RF-6: every response the board RENDERS DIRECTLY carries the roster the board renders from", () => {
+  const client = readFileSync(new URL("../../web/assets/admin-kotc.js", import.meta.url), "utf8");
+  const worker = readFileSync(new URL("../src/kotcplay.js", import.meta.url), "utf8");
+
+  const rendered = renderedRoutes(client);
+  assert.ok(rendered.size >= 3,
+    `only ${rendered.size} render-from-response route(s) found — the extractor stopped matching, not the page`);
+  assert.ok(client.includes("(data.roster || []).filter((p) => p.withdrawn)"),
+    "the page no longer derives the withdrawn list from data.roster — this contract moved, so re-read it");
+
+  const missing = [...rendered].filter((shape) => !rosterInRegionOf(worker, shape)).sort();
+  assert.deepEqual(missing, [],
+    `these routes REPLACE the board and return no roster, so a drag empties the withdrawn list: ${missing.join(", ")}`);
+});
+
+test("NC: strip the roster spread and this contract check reports it", () => {
+  /* Without this the check above would pass identically against a search that cannot match. The
+     mutation is on the REAL module text, and it removes every occurrence rather than one, because a
+     check that only notices the last site is the defect wearing a different hat. */
+  const worker = readFileSync(new URL("../src/kotcplay.js", import.meta.url), "utf8");
+  const anchor = "...(await roster(env, ctx.orgId, sessionId))";
+  const hits = worker.split(anchor).length - 1;
+  assert.ok(hits >= 3, `expected the shared spread at three or more sites, found ${hits}`);
+
+  const stripped = worker.split(anchor).join("{}");
+  assert.equal(rosterInRegionOf(stripped, "/api/admin/kotc/*/move"), false,
+    "with the spread gone from /move the check must say so");
+  assert.equal(rosterInRegionOf(stripped, "/api/admin/kotc/*/withdraw"), false,
+    "and from /withdraw too — the mutation must not be quietly partial");
+  assert.equal(rosterInRegionOf(worker, "/api/admin/kotc/*/withdraw"), true,
+    "and the unmutated file must still pass, or this control is measuring the wrong thing");
 });
 
 test("the board never patches its own seating — the move response IS the next board", () => {

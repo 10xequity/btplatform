@@ -569,6 +569,7 @@ export async function kotcRoutes(request, env, url, ctx) {
       return json({
         ok: true, moved: false, note: "They were already there.",
         ...(await boardPayload(env, ctx.orgId, sessionId)),
+        ...(await roster(env, ctx.orgId, sessionId)),
       });
     }
 
@@ -659,7 +660,14 @@ export async function kotcRoutes(request, env, url, ctx) {
         repaired ? "The remaining games were re-paired, so everyone on those nets has been asked to check again." : "",
         shortNote,
       ].filter(Boolean).join(" "),
+      /* BOTH HALVES OF THE BOARD, and the roster is not optional garnish (§-1r RF-6, 2026-08-18).
+         `admin-kotc.js` does `data = r.data` — the response IS the next board, by design, so that the
+         page can never patch its own seating — and it renders the withdrawn list from `data.roster`
+         because the server deliberately keeps those people off the bench. Returning the board without
+         the roster therefore blanked the withdrawn panel on every drag and took the only undo for a
+         mis-tap with it. Measured: this is why the owner reported the court board as "not working". */
       ...(await boardPayload(env, ctx.orgId, sessionId)),
+      ...(await roster(env, ctx.orgId, sessionId)),
     });
   }
 

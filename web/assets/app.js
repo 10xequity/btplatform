@@ -32,16 +32,19 @@
   const themeToggle = document.getElementById("themeToggle");
   const logoutBtn = document.getElementById("logoutBtn");
 
-  /* ---------- theme (system preference honored, user override persisted) ---------- */
-  const savedTheme = safeGet("bt_theme");
-  const systemLight = window.matchMedia("(prefers-color-scheme: light)").matches;
-  setTheme(savedTheme || (systemLight ? "light" : "dark"));
-  themeToggle.addEventListener("click", () => {
-    const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
-    setTheme(next);
-    safeSet("bt_theme", next);
-  });
-  function setTheme(t) { document.documentElement.dataset.theme = t; }
+  /* ---------- theme: ONE WRITER, AND IT IS NOT THIS FILE (§-1r RF-9, 2026-08-18) ----------
+     index.html's two pre-paint lines (:15 and :16) already applied `data-theme` AND `data-template`
+     before the first stylesheet, so there is nothing for this file to apply on load. What it used to
+     do was flip `dataset.theme` on its own and leave `data-template` alone — and because
+     tokens.css's template block follows the base block at EQUAL SPECIFICITY, the template kept
+     supplying every colour token. The ◐ was therefore a visible no-op on this one page, while still
+     writing `bt_theme` and leaving `bt_template_<mode>` behind, so the next page a member opened
+     disagreed with this one. Every other surface — 38 admin pages via admin-nav.js and 17 member
+     pages via site-nav.js — already delegates to BT_THEME; index.html was the 56th and the only
+     holdout. config.js loads at index.html:33, ahead of this script, so the service is always there.
+     THIS FILE STILL OWNS THE LISTENER, deliberately: site-nav.js gates its own binding on
+     #btHdrMail, which index.html does not carry, precisely so the two cannot double-bind. */
+  themeToggle.addEventListener("click", () => { window.BT_THEME.toggleMode(); });
 
   /* ---------- config guard (catches stale cached config.js) ---------- */
   if (!API || API.includes("PENDING")) {
@@ -140,7 +143,7 @@
     if (nameEl) nameEl.textContent = brand.display_name;
     const img = document.getElementById("loginBrandLogo");
     if (img && brand.logo_url) {
-      img.onerror = () => { img.src = "assets/logo-boom-icon-512.png?v=0.169.0"; }; // fail closed on 404
+      img.onerror = () => { img.src = "assets/logo-boom-icon-512.png?v=0.170.0"; }; // fail closed on 404
       img.src = brand.logo_url;
     }
   }
@@ -155,7 +158,7 @@
        The logo carries explicit width/height so it reserves its box before it loads, and the name
        fills sideways into a fixed-width card, so the swap changes no height. */
     const brandSlot = org
-      ? `<div class="login-brand"><img id="loginBrandLogo" src="assets/logo-boom-icon-512.png?v=0.169.0" alt="" width="36" height="36" /><span id="loginBrandName"></span></div>`
+      ? `<div class="login-brand"><img id="loginBrandLogo" src="assets/logo-boom-icon-512.png?v=0.170.0" alt="" width="36" height="36" /><span id="loginBrandName"></span></div>`
       : "";
     render(`
       <div class="login-wrap">

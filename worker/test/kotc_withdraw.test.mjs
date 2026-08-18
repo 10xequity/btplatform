@@ -92,6 +92,14 @@ const withdraw = (env, token, sessionId, body) =>
 
 const board = (env, token, sessionId) => call(env, "GET", `/api/admin/kotc/${sessionId}`, { token });
 
+const move = (env, token, sessionId, body) =>
+  call(env, "POST", `/api/admin/kotc/${sessionId}/move`, { token, body });
+
+/* What the director's board renders the withdrawn list FROM, written here as the page's own rule so
+   a response can be judged the way the screen judges it: admin-kotc.js does
+   `(data.roster || []).filter((p) => p.withdrawn)` and `#kbDoneWrap.hidden` follows its length. */
+const doneListOf = (payload) => ((payload && payload.roster) || []).filter((p) => p.withdrawn);
+
 const gameRows = (env) =>
   env.DB.query(`SELECT id, net_no, game_no, a1_contact_id, a2_contact_id, b1_contact_id, b2_contact_id,
                        score_a, score_b FROM kotc_games WHERE deleted_at IS NULL ORDER BY net_no, game_no`);
@@ -99,6 +107,59 @@ const four = (g) => [g.a1_contact_id, g.a2_contact_id, g.b1_contact_id, g.b2_con
 
 const liveSlots = (env) =>
   env.DB.query("SELECT contact_id, net_no, seat FROM kotc_slots WHERE deleted_at IS NULL ORDER BY net_no, seat");
+
+/* ══════════ RF-6: A DRAG MUST NOT HIDE THE WITHDRAWN LIST ══════════
+
+   THE DEFECT THIS PAIR EXISTS FOR SAT BETWEEN TWO GUARDS THAT WERE EACH CORRECT.
+   `kotc_board_screen.test.mjs` asserts the page NEVER patches its own board — every response IS the
+   next board — and the page feeds the withdrawn list from `data.roster` on purpose, because the
+   server keeps those people off the bench so they cannot be dragged back onto a net by accident.
+   Meanwhile `/move` returned `boardPayload` and NOT `roster`. So one drag replaced `data` with a
+   payload that had no roster, `#kbDoneWrap` went hidden, and the "Back in" buttons — the only undo
+   for a mis-tap — vanished until the page was reloaded. The owner reported it as "court board is not
+   working" (§-1r RF-6), and every hop of button → handler → route → render resolved.
+
+   BOTH 200 PATHS OF `/move` ARE COVERED — the real move and the already-there no-op — because they
+   are two separate `return json` sites and only one of them being fixed is the likelier regression. */
+
+test("RF-6: a real move keeps the withdrawn list — the response the page renders carries the roster", async () => {
+  const { env, token, sessionId } = await night({ entered: 8 });
+  const w = await withdraw(env, token, sessionId, { contact_id: 3 });
+  assert.equal(w.status, 200, JSON.stringify(w.data));
+  assert.equal(doneListOf(w.data).length, 1, "precondition: the withdraw response itself carries the list");
+
+  const seats = liveSlots(env);
+  const mover = seats.find((s) => s.contact_id !== 3);
+  assert.ok(mover, "precondition: somebody else is seated to drag");
+  const target = seats.find((s) => s.net_no === mover.net_no && s.seat !== mover.seat);
+  assert.ok(target, "precondition: a second seat on that net to drop onto");
+
+  const r = await move(env, token, sessionId, {
+    contact_id: mover.contact_id, net_no: target.net_no, seat: target.seat,
+  });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  assert.ok(Array.isArray(r.data.roster),
+    "the move response carries no roster, and the page is forbidden to patch its own board — so the withdrawn list renders empty");
+  const done = doneListOf(r.data);
+  assert.equal(done.length, 1, "the withdrawn player must survive a drag by somebody else");
+  assert.equal(done[0].contact_id, 3, "and it must be the person who actually went home");
+  env.DB.close();
+});
+
+test("RF-6: the already-there no-op keeps it too — both return sites, not just the interesting one", async () => {
+  const { env, token, sessionId } = await night({ entered: 8 });
+  await withdraw(env, token, sessionId, { contact_id: 4 });
+
+  const seat = liveSlots(env).find((s) => s.contact_id !== 4);
+  assert.ok(seat, "precondition: somebody is seated");
+  const r = await move(env, token, sessionId, {
+    contact_id: seat.contact_id, net_no: seat.net_no, seat: seat.seat,
+  });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  assert.equal(r.data.moved, false, "precondition: this is the they-were-already-there path");
+  assert.equal(doneListOf(r.data).length, 1, "the no-op path must carry the roster as well");
+  env.DB.close();
+});
 
 /* ==================== the flag, the seat, and the player's own link ==================== */
 

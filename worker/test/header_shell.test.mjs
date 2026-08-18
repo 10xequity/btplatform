@@ -279,12 +279,78 @@ const siteNavThemeVerdict = (src) =>
 const siteNavLogoutVerdict = (src) =>
   src.includes('lo.addEventListener("click"') && src.includes('"/api/auth/logout"');
 /* a member page-script keeping a theme copy double-binds → dead button (v0.52.0 class) */
-const memberPageCopyVerdict = (src) => {
+/* WHAT COUNTS AS A PRIVATE COPY — REBUILT 2026-08-18 (§-1r RF-9), and both halves were wrong.
+   (1) The pattern required `getElementById("themeToggle").addEventListener` on ONE expression, and
+   NEITHER of the files this check exempted is written that way: `app.js`, `site-nav.js` and
+   `admin-nav.js` all bind through a const first, which is the house idiom. The check matched none of
+   its own known holders, so the `allowed` set was exempting files it could never have caught and a
+   new page copying the block in the house style would have passed.
+   (2) The rule itself was the wrong question. Binding the toggle is not the offence — every shell
+   binds it — KEEPING A PRIVATE WRITER is. So theme is now a PROPERTY with no exemption list at all:
+   a file may bind the ◐ as long as it delegates to `BT_THEME.toggleMode()` and writes neither
+   `dataset.theme` nor its own `setTheme`. Measured across all 62 asset scripts the day it was
+   written: `site-nav.js`, `admin-nav.js` and the repaired `app.js` all pass on the property, the
+   pre-fix `app.js` block fails it, and nothing else is touched — so three names came off the
+   exemption list rather than one going on. Logout keeps an owner list, because there is no
+   one-writer service for it to delegate to. */
+const bindsListener = (src, id) => {
+  const direct = new RegExp(`getElementById\\("${id}"\\)\\s*\\.\\s*(onclick|addEventListener)`);
+  if (direct.test(src)) return true;
+  const bound = new RegExp(`(?:const|let|var)\\s+([A-Za-z_$][\\w$]*)\\s*=\\s*document\\.getElementById\\("${id}"\\)`).exec(src);
+  return !!(bound && new RegExp(`\\b${bound[1]}\\s*\\.\\s*(onclick|addEventListener)`).test(src));
+};
+const delegatesTheme = (src) => /BT_THEME\s*\.\s*toggleMode\s*\(/.test(src);
+const privateThemeWriter = (src) =>
+  /function setTheme\s*\(/.test(src) || /documentElement\.dataset\.theme\s*=/.test(src);
+
+/* Behaviour keys, not prose, so the logout owner list below can compare against them. */
+const memberPageCopyKeys = (src) => {
   const bad = [];
-  if (/getElementById\("themeToggle"\)\s*\.\s*(onclick|addEventListener)/.test(src)) bad.push("theme listener copy");
-  if (/getElementById\("logoutBtn"\)\s*\.\s*addEventListener/.test(src)) bad.push("logout listener copy");
+  if (bindsListener(src, "themeToggle") && (privateThemeWriter(src) || !delegatesTheme(src))) bad.push("theme");
+  if (bindsListener(src, "logoutBtn")) bad.push("logout");
   return bad;
 };
+const memberPageCopyVerdict = (src) =>
+  memberPageCopyKeys(src).map((k) => (k === "theme" ? "theme listener copy" : "logout listener copy"));
+
+/* LOGOUT ONLY. `app.js` is index.html's own script and genuinely owns logout there — site-nav.js
+   declines to bind on that page (it gates on #btHdrMail, which index.html does not carry) precisely
+   so the two cannot double-bind. Theme needs no entry here for anyone. */
+const LOGOUT_OWNERS = new Set(["site-nav.js", "admin-nav.js", "app.js"]);
+
+test("RF-9: index.html's theme toggle delegates to the one writer and keeps no private setTheme", () => {
+  const src = read("assets/app.js");
+  assert.match(src, /BT_THEME\s*\.\s*toggleMode\s*\(/,
+    "app.js no longer delegates the ◐ to BT_THEME.toggleMode() — index.html was the 56th page and the only holdout");
+  assert.ok(!privateThemeWriter(src),
+    "a private theme writer is back in app.js; it can only write half the state — data-theme without data-template, which tokens.css then overrides at equal specificity");
+});
+
+test("NC-RF9: the rebuilt copy check catches the PRE-FIX spelling and clears the delegating one", () => {
+  /* Without this the property is unfalsifiable: on a clean corpus it looks identical to the old
+     pattern. The fixture is the real block app.js shipped until RF-9. */
+  const preFix = [
+    'const themeToggle = document.getElementById("themeToggle");',
+    '  const savedTheme = safeGet("bt_theme");',
+    '  setTheme(savedTheme || "dark");',
+    '  themeToggle.addEventListener("click", () => { setTheme("light"); });',
+    '  function setTheme(t) { document.documentElement.dataset.theme = t; }',
+  ].join("\n");
+  assert.deepEqual(memberPageCopyKeys(preFix), ["theme"],
+    "the const-bound private writer must be caught — this is the exact shape app.js shipped until RF-9");
+
+  const delegating = [
+    'const themeToggle = document.getElementById("themeToggle");',
+    '  themeToggle.addEventListener("click", () => { window.BT_THEME.toggleMode(); });',
+  ].join("\n");
+  assert.deepEqual(memberPageCopyKeys(delegating), [],
+    "and a shell that binds the toggle but delegates must NOT be called a copy, or every shell fails");
+
+  assert.deepEqual(memberPageCopyKeys(read("assets/schedule.js")), [],
+    "an innocent page script must stay clean, or the widened binding pattern over-reaches");
+  assert.ok(bindsListener(read("assets/site-nav.js"), "themeToggle"),
+    "the sanctioned owner must be VISIBLE to the binding check — it passes on the property, not by being unmatchable");
+});
 
 test("the 16 canonical member pages carry the complete member header, byte-identical", () => {
   // The count is a deliberate ratchet: it reddens whenever a member page is added, so whoever added
@@ -335,12 +401,13 @@ test("site-nav.js v2.13 owns the member theme-toggle listener and logout", () =>
 test("no member page script keeps a theme/logout copy (deleted blocks must not return), widest set", () => {
   const files = readdirSync(new URL("assets/", WEB_DIR)).filter((f) => f.endsWith(".js"));
   assert.ok(files.length >= 25, `assets corpus shrank: ${files.length} js files`);
-  const allowed = new Set(["site-nav.js", "admin-nav.js", "app.js"]); // app.js = index.html owner, documented
   const offenders = [];
   for (const f of files) {
-    if (allowed.has(f)) continue;
-    const bad = memberPageCopyVerdict(read("assets/" + f));
-    if (bad.length) offenders.push(`${f}: ${bad.join(" + ")}`);
+    /* Theme is judged on the PROPERTY, so it needs no exemption; logout is judged against its
+       owner list. A file may bind the ◐ freely as long as it delegates to the one writer. */
+    const bad = memberPageCopyKeys(read("assets/" + f))
+      .filter((k) => !(k === "logout" && LOGOUT_OWNERS.has(f)));
+    if (bad.length) offenders.push(`${f}: ${bad.map((k) => k + " listener copy").join(" + ")}`);
   }
   assert.deepEqual(offenders, [], `per-page header-behavior copies returned:\n${offenders.join("\n")}`);
 });
