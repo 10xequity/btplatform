@@ -77,11 +77,17 @@ test("blanking leaves every browser script compiling as a classic script", () =>
 });
 
 test("blanking preserves length and every newline position — offsets and line numbers stay true", () => {
-  for (const f of modules) {
-    const raw = readFileSync(new URL(f, SRC_DIR), "utf8");
+  /* BOTH corpora. This was worker-only in its first version, and the browser corpus is exactly where
+     the page guards use this function — 67 scripts asserting nothing about the invariant that makes
+     their reported line numbers true. Found by auditing the shipped diff, not by a failure. */
+  const all = [...modules.map((f) => [f, new URL(f, SRC_DIR)]),
+    ...webScripts.map((u) => [u.pathname.split("/").pop(), u])];
+  assert.ok(all.length >= 110, `expected both corpora, got ${all.length} files`);
+  for (const [name, u] of all) {
+    const raw = readFileSync(u, "utf8");
     const out = blankComments(raw);
-    assert.equal(out.length, raw.length, `${f}: length changed, so every reported offset after it is a lie`);
-    assert.equal(out.split("\n").length, raw.split("\n").length, `${f}: line count changed`);
+    assert.equal(out.length, raw.length, `${name}: length changed, so every reported offset after it is a lie`);
+    assert.equal(out.split("\n").length, raw.split("\n").length, `${name}: line count changed`);
   }
 });
 
@@ -136,6 +142,33 @@ test("NC-4 a /* inside a regex literal does not open a comment", () => {
   const out = blankComments(src);
   assert.ok(out.includes("wireThing(wiredHelpers)"), "code after a regex holding /* must survive");
   assert.ok(out.includes("const x = 2"), "and after an escaped one too");
+});
+
+test("NC-4b a regex after a CONTROL-FLOW head is a regex, not a division — the surviving hole", () => {
+  /* MEASURED 2026-08-17 against the first version of this lexer, which shipped and passed all nine
+     controls below: `if (x) /[/*]/.test(s)` LOST THE REST OF THE FILE. `)` was classified as
+     division outright, so the pattern's `[` was code and its `/*` opened a phantom block comment —
+     the very defect this function was rewritten to end, surviving inside the rewrite because the
+     rewrite's own note called that the dangerous direction and then took it anyway. `)` is now
+     resolved by walking back to the matching `(`. */
+  const src = 'if (x) /[/*]/.test(s);\nwireThing(wiredHelpers);\nconst z = 1;\n';
+  const out = blankComments(src);
+  assert.ok(out.includes("wireThing(wiredHelpers)"), "the line after the regex must survive");
+  assert.ok(out.includes("const z = 1"), "and so must everything after that");
+  for (const head of ["while", "for", "switch"]) {
+    const s2 = `${head} (x) /[/*]/.test(s);\nwireThing(wiredHelpers);\n`;
+    assert.ok(blankComments(s2).includes("wireThing(wiredHelpers)"), `${head} (…) is a regex position too`);
+  }
+});
+
+test("NC-4c and a division after a CALL is still a division — the fix did not just say yes", () => {
+  /* Without this, NC-4b would be satisfied by a regexAllowed that always returns true, which loses
+     the comment blanking inside every division expression instead. */
+  const src = 'const r = total(a, b) / count(c); // gone\nwireThing(wiredHelpers);\n';
+  const out = blankComments(src);
+  assert.ok(out.includes("total(a, b) / count(c)"), "the division must be copied as code");
+  assert.ok(!out.includes("gone"), "and the comment after it must still be blanked");
+  assert.ok(out.includes("wireThing(wiredHelpers)"), "and the next line must survive");
 });
 
 test("NC-5 division is not mistaken for a regex in a way that loses code", () => {

@@ -76,12 +76,36 @@ export function blankComments(src) {
      being repaired, so the two mistakes are not symmetric and this leans away from the bad one. */
   const KEYWORD_BEFORE_REGEX = new Set(["return", "typeof", "case", "in", "of", "new", "delete",
     "void", "instanceof", "do", "else", "yield", "await", "throw"]);
+  /* `)` is the one previous token that goes BOTH ways, and getting it wrong is the expensive
+     direction. `(a + b) / 2` is division; `if (x) /re/.test(s)` is a regex, and reading THAT as a
+     division is what let `/[/*]/` open a phantom comment and eat the rest of the file — measured
+     2026-08-17, the same defect class this function was rewritten to end, surviving in one branch of
+     the rewrite. So a `)` is resolved by walking back to its matching `(` and asking what precedes
+     it: a control-flow head means a regex follows, anything else means division. The walk counts
+     parens without regard to strings, which can be wrong — and a wrong answer there resolves to
+     "regex", the direction that only ever copies bytes verbatim. */
+  const CONTROL_HEADS = new Set(["if", "while", "for", "switch", "catch", "with"]);
+  const wordEndingAt = (at) => {
+    let m = at;
+    while (m >= 0 && /\s/.test(src[m])) m--;
+    let e = m;
+    while (e >= 0 && /[A-Za-z0-9_$]/.test(src[e])) e--;
+    return src.slice(e + 1, m + 1);
+  };
   const regexAllowed = (at) => {
     let j = at - 1;
     while (j >= 0 && /\s/.test(src[j])) j--;
     if (j < 0) return true;
     const c = src[j];
-    if (c === ")" || c === "]") return false;                    /* (…)/2 and a[0]/2 are division */
+    if (c === "]") return false;                                 /* a[0]/2 is division */
+    if (c === ")") {
+      let depth = 0, k = j;
+      for (; k >= 0; k--) {
+        if (src[k] === ")") depth++;
+        else if (src[k] === "(" && --depth === 0) break;
+      }
+      return k >= 0 && CONTROL_HEADS.has(wordEndingAt(k - 1));
+    }
     if (/[A-Za-z0-9_$]/.test(c)) {                               /* an identifier or a number */
       let k = j;
       while (k >= 0 && /[A-Za-z0-9_$]/.test(src[k])) k--;
