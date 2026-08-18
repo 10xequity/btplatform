@@ -22,9 +22,17 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import worker from "../src/index.js";
 import { createD1 } from "../testkit/d1-memory.mjs";
+import { blankComments } from "../testkit/route-extract.mjs";
 
 const SCHEMA = readFileSync(new URL("../testkit/journey-schema.sql", import.meta.url), "utf8");
 const NAV = readFileSync(new URL("../../web/assets/admin-nav.js", import.meta.url), "utf8");
+/* TWO VIEWS, and which one each assertion takes is the point (§-1c D-45, 2026-08-18). `NAV_LIVE`
+   drops comment bytes, so an assertion that a call site EXISTS cannot be satisfied by a line
+   switched off with `//`. `NAV` stays raw for the assertion BELOW that forbids a shape, because for
+   a forbidding assertion raw is the STRICTER view — blanking it would let a commented-out access
+   path through. Measured before this change: with `location.reload(); return;` commented out in the
+   real admin-nav.js, this file stayed green at 10/10. */
+const NAV_LIVE = blankComments(NAV);
 const ORIGIN = "https://boomtown.test";
 
 const makeEnv = () => ({
@@ -164,8 +172,8 @@ test("the default is PER ACCOUNT — one user's choice is not another's", async 
 /* ───────────────────────── the read side, in the switcher ───────────────────────── */
 
 test("admin-nav.js CONSULTS the default, and only inside the role-filtered list", () => {
-  assert.match(NAV, /default_org_id/,
-    "admin-nav.js never mentions default_org_id — the column reaches the client and is ignored");
+  assert.match(NAV_LIVE, /default_org_id/,
+    "admin-nav.js never mentions default_org_id in live code — the column reaches the client and is ignored");
   // The preference is only ever honoured through `orgs`, which is already role-filtered above it.
   // Reading it off `all` (every org on the instance) would turn a preference into an access grant.
   assert.doesNotMatch(NAV, /all\.(some|find)\([^)]*default_org_id/,
@@ -175,6 +183,30 @@ test("admin-nav.js CONSULTS the default, and only inside the role-filtered list"
 test("the two literals org_honesty.test.mjs pins are untouched — the self-heal still reads as before", () => {
   // Recorded in handoff §6 as the hazard for this unit: a rewrite of that block reddens the suite
   // ON A CORRECT FIX. Pinned here too so the constraint is visible from the unit that must respect it.
-  assert.ok(NAV.includes("orgs.some((o) => Number(o.id) === current)"), "the self-heal detector was rewritten");
-  assert.ok(NAV.includes("location.reload(); return;"), "the self-heal reload was rewritten");
+  assert.ok(NAV_LIVE.includes("orgs.some((o) => Number(o.id) === current)"), "the self-heal detector was rewritten");
+  assert.ok(NAV_LIVE.includes("location.reload(); return;"), "the self-heal reload was rewritten");
+});
+
+test("NC: those two literals COMMENTED OUT fail this guard — they are code, not text", () => {
+  /* The hole this file shared with org_honesty until 2026-08-18: both assertions above read raw
+     source, so `// location.reload(); return;` satisfied them and the whole suite stayed green.
+     Each anchor is asserted unique before it is used, because a control whose anchor matched twice
+     proves nothing. */
+  for (const anchor of ["orgs.some((o) => Number(o.id) === current)", "location.reload(); return;"]) {
+    const hits = NAV.split(anchor).length - 1;
+    assert.equal(hits, 1, `control anchor must appear exactly once, found ${hits}: ${anchor}`);
+    const off = blankComments(NAV.split(anchor).join("// " + anchor));
+    assert.ok(!off.includes(anchor), `a commented-out ${anchor} must not read as live code`);
+  }
+  /* And the forbidding assertion above must NOT be blanked — pinned, so a later "consistency" edit
+     goes red carrying its reason. */
+  /* The planted shape is PAREN-LESS on purpose. Measured 2026-08-18: that regex's `[^)]*` cannot
+     cross a `)`, so it reaches `all.some(o => ...)` and NOT `all.some((o) => ...)`. Recorded as
+     §-1c D-46 rather than widened here — widening a FORBIDDING assertion can redden correct code,
+     and that is its own unit. A control tests the check that exists, not the one I wish existed. */
+  const planted = NAV + "\n// const x = all.some(o => o.default_org_id);\n";
+  assert.match(planted, /all\.(some|find)\([^)]*default_org_id/,
+    "raw view: a commented-out unfiltered lookup is still visible to the forbidding check");
+  assert.doesNotMatch(blankComments(planted), /all\.(some|find)\([^)]*default_org_id/,
+    "blanked view: it disappears — which is why that check reads NAV, not NAV_LIVE");
 });

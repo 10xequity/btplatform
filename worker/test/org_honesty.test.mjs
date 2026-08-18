@@ -27,6 +27,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
+import { blankComments } from "../testkit/route-extract.mjs";
 import worker from "../src/index.js";
 import { createD1 } from "../testkit/d1-memory.mjs";
 
@@ -148,20 +149,54 @@ const MODULES = [
   "admin-pool-board.js", "admin-score-links.js", "admin-schedule-editor.js",
 ];
 
-/* Verdicts are pure so the negative controls can run the REAL source, mutated. */
-const switcherFilterVerdict = (src) =>
-  src.includes('x.role === "admin" || x.role === "staff"') && // the role set the shell admits
-  src.includes("roleIds.has(Number(o.id))");                   // the filter applied to /api/orgs
-const selfHealVerdict = (src) =>
-  src.includes("orgs.some((o) => Number(o.id) === current)") && // detect a stored org outside the role list
-  src.includes("location.reload(); return;");                    // and re-fetch the page under the healed org
+/* Verdicts are pure so the negative controls can run the REAL source, mutated.
+
+   THEY ALSO BLANK COMMENTS FIRST, and that is the repair of 2026-08-18 (§-1c D-45). Every verdict
+   here asserts that a CALL SITE EXISTS, and each one read RAW source, so a line switched off with
+   `//` satisfied it. Measured on the shipped files before the fix: with
+   `const orgs = all.filter((o) => roleIds.has(Number(o.id)));` commented out in the real
+   admin-nav.js, THE WHOLE SUITE STAYED GREEN AT 2083/2083 — and the same with a module's 403
+   handler commented out. The switcher would again offer an org the signed-in account holds no role
+   in, which is audit R1, the tester-round root cause this file exists to prevent.
+
+   `read` STAYS RAW ON PURPOSE. The widest-set check below asserts an ABSENCE, and for absence RAW
+   IS THE STRICTER VIEW: blanking would stop a commented-out blame string from counting as an
+   offender. NC-11 pins that decision with the measurement beside it, so a later "make it
+   consistent" edit goes red carrying the reason. Every needle was verified to survive blanking in
+   all seven files, each exactly once, before this change.  */
+const live = (src) => blankComments(src);
+const switcherFilterVerdict = (src) => {
+  const t = live(src);
+  return t.includes('x.role === "admin" || x.role === "staff"') && // the role set the shell admits
+         t.includes("roleIds.has(Number(o.id))");                  // the filter applied to /api/orgs
+};
+const selfHealVerdict = (src) => {
+  const t = live(src);
+  return t.includes("orgs.some((o) => Number(o.id) === current)") && // a stored org outside the role list
+         t.includes("location.reload(); return;");                   // and re-fetch under the healed org
+};
 const exportVerdict = (src) =>
-  /window\.BT_ADMIN = \{[^}]*loadFail[^}]*orgEmptyState[^}]*\}/.test(src); // the WIRING, not the definitions
+  /window\.BT_ADMIN = \{[^}]*loadFail[^}]*orgEmptyState[^}]*\}/.test(live(src)); // the WIRING, not the definitions
 const moduleVerdict = (src) => ({
-  loadFail: src.includes("BT_ADMIN.loadFail("),
-  emptyState: src.includes("BT_ADMIN.orgEmptyState("),
+  /* PRESENCE OF A GOOD THING blanks — a commented-out handler is not a handler. */
+  loadFail: live(src).includes("BT_ADMIN.loadFail("),
+  emptyState: live(src).includes("BT_ADMIN.orgEmptyState("),
+  /* PRESENCE OF A BAD THING STAYS RAW, and this split is the whole rule of this file. `blame` is
+     the retired sentence, so it is an ABSENCE needle wearing a presence spelling: blanking it would
+     let a commented-out revival pass unseen, which is the same loosening refused at the widest-set
+     check below. Blanking all three would have made this file answer two different ways about
+     identical bytes — caught by adversarial review before it shipped, 2026-08-18. */
   blame: src.includes("Couldn't load your events."),
 });
+
+/* Comment out ONE occurrence of `anchor` in `text`, refusing to proceed unless it appears exactly
+   once. A control whose anchor matched zero times, or matched somewhere else as well, proves
+   nothing — and this file's own NC-1 and NC-2 had no vacuity guard at all until 2026-08-18. */
+const commentOutOnce = (text, anchor) => {
+  const hits = text.split(anchor).length - 1;
+  assert.equal(hits, 1, `control anchor must appear exactly once, found ${hits}: ${anchor}`);
+  return text.split(anchor).join("// " + anchor);
+};
 
 test("admin-nav.js filters the switcher through /api/me roles and self-heals a poisoned bt_org", () => {
   const src = read("assets/admin-nav.js");
@@ -191,12 +226,16 @@ test("the six event-driven modules use loadFail + orgEmptyState; nothing in web/
 /* ── negative controls — every verdict must be provable-false on mutated REAL input ── */
 
 test("NC-1: stripping the role filter from admin-nav.js fails the switcher verdict", () => {
-  const mutated = read("assets/admin-nav.js").replace("roleIds.has(Number(o.id))", "true");
+  const real = read("assets/admin-nav.js");
+  const mutated = real.replace("roleIds.has(Number(o.id))", "true");
+  assert.notEqual(mutated, real, "mutation did not land — NC is vacuous");
   assert.equal(switcherFilterVerdict(mutated), false, "an unfiltered switcher must fail");
 });
 
 test("NC-2: stripping the self-heal reload from admin-nav.js fails the self-heal verdict", () => {
-  const mutated = read("assets/admin-nav.js").replace("location.reload(); return;", "");
+  const real = read("assets/admin-nav.js");
+  const mutated = real.replace("location.reload(); return;", "");
+  assert.notEqual(mutated, real, "mutation did not land — NC is vacuous");
   assert.equal(selfHealVerdict(mutated), false, "a heal that never re-fetches must fail");
 });
 
@@ -219,4 +258,71 @@ test("NC-5: stripping the orgEmptyState call from a real module fails the module
   const mutated = real.replace(/if \(!eventId\) return BT_ADMIN\.orgEmptyState\([^)]*\);[^\n]*\n/, "");
   assert.notEqual(mutated, real, "mutation did not land — NC is vacuous");
   assert.equal(moduleVerdict(mutated).emptyState, false, "an empty org rendering nothing must fail");
+});
+
+/* ── the comment axis (§-1c D-45). Every control below COMMENTS OUT a real line rather than
+      deleting it, because deletion was the only mutation these verdicts had ever been shown, and a
+      commented-out call site satisfied all of them. ── */
+
+test("NC-6: COMMENTING OUT the role filter fails the switcher verdict — the D-45 defect", () => {
+  /* Measured before the fix: this exact mutation left all 2083 tests in the suite green. */
+  const real = read("assets/admin-nav.js");
+  const mutated = commentOutOnce(real, "      const orgs = all.filter((o) => roleIds.has(Number(o.id)));");
+  assert.ok(mutated.includes("roleIds.has(Number(o.id))"), "the bytes are still there — only a // was added");
+  assert.equal(switcherFilterVerdict(mutated), false, "a commented-out filter is not a filter");
+});
+
+test("NC-7: COMMENTING OUT the self-heal reload fails the self-heal verdict", () => {
+  const real = read("assets/admin-nav.js");
+  const mutated = commentOutOnce(real, "location.reload(); return;");
+  assert.ok(mutated.includes("location.reload(); return;"), "the bytes are still there");
+  assert.equal(selfHealVerdict(mutated), false, "a commented-out reload never heals anything");
+});
+
+test("NC-8: COMMENTING OUT the other switcher conjunct fails the verdict too", () => {
+  /* The `x.role` half had no control of any kind until 2026-08-18 — a conjunct nothing can drive
+     false is a conjunct that is not really being asserted. */
+  const real = read("assets/admin-nav.js");
+  const mutated = commentOutOnce(real, 'x.role === "admin" || x.role === "staff"');
+  assert.equal(switcherFilterVerdict(mutated), false, "the admitted role set must be live code");
+});
+
+test("NC-9: COMMENTING OUT the stored-org check fails the self-heal verdict too", () => {
+  const real = read("assets/admin-nav.js");
+  const mutated = commentOutOnce(real, "orgs.some((o) => Number(o.id) === current)");
+  assert.equal(selfHealVerdict(mutated), false, "the detection half must be live code");
+});
+
+test("NC-10: COMMENTING OUT a module's 403 handler and its empty state fails the module verdict", () => {
+  /* Measured before the fix: commenting out this line left the whole suite green. */
+  const tryouts = read("assets/admin-tryouts.js");
+  const noFail = commentOutOnce(tryouts, "    if (!r.ok) return BT_ADMIN.loadFail(");
+  assert.equal(moduleVerdict(noFail).loadFail, false, "a commented-out 403 handler blames the module again");
+
+  const brackets = read("assets/admin-brackets.js");
+  const noEmpty = commentOutOnce(brackets, "    if (!eventId) return BT_ADMIN.orgEmptyState(");
+  assert.equal(moduleVerdict(noEmpty).emptyState, false, "a commented-out empty state renders a blank board again");
+});
+
+test("NC-11: the export wiring cannot be satisfied by a commented-out helper", () => {
+  /* Not a whole line — the single token inside the export object, block-commented in place, which is
+     the smallest edit that would fool a raw-source regex. */
+  const real = read("assets/admin-nav.js");
+  const anchor = "fail, loadFail, orgEmptyState";
+  assert.equal(real.split(anchor).length - 1, 1, "the anchor must appear exactly once");
+  const mutated = real.split(anchor).join("fail, /* loadFail, */ orgEmptyState");
+  assert.ok(mutated.includes("loadFail"), "the token is still in the file, inside a comment");
+  assert.equal(exportVerdict(mutated), false, "an exported-only-in-a-comment helper is not exported");
+});
+
+test("NC-12: the blame check reads RAW ON PURPOSE — blanking it would hide a commented offender", () => {
+  /* THE LOOSENING THIS FIX DELIBERATELY DID NOT MAKE, pinned so a later "consistency" edit goes red
+     carrying its reason. The widest-set check asserts an ABSENCE, and for absence raw is STRICTER:
+     web/assets ships with no build step, so a commented string is still served, and the retired
+     sentence is meant to be gone from the shipped bytes — not merely unreachable. */
+  const BLAME = "Couldn't load your events.";
+  const planted = read("assets/admin-tryouts.js") + `\n// ${BLAME}\n`;
+  assert.ok(planted.includes(BLAME), "raw view: a commented offender IS an offender");
+  assert.ok(!blankComments(planted).includes(BLAME),
+    "blanked view: the same offender disappears — which is why the widest-set check must not blank");
 });
