@@ -35,7 +35,7 @@
 /** Blank comment bytes to spaces, keeping newlines. Length is preserved exactly, so offsets and
  *  line numbers both stay true — the failure that made an earlier scan's line numbers worthless.
  *
- *  THIS WAS TWO `String.replace` CALLS UNTIL 2026-08-18, AND THEY ATE LIVE CODE IN 98 OF THE 118
+ *  THIS WAS TWO `String.replace` CALLS UNTIL 2026-08-17, AND THEY ATE LIVE CODE IN 98 OF THE 118
  *  SHIPPED JS FILES. Block comments were blanked FIRST, over the whole text, with no notion of what
  *  a string or a line comment is — so any `/*` sequence appearing inside a line comment or a string
  *  literal opened a phantom block comment that ran to the next close-comment token and blanked
@@ -431,7 +431,7 @@ export function mountsAndWires(indexSrc, name) {
  * with every helper correctly injected.
  *
  * IT IS HERE BECAUSE THE FACT WAS DERIVED FOUR TIMES IN ONE FILE. `resilience.test.mjs` cut the
- * table region and re-ran the same regex over RAW source in four places, and 2026-08-18 measured
+ * table region and re-ran the same regex over RAW source in four places, and 2026-08-17 measured
  * what that cost: commenting out `["bracket", bracketRoutes],` in the real index.js left the
  * suite's widest both-ways mount guard green, and no other guard in the suite caught it either.
  * Order is preserved because that file also asserts first and last, which decides who wins an

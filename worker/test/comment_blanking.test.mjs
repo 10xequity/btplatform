@@ -1,11 +1,11 @@
 /**
  * Boomtown Platform — the comment blanker must not delete code (§6 item 0c, the instrument half)
- * File: worker/test/comment_blanking.test.mjs · Version: v1.0 · Date: 2026-08-18 · Ships in: NO-BUMP
+ * File: worker/test/comment_blanking.test.mjs · Version: v1.0 · Date: 2026-08-17 · Ships in: NO-BUMP
  *
  * WHY THIS FILE EXISTS. `blankComments` is the shared answer to comment blindness — 34 test files
  * import it, the gate scanners have used it since v0.102.0, and v0.168.0's `mountsAndWires` was
  * built on it after eleven mount anchors were found accepting a mount that had been commented out.
- * It was two `String.replace` calls, and on 2026-08-18 it measured as DELETING LIVE CODE from 98 of
+ * It was two `String.replace` calls, and on 2026-08-17 it measured as DELETING LIVE CODE from 98 of
  * the 118 shipped JS files. Block comments were blanked first, over the whole text, with no notion
  * of a string or a line comment, so any `/*` inside either opened a phantom block comment that ran
  * to the next close-comment token. `index.js:572` carries the worked example — the `/*` inside the
@@ -37,7 +37,7 @@ const INDEX = readFileSync(new URL("index.js", SRC_DIR), "utf8");
 const modules = readdirSync(SRC_DIR).filter((f) => f.endsWith(".js"));
 const webScripts = WEB_DIRS.flatMap((d) => readdirSync(d).filter((f) => f.endsWith(".js")).map((f) => new URL(f, d)));
 
-/** The blanker as it shipped from v0.102.0 to 2026-08-18. Kept ONLY as NC-9's input. */
+/** The blanker as it shipped from v0.102.0 to 2026-08-17. Kept ONLY as NC-9's input. */
 const legacyBlankComments = (s) =>
   s.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "))
    .replace(/\/\/[^\n]*/g, (m) => " ".repeat(m.length));

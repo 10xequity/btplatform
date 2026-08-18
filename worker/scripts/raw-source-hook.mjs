@@ -1,6 +1,6 @@
 /**
  * Boomtown Platform — the fs shim `raw-source-sweep.mjs` runs each test file under
- * File: worker/scripts/raw-source-hook.mjs · Version: v1.0 · Date: 2026-08-18 · Ships in: NO-BUMP
+ * File: worker/scripts/raw-source-hook.mjs · Version: v1.0 · Date: 2026-08-17 · Ships in: NO-BUMP
  *
  * Loaded with `node --import`, so it patches `readFileSync` before any test file is evaluated.
  * Three modes, chosen by `BT_RS_MODE`:
@@ -9,7 +9,7 @@
  *   comment  serve `BT_RS_TARGET` with every line prefixed by `//` — the bytes stay, the code stops
  *   empty    serve `BT_RS_TARGET` as an empty string
  *
- * THE PATCH GOES THROUGH `createRequire`, AND THAT IS NOT A STYLE CHOICE. Measured 2026-08-18:
+ * THE PATCH GOES THROUGH `createRequire`, AND THAT IS NOT A STYLE CHOICE. Measured 2026-08-17:
  * `import fs from "node:fs"; fs.readFileSync = …` does NOT reach a test file's
  * `import { readFileSync } from "node:fs"` — a builtin's ES-module facade is built from the CJS
  * exports object the first time it is imported, so a later assignment is invisible to the named

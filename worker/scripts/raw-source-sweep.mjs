@@ -1,6 +1,6 @@
 /**
  * Boomtown Platform — which guards are satisfied by code that has been COMMENTED OUT
- * File: worker/scripts/raw-source-sweep.mjs · Version: v1.0 · Date: 2026-08-18 · Ships in: NO-BUMP
+ * File: worker/scripts/raw-source-sweep.mjs · Version: v1.0 · Date: 2026-08-17 · Ships in: NO-BUMP
  *
  * THE QUESTION (roadmap §-1c, handoff §6 item 0c). v0.168.0's follow-up found 11 of 11 mount
  * anchors satisfied by a mount that had been commented out, because they matched raw source. This

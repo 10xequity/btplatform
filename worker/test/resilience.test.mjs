@@ -22,7 +22,7 @@ import { blankComments, dispatchTableIn } from "../testkit/route-extract.mjs";
 const SRC_DIR = new URL("../src/", import.meta.url);
 
 /* TWO VIEWS OF THE ROUTER, AND THE DEFAULT IS THE BLANKED ONE. Every structural claim below is
-   about LIVE code, and until 2026-08-18 they were all made against raw source: commenting out
+   about LIVE code, and until 2026-08-17 they were all made against raw source: commenting out
    `["bracket", bracketRoutes],` in the real index.js left this file — the suite's widest both-ways
    mount guard — green, and no other guard in the suite caught it either. `INDEX_RAW` exists only so
    the negative controls can mutate what actually ships. */
@@ -195,7 +195,7 @@ test("NC: the table guard can fail — DELETING an entry is caught in both direc
 });
 
 test("NC: a COMMENTED-OUT entry is caught too — the defect this file shipped with", () => {
-  /* MEASURED 2026-08-18, BEFORE THE FIX: commenting this line out in the real index.js left all 18
+  /* MEASURED 2026-08-17, BEFORE THE FIX: commenting this line out in the real index.js left all 18
      tests here green, and mount_wiring, staff_gate_wiring, admin_route_gating and route_reachability
      green as well. The module stays imported and wired, so nothing else even looks wrong — the
      dispatch table is the only place that decides who answers a request. */
