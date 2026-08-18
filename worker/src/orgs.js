@@ -240,6 +240,58 @@ export async function orgRoutes(request, env, url, ctx) {
   const p = url.pathname;
   const m = request.method;
 
+  /* ---------- the account's own default organization (§6 item 1, migration 0052) ----------
+     SESSION-GATED, NOT STAFF-GATED. Choosing which of YOUR OWN organizations opens first is a
+     personal preference, so the bar is a session and the subject is always `ctx.userId` — never a
+     value from the body. Nobody can set anybody else's default because there is no field in which
+     to name somebody else.
+
+     IT LIVES HERE rather than beside `/api/me` in index.js because index.js matches the EXACT
+     string "/api/me", so sub-paths fall through to this dispatch chain (precedent:
+     `PUT /api/me/sub-availability`, announcements.js). It is in orgs.js because orgs.js owns org
+     identity and is one of the four CORE modules left UNBOUND by SG-3a — a module-grant must never
+     be able to widen or narrow which orgs an account may call its own.
+
+     DO NOT COPY sub-availability's `contactForSession` here: that resolves a `contacts.id`, and
+     this column is a `users.id`. They are different rows and mixing them is the D-18 defect.
+
+     THE FOREIGN KEY IS NOT THE PERMISSION CHECK. `REFERENCES orgs(id)` proves only that the org
+     exists. The role join below is what proves the org is YOURS, and it also collapses three
+     different refusals — no such org, inactive org, no role — into ONE 403 with one sentence, so
+     the reply never tells a caller which org ids exist. */
+  if (p === "/api/me/default-org" && m === "PUT") {
+    if (!ctx.userId) return H.json({ error: "Sign in first." }, 401);
+
+    let body;
+    try { body = await request.json(); } catch { body = null; }
+    const raw = body && "org_id" in body ? body.org_id : undefined;
+
+    if (raw === null) {
+      await env.DB.prepare(
+        "UPDATE users SET default_org_id = NULL, updated_at = datetime('now') WHERE id = ?1"
+      ).bind(ctx.userId).run();
+      return H.json({ ok: true, default_org_id: null });
+    }
+
+    // Integer only. `true`, "2", 1.5 and [] all reach here and all must be refused rather than
+    // coerced: a preference silently rounded or cast is a preference the account did not express.
+    if (typeof raw !== "number" || !Number.isInteger(raw) || raw <= 0) {
+      return H.json({ error: "Send org_id as a whole number, or null to clear it." }, 400);
+    }
+
+    const mine = await env.DB.prepare(
+      `SELECT 1 AS ok FROM user_org_roles r
+         JOIN orgs o ON o.id = r.org_id AND o.active = 1 AND o.deleted_at IS NULL
+        WHERE r.user_id = ?1 AND r.org_id = ?2 AND r.deleted_at IS NULL`
+    ).bind(ctx.userId, raw).first();
+    if (!mine) return H.json({ error: "That isn't one of your organizations." }, 403);
+
+    await env.DB.prepare(
+      "UPDATE users SET default_org_id = ?2, updated_at = datetime('now') WHERE id = ?1"
+    ).bind(ctx.userId, raw).run();
+    return H.json({ ok: true, default_org_id: raw });
+  }
+
   /* ---------- current org profile ---------- */
 
   if (p === "/api/admin/org/profile" && m === "GET") {

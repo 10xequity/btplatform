@@ -146,7 +146,7 @@ test("pad produces the 4-digit form used in filenames and the ledger", () => {
   assert.equal(pad(2026), "2026");
 });
 
-test("the real db/migrations directory parses cleanly and reports 0051", () => {
+test("the real db/migrations directory parses cleanly and reports 0052", () => {
   // This number is a deliberate ratchet, not a nuisance: it reddens on every new migration and
   // makes whoever added one confirm the scanner still reads the whole directory. Bump it in the
   // same commit as the migration, AFTER the ledger row exists in live D1 (v0.60.0 → 0036;
@@ -195,10 +195,17 @@ test("the real db/migrations directory parses cleanly and reports 0051", () => {
   // a new table plus one PARTIAL UNIQUE index on the live rows only. Moved once live D1 answered
   // MAX(id)=51, COUNT(*)=51, MAX(version)='0051', `tbl_name='user_module_grants'` showed exactly
   // 2 objects (the table and idx_umg_live), and the row count came back 0: nothing can read a
-  // grant until `staffGateFor` ships, so the deploy changes no behaviour for anyone.)
+  // grant until `staffGateFor` ships, so the deploy changes no behaviour for anyone.
+  // TWELFTH time 2026-08-17: migration 0052 (users.default_org_id, §6 item 1) — additive, ONE
+  // nullable column with a REFERENCES clause, which SQLite permits on ADD COLUMN only because the
+  // default is NULL. Moved once live D1 answered MAX(version)=52, COUNT(*)=52,
+  // pragma_table_info('users') showed default_org_id present, and `COUNT(*) WHERE
+  // default_org_id IS NOT NULL` came back 0 of 1 users: nobody holds a default, so the deploy
+  // changes where nobody lands. The column is a PREFERENCE and the foreign key is NOT its
+  // permission check — the route's role join is, and default_org.test.mjs pins both directions.)
   const { highest, files, unparseable } = scanMigrations(DEFAULT_DIR);
   assert.deepEqual(unparseable, [], `unparseable migration filenames: ${unparseable.join(", ")}`);
-  assert.equal(highest, 51);
+  assert.equal(highest, 52);
   assert.ok(files >= 20, `expected at least 20 .sql files, saw ${files}`);
 });
 

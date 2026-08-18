@@ -783,7 +783,17 @@
       const stored = Number(safeGet("bt_org")) || 0;
       let current = stored;
       if (!orgs.some((o) => Number(o.id) === current)) {
-        current = Number(orgs[0].id);
+        /* v0.169.0 (§6 item 1) — the ACCOUNT'S OWN DEFAULT, consulted here and nowhere else.
+           `orgs` is already role-filtered above, so a default whose role was later revoked simply
+           fails this find and falls through to the first-org behaviour that has always applied.
+           That is why a preference can never widen access: it selects from a list it did not build.
+           NOTE WHAT THIS DELIBERATELY DOES NOT DO — it does not override a VALID stored `bt_org`,
+           because this whole block only runs when the stored org is missing or not one of yours.
+           "Default" means where you land when nothing else has said otherwise; the org you last
+           switched to still wins for that browser. */
+        const pref = Number((me.user && me.user.default_org_id) || 0);
+        const preferred = pref ? orgs.find((o) => Number(o.id) === pref) : null;
+        current = Number(preferred ? preferred.id : orgs[0].id);
         try { localStorage.setItem("bt_org", String(current)); } catch (e) {}
         if (stored && Number(safeGet("bt_org")) === current) { location.reload(); return; } // heal, then re-fetch everything this page already loaded under the poisoned org
       }
@@ -900,7 +910,7 @@
       if (window.BT_STATUS || document.getElementById("bt-status-js")) return;
       var s = document.createElement("script");
       s.id = "bt-status-js";
-      s.src = "assets/build-status.js?v=0.168.0";
+      s.src = "assets/build-status.js?v=0.169.0";
       s.async = false;
       document.head.appendChild(s);
     } catch (e) { /* indicators are never load-blocking */ }

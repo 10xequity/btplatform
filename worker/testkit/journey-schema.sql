@@ -1,5 +1,8 @@
 -- Boomtown Platform — end-to-end journey schema fixture
--- File: worker/testkit/journey-schema.sql · Version: v1.1 · Date: 2026-08-08 · Ships in: v0.107.0
+-- File: worker/testkit/journey-schema.sql · Version: v1.2 · Date: 2026-08-17 · Ships in: v0.169.0
+-- v1.2 (migration 0052, v0.169.0): `users` re-read from live sqlite_master after
+-- `ALTER TABLE users ADD COLUMN default_org_id INTEGER REFERENCES orgs(id)` — the same
+-- trailing-paren shape ALTER produces, copied verbatim for the reason the header states below.
 -- v1.1 (migration 0043, v0.107.0): `sessions` re-read from live sqlite_master after
 -- `ALTER TABLE sessions ADD COLUMN acting_role TEXT` — which is why that column trails the closing
 -- paren on its own line rather than sitting in the column list. It is copied VERBATIM, including
@@ -54,7 +57,7 @@ CREATE TABLE users (
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),
   deleted_at TEXT
-);
+, default_org_id INTEGER REFERENCES orgs(id));
 
 CREATE TABLE sessions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

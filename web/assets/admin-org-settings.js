@@ -298,6 +298,53 @@
     });
   }
 
+  /* ---------------- your default organization (§6 item 1, v0.169.0) ----------------
+     A PERSONAL setting living on an ORG page, so it gets its own control and its own write.
+     Folding it into "Save changes" would put a `users` write behind a button whose label promises
+     an organization write — somebody editing the org would silently change their own account.
+     Separate button, separate call, separate message.
+
+     The button BELIEVES THE SERVER, not the click: `current` is re-read from the response rather
+     than assumed, so a refused or partially-applied write can never leave the label claiming a
+     state the database does not hold. */
+  function wireDefaultOrg() {
+    const btn = $("defOrgBtn"), said = $("defOrgSaid");
+    if (!btn || !said) return;
+    const orgId = Number((loaded && loaded.id) || localStorage.getItem("bt_org") || 0);
+    if (!orgId) return;
+    let current = Number((me.user && me.user.default_org_id) || 0);
+
+    function paint() {
+      const isDefault = current === orgId;
+      btn.textContent = isDefault ? "Clear my default" : "Make this my default";
+      btn.disabled = false;
+      said.className = "og-said";
+      said.textContent = isDefault
+        ? "This organization opens first for you."
+        : current ? "Another organization is currently your default."
+                  : "You have no default set.";
+    }
+    paint();
+
+    btn.onclick = async () => {
+      const next = current === orgId ? null : orgId;
+      btn.disabled = true;
+      const r = await api("/api/me/default-org", { method: "PUT", body: JSON.stringify({ org_id: next }) });
+      btn.disabled = false;
+      if (!r.ok) {
+        said.className = "og-said bad";
+        said.textContent = (r.data && r.data.error) || "Couldn't save that.";
+        return;
+      }
+      current = Number((r.data && r.data.default_org_id) || 0);
+      paint();
+      said.className = "og-said ok";
+      said.textContent = current === orgId
+        ? "Saved — this organization opens first for you."
+        : "Saved — your default is cleared.";
+    };
+  }
+
   /* ---------------- boot ---------------- */
 
   async function load() {
@@ -308,6 +355,7 @@
 
   try {
     await load();
+    wireDefaultOrg();   // after load(): it reads `loaded.id`
     await loadModules();
     await loadAllOrgs();
   } catch (e) {

@@ -140,7 +140,7 @@
     if (nameEl) nameEl.textContent = brand.display_name;
     const img = document.getElementById("loginBrandLogo");
     if (img && brand.logo_url) {
-      img.onerror = () => { img.src = "assets/logo-boom-icon-512.png?v=0.168.0"; }; // fail closed on 404
+      img.onerror = () => { img.src = "assets/logo-boom-icon-512.png?v=0.169.0"; }; // fail closed on 404
       img.src = brand.logo_url;
     }
   }
@@ -155,7 +155,7 @@
        The logo carries explicit width/height so it reserves its box before it loads, and the name
        fills sideways into a fixed-width card, so the swap changes no height. */
     const brandSlot = org
-      ? `<div class="login-brand"><img id="loginBrandLogo" src="assets/logo-boom-icon-512.png?v=0.168.0" alt="" width="36" height="36" /><span id="loginBrandName"></span></div>`
+      ? `<div class="login-brand"><img id="loginBrandLogo" src="assets/logo-boom-icon-512.png?v=0.169.0" alt="" width="36" height="36" /><span id="loginBrandName"></span></div>`
       : "";
     render(`
       <div class="login-wrap">
