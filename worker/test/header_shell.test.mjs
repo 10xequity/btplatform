@@ -1,6 +1,14 @@
 /**
  * Boomtown Platform — unified admin header guard
- * File: worker/test/header_shell.test.mjs · Version: v2.1 · Date: 2026-08-02 · Ships in: v0.53.1 (v2.0 v0.53.0 · v1.0 v0.52.0)
+ * File: worker/test/header_shell.test.mjs · Version: v3.0 · Date: 2026-08-20 · Ships in: v0.171.0 (v2.1 v0.53.1 · v2.0 v0.53.0 · v1.0 v0.52.0)
+ *
+ * v3.0 (v0.171.0, §-1r RF-12 — owner 2026-08-18): the member canonical header LOSES #btHdrAdmin.
+ * "There should be no admin access from this screen" — so memberHeaderVerdict now FORBIDS the
+ * anchor (the same shape as its #orgSwitcher rule) instead of requiring it hidden with an
+ * admin.html href. NC-M3 inverts (a re-added anchor must fail, even shipped hidden exactly as it
+ * used to); NC-M7/NC-M8 are retired WITH their purpose stated: both existed to prove the verdict
+ * read the anchor's attributes correctly, and a verdict that forbids the anchor outright has no
+ * attributes to misread — the ban subsumes the hijack case NC-M7 guarded.
  *
  * v2.1 (v0.53.1, external code review): TWO GUARD DEFECTS FIXED, both of the class this file
  * exists to prevent — an assertion that passes while the thing it claims to check is broken.
@@ -18,9 +26,10 @@
  *
  * v2.0 (v0.53.0): the MEMBER canonical header — 14 site-nav pages (every site-nav page
  * except index.html, whose reduced login header app.js owns) ship ONE static header,
- * byte-identical: brand-logo img + "Boomtown Athletics" wordmark · hidden #btHdrAdmin →
- * admin.html · #btHdrMail → member-inbox.html · #themeToggle · hidden #logoutBtn ·
- * no-print · deliberately NO #orgSwitcher (owner call 2026-08-02: members act in one org).
+ * byte-identical: brand-logo img + "Boomtown Athletics" wordmark · #btHdrMail →
+ * member-inbox.html · #themeToggle · hidden #logoutBtn · no-print · deliberately NO
+ * #orgSwitcher (owner call 2026-08-02: members act in one org) · and since v3.0 NO
+ * #btHdrAdmin (RF-12 — it shipped hidden-with-reveal from v2.0 until then).
  * site-nav.js v2.13 is the single behavior source (theme + logout); the per-page theme
  * copies in register.js/score.js/settings.js are DELETED and must not return (app.js is
  * the documented exception — it owns index.html's reduced header).
@@ -257,13 +266,9 @@ function memberHeaderVerdict(html) {
   const missing = [];
   if (!/<img class="brand-logo" src="assets\/logo-boom-icon-512\.png\?v=/.test(h)) missing.push("static .brand-logo img");
   if (!/Boomtown <span>Athletics<\/span>/.test(h)) missing.push("Athletics wordmark");
-  const adminTag = h.match(/<a[^>]*id="btHdrAdmin"[^>]*>/);
-  if (!adminTag) missing.push("#btHdrAdmin");
-  else {
-    /* per-attribute, order-independent — v2.0's alternation let a hijacked href through */
-    if (!/\shref="admin\.html"/.test(adminTag[0])) missing.push('#btHdrAdmin href must be admin.html');
-    if (!/\shidden(\s|>)/.test(adminTag[0])) missing.push("#btHdrAdmin must ship hidden");
-  }
+  /* v3.0 (RF-12): the anchor is FORBIDDEN, hidden or not — same shape as the orgSwitcher rule.
+     An outright ban has no attributes to misread, which is what retires NC-M7/NC-M8. */
+  if (h.includes("btHdrAdmin")) missing.push("UNEXPECTED #btHdrAdmin (RF-12: no admin affordance on member surfaces)");
   if (!/id="btHdrMail"[^>]*href="member-inbox\.html"|href="member-inbox\.html"[^>]*id="btHdrMail"/.test(h)) missing.push("#btHdrMail → member-inbox.html");
   if (!h.includes('id="themeToggle"')) missing.push("#themeToggle");
   if (!/id="logoutBtn"[^>]*hidden/.test(h)) missing.push("hidden #logoutBtn");
@@ -427,9 +432,13 @@ test("NC-M2: a one-byte drift in one member page's header breaks byte-identity",
   assert.notEqual(a, b, "the identity comparison must notice a one-byte drift");
 });
 
-test("NC-M3: an un-hidden Admin link fails the verdict (it must ship hidden)", () => {
-  const html = read("home.html").replace(/(id="btHdrAdmin"[^>]*) hidden/, "$1");
-  assert.equal(memberHeaderVerdict(html).ok, false);
+test("NC-M3: a re-added Admin anchor fails the verdict — even shipped hidden, exactly as it used to", () => {
+  const src = read("home.html");
+  const mutated = src.replace('<div class="spacer"></div>',
+    '<div class="spacer"></div>\n    <a id="btHdrAdmin" class="btn ghost hdr-admin" href="admin.html" aria-label="Switch to admin view" hidden>Admin</a>');
+  assert.notEqual(mutated, src, "mutation did not land — NC is vacuous");
+  assert.equal(memberHeaderVerdict(mutated).ok, false,
+    "the pre-RF-12 anchor must fail the verdict — hidden was the old rule, absent is the rule now");
 });
 
 test("NC-M4: a member header carrying an org switcher fails (members act in one org)", () => {
@@ -481,17 +490,17 @@ test("every nav script runs after the header parses (defer, or positioned below 
     `nav script may run before its header \u2014 header controls will not bind:\n${offenders.join("\n")}`);
 });
 
-test("NC-M7: a hijacked #btHdrAdmin href FAILS the verdict (v2.0 passed this — the fixed defect)", () => {
-  const html = read("home.html").replace('href="admin.html"', 'href="https://evil.example/pwn"');
-  assert.equal(memberHeaderVerdict(html).ok, false,
-    "the href hijack must fail — if it passes, the check is blind again");
-});
-
-test("NC-M8: attribute order on #btHdrAdmin does NOT matter (hidden before href still passes)", () => {
-  const html = read("home.html").replace(
-    /<a id="btHdrAdmin"([^>]*)href="admin\.html"([^>]*)hidden>/,
-    '<a id="btHdrAdmin"$1hidden$2href="admin.html">');
-  assert.equal(memberHeaderVerdict(html).ok, true, "the check must be order-independent");
+/* NC-M7 (hijacked href caught) and NC-M8 (attribute order immaterial) retired in v3.0 with their
+   purpose stated: both proved the verdict read the ANCHOR'S ATTRIBUTES correctly, and RF-12's
+   outright ban has no attributes to misread. A hijacked href is still caught — as the anchor
+   existing at all — which NC-M7's replacement below proves on the same mutated input. */
+test("NC-M7: the old hijacked-href mutation STILL fails — the ban subsumes the attribute check", () => {
+  const src = read("home.html");
+  const mutated = src.replace('<div class="spacer"></div>',
+    '<div class="spacer"></div><a id="btHdrAdmin" href="https://evil.example/pwn" hidden>Admin</a>');
+  assert.notEqual(mutated, src, "mutation did not land — NC is vacuous");
+  assert.equal(memberHeaderVerdict(mutated).ok, false,
+    "an anchor with a hijacked href must fail — under the ban it fails by existing");
 });
 
 test("NC-M9: a nav script ABOVE the header with no defer fails the verdict", () => {

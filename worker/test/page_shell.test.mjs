@@ -13,8 +13,8 @@
  * (failure class 3: a guard narrower than its subject).
  *
  * Separately, lfg.html and help.html carried no <header> element, so the v0.48/v0.49 header
- * injectors (#btHdrMail, #btHdrAdmin — both target header.header) silently mounted nothing.
- * header_actions.test.mjs verified the injectors, not the injection TARGET.
+ * injectors (#btHdrMail, and #btHdrAdmin until RF-12 removed it — both targeted header.header)
+ * silently mounted nothing. header_actions.test.mjs verified the injectors, not the TARGET.
  *
  * This guard holds the page-level prerequisites, widest set, self-counted:
  *   1. Every web/*.html that loads assets/admin-nav.js loads assets/config.js EARLIER in the file.
@@ -90,7 +90,7 @@ test("every site-nav.js page carries the header element the injectors target", (
   assert.ok(applied >= 12,
     `guard floor: expected >=12 site-nav pages, saw ${applied} (failure class 4)`);
   assert.deepEqual(offenders, [],
-    `member pages with no <header class="header — #btHdrMail/#btHdrAdmin mount nothing: ${offenders.join(", ")}`);
+    `member pages with no <header class="header — #btHdrMail mounts nothing: ${offenders.join(", ")}`);
 });
 
 /* ── negative controls — mutate the EXACT subject line in real input ── */

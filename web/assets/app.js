@@ -1,7 +1,13 @@
 /* Boomtown Platform — App Shell
-   Version: v0.6.0 · Date: 2026-07-23
+   Version: v0.8.0 · Date: 2026-08-20
    Handles: magic-link login, verify (?token=), session (Bearer, in-memory + sessionStorage),
    org switcher (≤2 clicks), theme toggle (instant — high-frequency action).
+   v0.8.0 (§-1r RF-12, owner 2026-08-18): the v0.6.0 Member/Manager sign-in switch and the
+           staff-gated Control Center card are DELETED — "there are options for the admin panel
+           on that page or lead to the admin page. This is not allowable for security reason."
+           Everyone signs in the same way (email link, or the passkey button passkey.js injects);
+           the tab only ever flipped hint copy. Staff reach admin.html by URL or bookmark.
+           Guards: header_actions.test.mjs v4.0 (card-grid verdict + widest-set RF-12 scan).
    v0.2.4: network failures show a clear message and re-enable the send button;
            startup guard if config.js is stale/placeholder.
    v0.6.0: member/manager sign-in switch · dashboard cards all clickable (Foundation → Settings,
@@ -143,7 +149,7 @@
     if (nameEl) nameEl.textContent = brand.display_name;
     const img = document.getElementById("loginBrandLogo");
     if (img && brand.logo_url) {
-      img.onerror = () => { img.src = "assets/logo-boom-icon-512.png?v=0.170.0"; }; // fail closed on 404
+      img.onerror = () => { img.src = "assets/logo-boom-icon-512.png?v=0.171.0"; }; // fail closed on 404
       img.src = brand.logo_url;
     }
   }
@@ -151,25 +157,20 @@
   function renderLogin(errorMsg) {
     logoutBtn.hidden = true;
     orgSwitcher.hidden = true;
-    const savedRole = safeGet("bt_login_role") || "member";
     const org = loginOrgHint();
     /* The lockup ships in the SYNCHRONOUS template, never injected after the fetch — D-15 closed
        exactly that defect on the member rail one release ago and the card is one await from it.
        The logo carries explicit width/height so it reserves its box before it loads, and the name
        fills sideways into a fixed-width card, so the swap changes no height. */
     const brandSlot = org
-      ? `<div class="login-brand"><img id="loginBrandLogo" src="assets/logo-boom-icon-512.png?v=0.170.0" alt="" width="36" height="36" /><span id="loginBrandName"></span></div>`
+      ? `<div class="login-brand"><img id="loginBrandLogo" src="assets/logo-boom-icon-512.png?v=0.171.0" alt="" width="36" height="36" /><span id="loginBrandName"></span></div>`
       : "";
     render(`
       <div class="login-wrap">
         <div class="card login-card reveal">
           ${brandSlot}
           <h1>Sign in</h1>
-          <div class="login-tabs" role="tablist" aria-label="Sign in as">
-            <button id="tabMember" class="login-tab" role="tab" aria-selected="false">Member</button>
-            <button id="tabManager" class="login-tab" role="tab" aria-selected="false">Manager</button>
-          </div>
-          <p id="loginHint"></p>
+          <p id="loginHint">We’ll email you a one-time sign-in link. No password needed.</p>
           <div class="field">
             <label for="email">Email</label>
             <input id="email" type="email" autocomplete="email" inputmode="email" placeholder="you@example.com" />
@@ -181,21 +182,9 @@
     if (errorMsg) notice(errorMsg, true);
     applyLoginBrand(org); // v0.106.0 — AFTER the card exists, deliberately not awaited
 
-    const tabs = { member: document.getElementById("tabMember"), manager: document.getElementById("tabManager") };
-    function pickRole(r) {
-      safeSet("bt_login_role", r);
-      tabs.member.classList.toggle("active", r === "member");
-      tabs.manager.classList.toggle("active", r === "manager");
-      tabs.member.setAttribute("aria-selected", r === "member");
-      tabs.manager.setAttribute("aria-selected", r === "manager");
-      document.getElementById("loginHint").textContent = r === "manager"
-        ? "Staff & admins: use Face ID / fingerprint below if you\u2019ve added a passkey, or the email link."
-        : "We\u2019ll email you a one-time sign-in link. No password needed.";
-    }
-    tabs.member.addEventListener("click", () => pickRole("member"));
-    tabs.manager.addEventListener("click", () => pickRole("manager"));
-    pickRole(savedRole);
-
+    /* RF-12: the Member/Manager tablist is gone \u2014 it only ever flipped this hint's copy, and it
+       advertised the admin panel on the public front door. One flow for everyone: the email
+       link, or the passkey button passkey.js injects after #sendLink for anyone who added one. */
     const emailInput = document.getElementById("email");
     document.getElementById("sendLink").addEventListener("click", submit);
     emailInput.addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); });
@@ -245,7 +234,6 @@
       const orgId = Number(orgSwitcher.value);
       const org = orgs.find((o) => o.id === orgId);
       const role = roleByOrg[orgId] || "member";
-      const staff = role === "admin" || role === "staff";
       const card = (href, title, desc, status) => `
         <a class="card module reveal" href="${href}" style="text-decoration:none;color:inherit">
           <h3>${title} \u2192</h3><p>${desc}</p>
@@ -260,7 +248,6 @@
           ${card("leagues.html", "Leagues", "League nights, weekly schedules, and season standings.", "Live")}
           ${card("profile.html", "My Profile", "Photo, results r\u00e9sum\u00e9, family accounts, reminders.", "Live")}
           ${card("settings.html", "Settings", "Sign-in \u0026 security, passkeys, appearance, reminders.", "Live")}
-          ${staff ? card("admin.html", "Control Center", "Events, registrations, members, reports — the admin side.", "Live") : ""}
         </div>`);
     }
   }

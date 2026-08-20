@@ -1,11 +1,15 @@
 /* Boomtown Platform — Settings
-   File: web/assets/settings.js · Version: v1.2 · Date: 2026-08-16 · Ships in: v0.6.0 (v1.2 in v0.160.0)
+   File: web/assets/settings.js · Version: v1.3 · Date: 2026-08-20 · Ships in: v0.6.0 (v1.3 in v0.171.0)
+   v1.3 (§-1r RF-12, owner 2026-08-18): the System (staff) section is DELETED — it put two admin
+   links (Members & roles, Events & programs) and an /api/admin/push/test caller on a MEMBER
+   page. "The member page should be limited to the member features." The push-test control moved
+   to admin-org-settings.html, where its route keeps a caller. Guards: header_actions v4.0.
    v1.2 (T2-15/W1): the Appearance card gains the colour-template chips (BT_THEME.mountPicker —
    the ONE picker, shared with the admin shell) and #themeNow reads BT_THEME.describe().
    v1.1: Push-notification row in the Reminders card (BT_PUSH from push.js).
    Sections: Account (name/email/photo — edits live on the Profile page; email is your
    sign-in identity, changed by staff on request), Sign-in & security (passkeys replace
-   passwords AND 2FA — one gesture is both factors), Appearance, Reminders, System (staff).
+   passwords AND 2FA — one gesture is both factors), Appearance, Reminders.
    Only calls endpoints that exist in v0.5.0: /api/me, /api/profile/me, /api/profile/reminders,
    /api/passkey/* (via window.btPasskey), /api/auth/logout. */
 
@@ -44,10 +48,6 @@
   }
 
   function render(me, prof) {
-    const orgId = Number(localStorage.getItem("bt_org")) || null;
-    const roleRow = (me.roles || []).find(r => !orgId || r.org_id === orgId) || (me.roles || [])[0];
-    const role = roleRow ? roleRow.role : "member";
-    const staff = role === "admin" || role === "staff";
     const p = prof.profile || prof || {};
     const name = p.full_name || (prof.contact && prof.contact.full_name) || me.user.full_name || "";
     const remindersOn = !!(p.reminders_opt_in || prof.reminders_opt_in);
@@ -137,30 +137,10 @@
         </div>
       </section>
 
-      ${staff ? `
-      <section class="card settings-section reveal" aria-labelledby="sSys" id="system">
-        <h3 id="sSys">System (staff)</h3>
-        <div class="settings-row">
-          <div class="grow"><div class="k">Test push notifications</div>
-            <div class="v">Sends a test notification to every device where you turned push on.</div></div>
-          <button id="pushTestBtn" class="btn ghost">Send test</button>
-        </div>
-        <div class="settings-row">
-          <div class="grow"><div class="k">Members, roles &amp; admin access</div>
-            <div class="v">Add staff, change roles, look up any member.</div></div>
-          <a class="btn ghost" href="admin-users.html" style="text-decoration:none">Open</a>
-        </div>
-        <div class="settings-row">
-          <div class="grow"><div class="k">Events &amp; programs</div>
-            <div class="v">Create and publish tournaments, leagues, and training.</div></div>
-          <a class="btn ghost" href="admin-events.html" style="text-decoration:none">Open</a>
-        </div>
-        <div class="settings-row">
-          <div class="grow"><div class="k">Foundation</div>
-            <div class="v">Database, sign-in, roles, and org switching &#8212; running on Cloudflare D1. Healthy when the app loads.</div></div>
-        </div>
-      </section>` : ""}
     `;
+    /* RF-12 (owner 2026-08-18): the System (staff) section that stood here is gone — two admin
+       links and an /api/admin caller do not belong on a member page. The push-test row lives on
+       admin-org-settings.html now. */
 
     document.getElementById("signOut2").addEventListener("click", () => document.getElementById("logoutBtn").click());
 
@@ -178,16 +158,6 @@
        shared filler here is what makes this the fifth site rather than the one that stayed
        broken; it is idempotent, and if the brand has not resolved the help.html fallback stands. */
     if (window.btOrgContact) window.btOrgContact();
-
-    /* staff push test (v1.1) */
-    const ptb = document.getElementById("pushTestBtn");
-    if (ptb) ptb.onclick = async () => {
-      ptb.disabled = true; ptb.textContent = "Sending\u2026";
-      const r = await api("/api/admin/push/test", { method: "POST", body: "{}" });
-      ptb.disabled = false;
-      ptb.textContent = r.ok ? `Sent to ${r.data.sent || 0} device${(r.data.sent||0) === 1 ? "" : "s"}` : (r.data.error || "Failed");
-      setTimeout(() => { ptb.textContent = "Send test"; }, 4000);
-    };
 
     /* push notifications (v1.1) */
     initPush();

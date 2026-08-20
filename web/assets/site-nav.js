@@ -1,4 +1,10 @@
 /* Boomtown Platform — Site-wide sidebar navigation (shared)
+   v2.21 (v0.171.0, §-1r RF-12, owner 2026-08-18): the staff/admin header reveal is DELETED with
+   the static #btHdrAdmin anchor it revealed — "There should be no admin access from this
+   screen." No member surface offers a route to the admin shell any more; staff go by URL or
+   bookmark. The one admin.html reference left in this file's code is the "Viewing as member —
+   Exit" pill, the only way out of the preview mode (admin pages bounce back while
+   bt_demo_member is set). Guards: header_actions.test.mjs v4.0.
    v2.20 (v0.162.0, §-1h M-4 / §-0 B15): the header ✉ badge pops (1→1.15→1, 160ms, WAAPI) ONLY
    when the unread count changed within the session; first sight sets the baseline silently and
    reduced motion is checked explicitly. Guarded by home_motion.test.mjs.
@@ -51,7 +57,7 @@
    falls back to `roles[0]`, which handed a caller their role in ANOTHER org when they had none in
    the org on screen. Both are presentation-only — requireStaff re-checks userId + orgId on every
    admin route — but presentation is what was reported. Guards: header_actions.test.mjs.
-   File: web/assets/site-nav.js · Version: v2.15 · Date: 2026-08-06 · Ships in: v0.101.0
+   File: web/assets/site-nav.js · Version: v2.21 · Date: 2026-08-20 · Ships in: v0.171.0
    v2.11: header "Admin" switch (owner 2026-08-02) — staff/admin who are also players get a
    header button on member pages to jump back to the Control Center, next to the mail icon
    and theme toggle. Clears bt_demo_member on click (same escape as the exit pill). Role-gated
@@ -238,18 +244,14 @@
         { href: "settings.html", ico: "⚙", text: "Settings" },
       ]});
       const demoMember = ssGet("bt_demo_member") === "1";
-      /* v2.11: header Admin switch — players who are also staff jump back to the Control
-         Center from any member page. Presentation-only gating (v2.2 rule): the admin shell's
-         own guard() + server requireStaff remain the enforcement. */
-      if (role === "admin" || role === "staff") (function headerAdminReveal() {
-        /* v2.13: the Admin link ships static-but-hidden on all 13 canonical member pages
-           (owner call 2026-08-02: frame-one markup for everyone, one reveal for staff).
-           Presentation-only gating unchanged (v2.2 rule): guard() + requireStaff enforce. */
-        const a = document.getElementById("btHdrAdmin");
-        if (!a) return;
-        a.hidden = false;
-        a.addEventListener("click", (e) => { e.preventDefault(); exitMemberView(a.getAttribute("href") || "admin.html"); });
-      })();
+      /* v2.17 (§-1r RF-12, owner 2026-08-18): the v2.11/v2.13 header Admin reveal is GONE, with
+         the static #btHdrAdmin anchor it revealed. His words: "There should be no admin access
+         from this screen." Said honestly: the anchor granted nothing — every admin route is
+         gated server-side — but an affordance the owner ordered off the surface stays off.
+         Staff reach the Control Center by URL or bookmark now. The ONE admin.html reference
+         below (the exit pill) is the only way OUT of the view-as-member preview: admin pages
+         bounce back to home.html while bt_demo_member is set, so removing the pill would trap
+         staff in the preview. header_actions.test.mjs pins both halves. */
       if ((role === "admin" || role === "staff") && demoMember) {
         const pill = document.createElement("button");
         pill.type = "button";
@@ -266,8 +268,8 @@
          Member Management) into the MEMBER navigation for any staff viewer, and the admin shell
          header links back to the member site — so the two shells offered each other and the owner
          reported the member page "switching back and forth and exposing the admin page".
-         The way back to the Control Center is the ONE header link (#btHdrAdmin, revealed above);
-         a second, four-item copy of the admin rail on the member site is duplication, not a
+         (Until RF-12 the way back was the one header link; now there is none by design.)
+         A second, four-item copy of the admin rail on the member site is duplication, not a
          shortcut, and it is what made the member site read as an admin surface.
          Also serves the same report's "menus need to be optimized and reviewed for brevity". */
     } else {
@@ -505,7 +507,7 @@
       if (window.BT_STATUS || document.getElementById("bt-status-js")) return;
       var s = document.createElement("script");
       s.id = "bt-status-js";
-      s.src = "assets/build-status.js?v=0.170.0";
+      s.src = "assets/build-status.js?v=0.171.0";
       s.async = false;
       document.head.appendChild(s);
     } catch (e) { /* indicators are never load-blocking */ }

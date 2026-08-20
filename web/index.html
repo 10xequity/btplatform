@@ -1,5 +1,7 @@
 <!DOCTYPE html>
-<!-- Boomtown Platform — App Shell · Version: v0.7.0 · Date: 2026-07-25
+<!-- Boomtown Platform — App Shell · Version: v0.8.0 · Date: 2026-08-20
+     v0.8.0: RF-12 (owner 2026-08-18) — the member/manager sign-in switch and the staff Control
+             Center card are gone: no admin affordance on any member surface (app.js v0.8.0).
      v0.7.0: PWA — manifest link, apple-touch-icon, theme-color, sw.js registration (v0.20.0).
      v0.6.0: member/manager sign-in switch, clickable dashboard cards, site-wide sidebar (site-nav.js). -->
 <html lang="en" data-theme="dark">
@@ -14,12 +16,12 @@
   <link rel="apple-touch-icon" href="assets/logo-boom-icon-512.png" />
   <script>/* Pre-paint theme (v0.53.0): saved bt_theme, else system preference, applied before the first stylesheet — the member header paints the right theme on frame one (admin pre-paint v2 precedent, theme half only; member pages carry no rail-collapse state). site-nav.js v2.12 owns the toggle listener. */(function(){try{var t=(window.localStorage&&localStorage.getItem("bt_theme"))||(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.dataset.theme=t;}catch(e){}})();</script>
   <script>try{var btTpl=localStorage.getItem("bt_template");if(btTpl)document.documentElement.dataset.template=btTpl;}catch(e){}</script>
-  <link rel="stylesheet" href="assets/tokens.css?v=0.170.0" />
-  <link rel="stylesheet" href="assets/app.css?v=0.170.0" />
+  <link rel="stylesheet" href="assets/tokens.css?v=0.171.0" />
+  <link rel="stylesheet" href="assets/app.css?v=0.171.0" />
 </head>
 <body>
   <header class="header chrome-glass">
-    <div class="wordmark"><img class="brand-logo" src="assets/logo-boom-icon-512.png?v=0.170.0" alt="" width="22" height="22" />Boomtown <span>Athletics</span></div>
+    <div class="wordmark"><img class="brand-logo" src="assets/logo-boom-icon-512.png?v=0.171.0" alt="" width="22" height="22" />Boomtown <span>Athletics</span></div>
     <div class="spacer"></div>
     <select id="orgSwitcher" class="org-switcher" aria-label="Switch organization" hidden></select>
     <button id="themeToggle" class="btn ghost theme-toggle" aria-label="Toggle dark or light theme">◐</button>
@@ -30,10 +32,10 @@
     <!-- rendered by app.js -->
   </main>
 
-  <script src="assets/config.js?v=0.170.0"></script>
-  <script src="assets/site-nav.js?v=0.170.0" defer></script>
-  <script src="assets/app.js?v=0.170.0"></script>
-  <script src="assets/passkey.js?v=0.170.0"></script>
+  <script src="assets/config.js?v=0.171.0"></script>
+  <script src="assets/site-nav.js?v=0.171.0" defer></script>
+  <script src="assets/app.js?v=0.171.0"></script>
+  <script src="assets/passkey.js?v=0.171.0"></script>
   <script>if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(function(){});</script>
 </body>
 </html>

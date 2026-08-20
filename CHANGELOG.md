@@ -1,5 +1,15 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.171.0 — 2026-08-20
+
+**§-1r RF-12, security half (owner 2026-08-18): no admin affordance on any member surface.** His words: *"there are options for the admin panel on that page or lead to the admin page. This is not allowable for security reason… There should be no admin access from this screen."* Every admin-leading affordance was enumerated FIRST, then removed — a removal pass that misses one has achieved nothing. Said honestly: none of them granted access (all 104 admin routes are gated server-side, enforced every run); they were affordances, not holes, and his least-surface instruction removes them anyway.
+
+Removed: (1) the static `#btHdrAdmin → admin.html` header anchor from all 17 canonical member pages, with site-nav.js's staff/admin reveal of it; (2) the staff-gated **Control Center** card from index.html's signed-in grid (app.js) — this ends D-22's owner-settled "exactly one way back" rule at his newer word; (3) the **Member/Manager sign-in tablist** from the login card — it only ever flipped hint copy (`bt_login_role` had no other reader), and one flow remains for everyone: the email link, or the passkey button passkey.js injects; (4) the **System (staff)** section from the member Settings page — two admin links plus an `/api/admin/push/test` caller. The push-test control moved to **Organization Settings** (admin-org-settings.html), where its route keeps a caller — deleting the only caller would have orphaned the route against route_reachability's shrink-only ratchet.
+
+Kept, deliberately: the **"Viewing as member — Exit" pill** — the only exit from the view-as-member preview (admin pages bounce back to home.html while `bt_demo_member` is set); a member can never see it, and removing it would trap staff in the preview. It is pinned by its own presence test, and site-nav.js code may name admin.html exactly once.
+
+Guards: `header_actions.test.mjs` v4.0 inverts the v3.0 reveal verdicts (absence, not presence) and adds a widest-set scan with everything DERIVED — an admin surface is any page loading admin-nav.js (which is what catches tournament.html), a member surface is every other shipped page plus the repo-root pages, and the scripts checked are exactly the local scripts member pages load. Comments are stripped at both grains with positive controls on the stripper, and the script-src extractor was probed before shipping (its first draft could not see past the cache-buster — the ≥20 floor caught it). `header_shell.test.mjs` v3.0 forbids the anchor outright (NC-M7/NC-M8 retired with their purpose stated: an outright ban has no attributes to misread). All new and inverted guards were watched failing against the pre-fix corpus — 13 reds, each accounted for. Suite 2097 → 2104.
+
 ## v0.170.0 — 2026-08-18
 
 **The court board keeps the withdrawn list through a drag (§-1r RF-6), and the sign-in page's theme toggle finally does something (§-1r RF-9).** Two owner-reported "not working" screens, and neither was a dead button.

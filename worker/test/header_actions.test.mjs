@@ -1,6 +1,18 @@
 /**
  * Boomtown Platform — header-actions guard
- * File: worker/test/header_actions.test.mjs · Version: v3.1 · Date: 2026-08-02 · Ships in: v0.53.1 (v3.0 v0.53.0)
+ * File: worker/test/header_actions.test.mjs · Version: v4.0 · Date: 2026-08-20 · Ships in: v0.171.0
+ *
+ * v4.0 (v0.171.0, §-1r RF-12 — owner 2026-08-18): "There should be no admin access from this
+ * screen." EVERY admin-leading affordance is REMOVED from every member surface: the static
+ * #btHdrAdmin anchor (17 pages), site-nav.js's role reveal, index.html's staff Control Center
+ * card, the login card's Manager tab, and settings.html's System (staff) section. Said honestly:
+ * none of them granted access — all admin routes are gated server-side — so this is
+ * least-surface, not a hole being closed; his instruction removes the affordances anyway.
+ * The v3.0 reveal verdicts INVERT (assert absence), and a new derived widest-set guard at the
+ * bottom keeps a NEW member page or script from reintroducing one. The single sanctioned
+ * admin.html reference left in member-loaded code is the "Viewing as member — Exit" pill:
+ * admin pages bounce back to home.html while bt_demo_member is set, so the pill is the only
+ * exit from the preview and deleting it is a navigation lockout, not a hardening.
  *
  * v3.1 (v0.53.1): guards for the two v2.14 source fixes. Both were found by external review of
  * v0.53.0 and both were shipped BEFORE these assertions existed — recorded here because the
@@ -56,12 +68,12 @@ const mailFillVerdict = (src) =>
   src.includes("function headerMailFill(") &&
   src.includes('document.getElementById("btHdrMail")') &&
   src.includes("inboxUnread");
-/* the Admin control: role-gated REVEAL of the static hidden element, still → admin.html
-   (the href lives in markup now; header_shell v2.0 asserts it there) */
-const adminRevealVerdict = (src) =>
-  src.includes('if (role === "admin" || role === "staff") (function headerAdminReveal()') &&
-  src.includes('document.getElementById("btHdrAdmin")') &&
-  src.includes("a.hidden = false");
+/* v4.0 (RF-12): the Admin control is GONE — site-nav.js may not reveal, inject, or even resolve
+   #btHdrAdmin. Any reappearance, by the old helper name or by a bare getElementById, is the
+   affordance coming back. (The pill's own rules live with the widest-set guard below.) */
+const noAdminRevealVerdict = (src) =>
+  !src.includes("headerAdminReveal") &&
+  !src.includes('getElementById("btHdrAdmin")');
 
 test("site-nav.js keeps NO header injectors (v3.0 — both controls are static; a survivor doubles them)", () => {
   assert.ok(noInjectorVerdict(read("assets/site-nav.js")),
@@ -77,9 +89,9 @@ test("site-nav.js FILLS the static mail badge (data fill, not element injection)
   assert.ok(mailFillVerdict(read("assets/site-nav.js")), "headerMailFill missing or altered");
 });
 
-test("site-nav.js REVEALS the static role-gated Admin link (owner call: static + hidden + reveal)", () => {
-  assert.ok(adminRevealVerdict(read("assets/site-nav.js")),
-    "Admin reveal missing, un-gated, or reverted to injection");
+test("site-nav.js keeps NO Admin reveal (RF-12 — no admin access from member screens)", () => {
+  assert.ok(noAdminRevealVerdict(read("assets/site-nav.js")),
+    "an Admin reveal is back in site-nav.js — RF-12 removed the affordance");
 });
 
 test("static btHdrMail on admin-nav pages AND the 15 canonical member pages — nowhere else, widest set", () => {
@@ -107,15 +119,9 @@ test("static btHdrMail on admin-nav pages AND the 15 canonical member pages — 
   assert.deepEqual(extras, [], `static ✉ on excluded pages (index/chromeless): ${extras.join(", ")}`);
 });
 
-test("static btHdrAdmin ships hidden on exactly the 15 canonical member pages — and NO admin page", () => {
-  const offendersAdmin = [], missing = [];
-  for (const f of pages()) {
-    const html = read(f);
-    if (isAdmin(html) && html.includes("btHdrAdmin")) offendersAdmin.push(f);
-    if (isMemberCanon(f, html) && !/id="btHdrAdmin"[^>]*hidden/.test(html)) missing.push(f);
-  }
-  assert.deepEqual(offendersAdmin, [], `btHdrAdmin leaked onto admin pages: ${offendersAdmin.join(", ")}`);
-  assert.deepEqual(missing, [], `canonical member pages missing the hidden Admin link: ${missing.join(", ")}`);
+test("btHdrAdmin appears NOWHERE in the shipped corpus (RF-12 — the anchor is removed, every page)", () => {
+  const offenders = pages().filter((f) => read(f).includes("btHdrAdmin"));
+  assert.deepEqual(offenders, [], `the removed Admin anchor is back: ${offenders.join(", ")}`);
 });
 
 test("NC-1: a re-added site-nav injector fails the no-injector check (v3.0 subject line)", () => {
@@ -137,14 +143,20 @@ test("NC-2: a stripped badge fill fails the fill check", () => {
     "removing the named fill helper must fail the verdict — if it passes, the verdict is blind");
 });
 
-test("NC-3: an un-gated Admin reveal fails the check", () => {
-  const mutated = read("assets/site-nav.js")
-    .replace('if (role === "admin" || role === "staff") (function headerAdminReveal()', "(function headerAdminReveal()");
-  assert.equal(adminRevealVerdict(mutated), false, "the role-gate check must notice a stripped gate");
+test("NC-3: a re-added Admin reveal FAILS the no-reveal verdict (the removed idiom, verbatim)", () => {
+  const src = read("assets/site-nav.js");
+  const mutated = src + '\n      (function headerAdminReveal() {\n' +
+    '        const a = document.getElementById("btHdrAdmin");\n' +
+    '        if (!a) return;\n        a.hidden = false;\n      })();';
+  assert.notEqual(mutated, src, "mutation did not land — NC is vacuous");
+  assert.equal(noAdminRevealVerdict(mutated), false,
+    "re-introducing the reveal must fail — if it passes, the verdict is blind");
 });
 
-test("NC-4: a reveal that stops un-hiding fails the check", () => {
-  assert.equal(adminRevealVerdict(read("assets/site-nav.js").replace("a.hidden = false", "")), false);
+test("NC-4: resolving #btHdrAdmin by id alone (no named helper) FAILS too", () => {
+  const mutated = read("assets/site-nav.js") + '\n      document.getElementById("btHdrAdmin");';
+  assert.equal(noAdminRevealVerdict(mutated), false,
+    "any #btHdrAdmin resolution in site-nav.js is the affordance back under another name");
 });
 
 /* ═══════════════ v3.1 — the two review fixes (v0.53.1) ═══════════════ */
@@ -253,8 +265,8 @@ test("NC: the call-site gate fails when the invocation is removed", () => {
    The owner reported the member page "switching back and forth and exposing the admin page".
    site-nav.js used to push a "Manage" group of four ADMIN destinations into the MEMBER nav for
    any staff viewer, while the admin shell's header links back to the member site — so each shell
-   advertised the other. Removed. The one way back is the single header #btHdrAdmin link, which
-   adminRevealVerdict above still requires, so this pair cannot be "fixed" by deleting both. */
+   advertised the other. Removed. (Until v4.0 the one way back was the header #btHdrAdmin link;
+   RF-12 removed that too — staff reach the Control Center by URL or bookmark now, his call.) */
 
 /* NAV hrefs only. site-nav.js legitimately names admin.html once more — the "Viewing as member —
    Exit" pill — and a verdict that scanned the whole file would fail on that and be wrong. */
@@ -266,7 +278,7 @@ test("the member sidebar offers NO admin destination (v2.15 — the reported she
   const src = read("assets/site-nav.js");
   assert.ok(navHrefs(src).length >= 10, `NAV href extraction collapsed (${navHrefs(src).length}) — idiom drift, not a clean scan`);
   assert.deepEqual(memberNavVerdict(src), [],
-    "an admin destination is back in the member nav; the way to the Control Center is the header link");
+    "an admin destination is back in the member nav — RF-12: no admin affordance on member surfaces");
 });
 
 test("NC-A1: re-adding one admin link to the member NAV FAILS the verdict", () => {
@@ -371,29 +383,32 @@ test("NC-A5: the deliberate 'View as member' navigation is NOT caught (scope con
    card. The suite was green over the owner's tester-round complaint that "the menu buttons lead
    into admin pages, not membership views", because the rule was enforced on the obedient file.
 
-   THE RULE IS THE ONE THE OWNER ALREADY SETTLED, not a new one: the member shell offers exactly
-   ONE way to the Control Center. site-nav.js satisfies it with the header #btHdrAdmin link;
-   index.html has no such header (app.js owns a reduced one — header_shell's documented
-   exception), so its single sanctioned exit is ONE admin.html card. Removing the cards without
-   leaving that exit would strand an admin on the member front door with no route to admin at
-   all — the exits must be enumerated before anything is taken away. */
+   THE RULE'S EXEMPTION ENDED WITH RF-12 (v4.0). D-22's owner-settled rule was "exactly ONE way
+   to the Control Center", and this verdict exempted the single admin.html card as that way. The
+   owner's 2026-08-18 word removes even that: the card grid offers NO admin surface at all, and
+   staff reach the Control Center by URL or bookmark. He was told the removal has that cost; the
+   ONE sanctioned admin.html reference left anywhere in member-loaded code is the
+   "Viewing as member — Exit" pill, whose presence test is below. */
 const cardHrefs = (src) => [...stripJs(src).matchAll(/card\("([^"]+)"/g)].map((m) => m[1]);
-const memberCardVerdict = (src) => cardHrefs(src).filter(isAdminSurface).filter((h) => h !== "admin.html");
+const memberCardVerdict = (src) =>
+  cardHrefs(src).filter((h) => isAdminSurface(h) || h === "admin.html");
 
-test("D-22: the member CARD GRID offers no admin destination either — the rule reaches app.js now", () => {
+test("D-22+RF-12: the member CARD GRID offers NO admin destination — admin.html included now", () => {
   const src = read("assets/app.js");
   assert.ok(cardHrefs(src).length >= 5, `card href extraction collapsed (${cardHrefs(src).length}) — idiom drift, not a clean scan`);
   assert.deepEqual(memberCardVerdict(src), [],
-    "an admin destination is on the member front door; the one way to the Control Center is the single admin.html card");
+    "an admin destination is on the member front door — RF-12 ended the one-card exemption");
 });
 
-test("D-22: ...and that single sanctioned exit EXISTS, so removing the cards did not strand admins", () => {
-  const src = read("assets/app.js");
-  assert.ok(cardHrefs(src).includes("admin.html"),
-    "index.html has no header Admin link (app.js owns a reduced header), so this card is the ONLY route " +
-    "from the member front door to the Control Center — deleting it is a navigation lockout");
-  assert.match(stripJs(src), /staff\s*\?\s*card\("admin\.html"/,
-    "the Control Center card must be staff-gated — a member has no business being offered it");
+test("RF-12: the sanctioned exit from view-as-member EXISTS — the pill is not a member affordance", () => {
+  /* Admin pages bounce back to home.html while bt_demo_member is set, so this pill is the ONLY
+     exit from the preview mode. It renders only for a staff/admin session that is already in
+     that mode — a member can never see it. Deleting it is a lockout, not a hardening. */
+  const code = stripJs(read("assets/site-nav.js"));
+  assert.match(code, /exitMemberView\("admin\.html"\)/,
+    "the Viewing-as-member Exit pill is gone — staff who enter the preview cannot leave it");
+  assert.equal((code.match(/admin\.html/g) || []).length, 1,
+    "site-nav.js code must name admin.html EXACTLY once (the pill) — a second naming is a new affordance");
 });
 
 test("NC-D22a: putting one admin destination back into the card grid FAILS the verdict", () => {
@@ -410,4 +425,139 @@ test("NC-D22b: tournament.html in the card grid is caught too (it loads admin-na
   assert.notEqual(mutated, src, "mutation did not land — NC is vacuous");
   assert.deepEqual(memberCardVerdict(mutated), ["tournament.html"],
     "tournament.html must count as an admin surface in the card grid, exactly as it does in the nav");
+});
+
+test("NC-D22c: the old Control Center card put back FAILS now (RF-12 ended the exemption)", () => {
+  const src = read("assets/app.js");
+  const mutated = src.replace('card("settings.html"',
+    'card("admin.html", "Control Center", "x", "Live")}\n          ${card("settings.html"');
+  assert.notEqual(mutated, src, "mutation did not land — NC is vacuous");
+  assert.deepEqual(memberCardVerdict(mutated), ["admin.html"],
+    "admin.html in the member card grid must be an offender — RF-12 ended the one-card exemption");
+});
+
+/* ═══════════ v4.0 — §-1r RF-12 (owner 2026-08-18): NO ADMIN AFFORDANCE ON ANY MEMBER SURFACE ═══════════
+   His words: "there are options for the admin panel on that page or lead to the admin page. This
+   is not allowable for security reason… There should be no admin access from this screen."
+   The guard is over the WIDEST set and everything is DERIVED, never listed:
+     · an ADMIN SURFACE is any web page that loads admin-nav.js — the property, not the filename,
+       which is what catches tournament.html (no admin- prefix);
+     · a MEMBER SURFACE is every other shipped page, plus the repo-root index.html and 404.html;
+     · the scripts checked are exactly the LOCAL scripts those member pages load, so a new page or
+       a new script joins the corpus by existing, and admin-side scripts (which legitimately name
+       admin pages) never enter it — an exclusion the derivation is itself tested for.
+   Comments are stripped at both grains first (a filename in prose is not an affordance), and the
+   stripping has its own positive control. */
+
+const ROOT_DIR = new URL("../../", import.meta.url);
+const readRoot = (p) => readFileSync(new URL(p, ROOT_DIR), "utf8");
+/* HTML comments first, then JS comments inside what remains (inline <script> bodies) */
+const stripHtml = (html) => stripJs(html.replace(/<!--[\s\S]*?-->/g, ""));
+const adminSurfaceSet = () => new Set(pages().filter((f) => isAdmin(read(f))));
+const memberSurfaceList = () => pages().filter((f) => !isAdmin(read(f)));
+const memberScriptList = () => {
+  const seen = new Set();
+  const htmls = memberSurfaceList().map((f) => read(f)).concat([readRoot("index.html"), readRoot("404.html")]);
+  for (const html of htmls)
+    /* the optional (?:\?…) arm eats the cache-buster: every shipped tag reads src="x.js?v=N.N.N",
+       and without that arm the closing quote can never match — probed before shipping, and the
+       ≥20 floor below is what catches this extractor going blind again */
+    for (const m of html.matchAll(/<script[^>]+src="(?!https?:)([^"?]+)(?:\?[^"]*)?"/g)) seen.add(m[1]);
+  return [...seen];
+};
+/* the shared verdict: which admin surfaces does this comment-stripped content still name? */
+const adminNamesIn = (content, admins) => [...admins].filter((a) => content.includes(a));
+
+test("RF-12: no member surface names an admin surface (derived both ways, comments stripped)", () => {
+  const admins = adminSurfaceSet();
+  assert.ok(admins.size >= 38, `admin-surface derivation collapsed: ${admins.size} (failure class 4)`);
+  assert.ok(admins.has("tournament.html") && admins.has("admin.html"),
+    "the derivation lost a known admin surface — the property scan broke, the corpus is not clean");
+  const members = memberSurfaceList();
+  assert.ok(members.length >= 22, `member-surface derivation collapsed: ${members.length}`);
+  assert.ok(members.includes("home.html") && members.includes("sheet.html"),
+    "the derivation lost a known member surface");
+  const offenders = [];
+  for (const f of members) {
+    const named = adminNamesIn(stripHtml(read(f)), admins);
+    if (named.length) offenders.push(`${f} → ${named.join(", ")}`);
+  }
+  for (const f of ["index.html", "404.html"]) {
+    const named = adminNamesIn(stripHtml(readRoot(f)), admins);
+    if (named.length) offenders.push(`root ${f} → ${named.join(", ")}`);
+  }
+  assert.deepEqual(offenders, [],
+    `member surfaces lead to admin screens (RF-12):\n  ${offenders.join("\n  ")}`);
+});
+
+test("RF-12: no script a member page loads names an admin surface — the pill excepted, exactly once", () => {
+  const admins = adminSurfaceSet();
+  const scripts = memberScriptList();
+  assert.ok(scripts.length >= 20, `member-script derivation collapsed: ${scripts.length}`);
+  assert.ok(scripts.includes("assets/site-nav.js") && scripts.includes("home.js"),
+    "the derivation lost a known member script");
+  assert.ok(!scripts.includes("assets/admin-nav.js") && !scripts.includes("assets/team-roster.js"),
+    "an admin-side script entered the member corpus — the exclusion broke, so the scan would " +
+    "either false-positive on legitimate admin links or be proving the wrong set clean");
+  const offenders = [];
+  for (const s of scripts) {
+    let code = stripJs(read(s));
+    /* the one sanctioned reference: String.replace removes only the FIRST occurrence, so the
+       allowance is exactly one — a second naming stays in `code` and is reported */
+    if (s === "assets/site-nav.js") code = code.replace('exitMemberView("admin.html")', "");
+    const named = adminNamesIn(code, admins);
+    if (named.length) offenders.push(`${s} → ${named.join(", ")}`);
+  }
+  assert.deepEqual(offenders, [],
+    `member-loaded scripts lead to admin screens (RF-12):\n  ${offenders.join("\n  ")}`);
+});
+
+test("NC-R1: an admin link added to a member page is caught", () => {
+  const admins = adminSurfaceSet();
+  const src = read("home.html");
+  const mutated = src + '\n<a href="admin-users.html">Manage</a>';
+  assert.notEqual(mutated, src, "mutation did not land — NC is vacuous");
+  assert.deepEqual(adminNamesIn(stripHtml(mutated), admins), ["admin-users.html"],
+    "an admin href on a member page must be reported — if this passes, the scan is blind");
+});
+
+test("NC-R2: an admin filename in an HTML comment does NOT trip the scan (stripper control)", () => {
+  const admins = adminSurfaceSet();
+  const src = read("home.html");
+  const mutated = src + "\n<!-- see admin-users.html -->";
+  assert.notEqual(mutated, src, "mutation did not land — NC is vacuous");
+  assert.deepEqual(adminNamesIn(stripHtml(mutated), admins), [],
+    "a filename in prose is not an affordance — a broken stripper turns every documented mention " +
+    "into a false offender");
+});
+
+test("NC-R3: an admin navigation added to a member-loaded script is caught", () => {
+  const admins = adminSurfaceSet();
+  const src = read("assets/schedule.js");
+  const mutated = src + '\nlocation.href = "admin-events.html";';
+  assert.notEqual(mutated, src, "mutation did not land — NC is vacuous");
+  assert.deepEqual(adminNamesIn(stripJs(mutated), admins), ["admin-events.html"],
+    "an admin destination in a member-loaded script must be reported");
+});
+
+test("NC-R4: a JS comment naming an admin page does NOT trip the scan — and the stripper is not blind", () => {
+  const admins = adminSurfaceSet();
+  const src = read("assets/schedule.js");
+  const commented = src + "\n// see admin-events.html for the admin grid";
+  assert.notEqual(commented, src, "mutation did not land — NC is vacuous");
+  assert.deepEqual(adminNamesIn(stripJs(commented), admins), [],
+    "a comment mention must not be an offender");
+  /* positive control on the stripper itself: the SAME needle outside a comment IS kept */
+  assert.deepEqual(adminNamesIn(stripJs(commented + '\nlocation.href = "admin-events.html";'), admins),
+    ["admin-events.html"], "the stripper ate live code — it is deleting more than comments");
+});
+
+test("NC-R5: a SECOND code-level admin.html in site-nav.js is caught — the pill allowance is one", () => {
+  const admins = adminSurfaceSet();
+  const src = read("assets/site-nav.js");
+  const mutated = src + '\nlocation.href = "admin.html";';
+  assert.notEqual(mutated, src, "mutation did not land — NC is vacuous");
+  const code = stripJs(mutated).replace('exitMemberView("admin.html")', "");
+  assert.deepEqual(adminNamesIn(code, admins), ["admin.html"],
+    "with the pill's single allowance spent, a second admin.html reference must be reported");
 });

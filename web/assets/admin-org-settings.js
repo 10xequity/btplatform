@@ -345,6 +345,20 @@
     };
   }
 
+  /* ---------------- push test (RF-12: moved here from the member Settings page) ---------------- */
+
+  function wirePushTest() {
+    const ptb = $("pushTestBtn");
+    if (!ptb) return;
+    ptb.onclick = async () => {
+      ptb.disabled = true; ptb.textContent = "Sending…";
+      const r = await api("/api/admin/push/test", { method: "POST", body: "{}" });
+      ptb.disabled = false;
+      ptb.textContent = r.ok ? `Sent to ${r.data.sent || 0} device${(r.data.sent || 0) === 1 ? "" : "s"}` : ((r.data && r.data.error) || "Failed");
+      setTimeout(() => { ptb.textContent = "Send test"; }, 4000);
+    };
+  }
+
   /* ---------------- boot ---------------- */
 
   async function load() {
@@ -356,6 +370,7 @@
   try {
     await load();
     wireDefaultOrg();   // after load(): it reads `loaded.id`
+    wirePushTest();     // RF-12: the /api/admin/push/test caller lives on an admin page now
     await loadModules();
     await loadAllOrgs();
   } catch (e) {
