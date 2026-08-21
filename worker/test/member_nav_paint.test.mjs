@@ -1,6 +1,15 @@
 /**
  * Boomtown Platform — member rail paints before its badge fetches (§-1c D-15)
- * File: worker/test/member_nav_paint.test.mjs · Version: v1.0 · Date: 2026-08-08 · Ships in: v0.105.0
+ * File: worker/test/member_nav_paint.test.mjs · Version: v1.1 · Date: 2026-08-20 · Ships in: v0.172.0
+ *
+ * v1.1 (v0.172.0, §-1r RF-12(4) + §-1c D-50 — owner 2026-08-18): this file also owns the member
+ * rail's CONTENT contract now. His order pinned verbatim ("Inbox should be 2 or 3, while Home at
+ * #1, then notifications"), one named route to the public grid (Explore — his option B), no two
+ * items sharing a name (D-19's class), and the FRAGMENT CONTRACT: a rail item that promises a
+ * page section must point at an id that exists in that page's static markup — D-50 was
+ * "Notifications" pointing at home.html#notifications while no such id existed anywhere, so the
+ * click silently landed at the top of the page. Two correct halves (a rail that names an anchor,
+ * a page that renders a box) with nothing asserting the seam — the v0.170.0 class again.
  *
  * ── D-15'S RECORDED CANDIDATE MECHANISM WAS WRONG, AND FINDING THAT OUT IS THE UNIT ─────────
  * D-15 was filed as "site-nav.js:273 rebuilds the whole rail with aside.innerHTML on every
@@ -172,4 +181,92 @@ test("NC-N3: a COMMENT naming an endpoint in the critical path must not be read 
   const v = railPaintsBeforeBadges(mutated);
   assert.equal(v.ok, true,
     `a commented-out endpoint name was counted as a live request: ${JSON.stringify(v.offenders)}`);
+});
+
+/* ═══════════ v1.1 — §-1r RF-12(4) + §-1c D-50: the member rail's content contract ═══════════ */
+
+const WEB_DIR = new URL("../../web/", import.meta.url);
+/* one item per line is the file's own idiom; the ≥ floors below are what notice this extractor
+   going blind if the idiom ever changes (the v0.171.0 script-src lesson) */
+const navItemsOf = (src) =>
+  [...src.matchAll(/\{ href: "([^"]+)",\s*ico: "[^"]*",\s*text: "([^"]+)"/g)]
+    .map((m) => ({ href: m[1], text: m[2] }));
+/* the signed-in slice: from the You push to the signed-out else-branch */
+const signedInItemsOf = (src) => {
+  const t = blankComments(src);
+  const you = t.indexOf('NAV.push({ label: "You"');
+  if (you === -1) return null;
+  const elseAt = t.indexOf("} else {", you);
+  return navItemsOf(t.slice(you, elseAt === -1 ? undefined : elseAt));
+};
+const HIS_ORDER = [
+  ["Home", "home.html"],
+  ["Notifications", "home.html#notifications"],
+  ["Inbox", "member-inbox.html"],
+];
+const deadFragmentsOf = (src) => {
+  const dead = [];
+  for (const i of navItemsOf(blankComments(src))) {
+    const hash = i.href.indexOf("#");
+    if (hash === -1) continue;
+    const page = i.href.slice(0, hash), frag = i.href.slice(hash + 1);
+    const html = readFileSync(new URL(page, WEB_DIR), "utf8");
+    if (!html.includes(`id="${frag}"`)) dead.push(`${i.text} → ${i.href}`);
+  }
+  return dead;
+};
+
+test("RF-12(4): the signed-in rail leads with HIS order — Home, then Notifications, then Inbox", () => {
+  const items = signedInItemsOf(readNav());
+  assert.ok(items && items.length >= 12, `signed-in item extraction collapsed: ${items && items.length}`);
+  assert.deepEqual(items.slice(0, 3).map((i) => [i.text, i.href]), HIS_ORDER,
+    'owner 2026-08-18: "Inbox should be 2 or 3, while Home at #1, then notifications"');
+  /* and You is the FIRST thing a signed-in member sees: the base literal carries no groups,
+     so the first push in the file — the signed-in branch runs first — is the top of the rail */
+  const t = blankComments(readNav());
+  assert.match(t, /const NAV = \[\];/, "the base NAV literal must be empty — groups are pushed per state");
+  assert.equal(t.indexOf("NAV.push("), t.indexOf('NAV.push({ label: "You"'),
+    "a group is pushed above You — Home is no longer #1 for a signed-in member");
+});
+
+test("RF-12(2)+D-19: ONE route to the public grid, named Explore — and no two items share a name", () => {
+  const items = signedInItemsOf(readNav());
+  const grid = items.filter((i) => i.href.split("#")[0] === "index.html");
+  assert.deepEqual(grid.map((i) => i.text), ["Explore"],
+    "a signed-in member keeps exactly one route to the public card grid, named Explore (his option B)");
+  const texts = items.map((i) => i.text);
+  assert.equal(new Set(texts).size, texts.length,
+    `two rail items share a name, so a member cannot predict which screen they get (D-19): ${texts.join(" · ")}`);
+});
+
+test("D-50: every fragment href in the rail points at an id that EXISTS in the target page", () => {
+  const all = navItemsOf(blankComments(readNav()));
+  assert.ok(all.length >= 20, `rail item extraction collapsed: ${all.length}`);
+  assert.ok(all.some((i) => i.href.includes("#")),
+    "no fragment hrefs found at all — the extractor lost the very class this guards");
+  assert.deepEqual(deadFragmentsOf(readNav()), [],
+    "rail items promise page sections that do not exist — the click silently lands at the top (D-50)");
+});
+
+test("NC-D50a: a rail fragment pointed at a missing id IS reported", () => {
+  const src = readNav();
+  const mutated = src.replace('home.html#notifications', 'home.html#nope-never-an-id');
+  assert.notEqual(mutated, src, "mutation did not land — NC is vacuous");
+  assert.deepEqual(deadFragmentsOf(mutated), ["Notifications → home.html#nope-never-an-id"],
+    "a dead fragment must be reported by name — if this passes, the contract check is blind");
+});
+
+test("NC-D50b: swapping Notifications below Inbox FAILS the order pin", () => {
+  const src = readNav();
+  const items = signedInItemsOf(src);
+  assert.deepEqual(items.slice(0, 3).map((i) => [i.text, i.href]), HIS_ORDER,
+    "the real source must satisfy his order or this NC proves nothing");
+  const mutated = src
+    .replace('{ href: "home.html#notifications", ico: "◔", text: "Notifications", key: "notifications" },', "@@HOLD@@")
+    .replace('{ href: "member-inbox.html", ico: "✉", text: "Inbox", key: "inbox" },',
+      '{ href: "member-inbox.html", ico: "✉", text: "Inbox", key: "inbox" },\n        { href: "home.html#notifications", ico: "◔", text: "Notifications", key: "notifications" },')
+    .replace("@@HOLD@@\n", "");
+  assert.notEqual(mutated, src, "mutation did not land — NC is vacuous");
+  assert.notDeepEqual(signedInItemsOf(mutated).slice(0, 3).map((i) => [i.text, i.href]), HIS_ORDER,
+    "with Notifications demoted the order pin must fail — his order is the assertion");
 });

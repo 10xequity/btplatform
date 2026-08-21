@@ -1,4 +1,11 @@
 /* Boomtown Platform — Site-wide sidebar navigation (shared)
+   v2.22 (v0.172.0, §-1r RF-12(4)/(2) + §-1c D-19/D-50, owner 2026-08-18): the member menu is
+   rebuilt most-useful-first per his order — You (Home · Notifications · Inbox) · Play · Explore ·
+   Account. "Home" is now the member's own home (home.html); the public card grid's one signed-in
+   route is named "Explore" (his option B), ending D-19's two-homes collision. The Notifications
+   item's #notifications anchor now EXISTS (home.html's feed box carries the id — D-50), and the
+   signed-out Sign in item drops its dead #signin fragment. See the block comment at the NAV
+   build; guards in member_nav_paint.test.mjs v1.1.
    v2.21 (v0.171.0, §-1r RF-12, owner 2026-08-18): the staff/admin header reveal is DELETED with
    the static #btHdrAdmin anchor it revealed — "There should be no admin access from this
    screen." No member surface offers a route to the admin shell any more; staff go by URL or
@@ -57,7 +64,7 @@
    falls back to `roles[0]`, which handed a caller their role in ANOTHER org when they had none in
    the org on screen. Both are presentation-only — requireStaff re-checks userId + orgId on every
    admin route — but presentation is what was reported. Guards: header_actions.test.mjs.
-   File: web/assets/site-nav.js · Version: v2.21 · Date: 2026-08-20 · Ships in: v0.171.0
+   File: web/assets/site-nav.js · Version: v2.22 · Date: 2026-08-20 · Ships in: v0.172.0
    v2.11: header "Admin" switch (owner 2026-08-02) — staff/admin who are also players get a
    header button on member pages to jump back to the Control Center, next to the mail icon
    and theme toggle. Clears bt_demo_member on click (same escape as the exit pill). Role-gated
@@ -212,17 +219,25 @@
       } catch (e) { /* offline: render public nav */ }
     }
 
-    const NAV = [
-      { label: "Explore", items: [
-        { href: "index.html",    ico: "⌂", text: "Home" },
-        { href: "schedule.html", ico: "▣", text: "Schedule" },
-        { href: "live.html",     ico: "◉", text: "Live scores" },
-        { href: "leagues.html",  ico: "◇", text: "Leagues" },
-        { href: "lfg.html",      ico: "◆", text: "Community Play" },
-        { href: "library.html",  ico: "◎", text: "Player Library" },
-        { href: "help.html",     ico: "?", text: "Help & FAQ" },
-      ]},
-    ];
+    /* v2.22 (§-1r RF-12(4) + RF-12(2) + D-19/D-50, owner 2026-08-18): the member menu is built
+       per state, most-useful-first — his words: "Realign that menu from most useful to least
+       useful. Inbox should be 2 or 3, while Home at #1, then notifications… Group things
+       together that make sense."
+       · HOME IS THE MEMBER'S OWN HOME (home.html — the screen titled My Dashboard), because his
+         item 12 said "Dashboard should be the primary screen for members". That reading is an
+         assumption recorded in roadmap §-1r; if he corrects it, his word governs.
+       · The public card grid (index.html) keeps exactly ONE signed-in route, named EXPLORE —
+         his option B — which also ends D-19 (two landing pages both named like home).
+       · Groups follow the §-1f F-5/F-6 proposal (delivered v0.106.0, held until his order):
+         You (the badge-bearing three, his order) · Play (the product; Leagues above Live scores
+         because a league night is a weekly destination, live scores an event-day one) ·
+         Explore (browse surfaces) · Account (convention: account last, Help with it).
+       · F-5's signed-out/signed-in position stability is deliberately traded away — his
+         explicit order outranks it. Signed-out keeps the public list with Home first: a
+         visitor's home IS the front door.
+       Guards: member_nav_paint.test.mjs v1.1 (his order · one Explore route · no duplicate
+       names · the fragment contract). */
+    const NAV = [];
     if (signedIn) {
       /* v2.16 (§-1c D-15) — THE BADGE FETCHES NO LONGER GATE THE RAIL.
          They used to sit here, two SERIALLY AWAITED round trips before the rail was appended at
@@ -236,12 +251,25 @@
          they are filled into the live DOM by fillNavBadges() AFTER the append, and fetched in
          PARALLEL rather than in series. member_nav_paint.test.mjs pins the ordering. */
       NAV.push({ label: "You", items: [
-        { href: "home.html",     ico: "▦", text: "My Dashboard" },
+        { href: "home.html",     ico: "⌂", text: "Home" },
         { href: "home.html#notifications", ico: "◔", text: "Notifications", key: "notifications" },
         { href: "member-inbox.html", ico: "✉", text: "Inbox", key: "inbox" },
+      ]});
+      NAV.push({ label: "Play", items: [
+        { href: "schedule.html", ico: "▣", text: "Schedule" },
+        { href: "leagues.html",  ico: "◇", text: "Leagues" },
+        { href: "live.html",     ico: "◉", text: "Live scores" },
+        { href: "lfg.html",      ico: "◆", text: "Community Play" },
+      ]});
+      NAV.push({ label: "Explore", items: [
+        { href: "index.html",    ico: "▦", text: "Explore" },
+        { href: "library.html",  ico: "◎", text: "Player Library" },
+      ]});
+      NAV.push({ label: "Account", items: [
         { href: "profile.html",  ico: "◉", text: "My Profile" },
         { href: "membership.html", ico: "★", text: "Membership" },
         { href: "settings.html", ico: "⚙", text: "Settings" },
+        { href: "help.html",     ico: "?", text: "Help & FAQ" },
       ]});
       const demoMember = ssGet("bt_demo_member") === "1";
       /* v2.17 (§-1r RF-12, owner 2026-08-18): the v2.11/v2.13 header Admin reveal is GONE, with
@@ -273,8 +301,19 @@
          shortcut, and it is what made the member site read as an admin surface.
          Also serves the same report's "menus need to be optimized and reviewed for brevity". */
     } else {
+      NAV.push({ label: "Explore", items: [
+        { href: "index.html",    ico: "⌂", text: "Home" },
+        { href: "schedule.html", ico: "▣", text: "Schedule" },
+        { href: "leagues.html",  ico: "◇", text: "Leagues" },
+        { href: "live.html",     ico: "◉", text: "Live scores" },
+        { href: "lfg.html",      ico: "◆", text: "Community Play" },
+        { href: "library.html",  ico: "◎", text: "Player Library" },
+        { href: "help.html",     ico: "?", text: "Help & FAQ" },
+      ]});
       NAV.push({ label: "Account", items: [
-        { href: "index.html#signin", ico: "→", text: "Sign in" },
+        /* D-50's class: index.html has no id="signin" — the login card is JS-rendered — so the
+           old #signin fragment was dead weight. The page IS the sign-in screen; link it plainly. */
+        { href: "index.html",    ico: "→", text: "Sign in" },
       ]});
     }
 
@@ -507,7 +546,7 @@
       if (window.BT_STATUS || document.getElementById("bt-status-js")) return;
       var s = document.createElement("script");
       s.id = "bt-status-js";
-      s.src = "assets/build-status.js?v=0.171.0";
+      s.src = "assets/build-status.js?v=0.172.0";
       s.async = false;
       document.head.appendChild(s);
     } catch (e) { /* indicators are never load-blocking */ }
