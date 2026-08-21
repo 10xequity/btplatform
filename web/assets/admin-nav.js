@@ -276,6 +276,8 @@
     { label: "Run events", key: "run", items: [
       { href: "admin.html",               ico: "dash",   text: "Dashboard" },
       { href: "admin-events.html",        ico: "events", text: "Events & Programs" },
+      { href: "admin-manage.html#tournaments", ico: "ops", text: "Tournament Management" },
+      { href: "admin-manage.html#leagues", ico: "league", text: "League Management" },
       { href: "admin-registrations.html", ico: "regs",   text: "Registrations" },
       { href: "admin-waitlists.html",     ico: "regs",   text: "Waitlists" },
       { href: "admin-checkin.html",       ico: "door",   text: "Check-in" },
@@ -910,7 +912,7 @@
       if (window.BT_STATUS || document.getElementById("bt-status-js")) return;
       var s = document.createElement("script");
       s.id = "bt-status-js";
-      s.src = "assets/build-status.js?v=0.172.0";
+      s.src = "assets/build-status.js?v=0.173.0";
       s.async = false;
       document.head.appendChild(s);
     } catch (e) { /* indicators are never load-blocking */ }

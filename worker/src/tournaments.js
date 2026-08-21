@@ -60,7 +60,7 @@ async function listEvents(request, env, ctx) {
   const staff = await isStaff(env, ctx, orgId);
   const rows = (await env.DB.prepare(
     staff
-      ? "SELECT id, org_id, type, name, starts_at, location, court_count, format_template, status FROM events WHERE org_id=?1 AND deleted_at IS NULL ORDER BY starts_at DESC, id DESC"
+      ? "SELECT id, org_id, type, name, starts_at, ends_at, location, court_count, format_template, status FROM events WHERE org_id=?1 AND deleted_at IS NULL ORDER BY starts_at DESC, id DESC"
       : "SELECT id, org_id, type, name, starts_at, location, status FROM events WHERE org_id=?1 AND status IN ('published','in_progress','completed') AND deleted_at IS NULL ORDER BY starts_at DESC, id DESC"
   ).bind(orgId).all()).results;
   return json({ events: rows });

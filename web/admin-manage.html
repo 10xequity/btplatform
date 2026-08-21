@@ -1,50 +1,46 @@
 <!DOCTYPE html>
-<!-- Boomtown Platform — Media consent record · Version: v1.0 · Date: 2026-07-26 · Ships in: v0.25.0
-     Waiver v2 §6 grants an irrevocable likeness release, and per D-WV-10 the ONLY decline
-     path is a written request to a named address. This page is where that request gets
-     recorded. There is deliberately no member-facing self-serve opt-out — adding one would
-     contradict the owner's decision, not implement it. Staff-only. -->
+<!-- Boomtown Platform — Tournament / League Management picker (admin) · Version: v1.0 · Date: 2026-08-21 · Ships in: v0.173.0
+     §-1r RF-4, the owner's option C (2026-08-18, verbatim): "tournaments and Leagues have their
+     own buttons for management that sorts which they can pick of a filtered list." Two rail
+     entries (#tournaments / #leagues) land here; the module lists that type's ACTIVE events and
+     each row opens the event's manager hub (admin-manager.html?event=N). Past events fall off
+     the active list (RF-4b — rule and its measurement in admin-manage.js) and stay one click
+     away behind the Show-past toggle, and on Events & Programs for duplication and history. -->
 <html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Media consent — Boomtown Athletics</title>
+  <title>Management — Boomtown Athletics</title>
   <script>/* Pre-paint state — collapse + theme (uiux-review §4/§6.4, v0.52.0): read the bt_nav cookie and the saved theme BEFORE the first stylesheet so the rail state AND the theme are right on frame one — no post-paint snap of either. admin-nav.js writes the cookie on rail toggle and bt_theme on theme toggle; the localStorage bt_nav fallback migrates pre-v0.51 sessions. */(function(){try{var m=document.cookie.match(/(?:^|; )bt_nav=([^;]*)/);var v=m?m[1]:((window.localStorage&&localStorage.getItem("bt_nav_collapsed")==="1")?"min":"");if(v==="min")document.documentElement.dataset.nav="min";var t=(window.localStorage&&localStorage.getItem("bt_theme"))||(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.dataset.theme=t;}catch(e){}})();</script>
   <script>try{var btTpl=localStorage.getItem("bt_template");if(btTpl)document.documentElement.dataset.template=btTpl;}catch(e){}</script>
   <link rel="stylesheet" href="assets/tokens.css?v=0.173.0" />
   <link rel="stylesheet" href="assets/app.css?v=0.173.0" />
   <link rel="stylesheet" href="assets/admin.css?v=0.173.0" />
   <style>
-    .mc-grid { display: grid; grid-template-columns: minmax(0,340px) minmax(0,1fr); gap: 20px; align-items: start; }
-    @media (max-width: 860px) { .mc-grid { grid-template-columns: 1fr; } }
-    .mc-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
-    .mc-card h2 { margin: 0 0 4px; font-size: 16px; }
-    label.fld { display: block; font-size: 13px; font-weight: 600; margin: 14px 0 5px; }
-    .mc-card input[type=text], .mc-card input[type=date], .mc-card select, .mc-card textarea {
-      width: 100%; box-sizing: border-box; min-height: 44px; padding: 8px 12px; font-size: 15px;
-      background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 8px; }
-    .mc-card textarea { min-height: 72px; resize: vertical; font-family: inherit; }
-    .mc-card :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
-    .mc-btn { min-height: 44px; padding: 0 16px; font-size: 15px; font-weight: 600; cursor: pointer;
-      background: var(--primary); color: var(--bg); border: 0; border-radius: 8px;
-      transition: transform 120ms cubic-bezier(.23,1,.32,1); }
-    .mc-btn:active { transform: scale(.97); }
-    .mc-btn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
-    .mc-btn.ghost { background: transparent; color: var(--text); border: 1px solid var(--border); }
-    .mc-row { display: flex; gap: 12px; align-items: flex-start; padding: 12px 0;
-      border-bottom: 1px solid var(--border); }
-    .mc-row:last-child { border-bottom: 0; }
-    .mc-row .who { flex: 1; min-width: 0; }
-    .mc-row .who b { display: block; font-size: 15px; }
-    .mc-row .who span { font-size: 13px; color: var(--text-dim); }
-    .msg { font-size: 14px; margin: 10px 0 0; min-height: 20px; }
-    .msg.bad { color: var(--danger); } .msg.good { color: var(--positive); }
-    .note { font-size: 13px; color: var(--text-dim); line-height: 1.55; }
-    @media (prefers-reduced-motion: reduce) { .mc-btn { transition: none; } .mc-btn:active { transform: none; } }
+    .mg-head { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 4px; }
+    .mg-head h1 { margin: 0; }
+    .mg-sub { color: var(--text-muted); margin: 0 0 16px; }
+    .mg-list { display: flex; flex-direction: column; gap: 10px; }
+    .mg-list[hidden] { display: none; } /* hidden must beat the flex rule above — hidden_overlay.test.mjs */
+    .mg-row { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; padding: 14px 16px;
+      border: 1px solid var(--border); border-radius: 10px; background: var(--surface);
+      color: inherit; text-decoration: none; min-height: 44px; }
+    .mg-row:hover, .mg-row:focus-visible { border-color: var(--gold, #c9a227); }
+    .mg-row .mg-name { font-weight: 700; }
+    .mg-row .mg-when, .mg-row .mg-where { color: var(--text-muted); font-size: 13px; }
+    .mg-row .mg-go { margin-left: auto; color: var(--text-muted); }
+    .mg-status { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px;
+      font-weight: 700; border: 1px solid var(--border); }
+    .mg-status.in_progress { color: var(--positive, #4cc38a); border-color: currentColor; }
+    .mg-status.draft { color: var(--text-muted); }
+    .mg-row.past { opacity: 0.62; }
+    .mg-empty { color: var(--text-muted); padding: 18px 4px; }
+    .mg-pastbar { margin-top: 20px; }
+    .mg-foot { color: var(--text-muted); font-size: 13px; margin-top: 14px; }
   </style>
 </head>
 <body>
-  <header class="header chrome-glass no-print">
+    <header class="header chrome-glass no-print">
     <a class="wordmark" href="admin.html" style="text-decoration:none;color:inherit"><img class="brand-logo" src="assets/logo-boom-icon-512.png?v=0.173.0" alt="" width="22" height="22" />Boomtown <span>Athletics</span></a>
     <div class="spacer"></div>
     <select id="orgSwitcher" class="org-switcher" aria-label="Switch organization"></select>
@@ -53,7 +49,7 @@
     <a class="btn ghost" href="index.html">Member site</a>
   </header>
 
-  <div class="admin-layout">
+  <div id="app" class="admin-layout">
     <aside class="sidebar" data-static="rail" aria-label="Admin sections">
       <nav class="nav-group" data-key="run">
         <div class="nav-label" role="button" tabindex="0" aria-expanded="true">Run events<span class="grp-chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></span></div>
@@ -127,161 +123,21 @@
       </nav>
       <button class="bt-edge" type="button" aria-label="Collapse or expand navigation"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
     </aside>
-  <main class="main wide admin-main" id="app">
-    <div class="page-head"><h1>Media consent</h1></div>
-    <p class="note" style="max-width:70ch;margin:0 0 18px">
-      The waiver grants Boomtown a likeness release, and the only way to decline it is a
-      written request. When one arrives, record it here — otherwise the next person picking
-      photos has no way to know. This is a legal record: it keeps history, and withdrawing an
-      opt-out does not erase that it existed.
-    </p>
-
-    <div class="mc-grid">
-      <div class="mc-card">
-        <h2>Record an opt-out</h2>
-        <p class="note" style="margin:0">Only after a written request.</p>
-        <label class="fld" for="q">Member</label>
-        <input type="text" id="q" placeholder="Search by name or email" autocomplete="off"
-               aria-describedby="qHint" />
-        <p class="note" id="qHint" style="margin:4px 0 0">Pick from the results below.</p>
-        <div id="results" style="margin-top:8px"></div>
-
-        <label class="fld" for="via">How it arrived</label>
-        <select id="via">
-          <option value="email">Email</option>
-          <option value="post">Letter</option>
-          <option value="in_person">In person, written</option>
-          <option value="phone">Phone (write a note)</option>
-          <option value="other">Other</option>
-        </select>
-
-        <label class="fld" for="ref">Where the request came from</label>
-        <input type="text" id="ref" placeholder="sender@example.com, or a message reference"
-               aria-describedby="refHint" />
-        <p class="note" id="refHint" style="margin:4px 0 0">
-          Required. A record with no pointer to the writing can't be defended later.
-        </p>
-
-        <label class="fld" for="when">Date of the request</label>
-        <input type="date" id="when" />
-
-        <label class="fld" for="note">Note (optional)</label>
-        <textarea id="note" placeholder="e.g. applies to both children"></textarea>
-
-        <div style="margin-top:16px"><button class="mc-btn" id="save" type="button" disabled>Record opt-out</button></div>
-        <p class="msg" id="msg" role="alert"></p>
+    <main class="content">
+      <div class="mg-head">
+        <h1 id="mgTitle">Management</h1>
       </div>
-
-      <div class="mc-card">
-        <h2>Current opt-outs <span id="count" style="color:var(--text-dim);font-weight:400"></span></h2>
-        <p class="note" style="margin:0 0 6px">Do not publish photos of these members.</p>
-        <div id="list"><p class="note">Loading…</p></div>
+      <p class="mg-sub" id="mgSub">Pick an event to open its manager hub.</p>
+      <div id="mgActive" class="mg-list" aria-live="polite"></div>
+      <div class="mg-pastbar">
+        <button id="mgPastToggle" class="btn ghost" type="button" hidden></button>
       </div>
-    </div>
-  </main>
+      <div id="mgPast" class="mg-list" hidden></div>
+      <p class="mg-foot">Past events stay on <a href="admin-events.html">Events &amp; Programs</a> to duplicate or review — they just don’t crowd this list.</p>
+    </main>
   </div>
-
   <script src="assets/config.js?v=0.173.0"></script>
-  <script src="assets/admin-nav.js?v=0.173.0" defer></script>
-  <script src="assets/build-status.js?v=0.173.0" defer></script>
-  <script>
-  document.addEventListener("DOMContentLoaded", function () {
-    "use strict";
-    var A = window.BT_ADMIN;
-    var esc = function (s) {
-      return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
-        return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
-      });
-    };
-    var picked = null, timer = null;
-    var $ = function (id) { return document.getElementById(id); };
-
-    function say(t, bad) { $("msg").textContent = t; $("msg").className = "msg " + (bad ? "bad" : "good"); }
-    function refreshBtn() { $("save").disabled = !(picked && $("ref").value.trim().length >= 3); }
-    $("ref").addEventListener("input", refreshBtn);
-
-    $("q").addEventListener("input", function () {
-      clearTimeout(timer);
-      var term = $("q").value.trim();
-      picked = null; refreshBtn();
-      if (term.length < 2) { $("results").innerHTML = ""; return; }
-      timer = setTimeout(function () {
-        A.api("/api/admin/members?q=" + encodeURIComponent(term)).then(function (r) {
-          var rows = (r.ok && r.data.members) || [];
-          if (!rows.length) { $("results").innerHTML = '<p class="note">No match.</p>'; return; }
-          $("results").innerHTML = rows.slice(0, 8).map(function (c) {
-            return '<button class="mc-btn ghost" style="display:block;width:100%;text-align:left;margin:4px 0" ' +
-              'data-id="' + c.id + '" data-n="' + esc(c.full_name || c.email) + '" type="button">' +
-              esc(c.full_name || "(no name)") + ' <span style="color:var(--text-dim);font-weight:400">' +
-              esc(c.email || "") + "</span></button>";
-          }).join("");
-          Array.prototype.forEach.call($("results").querySelectorAll("button"), function (b) {
-            b.addEventListener("click", function () {
-              picked = { id: Number(b.dataset.id), name: b.dataset.n };
-              $("q").value = b.dataset.n;
-              $("results").innerHTML = '<p class="note">Selected: <b>' + esc(b.dataset.n) + "</b></p>";
-              refreshBtn();
-            });
-          });
-        }).catch(function () { $("results").innerHTML = '<p class="note">Search unavailable.</p>'; });
-      }, 250);
-    });
-
-    $("save").addEventListener("click", function () {
-      if (!picked) return;
-      $("save").disabled = true;
-      A.api("/api/admin/media-consent", {
-        method: "POST",
-        body: JSON.stringify({
-          contact_id: picked.id, received_via: $("via").value,
-          reference: $("ref").value.trim(), note: $("note").value.trim(),
-          requested_at: $("when").value || null,
-        }),
-      }).then(function (r) {
-        if (r.ok && r.data.ok) {
-          say(r.data.already ? "Already on file — nothing changed." : "Recorded.", false);
-          $("ref").value = ""; $("note").value = ""; $("q").value = "";
-          $("results").innerHTML = ""; picked = null;
-          load();
-        } else { say((r.data && r.data.error) || "Couldn't save that.", true); }
-        refreshBtn();
-      }).catch(function () { say("Couldn't reach the server.", true); refreshBtn(); });
-    });
-
-    function load() {
-      A.api("/api/admin/media-consent").then(function (r) {
-        if (!r.ok) { $("list").innerHTML = '<p class="note">Couldn\'t load.</p>'; return; }
-        var rows = r.data.opted_out || [];
-        $("count").textContent = "(" + rows.length + ")";
-        if (!rows.length) {
-          $("list").innerHTML = '<p class="note">Nobody has opted out. That is the expected state — ' +
-            "the release is part of the waiver and declining takes a written request.</p>";
-          return;
-        }
-        $("list").innerHTML = rows.map(function (m) {
-          return '<div class="mc-row"><div class="who"><b>' + esc(m.full_name || "(no name)") + "</b>" +
-            "<span>" + esc(m.email || "") + " · " + esc(m.received_via || "") + " · " +
-            esc(String(m.requested_at || m.created_at || "").slice(0, 10)) + "</span>" +
-            (m.note ? '<span style="display:block">' + esc(m.note) + "</span>" : "") +
-            "</div>" +
-            '<button class="mc-btn ghost" data-c="' + m.contact_id + '" type="button">Withdraw</button></div>';
-        }).join("");
-        Array.prototype.forEach.call($("list").querySelectorAll("button[data-c]"), function (b) {
-          b.addEventListener("click", function () {
-            var ref = window.prompt("Where did the withdrawal come from? (sender's address or a reference)");
-            if (!ref || ref.trim().length < 3) return;
-            A.api("/api/admin/media-consent/" + b.dataset.c, {
-              method: "DELETE", body: JSON.stringify({ reference: ref.trim() }),
-            }).then(function (r) {
-              if (r.ok && r.data.ok) load(); else say((r.data && r.data.error) || "Couldn't withdraw.", true);
-            });
-          });
-        });
-      }).catch(function () { $("list").innerHTML = '<p class="note">Couldn\'t load.</p>'; });
-    }
-    load();
-  });
-  </script>
+  <script src="assets/admin-nav.js?v=0.173.0"></script>
+  <script src="assets/admin-manage.js?v=0.173.0"></script>
 </body>
 </html>
-<!-- Changelog: v1.0 (2026-07-26) — initial media-consent admin page (v0.25.0). -->
