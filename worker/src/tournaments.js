@@ -78,9 +78,9 @@ async function createEvent(request, env, ctx) {
     budgetMinutes: b.budgetMinutes ?? 420,
   };
   const r = await env.DB.prepare(
-    `INSERT INTO events (org_id, type, name, starts_at, location, court_count, format_template, config_json, status, cash_option_enabled)
-     VALUES (?1,?2,?3,?4,?5,?6,?7,?8,'draft',?9)`
-  ).bind(ctx.orgId, b.type || "tournament", b.name, b.starts_at || null, b.location || null,
+    `INSERT INTO events (org_id, type, name, starts_at, ends_at, location, court_count, format_template, config_json, status, cash_option_enabled)
+     VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,'draft',?10)`
+  ).bind(ctx.orgId, b.type || "tournament", b.name, b.starts_at || null, b.ends_at || null, b.location || null,
          b.court_count ?? tpl?.courts ?? 4, b.format_template || null, JSON.stringify(cfg),
          b.cash_option_enabled ? 1 : 0).run();
   await audit(env, ctx, "event.create", "events", r.meta.last_row_id, { name: b.name });
@@ -115,7 +115,10 @@ async function patchEvent(request, env, ctx, id) {
   // said "Saved."; the register's row is the history). Both fields persist now, through the ONE
   // junk spelling (cleanPriceCapacity — refusal in a sentence, never a silent free/unlimited).
   // SG-2's `min_signups` rides its own ONE spelling the same way.
-  const allowed = ["name", "starts_at", "location", "court_count", "status", "cash_option_enabled",
+  /* v0.174.0 (§-1c D-53): "ends_at" joins the list. Until now the modal could not send it and
+     this route would have dropped it silently if it had (D-34's "Saved." class) — so every real
+     event carried NULL ends_at and RF-4b's date rule read it as active forever. */
+  const allowed = ["name", "starts_at", "ends_at", "location", "court_count", "status", "cash_option_enabled",
     "config_json", "external_url", "external_label", "min_signups", "price_cents", "capacity"];
   if ("min_signups" in b) b.min_signups = cleanMinSignups(b.min_signups);
   const pcErr = cleanPriceCapacity(b);

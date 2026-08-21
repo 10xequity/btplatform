@@ -1,5 +1,11 @@
 /* Boomtown Platform — Events & Programs Admin
-   Version: v0.4.1 · Date: 2026-08-02
+   Version: v0.5.0 · Date: 2026-08-21 · Ships in: v0.174.0
+   v0.5.0 (§-1c D-53): the modal and the recurring form collect an END time (and optionally an
+   end date) — measured on live D1: every non-NULL ends_at was sandbox seed, because this form
+   never sent one, so every real event read as "active" forever to RF-4b's management pickers.
+   End fields are optional; blank end date with an end time means same-day; both blank stays
+   NULL (unknown — the event stays on the active list, visibly). A backwards end is refused in
+   a sentence before the request is made.
    Calendar with HTML5 drag-and-drop (template chip → day = create; event → day = reschedule),
    recurring series, bulk CSV import (paste or file), bulk edit, view profiles + embed snippet. */
 (async function () {
@@ -166,6 +172,10 @@
         <div class="field"><label>Start time</label><input id="m_time" type="time" value="${(pre.starts_at || "").slice(11, 16) || "09:00"}" /></div>
       </div>
       <div class="row2">
+        <div class="field"><label>End date (blank = same day)</label><input id="m_endDate" type="date" value="${(pre.ends_at || "").slice(0, 10)}" /></div>
+        <div class="field"><label>End time (blank = no end set)</label><input id="m_endTime" type="time" value="${(pre.ends_at || "").slice(11, 16)}" /></div>
+      </div>
+      <div class="row2">
         <div class="field"><label>Price (USD, 0 = free)</label><input id="m_price" type="number" min="0" step="0.01" value="${((pre.price_cents || 0) / 100).toFixed(2)}" /></div>
         <div class="field"><label>Capacity (blank = unlimited)</label><input id="m_cap" type="number" min="1" value="${pre.capacity || ""}" /></div>
       </div>
@@ -182,6 +192,11 @@
       type: back.querySelector("#m_type").value,
       status: back.querySelector("#m_status").value,
       starts_at: back.querySelector("#m_date").value ? `${back.querySelector("#m_date").value} ${back.querySelector("#m_time").value || "09:00"}` : null,
+      /* D-53: end time with no end date = same day; end date with no time = end of that day;
+         both blank = null (unknown) — the event stays visibly on the active management list */
+      ends_at: back.querySelector("#m_endTime").value
+        ? `${back.querySelector("#m_endDate").value || back.querySelector("#m_date").value} ${back.querySelector("#m_endTime").value}`
+        : (back.querySelector("#m_endDate").value ? `${back.querySelector("#m_endDate").value} 23:59` : null),
       price_cents: Math.round(Number(back.querySelector("#m_price").value || 0) * 100),
       capacity: Number(back.querySelector("#m_cap").value) || null,
       location: back.querySelector("#m_loc").value.trim() || null,
@@ -199,6 +214,7 @@
       const b = bag();
       if (!b.name) return alert("Give the event a name.");
       if (!b.starts_at) return alert("Pick a date.");
+      if (b.ends_at && b.starts_at && b.ends_at < b.starts_at) return alert("The end can't be before the start.");
       const r = pre.id
         ? await api("/api/events/" + pre.id, { method: "PATCH", body: JSON.stringify(b) })
         : await api("/api/events", { method: "POST", body: JSON.stringify(b) });
@@ -223,8 +239,9 @@
       </div>
       <div class="row2">
         <div class="field"><label>How many times (max 52)</label><input id="r_count" type="number" min="1" max="52" value="8" /></div>
-        <div class="field"><label>Price (USD)</label><input id="r_price" type="number" min="0" step="0.01" value="0" /></div>
+        <div class="field"><label>End time each night (optional)</label><input id="r_endTime" type="time" /></div>
       </div>
+      <div class="field"><label>Price (USD)</label><input id="r_price" type="number" min="0" step="0.01" value="0" /></div>
       <div class="field"><label>Location</label><input id="r_loc" /></div>
       <div class="actions"><button class="btn ghost" id="r_cancel">Cancel</button><button class="btn" id="r_go">Create series</button></div>`);
     back.querySelector("#r_cancel").addEventListener("click", closeModal);
@@ -235,6 +252,9 @@
       const r = await api("/api/admin/events/recurring", { method: "POST", body: JSON.stringify({
         base: { name, type: back.querySelector("#r_type").value,
           starts_at: `${date} ${back.querySelector("#r_time").value || "18:00"}`,
+          /* D-53: the server derives each instance's ends_at from its OWN date + this end
+             TIME-OF-DAY (endsForInstance) — the date half here is only a carrier */
+          ends_at: back.querySelector("#r_endTime").value ? `${date} ${back.querySelector("#r_endTime").value}` : null,
           price_cents: Math.round(Number(back.querySelector("#r_price").value || 0) * 100),
           location: back.querySelector("#r_loc").value.trim() || null },
         rule: { freq: back.querySelector("#r_freq").value, count: Number(back.querySelector("#r_count").value) || 8 },

@@ -1,5 +1,5 @@
 /* Boomtown Platform — Tournament / League Management picker (admin)
-   File: web/assets/admin-manage.js · Version: v1.0 · Date: 2026-08-21 · Ships in: v0.173.0
+   File: web/assets/admin-manage.js · Version: v1.1 · Date: 2026-08-21 · Ships in: v0.174.0
 
    §-1r RF-4, the owner's option C (2026-08-18, verbatim): "A - but create an option C - whre
    tournaments and Leagues have their own buttons for management that sorts which they can pick
@@ -81,8 +81,10 @@
     t.hidden = past.length === 0;
     box.hidden = true;
     t.textContent = `Show past ${scope.noun} (${past.length})`;
+    t.setAttribute("aria-expanded", "false"); // v1.1: screen readers hear open/closed, not a dead button
     t.onclick = () => {
       box.hidden = !box.hidden;
+      t.setAttribute("aria-expanded", String(!box.hidden));
       t.textContent = (box.hidden ? "Show" : "Hide") + ` past ${scope.noun} (${past.length})`;
     };
   }

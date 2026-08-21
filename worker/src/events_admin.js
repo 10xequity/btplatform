@@ -202,7 +202,9 @@ async function notifyParticipants(request, env, ctx, eventId) {
 
 /* ---------- shared ---------- */
 
-const EVENT_FIELDS = ["type", "name", "location", "price_cents", "capacity", "court_count", "format_template", "cash_option_enabled", "config_json", "program_id", "external_url", "external_label", "min_signups"];
+/* v0.174.0 (§-1c D-53): "ends_at" joins the list — it was stripped here before insertEvent's
+   bag.ends_at bind could see it, making that bind dead code and every bulk/recurring row NULL. */
+const EVENT_FIELDS = ["type", "name", "location", "price_cents", "capacity", "court_count", "format_template", "cash_option_enabled", "config_json", "program_id", "external_url", "external_label", "min_signups", "ends_at"];
 
 /**
  * SG-2 (§-1o): the ONE spelling of what a threshold may be — a whole number of sign-ups, 1 or
@@ -411,9 +413,15 @@ async function createRecurring(request, env, ctx) {
   const dates = expandRule(b.base && b.base.starts_at, rule);
   if (!dates.length) return json({ error: "Couldn't build any dates from that rule — check the start date." }, 400);
   const seriesId = crypto.randomUUID();
+  /* v0.174.0 (§-1c D-53): each instance's ends_at derives from its OWN date + the base's end
+     TIME-OF-DAY. The base's ends_at verbatim would stamp instance 1's end on every instance —
+     a January end on a March night, wrong in both directions for RF-4b's date rule. A series
+     night ends the same day it starts; base ends_at absent → instances stay NULL (unknown). */
+  const endsForInstance = (startsAt) =>
+    bag.ends_at && startsAt ? `${String(startsAt).slice(0, 10)} ${String(bag.ends_at).slice(11, 16)}` : null;
   const ids = [], squares = [];
   for (const dt of dates) {
-    const { id, square } = await insertEvent(env, ctx.orgId, bag, dt, seriesId, JSON.stringify(rule), b.status || "draft");
+    const { id, square } = await insertEvent(env, ctx.orgId, { ...bag, ends_at: endsForInstance(dt) }, dt, seriesId, JSON.stringify(rule), b.status || "draft");
     ids.push(id); squares.push(square);
   }
   await audit(env, ctx, "series.created", "event", ids[0], { series_id: seriesId, instances: ids.length, rule });
@@ -456,6 +464,19 @@ async function editSeries(request, env, ctx, seriesId) {
   const extra = {};
   if (b.fields && b.fields.status && STATUSES.includes(b.fields.status)) extra.status = b.fields.status;
   const sets = [], vals = [];
+  /* v0.174.0 (§-1c D-53): a series edit carrying ends_at derives PER ROW — each instance's own
+     date + the incoming end TIME-OF-DAY (createRecurring's endsForInstance rule, in SQL). The
+     set-based UPDATE would otherwise stamp one verbatim datetime across different nights. An
+     incoming value with no time part is refused in a sentence, never guessed. */
+  if ("ends_at" in bag) {
+    const endTime = String(bag.ends_at ?? "").slice(11, 16);
+    if (bag.ends_at !== null && !/^\d\d:\d\d$/.test(endTime)) {
+      return json({ error: "To change when series nights end, send a full date-and-time — its time of day is applied to each night's own date." }, 400);
+    }
+    delete bag.ends_at;
+    if (endTime) { vals.push(endTime); sets.push(`ends_at = date(starts_at) || ' ' || ?${vals.length}`); }
+    else sets.push("ends_at = NULL");
+  }
   for (const [k, v] of Object.entries({ ...bag, ...extra })) { vals.push(v); sets.push(`${k}=?${vals.length}`); }
   if (!sets.length) return json({ error: "Nothing to update." }, 400);
   vals.push(seriesId, ctx.orgId, from.starts_at);

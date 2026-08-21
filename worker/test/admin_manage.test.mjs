@@ -106,6 +106,53 @@ test("RF-4: every picker row leads to the event hub — the seam the collapse wi
     "the hub no longer reads ?event= — the picker's links would land on an empty hub");
 });
 
+/* ═══ v1.1 (v0.174.0, §-1c D-53) — THE WRITERS. Measured 2026-08-21: every non-NULL ends_at in
+   live D1 was sandbox seed; the owner's own creation path could not produce one — the modal never
+   sent it, patchEvent's allowed list dropped it (the D-34 "Saved." class), createEvent's INSERT
+   never named it, and EVENT_FIELDS stripped it before insertEvent's bind (which named it — dead
+   code). Four layers, each locally plausible, jointly guaranteeing NULL — so every real event
+   would sit "active" forever and the owner's complaint would return as his data grew. These pins
+   hold the whole write path open. ═══ */
+
+test("D-53: every writer on the owner's path carries ends_at — or every real event is active forever", () => {
+  const events = read("assets/admin-events.js");
+  assert.ok(/ends_at:/.test(events), "the event modal's bag() no longer sends ends_at");
+  assert.ok(events.includes('id="m_endTime"'), "the modal lost its end-time input — nothing for bag() to read");
+  const t = readFileSync(new URL("../src/tournaments.js", import.meta.url), "utf8");
+  const allowed = t.match(/const allowed = \[[^\]]+\]/);
+  assert.ok(allowed && allowed[0].includes('"ends_at"'),
+    "patchEvent's allowed list dropped ends_at — the modal sends it, the route discards it, the notice says Saved (D-34's class)");
+  const ins = t.match(/INSERT INTO events \(([^)]+)\)/);
+  assert.ok(ins && ins[1].includes("ends_at"), "createEvent's INSERT no longer names ends_at");
+  const ea = readFileSync(new URL("../src/events_admin.js", import.meta.url), "utf8");
+  const fields = ea.match(/const EVENT_FIELDS = \[[^\]]+\]/);
+  assert.ok(fields && fields[0].includes('"ends_at"'),
+    "EVENT_FIELDS strips ends_at, so insertEvent's bag.ends_at bind is dead code and bulk/recurring writes NULL");
+});
+
+test("D-53: recurring instances derive their end from their OWN date, never the base's verbatim", () => {
+  /* A weekly series is exactly the "as the list grows" engine of his complaint. Stamping the
+     base's ends_at datetime on every instance would put a January end on a March night — wrong
+     in both directions. Each instance ends on its own date at the base's end TIME. */
+  const ea = readFileSync(new URL("../src/events_admin.js", import.meta.url), "utf8");
+  assert.ok(/endsForInstance/.test(ea),
+    "createRecurring no longer derives per-instance ends_at (endsForInstance is gone)");
+  const events = read("assets/admin-events.js");
+  assert.ok(events.includes('id="r_endTime"'), "the recurring form lost its end-time input");
+});
+
+test("A11y: the Show-past toggle declares what it controls and whether it is open", () => {
+  /* Gemini review of v0.173.0, CONFIRMED against the owner's standing ARIA rule: a toggle that
+     reveals a region needs aria-controls + a live aria-expanded, or a screen reader hears a
+     button that does nothing. */
+  const page = read("admin-manage.html");
+  assert.ok(/id="mgPastToggle"[^>]*aria-controls="mgPast"/.test(page.replace(/\n\s*/g, " ")),
+    "the toggle lost aria-controls=\"mgPast\"");
+  const js = read("assets/admin-manage.js");
+  assert.ok(js.includes('setAttribute("aria-expanded"'),
+    "admin-manage.js no longer maintains aria-expanded on the toggle");
+});
+
 test("RF-4b: the staff events list projects ends_at — the column the rule reads", () => {
   /* If the projection loses ends_at, isPast sees NULL for every event and every event reads
      active forever — the owner's complaint returns with every test above still green. */
