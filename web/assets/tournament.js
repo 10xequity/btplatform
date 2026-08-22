@@ -1,5 +1,5 @@
 /* Boomtown Platform — Tournament Ops
-   Version: v0.5.0 · Date: 2026-08-16 · Ships in: v0.164.0
+   Version: v0.6.0 · Date: 2026-08-22 · Ships in: v0.175.0
    v0.5.0 (owner request + B21): the pool grid defaults to courts down the side / rounds across
    the top with a switch back (shared key bt_grid_axis, cells keep their round/court identity);
    the day-sheet buttons disable while composing, print-day gains one named exit shared by
@@ -404,8 +404,24 @@
     // round and skipped byes — "breaking does nothing" was the owner reading that result honestly.
     // The modern engine (preview / advance / slot / forfeit, division court ranges) owns brackets;
     // the body key is a_size — the engine ignores unknown keys, so the old aSize silently defaulted.
-    const r = await api(`/api/admin/events/${currentEvent.id}/brackets`, { method: "POST", body: JSON.stringify({ a_size: +$("aSize").value }) });
-    $("warningsBox").innerHTML = r.ok
+    /* RF-1(f) (v0.175.0, owner 2026-08-18): "nothing happens" was still true after T2-5, twice
+       over. (1) The engine answers 409 unless replace:true and this handler never offered it —
+       the second press was strictly silent in effect. admin-brackets.js generate() (and this
+       page's own plCommit) is the behaviour, copied: confirm with the server's own sentence,
+       re-POST with replace — through ONE gen() writer site, which is what bracket_rewire's
+       uniqueness pin licences. (2) The outcome rendered into #warningsBox, a whole grid ABOVE
+       this button — right words, wrong place. It speaks at #bracketNote beside the button now;
+       #warningsBox stays the schedule generator's voice. Guards: bracket_rewire.test.mjs v1.1. */
+    const body = { a_size: +$("aSize").value };
+    const gen = (b) => api(`/api/admin/events/${currentEvent.id}/brackets`, { method: "POST", body: JSON.stringify(b) });
+    let r = await gen(body);
+    if (r.status === 409 && r.data.existing_matches) {
+      if (!window.confirm(`${r.data.error}\n\nReplace it? The current bracket is set aside, not lost.`)) return;
+      r = await gen({ ...body, replace: true });
+    }
+    const note = $("bracketNote");
+    note.hidden = false;
+    note.innerHTML = r.ok
       ? `<div class="notice">${(r.data.summary || []).join(" · ")} &#8212; <a href="admin-brackets.html?event=${currentEvent.id}">open the bracket board</a> to run it.</div>`
       : `<div class="warn-banner">${r.data.error || "Bracket failed."}</div>`;
   };

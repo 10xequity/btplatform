@@ -1,6 +1,15 @@
 /**
  * Boomtown Platform — §-1j T2-5: the "Break to bracket" button reaches the engine that exists
- * File: worker/test/bracket_rewire.test.mjs · Version: v1.0 · Date: 2026-08-10 · Ships in: v0.121.0
+ * File: worker/test/bracket_rewire.test.mjs · Version: v1.1 · Date: 2026-08-22 · Ships in: v0.175.0
+ *
+ * v1.1 (§-1r RF-1(f), owner 2026-08-18): T2-5 rewired the button to the engine; RF-1's
+ * measurement found the press still read as "nothing happens" — TWO defects wearing one button.
+ * The engine answers 409 unless replace:true and this page never offered it (the second press
+ * was strictly silent in effect), and the outcome rendered into #warningsBox, a whole grid ABOVE
+ * the button that was pressed. admin-brackets.js generate() is the behaviour, copied: confirm
+ * with the server's own sentence, re-POST with replace (through the ONE gen() writer site, so
+ * the uniqueness pin below keeps its licence), and speak the outcome AT the button
+ * (#bracketNote). The v1.1 tests pin all three, with NCs that silence each.
  *
  * WHY. The owner: "after scores are assessed, breaking does nothing on the button screen." The
  * button was wired to the LEGACY POST /api/events/:id/bracket — tournaments.createBracket — which
@@ -92,4 +101,64 @@ test("NC — restoring the legacy path into the REAL client source makes the che
   assert.doesNotMatch(js, /\/api\/events\/\$\{[^}]+\}\/bracket`/, "pre-mutation sanity failed");
   assert.match(mutated, /\/api\/events\/\$\{[^}]+\}\/bracket`/,
     "the mutated source does not match the legacy pattern — the assertion reads something else and every pass above is vacuous");
+});
+
+/* ═══════════ v1.1 — RF-1(f): the press must SAY, at the button, why it refused ═══════════ */
+
+/** The bracket press handler, as a region: from its assignment to the next handler. */
+const pressRegionOf = (src) => {
+  const t = blankComments(src);
+  const start = t.indexOf('$("bracketBtn").onclick');
+  const end = t.indexOf('$("printBtn").onclick');
+  if (start === -1 || end === -1 || end <= start) return null;
+  return t.slice(start, end);
+};
+const pressVerdict = (src) => {
+  const region = pressRegionOf(src);
+  if (region === null) return null;
+  return {
+    handles409: /status === 409/.test(region) && region.includes("existing_matches"),
+    confirms: region.includes("window.confirm"),
+    replaces: /replace:\s*true/.test(region),
+    speaksAtButton: region.includes('$("bracketNote")'),
+    speaksAGridAbove: region.includes("warningsBox"),
+  };
+};
+
+test("RF-1(f): the 409 gets a confirm and a replace re-POST — the second press is no longer mute", () => {
+  const v = pressVerdict(readFileSync(new URL("../../web/assets/tournament.js", import.meta.url), "utf8"));
+  assert.ok(v, "the bracketBtn handler region could not be extracted — update pressRegionOf WITH the code");
+  assert.ok(v.handles409, "the handler no longer recognises the engine's 409 + existing_matches refusal");
+  assert.ok(v.confirms, "the handler no longer asks the operator before replacing — a silent replace is worse than a silent refusal");
+  assert.ok(v.replaces, "the confirmed path no longer re-POSTs with replace: true — the operator says yes and nothing happens, the original complaint");
+});
+
+test("RF-1(f): the outcome speaks AT the button, not into the box a whole grid above it", () => {
+  const v = pressVerdict(readFileSync(new URL("../../web/assets/tournament.js", import.meta.url), "utf8"));
+  assert.ok(v.speaksAtButton, "the handler no longer writes #bracketNote — the outcome went back above the fold");
+  assert.equal(v.speaksAGridAbove, false,
+    "the handler writes #warningsBox again — right words, wrong place (it sits above the tall grid and the button that was pressed); #warningsBox belongs to the schedule generator");
+  const html = readFileSync(new URL("../../web/tournament.html", import.meta.url), "utf8");
+  assert.ok(/id="bracketNote"[^>]*aria-live="polite"/.test(html.replace(/\n\s*/g, " ")),
+    "tournament.html lost the #bracketNote element (or its aria-live) — the handler would write into nothing");
+});
+
+test("NC-F1: stripping the replace re-POST from the real source FAILS the verdict", () => {
+  /* The mutation targets the press handler's own gen() call — a bare "replace: true" would hit
+     the SCHEDULE generator's earlier confirm+replace (plCommit, the in-file precedent) and
+     mutate the wrong handler. */
+  const src = readFileSync(new URL("../../web/assets/tournament.js", import.meta.url), "utf8");
+  const mutated = src.replace("gen({ ...body, replace: true })", "gen({ ...body })");
+  assert.notEqual(mutated, src, "mutation did not land — the press's re-POST changed shape; update this NC with it");
+  assert.equal(pressVerdict(mutated).replaces, false,
+    "with the re-POST stripped the verdict still reports replaces — it is reading something else");
+});
+
+test("NC-F2: pointing the outcome back at #warningsBox FAILS the placement verdict", () => {
+  const src = readFileSync(new URL("../../web/assets/tournament.js", import.meta.url), "utf8");
+  const mutated = src.replace('$("bracketNote")', '$("warningsBox")');
+  assert.notEqual(mutated, src, "mutation did not land — the note write changed shape; update this NC with it");
+  const v = pressVerdict(mutated);
+  assert.ok(!v.speaksAtButton || v.speaksAGridAbove,
+    "the outcome was pointed back above the fold and the verdict still passed");
 });
