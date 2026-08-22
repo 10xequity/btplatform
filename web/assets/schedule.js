@@ -1,5 +1,9 @@
 /* Boomtown Platform — Public Schedule
-   Version: v0.5.0 · Date: 2026-08-14 · Ships in: v0.155.0
+   Version: v0.6.0 · Date: 2026-08-22 · Ships in: v0.176.0
+   v0.6.0 (§-1r RF-7): the month grid gets WF-1's day cap — through config.js's BT_CAL, the ONE
+   judgement the admin calendar also reads — with "+N more" expanding the day in place; and the
+   pager/mode switch REFETCH, with the month window derived from calCursor (paging past the old
+   fixed today-7/+180 window showed empty boxes because of the REQUEST, not the schedule).
    v0.5.0 (§-1o SG-6): THE MONTH VIEW BECOMES A PLACE. ?mode=month opens the calendar directly
    — the grid itself had existed here all along (measured iteration 83: the §-1o "does not
    exist" line was wrong), but no URL reached it, so no announcement, admin screen or bookmark
@@ -39,6 +43,7 @@
   let events = [], mode = modeFromUrl(params.get("mode")), org = "";
   let typeFilter = "", sortKey = "date", sortRev = false;
   let calCursor = new Date(); calCursor.setDate(1);
+  let calExpanded = null; // RF-7: the one day whose "+N more" is open (a YYYY-MM-DD string)
 
   /* ── K-14 (§-0 B21, v0.145.0) — the owner's sort/filter tabs on the member events list.
      "B, main list of events needs to be sortable. Have tabs at the top to sort, similar to the
@@ -174,7 +179,7 @@
     mode = t.dataset.mode;
     syncModeUrl();
     document.querySelectorAll("#schedViewTabs .tab").forEach(x => x.classList.toggle("active", x === t));
-    render();
+    load(); // RF-7: the two modes fetch different windows now, so a mode switch refetches
   }));
   // SG-6: the markup hardcodes List as active; the URL may have decided otherwise before first
   // paint. Sync once at wiring time so a ?mode=month deep link is not a calendar under a lit
@@ -200,8 +205,20 @@
   document.getElementById("orgFilter").addEventListener("change", e => { org = e.target.value; load(); });
 
   async function load() {
-    const from = new Date(); from.setDate(from.getDate() - 7);
-    const to = new Date(); to.setDate(to.getDate() + 180);
+    /* RF-7 (v0.176.0): the fetch window follows what the reader is LOOKING AT. List mode keeps
+       the rolling today-7/+180. Month mode fetches the 42 grid cells around calCursor — the
+       pager used to call render() over the fixed window, so paging past +180 days showed empty
+       boxes because of the REQUEST, not the schedule (the server honours any from/to it is
+       sent; the window was pinned here). */
+    let from, to;
+    if (mode === "month") {
+      const first = new Date(calCursor.getFullYear(), calCursor.getMonth(), 1);
+      from = new Date(first); from.setDate(1 - first.getDay());
+      to = new Date(from); to.setDate(from.getDate() + 41);
+    } else {
+      from = new Date(); from.setDate(from.getDate() - 7);
+      to = new Date(); to.setDate(to.getDate() + 180);
+    }
     const qs = new URLSearchParams({ view: viewSlug, from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) });
     if (org) qs.set("org", org);
     let r;
@@ -272,14 +289,29 @@
         const d = new Date(start); d.setDate(start.getDate() + i);
         const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
         const day = upcoming.filter(e => (e.starts_at || "").slice(0, 10) === ds);
+        /* RF-7 (v0.176.0): the cap judgement is config.js's BT_CAL — one judgement, and the admin
+           calendar is its other reader. "+N more" expands the day IN PLACE (no modal on the member
+           side); a stale cached config.js without BT_CAL degrades to the uncapped pre-RF-7 cell
+           for its ≤10-minute cache window rather than a dead calendar. */
+        const expanded = calExpanded === ds;
+        const cap = (window.BT_CAL && !expanded) ? BT_CAL.split(day) : { shown: day, hidden: 0 };
+        const moreBtn = cap.hidden > 0
+          ? `<button type="button" class="cal-more" data-more="${ds}" aria-expanded="false" aria-label="Show all ${day.length} events on this day">+${cap.hidden} more</button>`
+          : (expanded ? `<button type="button" class="cal-more" data-more="${ds}" aria-expanded="true">less</button>` : "");
         html += `<div class="cal-day${d.getMonth() !== mo ? " other" : ""}"><div class="dnum">${d.getDate()}</div>
-          ${day.map(e => ((s) => `<a class="cal-ev" href="${esc(s.href)}"
+          ${cap.shown.map(e => ((s) => `<a class="cal-ev" href="${esc(s.href)}"
             ${s.external || embed ? `target="_blank" rel="${esc(s.rel || "noopener")}"` : ""}
-            title="${esc(e.name)}${s.external ? " — registers on another site" : ""}">${esc(e.name)}${s.external ? " ↗" : ""}</a>`)(signup(e))).join("")}</div>`;
+            title="${esc(e.name)}${s.external ? " — registers on another site" : ""}">${esc(e.name)}${s.external ? " ↗" : ""}</a>`)(signup(e))).join("")}${moreBtn}</div>`;
       }
       el.innerHTML = html + "</div>";
-      el.querySelector("#cp").addEventListener("click", () => { calCursor.setMonth(calCursor.getMonth() - 1); render(); });
-      el.querySelector("#cn").addEventListener("click", () => { calCursor.setMonth(calCursor.getMonth() + 1); render(); });
+      /* RF-7: the pager REFETCHES — render() alone repainted the same fixed window, so paging
+         past it showed empty boxes for months the request never covered. */
+      el.querySelector("#cp").addEventListener("click", () => { calCursor.setMonth(calCursor.getMonth() - 1); calExpanded = null; load(); });
+      el.querySelector("#cn").addEventListener("click", () => { calCursor.setMonth(calCursor.getMonth() + 1); calExpanded = null; load(); });
+      el.querySelectorAll(".cal-more").forEach(b => b.addEventListener("click", () => {
+        calExpanded = calExpanded === b.dataset.more ? null : b.dataset.more;
+        render();
+      }));
     }
     postHeight();
   }

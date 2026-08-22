@@ -1,5 +1,8 @@
 /* Boomtown Platform — Events & Programs Admin
-   Version: v0.5.0 · Date: 2026-08-21 · Ships in: v0.174.0
+   Version: v0.6.0 · Date: 2026-08-22 · Ships in: v0.176.0
+   v0.6.0 (§-1r RF-7): the calendar day cap reads config.js's BT_CAL — one judgement, two
+   readers (the member calendar in schedule.js is the second). The local CAL_DAY_CAP literal
+   is gone, deliberately.
    v0.5.0 (§-1c D-53): the modal and the recurring form collect an END time (and optionally an
    end date) — measured on live D1: every non-NULL ends_at was sandbox seed, because this form
    never sent one, so every real event read as "active" forever to RF-4b's management pickers.
@@ -72,15 +75,17 @@
 
   function ymd(d) { return d.toISOString().slice(0, 10); }
 
-  /* WF-1a (v0.133.0): a day shows at most this many tiles. Before the cap, a busy day stacked
-     every event and stretched its whole grid row — busy weeks towered over empty ones. The
-     overflow stays reachable: "+N more" opens the day modal, which lists everything. */
-  const CAL_DAY_CAP = 3;
+  /* WF-1a (v0.133.0): a day shows at most BT_CAL.DAY_CAP tiles. Before the cap, a busy day
+     stacked every event and stretched its whole grid row — busy weeks towered over empty ones.
+     The overflow stays reachable: "+N more" opens the day modal, which lists everything.
+     RF-7 (v0.176.0): the cap judgement moved to config.js's BT_CAL — ONE judgement, and the
+     member calendar (schedule.js) is its second reader now. No literal here, deliberately:
+     events_calendar.test.mjs executes config.js's shipped object through this builder and
+     forbids a second spelling in either reader. */
 
   /** One day cell. Pure on its inputs so the guard executes it as shipped bytes. */
   function dayCellHtml(ds, dayNum, classes, dayEvents) {
-    const shown = dayEvents.slice(0, CAL_DAY_CAP);
-    const hidden = dayEvents.length - shown.length;
+    const { shown, hidden } = BT_CAL.split(dayEvents);
     return `<div class="cal-day${classes}" data-date="${ds}">
         <div class="dnum">${dayNum}</div>
         ${shown.map(e => `<a class="cal-ev ${e.status}" draggable="true" data-ev="${e.id}"

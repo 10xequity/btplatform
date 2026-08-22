@@ -1,6 +1,17 @@
 /**
  * Boomtown Platform — §-1p WF-1 (§-0 B23): the Events & Programs page
- * File: worker/test/events_calendar.test.mjs · Version: v1.0 · Date: 2026-08-11 · Ships in: v0.133.0
+ * File: worker/test/events_calendar.test.mjs · Version: v2.0 · Date: 2026-08-22 · Ships in: v0.176.0
+ *
+ * v2.0 (§-1r RF-7, owner 2026-08-18): "the calendar boxes are STILL not correct" — true for the
+ * MEMBER calendar, which never got WF-1's cap, while the admin one has been fixed and guarded
+ * since v0.133.0. The cap is promoted to ONE judgement with TWO readers: `BT_CAL` lives in
+ * config.js (the one script BOTH shells load — BT_THEME's precedent), admin-events.js and
+ * schedule.js both render through BT_CAL.split(), and NEITHER carries its own cap literal.
+ * This file now extracts BT_CAL from config.js's shipped bytes and EXECUTES it through the
+ * admin cell builder, and pins the member reader: split() called, a "+N more" control, the
+ * month pager REFETCHING (it used to call render() over a fixed today-7/+180 window, so paging
+ * past the window showed empty boxes because of the REQUEST, not the schedule), and the fetch
+ * window following calCursor in month mode.
  *
  * The owner's 2026-08-11 item 1, measured into two defects on one page:
  *  (a) THE CALENDAR HAS NO PER-DAY CAP AND NO UNIFORM ROWS — a busy day stacks .cal-ev nodes
@@ -39,14 +50,29 @@ function pure(name) {
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
-/** The shipped cap, read from the source so the tests cannot drift from the page. */
-function shippedCap() {
-  const m = js.match(/const CAL_DAY_CAP\s*=\s*(\d+)/);
-  assert.ok(m, "CAL_DAY_CAP is gone — the cap must be one named constant, not a scattered literal");
-  return Number(m[1]);
+const CONFIG = readFileSync(new URL("../../web/assets/config.js", import.meta.url), "utf8");
+const SCHED = readFileSync(new URL("../../web/assets/schedule.js", import.meta.url), "utf8");
+
+/** The ONE judgement, extracted from config.js's shipped bytes and EXECUTED — never re-implemented. */
+function shippedBtCal(src = CONFIG) {
+  const m = blankComments(src).match(/window\.BT_CAL = (\{[\s\S]*?\n\};)/);
+  if (!m) return null;
+  return new Function("return " + m[1])();
 }
 
-const cellFn = () => new Function("ds", "dayNum", "classes", "dayEvents", "esc", "CAL_DAY_CAP",
+/** The shipped cap, read through the judgement — plus the one-judgement property itself. */
+function shippedCap() {
+  const cal = shippedBtCal();
+  assert.ok(cal, "BT_CAL is gone from config.js — the day cap must be ONE judgement both calendars read");
+  assert.ok(Number.isInteger(cal.DAY_CAP) && cal.DAY_CAP > 0, "BT_CAL.DAY_CAP is not a positive integer");
+  assert.doesNotMatch(js, /CAL_DAY_CAP\s*=\s*\d/,
+    "admin-events.js grew its own cap literal back — the judgement must live once, in config.js");
+  assert.doesNotMatch(blankComments(SCHED), /(?:CAL_)?DAY_CAP\s*=\s*\d/,
+    "schedule.js grew its own cap literal — the judgement must live once, in config.js");
+  return cal.DAY_CAP;
+}
+
+const cellFn = () => new Function("ds", "dayNum", "classes", "dayEvents", "esc", "BT_CAL",
   pure("dayCellHtml").slice(1, -1));
 
 const EVENTS = (n) => Array.from({ length: n }, (_, i) => ({
@@ -57,7 +83,7 @@ const EVENTS = (n) => Array.from({ length: n }, (_, i) => ({
 
 test("a quiet day renders every event as a draggable manage link, and no more-button", () => {
   const cap = shippedCap();
-  const html = cellFn()("2026-08-15", 15, "", EVENTS(cap), esc, cap);
+  const html = cellFn()("2026-08-15", 15, "", EVENTS(cap), esc, shippedBtCal());
   assert.equal((html.match(/class="cal-ev/g) || []).length, cap, "a day at the cap must show all of them");
   assert.equal((html.match(/draggable="true"/g) || []).length, cap, "visible tiles must stay draggable — reschedule-by-drag is a shipped feature");
   assert.ok(html.includes("admin-event.html?id=100"), "a tile must still link to its manage page");
@@ -67,12 +93,12 @@ test("a quiet day renders every event as a draggable manage link, and no more-bu
 test("a busy day caps the stack and says how many more — the overflow names leave the cell", () => {
   const cap = shippedCap();
   const fn = cellFn();
-  const before = fn("2026-08-15", 15, "", EVENTS(cap), esc, cap);
+  const before = fn("2026-08-15", 15, "", EVENTS(cap), esc, shippedBtCal());
   assert.ok(before.includes(esc(`Event Number ${cap}`)), "precondition: at the cap, the last event is visible");
 
   // NEGATIVE CONTROL — mutate the real input: the same day grows two more events.
   const grown = EVENTS(cap + 2);
-  const after = fn("2026-08-15", 15, "", grown, esc, cap);
+  const after = fn("2026-08-15", 15, "", grown, esc, shippedBtCal());
   assert.equal((after.match(/class="cal-ev/g) || []).length, cap, "the cap did not hold");
   assert.ok(!after.includes(esc(`Event Number ${cap + 1}`)), "an overflow event's name is still in the cell — the mutation did not land");
   assert.ok(!after.includes(esc(`Event Number ${cap + 2}`)), "the last event leaked past the cap");
@@ -81,7 +107,7 @@ test("a busy day caps the stack and says how many more — the overflow names le
 });
 
 test("an empty day is just a day", () => {
-  const html = cellFn()("2026-08-15", 15, " other", [], esc, shippedCap());
+  const html = cellFn()("2026-08-15", 15, " other", [], esc, shippedBtCal());
   assert.ok(!html.includes("cal-ev"), "an empty day rendered an event");
   assert.ok(!html.includes("data-more"));
   assert.match(html, /class="cal-day other"/, "the month-position class must survive the builder");
@@ -124,4 +150,50 @@ test("NEGATIVE CONTROL — the declaration detector fails on a copy of the sourc
     "the strip found nothing to remove — there is no declaration to control against (pre-fix this is the defect itself)");
   assert.equal(declRe.test(stripped), false,
     "the detector still matches after the declaration was removed — it is not detecting the declaration");
+});
+
+/* ==================== v2.0 — RF-7: the MEMBER calendar reads the same judgement ==================== */
+
+test("RF-7: the member calendar renders through BT_CAL.split and offers +N more — the SECOND reader", () => {
+  const t = blankComments(SCHED);
+  assert.ok(t.includes("BT_CAL.split("),
+    "schedule.js no longer calls BT_CAL.split — the member calendar left the one judgement");
+  assert.ok(t.includes("window.BT_CAL"),
+    "schedule.js reads BT_CAL unguarded — a stale cached config.js without it must degrade to the uncapped cell, not a dead calendar");
+  assert.ok(t.includes("cal-more"), "the member calendar lost its +N more control — the cap would hide events with no way in");
+});
+
+test("RF-7: the month pager REFETCHES — paging past the fetched window was empty boxes by REQUEST", () => {
+  const t = blankComments(SCHED);
+  for (const btn of ["#cp", "#cn"]) {
+    const at = t.indexOf(`querySelector("${btn}")`);
+    assert.notEqual(at, -1, `the ${btn} pager button is gone — update this pin with the pager's new shape`);
+    const handler = t.slice(at, t.indexOf("});", at));
+    assert.ok(handler.includes("load()"),
+      `the ${btn} pager no longer refetches — render() over the old window shows empty boxes for months the request never covered`);
+  }
+});
+
+test("RF-7: in month mode the fetch window follows calCursor — the reader gets what they are looking at", () => {
+  const body = functionBodyAfter(blankComments(SCHED), "async function load");
+  assert.ok(body, "schedule.js load() is gone or no longer a plain async function declaration");
+  assert.ok(/"month"/.test(body) && body.includes("calCursor"),
+    "load() no longer derives its window from calCursor in month mode — the pager refetch fetches the same fixed window forever");
+});
+
+test("NC-C1: a pager wired back to render() FAILS the refetch pin", () => {
+  const t = blankComments(SCHED);
+  const at = t.indexOf('querySelector("#cp")');
+  const handler = t.slice(at, t.indexOf("});", at));
+  const mutated = t.slice(0, at) + handler.replace("load()", "render()") + t.slice(at + handler.length);
+  assert.notEqual(mutated, t, "mutation did not land — the #cp handler changed shape; update this NC with it");
+  const h2 = mutated.slice(mutated.indexOf('querySelector("#cp")'));
+  assert.ok(!h2.slice(0, h2.indexOf("});")).includes("load()"),
+    "the mutated #cp handler still refetches — the NC mutated something else");
+});
+
+test("NC-C2: a second cap literal in the member reader FAILS the one-judgement property", () => {
+  const withOwnCap = blankComments(SCHED) + "\nconst CAL_DAY_CAP = 4;\n";
+  assert.match(withOwnCap, /(?:CAL_)?DAY_CAP\s*=\s*\d/,
+    "the forbidden-literal scan cannot see the planted literal — shippedCap()'s one-judgement assertion is blind");
 });

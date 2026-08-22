@@ -1,15 +1,33 @@
 /* Boomtown Platform — frontend config
-   Version: v0.4.0 · Date: 2026-08-12
+   Version: v0.7.0 · Date: 2026-08-22
    The ONLY file that changes when the backend URL changes.
    v0.3.0: RENTALS_ENABLED feature flag (owner decision D-M12B-2 — the member court-rental
    request form stays HIDDEN until the owner flips this to true).
    v0.4.0 (v0.137.0, §-1c D-29): BT_SIGNUP_LINK — the one place that decides where a sign-up
    link points. It sits here because config.js is the only script all three callers load.
    v0.5.0 (v0.140.0, WF-5 H-2): the embed CHILD, moved here from admin-nav.js for the same
-   reason — H-2's Live tab is a MEMBER page, and config.js is the only script both shells load. */
+   reason — H-2's Live tab is a MEMBER page, and config.js is the only script both shells load.
+   v0.7.0 (v0.176.0, §-1r RF-7): BT_CAL — the calendar day cap, one judgement for both grids. */
 window.BT_CONFIG = {
   apiBase: "https://boomtown-api.vvisuth.workers.dev",
   RENTALS_ENABLED: false,
+};
+
+/* THE CALENDAR DAY CAP — ONE JUDGEMENT, TWO READERS (§-1r RF-7, v0.176.0).
+   WF-1a (v0.133.0) capped the ADMIN month grid: a busy day stacked every event and stretched its
+   whole grid row, so busy weeks towered over empty ones. The MEMBER calendar (schedule.js) never
+   got it — "the calendar boxes are STILL not correct" was the owner reading that honestly. The
+   judgement lives HERE because config.js is the one script BOTH shells load (BT_SIGNUP_LINK's and
+   BT_THEME's precedent): admin-events.js and schedule.js both render through split() and neither
+   carries its own cap literal — events_calendar.test.mjs executes THIS object through the admin
+   cell builder and forbids a second spelling in either reader. */
+window.BT_CAL = {
+  DAY_CAP: 3,
+  /** shown/hidden split for one day's events — the whole cap judgement. */
+  split(dayEvents) {
+    const shown = dayEvents.slice(0, this.DAY_CAP);
+    return { shown, hidden: dayEvents.length - shown.length };
+  },
 };
 
 /* WHERE A SIGN-UP LINK POINTS — ONE JUDGEMENT, EVERY CALLER.
