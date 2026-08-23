@@ -1027,11 +1027,20 @@ async function importRows(request, env, ctx, eventId) {
 const newScoreToken = () =>
   [...crypto.getRandomValues(new Uint8Array(12))].map((x) => x.toString(16).padStart(2, "0")).join("");
 
-async function ensureScoreToken(env, team) {
+export async function ensureScoreToken(env, team) {
   if (team.score_token) return team.score_token;
   const token = newScoreToken();
-  await env.DB.prepare("UPDATE teams SET score_token=?1, updated_at=datetime('now') WHERE id=?2")
-    .bind(token, team.id).run();
+  // Conditional on score_token IS NULL so two requests minting for the SAME team at once (a whole
+  // team opening the app when the league goes live now all hit myTeams) cannot overwrite each other:
+  // the loser's UPDATE changes nothing, and it adopts the token the winner already handed out rather
+  // than returning a token that is no longer in the row (a dead link that 404s at captainMatches).
+  const res = await env.DB.prepare(
+    "UPDATE teams SET score_token=?1, updated_at=datetime('now') WHERE id=?2 AND score_token IS NULL"
+  ).bind(token, team.id).run();
+  if (res && res.meta && res.meta.changes === 0) {
+    const row = await env.DB.prepare("SELECT score_token FROM teams WHERE id=?1").bind(team.id).first();
+    if (row && row.score_token) return row.score_token;
+  }
   return token;
 }
 
@@ -1411,8 +1420,11 @@ async function myTeams(env, ctx) {
        status='in_progress' (the D-53/RF-4b lesson), so an event that has STARTED by date counts as
        live even while still 'published'. Upcoming events surface no link (and mint no token). */
     const startsAt = t.starts_at ? new Date(String(t.starts_at).replace(" ", "T")) : null;
-    const upcoming = t.event_status !== "in_progress" && startsAt && !isNaN(startsAt) && startsAt > now;
-    t.score_url = upcoming ? null : `${env.APP_URL}/score.html?t=${await ensureScoreToken(env, t)}`;
+    // Surface the link only when the event is CLEARLY live: marked in_progress, or started by date.
+    // A missing/unparseable date is NOT a start signal, so it stays closed (and mints no token) —
+    // this matches the client's groupOf, which files a date-less event under Upcoming.
+    const live = t.event_status === "in_progress" || (startsAt && !isNaN(startsAt.getTime()) && startsAt <= now);
+    t.score_url = live ? `${env.APP_URL}/score.html?t=${await ensureScoreToken(env, t)}` : null;
     delete t.score_token;    // the raw token never ships as its own field; score_url carries it, own-team only
     delete t.event_status;   // internal to the gate above
     t.members = (await env.DB.prepare(

@@ -21,6 +21,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import worker from "../src/index.js";
+import { ensureScoreToken } from "../src/registrations.js";
 import { createD1 } from "../testkit/d1-memory.mjs";
 import { blankComments } from "../testkit/route-extract.mjs";
 
@@ -132,6 +133,39 @@ test("RF-13: the score token appears ONLY on the authenticated own-team path, ne
   const mine = await call(env, "GET", "/api/profile/teams", { token: me.token });
   assert.ok(JSON.stringify(mine.data).includes(KNOWN),
     "the member's OWN team lost its score link — the whole point of RF-13");
+});
+
+test("RF-13: a date-less published event surfaces no link — a missing date is not a start signal", async () => {
+  // Gemini review 2026-08-23 (finding 1): a published event with NULL starts_at must not be treated
+  // as live. It stays closed and mints no token, matching the client's groupOf (date-less → Upcoming).
+  const env = boot();
+  const me = await member(env, "cap@bt.test");
+  env.DB.exec(`INSERT INTO contacts (id, org_id, user_id, email, full_name) VALUES (50, 1, ${me.id}, 'cap@bt.test', 'Cap')`);
+  env.DB.exec(`INSERT INTO events (id, org_id, name, type, status) VALUES (220, 1, 'No Date', 'tournament', 'published')`); // starts_at NULL
+  env.DB.exec(`INSERT INTO teams (id, org_id, event_id, name, captain_contact_id) VALUES (320, 1, 220, 'Ghosts', 50)`);
+
+  const r = await call(env, "GET", "/api/profile/teams", { token: me.token });
+  const team = (r.data.teams || []).find((t) => t.id === 320);
+  assert.ok(team, "the date-less team is missing");
+  assert.equal(team.score_url, null, "a date-less published event must not surface a live score link");
+  assert.equal(env.DB.one("SELECT score_token FROM teams WHERE id=320").score_token, null,
+    "a date-less published event must mint no token");
+});
+
+test("RF-13: a concurrent mint never overwrites a token another request already handed out", async () => {
+  // Gemini review 2026-08-23 (finding 2): two requests minting for the same team at once must not
+  // clobber each other. Simulate the race: request B has already written 'winner…'; request A, whose
+  // read still saw NULL, tries to mint — it must ADOPT the winner, not overwrite it with a dead token.
+  const env = boot();
+  env.DB.exec(`INSERT INTO events (id, org_id, name, type, status) VALUES (230, 1, 'Race', 'tournament', 'in_progress')`);
+  env.DB.exec(`INSERT INTO teams (id, org_id, event_id, name) VALUES (330, 1, 230, 'Racers')`);
+  env.DB.exec(`UPDATE teams SET score_token='winner0000000000' WHERE id=330`);
+
+  const got = await ensureScoreToken(env, { id: 330, score_token: null }); // A's stale null view
+  assert.equal(got, "winner0000000000",
+    "the losing minter returned its own token — a link already handed out would 404");
+  assert.equal(env.DB.one("SELECT score_token FROM teams WHERE id=330").score_token, "winner0000000000",
+    "the losing minter overwrote the winner's token in the row");
 });
 
 /* ═══════════ one mint, not two (consolidation) ═══════════ */

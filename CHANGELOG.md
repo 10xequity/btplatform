@@ -1,5 +1,14 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.186.0 — 2026-08-23
+
+**RF-13 score-entry hardening — the two valid findings from the in-loop Gemini review of v0.185.0.** Both measured against the real code and folded; neither was a security leak (the token stays own-team-only), but both were worth fixing in a credential path:
+
+- **A concurrent mint no longer hands out a dead token.** `ensureScoreToken` now writes with `WHERE score_token IS NULL` and, if it changed nothing (another request won the race), adopts the token already in the row instead of returning its own. v0.185.0 raised the odds of this: a whole team opening the app when the league goes live now all hit `/api/profile/teams` and mint for the same team at once, where before only staff minted. Self-healing before, correct now.
+- **A date-less published event no longer looks live.** The "surface the link" gate is now "clearly started" — `in_progress`, or a start date that has passed — so a published event with a missing or unparseable `starts_at` stays closed and mints no token, matching the client's `groupOf` (which files a date-less event under Upcoming). `starts_at` is compared with `!isNaN(startsAt.getTime())`.
+
+`member_score_entry.test.mjs` gains a deterministic race test (a stale-null minter must adopt the winner's token) and a date-less-published test (no link, no token). Gemini's remaining note was the explicit `.getTime()` guard, applied here.
+
 ## v0.185.0 — 2026-08-23
 
 **A team can reach its own score entry from the member site (RF-13 score-entry, owner req 2026-08-23).** The owner asked that score entry be "accessible through membership account and tournament/league page" (QR reserved for staff, not the primary way in). The per-team self-scoring link (`score.html?t=…`) has always been the credential — no login — but staff had to hand it out. Now a signed-in member of a team reaches it themselves.
