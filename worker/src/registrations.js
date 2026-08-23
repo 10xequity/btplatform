@@ -1020,6 +1020,21 @@ async function importRows(request, env, ctx, eventId) {
 
 /* ================= captain self-scoring ================= */
 
+/* The per-team self-scoring token IS the credential — no login, see captainMatches. It is minted
+   lazily the first time a link is actually needed, and only ever for a team the caller is entitled
+   to: staff opening Scoring Links (scoreLinks), or a team member reaching their own team's scores
+   from their account (myTeams). One spelling for the mint so the two paths cannot drift. */
+const newScoreToken = () =>
+  [...crypto.getRandomValues(new Uint8Array(12))].map((x) => x.toString(16).padStart(2, "0")).join("");
+
+async function ensureScoreToken(env, team) {
+  if (team.score_token) return team.score_token;
+  const token = newScoreToken();
+  await env.DB.prepare("UPDATE teams SET score_token=?1, updated_at=datetime('now') WHERE id=?2")
+    .bind(token, team.id).run();
+  return token;
+}
+
 async function scoreLinks(env, ctx, eventId) {
   const { ev, deny } = await staffEventGate(env, ctx, eventId);
   if (deny) return deny;
@@ -1028,11 +1043,7 @@ async function scoreLinks(env, ctx, eventId) {
   ).bind(eventId).all()).results;
   const links = [];
   for (const t of teams) {
-    let token = t.score_token;
-    if (!token) {
-      token = [...crypto.getRandomValues(new Uint8Array(12))].map((x) => x.toString(16).padStart(2, "0")).join("");
-      await env.DB.prepare("UPDATE teams SET score_token=?1, updated_at=datetime('now') WHERE id=?2").bind(token, t.id).run();
-    }
+    const token = await ensureScoreToken(env, t);
     links.push({ team_id: t.id, team: t.name, url: `${env.APP_URL}/score.html?t=${token}` });
   }
   return json({ ok: true, links });
@@ -1380,8 +1391,8 @@ async function myTeams(env, ctx) {
   const me = await myContact(env, ctx);
   if (!me) return json({ teams: [] });
   const teams = (await env.DB.prepare(
-    `SELECT DISTINCT t.id, t.name, t.captain_contact_id, e.id AS event_id, e.name AS event_name,
-            e.starts_at, e.type
+    `SELECT DISTINCT t.id, t.name, t.captain_contact_id, t.score_token, e.id AS event_id, e.name AS event_name,
+            e.starts_at, e.type, e.status AS event_status
      FROM teams t
      JOIN events e ON e.id = t.event_id AND e.deleted_at IS NULL
        AND e.status IN ('published','in_progress')
@@ -1390,8 +1401,20 @@ async function myTeams(env, ctx) {
        AND (t.captain_contact_id = ?2 OR tm.contact_id = ?2)
      ORDER BY e.starts_at`
   ).bind(ctx.orgId, me.id).all()).results;
+  const now = new Date();
   for (const t of teams) {
     t.is_captain = t.captain_contact_id === me.id;
+    /* RF-13 (owner req 2026-08-23): "score entry ... accessible through membership account and
+       tournament/league page." A team on THIS account can reach its own score entry once the event
+       is live; the token is surfaced only here to a member of this team, never on the public board or
+       schedule. The gate is DATE-DERIVED, not status-only — nothing on the owner's path reliably sets
+       status='in_progress' (the D-53/RF-4b lesson), so an event that has STARTED by date counts as
+       live even while still 'published'. Upcoming events surface no link (and mint no token). */
+    const startsAt = t.starts_at ? new Date(String(t.starts_at).replace(" ", "T")) : null;
+    const upcoming = t.event_status !== "in_progress" && startsAt && !isNaN(startsAt) && startsAt > now;
+    t.score_url = upcoming ? null : `${env.APP_URL}/score.html?t=${await ensureScoreToken(env, t)}`;
+    delete t.score_token;    // the raw token never ships as its own field; score_url carries it, own-team only
+    delete t.event_status;   // internal to the gate above
     t.members = (await env.DB.prepare(
       `SELECT id, member_name, member_email, contact_id, invited_at, is_sub
        FROM team_members WHERE team_id=?1 AND deleted_at IS NULL ORDER BY id`

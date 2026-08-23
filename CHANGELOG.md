@@ -1,5 +1,16 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.185.0 — 2026-08-23
+
+**A team can reach its own score entry from the member site (RF-13 score-entry, owner req 2026-08-23).** The owner asked that score entry be "accessible through membership account and tournament/league page" (QR reserved for staff, not the primary way in). The per-team self-scoring link (`score.html?t=…`) has always been the credential — no login — but staff had to hand it out. Now a signed-in member of a team reaches it themselves.
+
+- `GET /api/profile/teams` returns a per-team `score_url` for the caller's own teams whose event is **live** — surfaced only to a member of that team, never on the public board or schedule. The link is minted lazily through one shared helper (`ensureScoreToken`, also used by the staff Scoring Links page, so the two paths can't drift).
+- **The "live" gate is date-derived, not status-only.** Nothing on the owner's path reliably sets `status='in_progress'`, so a team whose event has *started by date* gets the link even while still `published`; an *upcoming* event surfaces no link and mints no token early. (This is the D-53 / RF-4b lesson applied.)
+- `web/assets/leagues.js` — the "your league tonight" banner now offers the member their own team's "Enter your team's scores →" beside "See the live board". A team with no live link shows no action; the card became a container so the two actions are each a 44px tap target.
+- `worker/test/member_score_entry.test.mjs` (new) — the account carries the link for a started team and not an upcoming one; an `in_progress` event with a future date still opens scoring (status path); the token appears only on the authenticated own-team path and never on the public live board or schedule feed; one mint spelling; and the banner surfaces it conditionally, with a negative control.
+
+Not yet built (queued): the same affordance on a member's tournament surface and a dedicated account "my teams" view, plus emailing the link to the team. QR for staff stays a separate, non-primary path.
+
 ## v0.184.0 — 2026-08-23
 
 **The eight event-scoped tools come off the admin rail (RF-4, owner req 2026-08-23).** The owner asked that the Schedule Editor and its siblings not sit on the menu — "add the rail for scheduler to the tournament page/league page for custom builds when needed to edit. Do not have it on the menu." The two management pickers (Tournament Management / League Management, shipped v0.173.0) already lead to the event hub, which frames each tool with the `?event=` context the standalone rail entries never had, so the eight rail destinations were now redundant.

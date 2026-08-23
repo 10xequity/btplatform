@@ -1,5 +1,9 @@
 /* Boomtown Platform — Leagues
-   File: web/assets/leagues.js · Version: v1.6 · Date: 2026-08-23 · Ships in: v0.183.0
+   File: web/assets/leagues.js · Version: v1.7 · Date: 2026-08-23 · Ships in: v0.185.0
+   v1.7 (§-1r RF-13 score-entry, owner req 2026-08-23): the "your league tonight" banner now offers
+   the signed-in member their OWN team's score entry — /api/profile/teams carries a per-team score_url
+   for a live event (surfaced only to a member of that team, never on the public board). The banner
+   card became a container (an anchor cannot nest the second link); no score_url → no action shown.
    v1.6 (Gemini review 2026-08-23, round 2): the live-board gate now checks `completed` EXPLICITLY
    (a completed league with no parseable date still links its standings, aligning with schedule.js),
    and the aria-label's name prefix is conditional (no dangling " — " when a league has no name).
@@ -89,8 +93,16 @@
         const onNow = (d.on_now || []).find(inMatch);
         const upNext = (d.up_next || []).find(inMatch);
         const line = onNow ? say(onNow, "you're on now") : upNext ? say(upNext, "you're up next") : "your league is live";
-        cards.push(`<a class="lg-tonight" href="live.html?event=${encodeURIComponent(t.event_id)}">
-          <strong>Tonight &#8212; ${esc(ev.name)}:</strong> ${line}. <span class="lg-tn-go">See the live board &#8594;</span></a>`);
+        // RF-13 (owner req 2026-08-23): score entry "accessible through membership account and
+        // tournament/league page." /api/profile/teams carries this team's own score link (score_url)
+        // once the event is live — surfaced only to this signed-in member of the team, never on the
+        // public board. No score_url (upcoming, or not yet live) → the action is simply absent.
+        const scoreCta = t.score_url
+          ? `<a class="lg-tn-score" href="${esc(t.score_url)}">Enter your team&#8217;s scores &#8594;</a>`
+          : "";
+        cards.push(`<div class="lg-tonight">
+          <div><strong>Tonight &#8212; ${esc(ev.name)}:</strong> ${line}.</div>
+          <div class="lg-tn-actions"><a class="lg-tn-go" href="live.html?event=${encodeURIComponent(t.event_id)}">See the live board &#8594;</a>${scoreCta}</div></div>`);
       }
       box.innerHTML = cards.join("");
     } catch (e) { /* decoration: any failure renders nothing */ }
