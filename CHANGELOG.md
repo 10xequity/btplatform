@@ -1,5 +1,18 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.177.0 — 2026-08-22
+
+**§-1r RF-8(b) / §-1c D-48 closed (owner 2026-08-18): the expired bounce finally has a reader — and sign-in carries you back.** Since v0.26.0, a dead staff session has been bounced to `index.html?expired=1&from=<page>` — and nothing anywhere read either param, so a timed-out director landed on a bare sign-in card with no reason and no way back. The writer was built; the reader never was. Now:
+
+- **The login card says it:** arriving with `?expired=1` shows *"Your session expired — sign in again and you'll land back where you were."*
+- **The emailed link carries the way back.** The sign-in request sends `from` along, and the server embeds it in the magic link (`/?token=…&from=<page>`) — the link may be opened on a different device, where no browser storage from the original page exists, so **the link is the only carry that survives**. After verify, `location.replace(from)`.
+- **The passkey path is covered at boot:** passkey.js signs in and reloads with the query intact, so `route()` with a live session and a validated `from` returns there too.
+- **The open-redirect line is one validator on each side:** only a bare same-directory page name (`^[a-z0-9-]+\.html$`) is ever embedded in the emailed link or handed to `location.replace()`. Anything else — absolute URLs, protocol tricks, path traversal, query/hash riders — is **dropped, never refused**: sign-in must not fail over a malformed return hint; the person simply lands on the dashboard as before.
+
+Guards: `expired_return.test.mjs` (new, 7 tests; 4 watched red, 3 absence-shaped greens explained pre-fix): the carry tested **behaviourally through the worker** in sandbox mode (`dev_link` must end `&from=admin-brackets.html`), eight hostile `from` shapes dropped from the link with a 200, the plain link's byte-shape unchanged, the login card's expired sentence, the single client validator with its boot-capture assignment and `location.replace(returnTo)` pinned (NC-E1 strips the validator and the assignment pin catches it), and the writer half pinned so the seam always has two live halves. Suite 2128 → 2135; test files 139 → 140.
+
+RF-8's remaining half stays open as recorded: (a) the conditionally-bare brand lockup (built only when `loginOrgHint()` resolves). (c) was already closed by v0.171.0's tablist removal.
+
 ## v0.176.0 — 2026-08-22
 
 **§-1r RF-7 (owner 2026-08-18): "the calendar boxes are STILL not correct" — the member calendar gets WF-1's cap, and the month pager finally fetches what it shows.** The row's measurement held on re-measure: there are exactly two month-grid renderers sharing one stylesheet, the admin one has been capped and guarded since v0.133.0, and the member one (`schedule.js`) never got it — no cap, no "+N more", and a pager that called `render()` over a fetch window pinned at today−7/+180, so paging past the window showed empty boxes **because of the request, not the schedule** (the server honours any from/to it is sent; the pin was client-side).

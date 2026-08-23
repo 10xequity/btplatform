@@ -1,5 +1,5 @@
 /* Boomtown Platform — App Shell
-   Version: v0.8.0 · Date: 2026-08-20
+   Version: v0.9.0 · Date: 2026-08-22 · Ships in: v0.177.0
    Handles: magic-link login, verify (?token=), session (Bearer, in-memory + sessionStorage),
    org switcher (≤2 clicks), theme toggle (instant — high-frequency action).
    v0.8.0 (§-1r RF-12, owner 2026-08-18): the v0.6.0 Member/Manager sign-in switch and the
@@ -84,6 +84,14 @@
 
   /* ---------- boot ---------- */
   const params = new URLSearchParams(location.search);
+  /* D-48 (v0.177.0), the reader half of admin-nav's expired bounce and of the emailed link.
+     ONE validator — this value becomes location.replace(), so ONLY a bare same-directory page
+     name passes (the open-redirect line); anything else reads as absent. The server embeds
+     `from` into the magic link through the same judgement, because the link may be opened on
+     another device and the LINK is the only carry that survives. Captured at boot, before
+     verifyToken scrubs the URL. */
+  const safeFrom = (v) => (typeof v === "string" && /^[a-z0-9-]+\.html$/.test(v) ? v : null);
+  const returnTo = safeFrom(params.get("from"));
   if (params.get("token")) {
     verifyToken(params.get("token"));
   } else {
@@ -92,17 +100,21 @@
 
   async function route() {
     const me = bearer ? await api("/api/me") : { ok: false };
+    /* D-48: back to the page the session died on. This covers the passkey path too — passkey.js
+       signs in and reloads with ?expired=1&from= still in the URL. returnTo is boot-validated. */
+    if (me.ok && returnTo) { location.replace(returnTo); return; }
     if (me.ok) renderDashboard(me.data);
     else renderLogin();
   }
 
   async function verifyToken(token) {
-    history.replaceState({}, "", location.pathname); // scrub token from the URL
+    history.replaceState({}, "", location.pathname); // scrub token from the URL (returnTo was captured at boot)
     render(`<div class="login-wrap"><div class="card login-card"><p>Signing you in…</p></div></div>`);
     const r = await api("/api/auth/verify", { method: "POST", body: JSON.stringify({ token }) });
     if (r.ok) {
       bearer = r.data.token;
       ssSet("bt_token", bearer);
+      if (returnTo) { location.replace(returnTo); return; } // D-48: the emailed link carried the way back
       route();
     } else {
       renderLogin(r.data.error || "Sign-in failed. Request a new link.");
@@ -149,7 +161,7 @@
     if (nameEl) nameEl.textContent = brand.display_name;
     const img = document.getElementById("loginBrandLogo");
     if (img && brand.logo_url) {
-      img.onerror = () => { img.src = "assets/logo-boom-icon-512.png?v=0.176.0"; }; // fail closed on 404
+      img.onerror = () => { img.src = "assets/logo-boom-icon-512.png?v=0.177.0"; }; // fail closed on 404
       img.src = brand.logo_url;
     }
   }
@@ -163,14 +175,16 @@
        The logo carries explicit width/height so it reserves its box before it loads, and the name
        fills sideways into a fixed-width card, so the swap changes no height. */
     const brandSlot = org
-      ? `<div class="login-brand"><img id="loginBrandLogo" src="assets/logo-boom-icon-512.png?v=0.176.0" alt="" width="36" height="36" /><span id="loginBrandName"></span></div>`
+      ? `<div class="login-brand"><img id="loginBrandLogo" src="assets/logo-boom-icon-512.png?v=0.177.0" alt="" width="36" height="36" /><span id="loginBrandName"></span></div>`
       : "";
     render(`
       <div class="login-wrap">
         <div class="card login-card reveal">
           ${brandSlot}
           <h1>Sign in</h1>
-          <p id="loginHint">We’ll email you a one-time sign-in link. No password needed.</p>
+          <p id="loginHint">${params.get("expired") === "1"
+            ? `Your session expired — sign in again${returnTo ? " and you’ll land back where you were" : ""}. No password needed.`
+            : "We’ll email you a one-time sign-in link. No password needed."}</p>
           <div class="field">
             <label for="email">Email</label>
             <input id="email" type="email" autocomplete="email" inputmode="email" placeholder="you@example.com" />
@@ -197,7 +211,10 @@
       btn.textContent = "Sending\u2026";
       let r;
       try {
-        r = await api("/api/auth/request-link", { method: "POST", body: JSON.stringify({ email }) });
+        /* D-48: the return page rides the REQUEST so the server can put it in the emailed link —
+           the link may be opened on another device, where no storage from this page exists. */
+        r = await api("/api/auth/request-link", { method: "POST",
+          body: JSON.stringify({ email, from: safeFrom(params.get("from")) || undefined }) });
       } finally {
         btn.disabled = false;
         btn.textContent = "Send sign-in link";

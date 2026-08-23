@@ -531,7 +531,7 @@ export default {
         const session = await currentSession(request, env);
         res = session ? await listOrgs(env) : json({ error: "Sign in first." }, 401);
       } else if (url.pathname === "/api/health") {
-        res = json({ ok: true, version: "v0.176.0" });
+        res = json({ ok: true, version: "v0.177.0" });
       } else if (url.pathname === "/api/webhooks/square" && request.method === "POST") {
         res = await membershipWebhook(request, env); // verifies signature; forwards payment.* to squareWebhook
       } else if (url.pathname === "/api/public/org-brand" && request.method === "GET") {
@@ -708,15 +708,17 @@ async function eventReminderSweep(env) {
 /* ---------- auth ---------- */
 
 async function requestLink(request, env) {
-  const { email } = await safeJson(request);
+  const { email, from } = await safeJson(request);
   if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
     return json({ error: "Enter a valid email address." }, 400);
   }
-  return sendLoginLink(env, email);
+  return sendLoginLink(env, email, from);
 }
 
-/** Shared: create + (sandbox: return / email mode: send) a magic sign-in link. */
-async function sendLoginLink(env, email) {
+/** Shared: create + (sandbox: return / email mode: send) a magic sign-in link.
+    `from` (optional, D-48/v0.177.0): the page to return to after sign-in — the link may be
+    opened on another device, so the LINK is the only carry that survives sign-in. */
+async function sendLoginLink(env, email, from) {
   // S-3b flood band. One human sentence, identical whether the address has an account or
   // not — a distinguishable 429 would be the user-enumeration oracle requestLink avoids.
   const addr = email.toLowerCase();
@@ -737,7 +739,12 @@ async function sendLoginLink(env, email) {
     "INSERT INTO magic_links (email, token_hash, expires_at) VALUES (?1, ?2, ?3)"
   ).bind(email.toLowerCase(), tokenHash, expires).run();
 
-  const link = `${env.APP_URL}/?token=${token}`;
+  /* D-48: ONLY a bare same-directory page name is embedded — this string lands in an inbox and
+     then in location.href, so it is the open-redirect line. Anything else is DROPPED, never
+     refused: sign-in must not fail over a malformed return hint. app.js's safeFrom is the same
+     judgement on the client; expired_return.test.mjs pins both with hostile shapes. */
+  const returnTo = typeof from === "string" && /^[a-z0-9-]+\.html$/.test(from) ? from : null;
+  const link = `${env.APP_URL}/?token=${token}` + (returnTo ? `&from=${returnTo}` : "");
 
   if (env.BREVO_API_KEY) {
     const sent = await sendBrevoEmail(env, email, link);
