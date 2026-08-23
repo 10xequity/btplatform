@@ -1,5 +1,5 @@
 /* Boomtown Platform — Pool board (admin page script)
-   File: web/assets/admin-pool-board.js · Version: v1.0 · Date: 2026-08-03 · Ships in: v0.70.0
+   File: web/assets/admin-pool-board.js · Version: v1.1 · Date: 2026-08-22 · Ships in: v0.178.0
 
    A board for arranging teams before any schedule exists. Owner 2026-08-03:
    "Add drag and drop for me to sort which teams go where and allow me to write a note that is
@@ -312,6 +312,22 @@
     render();
   }
 
+  /** RF-5 (v0.178.0): the remove affordance — this PRESSES the capability that has existed
+      since v0.70.0, it does not add one. The teams go back to the workspace (rule 1: the
+      staging area, never nowhere) and the zone leaves the board locally; Save then omits it
+      and the server does what the owner's own spec says ("if it is empty, itll auto delete"
+      — hard-delete when never played, soft-delete when matches refer to it). NOTHING SAVES
+      UNTIL YOU SAY SO still holds: this is a local arrangement change like any drag. */
+  function emptyPool(key) {
+    const z = zones.find((x) => x.key === key);
+    if (!z) return;
+    workspace.push(...z.teams);
+    z.teams = [];
+    zones = zones.filter((x) => x.key !== key);
+    dirty = true;
+    render();
+  }
+
   /** The "+" tile: a drop here invents a pool and puts the team in it. */
   function newPool(teamId, divisionId) {
     const id = tempSeq--;
@@ -362,6 +378,9 @@
         <input class="pb-poolname" value="${esc(z.name)}" data-rename="${z.key}"
           aria-label="Pool name" maxlength="60" />
         ${size}
+        <button type="button" class="pb-remove" data-empty="${z.key}"
+          title="Remove ${esc(z.name)} — its teams go back to the workspace"
+          aria-label="Remove ${esc(z.name)} — its teams go back to the workspace, and the empty pool disappears when you save">✕</button>
       </div>
       <ul class="pb-list" data-zone="${z.key}">${z.teams.map(tile).join("")}</ul>
     </div>`;
@@ -413,6 +432,10 @@
 
     document.querySelectorAll("[data-note]").forEach((b) => {
       b.addEventListener("click", (e) => { e.stopPropagation(); editNote(Number(b.dataset.note)); });
+    });
+
+    document.querySelectorAll("[data-empty]").forEach((b) => {
+      b.addEventListener("click", (e) => { e.stopPropagation(); emptyPool(b.dataset.empty); });
     });
 
     document.querySelectorAll("[data-rename]").forEach((inp) => {

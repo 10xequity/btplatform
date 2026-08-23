@@ -13,6 +13,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import worker from "../src/index.js";
 import { createD1 } from "../testkit/d1-memory.mjs";
+import { blankComments } from "../testkit/route-extract.mjs";
 
 const SCHEMA = readFileSync(new URL("../testkit/journey-schema.sql", import.meta.url), "utf8");
 const PBJS = readFileSync(new URL("../../web/assets/admin-pool-board.js", import.meta.url), "utf8");
@@ -348,4 +349,46 @@ test("a pool that matches still reference is soft-deleted, and keeps its teams' 
   assert.ok(row, "a pool a played game refers to must survive as a row");
   assert.ok(row.deleted_at, "and must be soft-deleted, not left live");
   env.DB.close();
+});
+
+/* ═══════════ v1.1 (v0.178.0, §-1r RF-5): the remove affordance — pressing the capability
+   that has existed since v0.70.0, never adding one. The owner's spec IS the auto-delete
+   ("if it is empty, itll auto delete"); what was missing was a control that empties the pool
+   FOR you, and a line that says the law out loud. ═══════════ */
+
+test("RF-5: every pool head carries the remove affordance, wired and keyboard-reachable", () => {
+  const t = blankComments(PBJS);
+  const head = t.slice(t.indexOf("pb-pool-head"), t.indexOf("pb-list"));
+  assert.ok(head.includes('data-empty="${z.key}"'), "the pool head lost its remove control (RF-5)");
+  assert.ok(/<button type="button"/.test(head),
+    "the remove control must be a real button — keyboard access is the owner's standing rule");
+  assert.ok(t.includes('querySelectorAll("[data-empty]")'),
+    "nothing wires the remove control after render — the button would be decoration");
+});
+
+test("RF-5: removing a pool NEVER orphans its teams — they land in the workspace (rule 1)", () => {
+  const t = blankComments(PBJS);
+  const at = t.indexOf("function emptyPool");
+  assert.notEqual(at, -1, "emptyPool is gone — the affordance has no handler");
+  const body = t.slice(at, t.indexOf("\n  }", at));
+  assert.ok(body.includes("workspace.push(...z.teams)"),
+    "emptyPool no longer returns the teams to the workspace — a removed pool would silently orphan its teams");
+  assert.ok(/zones = zones\.filter/.test(body),
+    "the zone is not removed locally — the press would appear to do nothing until Save");
+  assert.ok(body.includes("dirty = true"), "the press does not mark the board dirty — Save would not know");
+});
+
+test("RF-5: the board SAYS the law — an empty pool disappears when you save", () => {
+  assert.match(PBHTML, /empty pool disappears when you save/i,
+    "the wording line is gone — the auto-delete law is invisible again, which was the RF-5 complaint");
+});
+
+test("NC-P1: stripping the workspace return from the real handler FAILS the orphan pin", () => {
+  const t = blankComments(PBJS);
+  const mutated = t.replace("workspace.push(...z.teams)", "/* teams dropped */");
+  assert.notEqual(mutated, t, "mutation did not land — emptyPool changed shape; update this NC with it");
+  const at = mutated.indexOf("function emptyPool");
+  const body = at === -1 ? "" : mutated.slice(at, mutated.indexOf("\n  }", at));
+  assert.ok(!body.includes("workspace.push(...z.teams)"),
+    "the stripped copy still matches the orphan pin — it is matching another site");
 });

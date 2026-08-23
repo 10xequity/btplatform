@@ -1,5 +1,16 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.178.0 — 2026-08-22
+
+**§-1r RF-5 (owner 2026-08-18): the pool-remove affordance — pressing the capability that has existed since v0.70.0, never adding one.** The measurement held: the auto-delete IS his own 2026-08-03 spec (*"if i drag to a square or block with + it will add a pool. and if it is empty, itll auto delete"*) — `save()` already omits empty zones and the server already hard-deletes a never-played pool and soft-deletes a matched one, clearing `teams.pool_id` for migration 0039's FK. What was missing was the affordance and the wording, and that is all that shipped:
+
+- **Every pool head carries a ✕ button** (36px hit target, a real `<button>` for keyboard access, living in the head — which is not a drop zone, so a drag over the list cannot land on it). Pressing it sends the pool's teams **back to the workspace** (rule 1: the staging area, never nowhere), removes the zone locally, and marks the board dirty. "Nothing saves until you say so" still holds — it is a local arrangement change like any drag; Save then omits the pool and the server does what his spec says.
+- **The board says the law out loud:** a standing line under the keyboard tip reads *"Removing a pool (✕) sends its teams back to the workspace — an empty pool disappears when you save."* The button's own label says the same for screen readers.
+
+Guards: `pool_board.test.mjs` v1.1 (+4, all watched red first): the affordance present in the pool-head template, a real button, wired after render; the orphan pin — `emptyPool` must return teams to the workspace, remove the zone, and mark dirty (a removed pool must never silently orphan its teams); the wording line pinned on the page; NC-P1 strips the workspace return and the orphan pin catches it. Suite 2135 → 2139.
+
+His second sentence in item 5 — pools → points → matchups → bracket — stays with RF-1's bracket work as the row records; it is not closed here.
+
 ## v0.177.0 — 2026-08-22
 
 **§-1r RF-8(b) / §-1c D-48 closed (owner 2026-08-18): the expired bounce finally has a reader — and sign-in carries you back.** Since v0.26.0, a dead staff session has been bounced to `index.html?expired=1&from=<page>` — and nothing anywhere read either param, so a timed-out director landed on a bare sign-in card with no reason and no way back. The writer was built; the reader never was. Now:
