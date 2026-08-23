@@ -1,5 +1,18 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.181.0 — 2026-08-23
+
+**Members can reach the tournament view from an event (owner req 2026-08-23).** He asked whether members can see a read-only tournament display — pools, bracket, info — and enter scores "if needed." Measured: that view already exists as the public live board (`live.html?event=N`, `/api/live/events/:id`, team names only), which renders divisions → pools, brackets and standings and degrades gracefully for a not-started event. What was missing was the way in.
+
+- `web/assets/schedule.js` — a started tournament/league event card now links to `live.html?event=N` ("Pools & bracket" for tournaments, "Standings & scores" for leagues) where it used to render no action at all. Gated to those two types and to started events (in_progress/completed); an upcoming event still shows Register.
+- `web/assets/leagues.js` — the dead "In progress"/"Closed" label on a started or past league is now a link to the same live board.
+- No new page, no new route — the view and its route already existed and are public.
+- `worker/test/member_event_view.test.mjs` — new: the two surfaces link to `live.html?event=`, gated by type + status, Register preserved for open events, each with a real-source negative control.
+
+Also, from the forwarded Gemini review of v0.180.0: the ◈ glyph on the Sub-Finder buttons is now wrapped in `<span aria-hidden="true">` so screen readers announce "Sub-Finder", not the diamond character (the rail icon was already hidden). Declined, with reasons: moving the inline `text-decoration:none` to CSS (it is the house idiom on every `.btn` anchor), and a `#subFinder` hash redirect (nothing ever linked that fragment).
+
+**Not built — queued as a question:** letting members *enter scores* from this view. Members have no self-serve scoring-link path today (links are staff-distributed), so how a member reaches score entry needs the owner's word.
+
 ## v0.180.0 — 2026-08-22
 
 **Sub-Finder is its own module (owner req 2026-08-22).** The sub finder — join the sub list, post "need a sub", claim open requests — was a section embedded on the Leagues page. It is now its own page, `web/subs.html` (`web/assets/subs.js`), reached by a single rail button ("Sub-Finder", in the member Play group) and by a "buttons along the top" link on the leagues and community (Community Play) pages. The finder now has ONE home: leagues.js is the league list again and touches no `/api/subs/*` route. No server change — the `/api/subs/*` routes are unchanged; only where the UI lives moved.

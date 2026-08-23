@@ -1,5 +1,9 @@
 /* Boomtown Platform — Public Schedule
-   Version: v0.6.0 · Date: 2026-08-22 · Ships in: v0.176.0
+   Version: v0.7.0 · Date: 2026-08-23 · Ships in: v0.181.0
+   v0.7.0 (owner req 2026-08-23): a started tournament/league event card now links to its
+   read-only tournament view (pools, bracket, standings — the existing public live board,
+   live.html?event=N). Before, a member who opened a running event saw no way through to it.
+   See liveLink()/hasLiveView(); leagues.js does the same on the leagues list.
    v0.6.0 (§-1r RF-7): the month grid gets WF-1's day cap — through config.js's BT_CAL, the ONE
    judgement the admin calendar also reads — with "+N more" expanding the day in place; and the
    pager/mode switch REFETCH, with the month window derived from calCursor (paging past the old
@@ -31,6 +35,18 @@
   // whether it leaves the site, so the CTA below can be honest about it.
   const signup = e => BT_SIGNUP(e);
   const TZ = "America/Denver";
+
+  /* Owner req 2026-08-23: a member who opens an event that is running (or has run) sees a link to
+     the read-only tournament view — pools, bracket and standings — which already exists as the
+     public live board (live.html?event=N, /api/live/events/:id, team names only). Only tournaments
+     and leagues have that view; only once play has started is there anything to show. This replaces
+     the dead no-action state a started event used to render on the member schedule. */
+  const hasLiveView = e => (e.type === "tournament" || e.type === "league") &&
+    (e.status === "in_progress" || e.status === "completed");
+  const liveLink = e => hasLiveView(e)
+    ? `<a class="btn ghost sched-cta" href="live.html?event=${encodeURIComponent(e.id)}">${
+        e.type === "tournament" ? "Pools &amp; bracket" : "Standings &amp; scores"}</a>`
+    : "";
 
   /** SG-6 (§-1o): the one place a URL value becomes a view mode. A WHITELIST, not a passthrough
       — render() branches `if (mode === "list") … else <calendar>`, so any unrecognised value
@@ -272,7 +288,8 @@
             ${e.team_names && e.team_names.length ? `<div class="sched-meta">Teams: ${e.team_names.map(esc).join(", ")}</div>` : ""}
           </div>
           ${e.status === "published" ? (s => `<a class="btn sched-cta" href="${esc(s.href)}"
-            ${s.external || embed ? `target="_blank" rel="${esc(s.rel || "noopener")}"` : ""}>${esc(s.label)}${s.external ? " ↗" : ""}</a>`)(signup(e)) : ""}
+            ${s.external || embed ? `target="_blank" rel="${esc(s.rel || "noopener")}"` : ""}>${esc(s.label)}${s.external ? " ↗" : ""}</a>`)(signup(e))
+            : liveLink(e)}
         </div>`;
       }).join("");
     } else {

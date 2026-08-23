@@ -1,5 +1,8 @@
 /* Boomtown Platform — Leagues
-   File: web/assets/leagues.js · Version: v1.3 · Date: 2026-08-22 · Ships in: v0.180.0
+   File: web/assets/leagues.js · Version: v1.4 · Date: 2026-08-23 · Ships in: v0.181.0
+   v1.4 (owner req 2026-08-23): an in-progress or past league now links to its live board
+   (live.html?event=N — standings & scores) instead of rendering the dead "In progress"/"Closed"
+   text. Members can finally reach the tournament view from the list. schedule.js does the same.
    v1.3 (owner req 2026-08-22): the Sub finder MOVED OUT to its own module (web/assets/subs.js on
    subs.html). This file is the league list again — nothing here touches /api/subs/* any more; the
    top "Sub-Finder" button on leagues.html links to the module. See subs.js for the moved code.
@@ -131,7 +134,9 @@
       <div class="lg-cta">${open
         ? ((s) => `<a class="btn" href="${esc(s.href)}" style="text-decoration:none"
             ${s.external ? `target="_blank" rel="${esc(s.rel)}"` : ""}>${s.external ? esc(s.label) + " ↗" : "Register"}</a>`)(BT_SIGNUP(e))
-        : `<span class="lg-meta">${e.status === "in_progress" ? "In progress" : "Closed"}</span>`}</div>
+        : (e.status === "in_progress" || (d && d <= new Date()))
+          ? `<a class="btn ghost" href="live.html?event=${encodeURIComponent(e.id)}" style="text-decoration:none">Standings &amp; scores</a>`
+          : `<span class="lg-meta">Closed</span>`}</div>
     </div>`;
   }
 })();
