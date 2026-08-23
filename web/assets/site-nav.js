@@ -64,7 +64,9 @@
    falls back to `roles[0]`, which handed a caller their role in ANOTHER org when they had none in
    the org on screen. Both are presentation-only — requireStaff re-checks userId + orgId on every
    admin route — but presentation is what was reported. Guards: header_actions.test.mjs.
-   File: web/assets/site-nav.js · Version: v2.22 · Date: 2026-08-20 · Ships in: v0.172.0
+   File: web/assets/site-nav.js · Version: v2.23 · Date: 2026-08-22 · Ships in: v0.180.0
+   v2.23 (owner req 2026-08-22): "Sub-Finder" (subs.html) added to the signed-in Play group — the
+   sub finder is its own module now (moved off leagues.html); one rail button leads to it.
    v2.11: header "Admin" switch (owner 2026-08-02) — staff/admin who are also players get a
    header button on member pages to jump back to the Control Center, next to the mail icon
    and theme toggle. Clears bt_demo_member on click (same escape as the exit pill). Role-gated
@@ -260,6 +262,7 @@
         { href: "leagues.html",  ico: "◇", text: "Leagues" },
         { href: "live.html",     ico: "◉", text: "Live scores" },
         { href: "lfg.html",      ico: "◆", text: "Community Play" },
+        { href: "subs.html",     ico: "◈", text: "Sub-Finder" },
       ]});
       NAV.push({ label: "Explore", items: [
         { href: "index.html",    ico: "▦", text: "Explore" },
@@ -546,7 +549,7 @@
       if (window.BT_STATUS || document.getElementById("bt-status-js")) return;
       var s = document.createElement("script");
       s.id = "bt-status-js";
-      s.src = "assets/build-status.js?v=0.179.0";
+      s.src = "assets/build-status.js?v=0.180.0";
       s.async = false;
       document.head.appendChild(s);
     } catch (e) { /* indicators are never load-blocking */ }

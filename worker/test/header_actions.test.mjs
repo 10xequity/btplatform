@@ -114,7 +114,10 @@ test("static btHdrMail on admin-nav pages AND the 15 canonical member pages — 
   // so it arrived carrying the static ✉ rather than needing it added).
   // 16 → 17 in v0.132.0 (sheet.html, the public drop-in sheet — generated from register.html's
   // bytes, so it arrived carrying the static ✉ and the hidden Admin link).
-  assert.equal(memberPages, 17, `guard floor: expected exactly 17 canonical member pages, saw ${memberPages}`);
+  // 17 → 18 in v0.180.0 (subs.html, the Sub-Finder module — the sub finder moved off leagues.html
+  // to its own page, owner req 2026-08-22; generated from leagues.html's bytes, so it arrived
+  // carrying the static ✉).
+  assert.equal(memberPages, 18, `guard floor: expected exactly 18 canonical member pages, saw ${memberPages}`);
   assert.deepEqual(missing, [], `pages missing the static ✉: ${missing.join(", ")}`);
   assert.deepEqual(extras, [], `static ✉ on excluded pages (index/chromeless): ${extras.join(", ")}`);
 });

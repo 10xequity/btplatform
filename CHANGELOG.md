@@ -1,5 +1,16 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.180.0 — 2026-08-22
+
+**Sub-Finder is its own module (owner req 2026-08-22).** The sub finder — join the sub list, post "need a sub", claim open requests — was a section embedded on the Leagues page. It is now its own page, `web/subs.html` (`web/assets/subs.js`), reached by a single rail button ("Sub-Finder", in the member Play group) and by a "buttons along the top" link on the leagues and community (Community Play) pages. The finder now has ONE home: leagues.js is the league list again and touches no `/api/subs/*` route. No server change — the `/api/subs/*` routes are unchanged; only where the UI lives moved.
+
+- `web/subs.html` + `web/assets/subs.js` — new; the moved finder, generated from leagues.html's shell so its member header is byte-identical.
+- `web/leagues.html` / `web/assets/leagues.js` — the `#subFinder` embed and its code removed; a top "Sub-Finder" button added.
+- `web/lfg.html` — a top "Sub-Finder" button added.
+- `web/assets/site-nav.js` — "Sub-Finder" added to the signed-in Play group.
+- `web/assets/build-status.js` — `subs.html` registered (beta: the in-app board works; notifications ride on dormant push).
+- `worker/test/sub_finder.test.mjs` — new: the module mounts the finder, the finder has one home, the entry buttons and the rail item lead to it, each with a negative control. Canonical member-page ratchets bumped 17 → 18 in `header_actions`, `header_shell`, `org_contact`.
+
 ## v0.179.0 — 2026-08-22
 
 **§-1r RF-10, half 2 (owner 2026-08-18): "your league tonight" on the member Leagues page — a member-scoped read over two routes that already existed.** The measurement held: the page showed nothing about tonight while the public court+opponent payload (`on_now`/`up_next` on `GET /api/live/events/:id`) had exactly one caller. Now a signed-in member with a team in a league that is live sees a banner above the list: *"Tonight — <league>: you're on now on Court N vs <opponent>"* (or *you're up next*, or plainly *your league is live*), linking straight to the live board. No new server surface: `/api/profile/teams` names the member's teams and the live payload names who is on which court — by team NAME only, deliberately (its no-personal-data walker ships no ids), so the member's game is found by exact name match inside their own event.

@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<!-- Boomtown Platform — Sub-Finder · Version: v1.0 · Date: 2026-08-22 · Ships in: v0.180.0
+     The sub finder as its own module (owner req 2026-08-22): "make it 1 button on the menu
+     called Sub-Finder." It was a section inside leagues.html (v1.1); it lives here now, reached
+     from the rail (site-nav.js "Sub-Finder") and from a top button on the league and community
+     pages. The list of leagues stays on leagues.html; this page is Be a sub / Need a sub? /
+     Open requests over /api/subs/*. Sign-in is asked for by the module itself, not gated here. -->
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sub-Finder — Boomtown Athletics</title>
+  <script>/* Pre-paint theme (v0.53.0): saved bt_theme, else system preference, applied before the first stylesheet — the member header paints the right theme on frame one (admin pre-paint v2 precedent, theme half only; member pages carry no rail-collapse state). site-nav.js v2.12 owns the toggle listener. */(function(){try{var t=(window.localStorage&&localStorage.getItem("bt_theme"))||(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.dataset.theme=t;}catch(e){}})();</script>
+  <script>try{var btTpl=localStorage.getItem("bt_template");if(btTpl)document.documentElement.dataset.template=btTpl;}catch(e){}</script>
+  <link rel="stylesheet" href="assets/tokens.css?v=0.180.0" />
+  <link rel="stylesheet" href="assets/app.css?v=0.180.0" />
+  <style>
+    .lg-wrap { max-width: 960px; margin: 0 auto; padding: 16px; }
+    .lg-intro { font-size: 14px; color: var(--text-muted); margin: 2px 0 14px; max-width: 60ch; }
+    .empty { color: var(--text-muted); padding: 24px; text-align: center; }
+    /* Sub finder (moved from leagues.html v1.1). Tokens only; no hover-state animation beyond
+       app.css defaults — chips are tapped tens of times, so feedback is instant (:active) not animated. */
+    .sub-card { border: 1px solid var(--border); border-radius: var(--radius-card);
+      background: var(--surface); padding: 14px; margin-bottom: 10px; }
+    .sub-title { font-weight: 600; font-size: 16px; }
+    .sub-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+    .sub-lab { font-size: 12.5px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .05em; }
+    .sub-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+    .sub-chip { min-height: 44px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--border);
+      background: transparent; color: var(--text); font-size: 14px; cursor: pointer;
+      transition: background-color 120ms ease-out, border-color 120ms ease-out; }
+    .sub-chip:active { transform: scale(0.97); }
+    .sub-chip.on { background: var(--primary); border-color: var(--primary); color: var(--surface); font-weight: 600; }
+    .sub-chip:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+    .sub-input { display: block; width: 100%; min-height: 44px; margin-top: 4px; padding: 8px 10px;
+      border: 1px solid var(--border); border-radius: 8px; background: transparent; color: var(--text);
+      font-size: 15px; letter-spacing: normal; text-transform: none; }
+    .sub-req { display: flex; gap: 10px; align-items: center; padding: 10px 0;
+      border-top: 1px solid var(--border); font-size: 13.5px; color: var(--text-muted); }
+    .sub-req:first-child { border-top: 0; }
+    @media (prefers-reduced-motion: reduce) { .sub-chip, .sub-chip:active { transition: none; transform: none; } }
+  </style>
+  <script>
+    (function () {
+      document.documentElement.dataset.theme = localStorage.getItem("bt_theme") ||
+        (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+    })();
+  </script>
+</head>
+<body>
+    <header class="header chrome-glass no-print">
+    <a class="wordmark" href="index.html" style="text-decoration:none;color:inherit"><img class="brand-logo" src="assets/logo-boom-icon-512.png?v=0.180.0" alt="" width="22" height="22" />Boomtown <span>Athletics</span></a>
+    <div class="spacer"></div>
+    <a id="btHdrMail" class="btn ghost hdr-mail" href="member-inbox.html" aria-label="Messages">✉</a>
+    <button id="themeToggle" class="btn ghost theme-toggle" aria-label="Toggle dark or light theme">◐</button>
+    <button id="logoutBtn" class="btn ghost" hidden>Sign out</button>
+  </header>
+
+  <main class="lg-wrap" id="app" aria-live="polite">
+    <div class="page-head" style="display:flex;align-items:center;gap:12px">
+      <h1 style="font-size:20px;margin:0">Sub-Finder</h1>
+    </div>
+    <p class="lg-intro">Put yourself on the sub list, post when your team is short a player, and pick up
+      open requests from other teams. Matching is by skill, division and game type.</p>
+    <div id="subFinder"><div class="empty">Loading&#8230;</div></div>
+  </main>
+
+  <script src="assets/site-nav.js?v=0.180.0" defer></script>
+  <script src="assets/config.js?v=0.180.0"></script>
+  <script src="assets/subs.js?v=0.180.0" defer></script>
+</body>
+</html>

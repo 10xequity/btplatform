@@ -22,7 +22,7 @@
        A stale asset can no longer satisfy a fresh request; the offline fallback never crosses
        a version boundary. */
 
-const V = ("?v=0.179.0").slice(3); // ← swept by sweep-buster.mjs --write on every release
+const V = ("?v=0.180.0").slice(3); // ← swept by sweep-buster.mjs --write on every release
 const CACHE = "bt-shell-v" + V;
 
 self.addEventListener("install", (e) => {

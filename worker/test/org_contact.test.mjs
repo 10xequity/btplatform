@@ -120,10 +120,12 @@ function corpus() {
 
 /* ══════════════════ 1–2. the corpus is real before anything is concluded from it ═════════════ */
 
-test("corpus: exactly the 17 canonical member pages, and the same set header_actions ratchets", () => {
+test("corpus: exactly the 18 canonical member pages, and the same set header_actions ratchets", () => {
   const { pages } = corpus();
-  assert.equal(pages.size, 17,
-    `expected exactly 17 canonical member pages, saw ${pages.size}: ${[...pages.keys()].join(", ")}`);
+  // 17 → 18 in v0.180.0: subs.html, the Sub-Finder module (owner req 2026-08-22) — the sub finder
+  // moved off leagues.html to its own page; subs.js joins the member-script corpus with it.
+  assert.equal(pages.size, 18,
+    `expected exactly 18 canonical member pages, saw ${pages.size}: ${[...pages.keys()].join(", ")}`);
   for (const f of ["member.html", "profile.html", "library.html", "member-inbox.html", "settings.html"]) {
     assert.ok(pages.has(f), `${f} — a page that carried a hard-coded address — left the corpus`);
   }

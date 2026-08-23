@@ -1,9 +1,10 @@
 <!DOCTYPE html>
-<!-- Boomtown Platform — Leagues · Version: v1.1 · Date: 2026-07-30 · Ships in: v0.38.0
+<!-- Boomtown Platform — Leagues · Version: v1.2 · Date: 2026-08-22 · Ships in: v0.180.0
      Dedicated league area (volleyballlife pattern: leagues are first-class, not a tournament
      footnote): current & upcoming league nights, register links, season standings entry point.
-     v1.1: Sub finder (owner req #7) — sub list signup, need-a-sub requests, open-request board.
-     League list stays public; the sub finder asks for sign-in. Data: /api/schedule + /api/subs/*. -->
+     v1.2 (owner req 2026-08-22): the Sub finder is now its own module (subs.html) reached by the
+     top "Sub-Finder" button here and by the rail item — it is no longer embedded on this page.
+     v1.1: Sub finder shipped here first (owner req #7). Data now: /api/schedule only. -->
 <html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8" />
@@ -11,8 +12,8 @@
   <title>Leagues — Boomtown Athletics</title>
   <script>/* Pre-paint theme (v0.53.0): saved bt_theme, else system preference, applied before the first stylesheet — the member header paints the right theme on frame one (admin pre-paint v2 precedent, theme half only; member pages carry no rail-collapse state). site-nav.js v2.12 owns the toggle listener. */(function(){try{var t=(window.localStorage&&localStorage.getItem("bt_theme"))||(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.dataset.theme=t;}catch(e){}})();</script>
   <script>try{var btTpl=localStorage.getItem("bt_template");if(btTpl)document.documentElement.dataset.template=btTpl;}catch(e){}</script>
-  <link rel="stylesheet" href="assets/tokens.css?v=0.179.0" />
-  <link rel="stylesheet" href="assets/app.css?v=0.179.0" />
+  <link rel="stylesheet" href="assets/tokens.css?v=0.180.0" />
+  <link rel="stylesheet" href="assets/app.css?v=0.180.0" />
   <style>
     .lg-wrap { max-width: 960px; margin: 0 auto; padding: 16px; }
     /* RF-10: the "your league tonight" banner — a link card, present only when the signed-in
@@ -31,27 +32,10 @@
     .lg-meta { font-size: 13.5px; color: var(--text-muted); margin-top: 2px; }
     .lg-cta { align-self: center; }
     .empty { color: var(--text-muted); padding: 24px; text-align: center; }
-    /* Sub finder (v1.1). Tokens only; no hover-state animation beyond app.css defaults —
-       chips are tapped tens of times, so feedback is instant (:active) not animated. */
-    .sub-card { border: 1px solid var(--border); border-radius: var(--radius-card);
-      background: var(--surface); padding: 14px; margin-bottom: 10px; }
-    .sub-title { font-weight: 600; font-size: 16px; }
-    .sub-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
-    .sub-lab { font-size: 12.5px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .05em; }
-    .sub-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
-    .sub-chip { min-height: 44px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--border);
-      background: transparent; color: var(--text); font-size: 14px; cursor: pointer;
-      transition: background-color 120ms ease-out, border-color 120ms ease-out; }
-    .sub-chip:active { transform: scale(0.97); }
-    .sub-chip.on { background: var(--primary); border-color: var(--primary); color: var(--surface); font-weight: 600; }
-    .sub-chip:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
-    .sub-input { display: block; width: 100%; min-height: 44px; margin-top: 4px; padding: 8px 10px;
-      border: 1px solid var(--border); border-radius: 8px; background: transparent; color: var(--text);
-      font-size: 15px; letter-spacing: normal; text-transform: none; }
-    .sub-req { display: flex; gap: 10px; align-items: center; padding: 10px 0;
-      border-top: 1px solid var(--border); font-size: 13.5px; color: var(--text-muted); }
-    .sub-req:first-child { border-top: 0; }
-    @media (prefers-reduced-motion: reduce) { .sub-chip, .sub-chip:active { transition: none; transform: none; } }
+    /* "buttons along the top" (owner req 2026-08-22): a quiet top link to the Sub-Finder module,
+       which used to live embedded on this page. Frequent nav → no animation (emil frequency rule);
+       .btn already carries :active feedback. */
+    .lg-toplinks { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; }
   </style>
   <script>
     (function () {
@@ -62,7 +46,7 @@
 </head>
 <body>
     <header class="header chrome-glass no-print">
-    <a class="wordmark" href="index.html" style="text-decoration:none;color:inherit"><img class="brand-logo" src="assets/logo-boom-icon-512.png?v=0.179.0" alt="" width="22" height="22" />Boomtown <span>Athletics</span></a>
+    <a class="wordmark" href="index.html" style="text-decoration:none;color:inherit"><img class="brand-logo" src="assets/logo-boom-icon-512.png?v=0.180.0" alt="" width="22" height="22" />Boomtown <span>Athletics</span></a>
     <div class="spacer"></div>
     <a id="btHdrMail" class="btn ghost hdr-mail" href="member-inbox.html" aria-label="Messages">✉</a>
     <button id="themeToggle" class="btn ghost theme-toggle" aria-label="Toggle dark or light theme">◐</button>
@@ -75,17 +59,17 @@
       <div class="spacer" style="flex:1"></div>
       <select id="orgFilter" class="org-switcher" aria-label="Filter by organization"><option value="">All orgs</option></select>
     </div>
+    <div class="lg-toplinks">
+      <a class="btn ghost" href="subs.html" style="text-decoration:none">◈ Sub-Finder</a>
+    </div>
     <!-- RF-10: "your league tonight" — filled by leagues.js tonight() for a signed-in member
          with a team in a live league; empty (and invisible) otherwise. -->
     <div id="lgTonight"></div>
     <div id="lgBody"><div class="empty">Loading leagues&#8230;</div></div>
-
-    <h2 style="font-size:16px;margin:22px 0 8px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em">Sub finder</h2>
-    <div id="subFinder"></div>
   </main>
 
-  <script src="assets/site-nav.js?v=0.179.0" defer></script>
-  <script src="assets/config.js?v=0.179.0"></script>
-  <script src="assets/leagues.js?v=0.179.0" defer></script>
+  <script src="assets/site-nav.js?v=0.180.0" defer></script>
+  <script src="assets/config.js?v=0.180.0"></script>
+  <script src="assets/leagues.js?v=0.180.0" defer></script>
 </body>
 </html>

@@ -106,6 +106,7 @@
     "schedule.html":            { s: "live" },
     "live.html":                { s: "beta", n: "The public scoreboard — no sign-in needed, so it works on a TV by the door or a parent phone on venue wifi. Shows which court is on now first, then standings and brackets. Refreshes itself every 25 seconds and tells you when it last did. Team names only; no player details are sent." },
     "leagues.html":             { s: "live" },
+    "subs.html":                { s: "beta", n: "The Sub-Finder module: put yourself on the sub list, post when your team is short a player, and pick up open requests. Reached from the rail and from a top button on the leagues and community pages. The in-app board works fully; getting *notified* when a team needs you rides on push, which is still dormant." },
     "library.html":             { s: "live" },
     "member-inbox.html":        { s: "live" },
     "profile.html":             { s: "live" },

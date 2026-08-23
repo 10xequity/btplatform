@@ -373,8 +373,10 @@ test("the 16 canonical member pages carry the complete member header, byte-ident
   // cheaper to be forced into it than to be caught by it.
   // 16 → 17 in v0.132.0 for sheet.html, the public drop-in sheet (SG-1) — generated from
   // register.html's bytes, the closest precedent: also a no-login public page with the full header.
+  // 17 → 18 in v0.180.0 for subs.html, the Sub-Finder module (owner req 2026-08-22) — generated
+  // from leagues.html's bytes, so its header is byte-identical on its first run (the intended way).
   const canon = htmlPages().filter((f) => isMemberCanonPage(f, read(f)));
-  assert.equal(canon.length, 17, `expected exactly 17 canonical member pages, saw ${canon.length}: ${canon.join(", ")}`);
+  assert.equal(canon.length, 18, `expected exactly 18 canonical member pages, saw ${canon.length}: ${canon.join(", ")}`);
   const headers = new Map();
   for (const f of canon) {
     const v = memberHeaderVerdict(read(f));
