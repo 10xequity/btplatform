@@ -1,5 +1,17 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.179.0 — 2026-08-22
+
+**§-1r RF-10, half 2 (owner 2026-08-18): "your league tonight" on the member Leagues page — a member-scoped read over two routes that already existed.** The measurement held: the page showed nothing about tonight while the public court+opponent payload (`on_now`/`up_next` on `GET /api/live/events/:id`) had exactly one caller. Now a signed-in member with a team in a league that is live sees a banner above the list: *"Tonight — <league>: you're on now on Court N vs <opponent>"* (or *you're up next*, or plainly *your league is live*), linking straight to the live board. No new server surface: `/api/profile/teams` names the member's teams and the live payload names who is on which court — by team NAME only, deliberately (its no-personal-data walker ships no ids), so the member's game is found by exact name match inside their own event.
+
+Two rules hold it together. **One judgement for "in progress":** the grouping test moved into `groupOf()`, and both the page's headings and the banner read it — a banner claiming a league is live under an "Upcoming" heading is the two-readers drift this repo keeps paying for. **The decoration rule:** `tonight()` is deliberately un-awaited and fully fail-soft — signed out, no teams, a fetch error, or a name mismatch each render *nothing*; the league list never waits on it and can never be taken down by it.
+
+**RF-10's other half — a Subs rail entry — is deliberately NOT built: it needs the owner's word.** The member already meets subs in three places (the Leagues page's sub finder, home's availability toggle, lfg.html), and the row itself says the unit "needs a decision about which fold in." The question is queued in the reply; building any answer would be inventing his IA.
+
+**Also this session, no code: the owner-forwarded Gemini review of v0.177.0/v0.178.0 was measured** — it is confirmatory throughout; its two speculations were already answered in the shipped code (the workspace list has been capped and scrollable since T2-8's `max-height: 32vh; overflow-y: auto`, and the `from` writer emits `location.pathname`, which cannot carry a query string, so the validator matches the writer's entire output space; the route-whitelist idea stays a note for if a query-bearing return is ever wanted).
+
+Guards: `league_tonight.test.mjs` (new, 4, all watched red first): the two-route read exists with its mount; the one-judgement pin (`groupOf` defined once, ≥2 call sites, and `tonight()` forbidden its own `in_progress` literal); the decoration rule (a catch that writes nothing, the session check before any fetch, the live-board link); NC-T1 (a re-implemented in-progress test fails the pin). Suite 2139 → 2143; test files 140 → 141.
+
 ## v0.178.0 — 2026-08-22
 
 **§-1r RF-5 (owner 2026-08-18): the pool-remove affordance — pressing the capability that has existed since v0.70.0, never adding one.** The measurement held: the auto-delete IS his own 2026-08-03 spec (*"if i drag to a square or block with + it will add a pool. and if it is empty, itll auto delete"*) — `save()` already omits empty zones and the server already hard-deletes a never-played pool and soft-deletes a matched one, clearing `teams.pool_id` for migration 0039's FK. What was missing was the affordance and the wording, and that is all that shipped:

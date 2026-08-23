@@ -1,5 +1,10 @@
 /* Boomtown Platform — Leagues
-   File: web/assets/leagues.js · Version: v1.1 · Date: 2026-07-30 · Ships in: v0.38.0
+   File: web/assets/leagues.js · Version: v1.2 · Date: 2026-08-22 · Ships in: v0.179.0
+   v1.2 (§-1r RF-10): "your league tonight" — a member-scoped banner over two existing routes
+   (/api/profile/teams + /api/live/events/:id): tonight's court and opponent, or up-next, or a
+   plain "your league is live", each linking the live board. One grouping judgement (groupOf)
+   feeds both the headings and the banner; the decoration rule (any failure renders nothing)
+   is pinned in league_tonight.test.mjs.
    v1.1: Sub finder lands (owner req #7) — the Phase-2 home this file reserved in v1.0.
    Signed-in members can join the sub list (skill / gender / game-type chips), post a
    "need a sub" request, and claim open requests. Signed-out visitors see a sign-in nudge.
@@ -41,9 +46,57 @@
         orgs.map(([id, name]) => `<option value="${id}">${esc(name)}</option>`).join("");
       orgFilter.onchange = paint;
       paint();
+      tonight(); // RF-10: decoration — deliberately not awaited, the list never waits on it
     } catch (e) {
       body.innerHTML = `<div class="empty">Can't reach the server right now. Check your connection and refresh.</div>`;
     }
+  }
+
+  /* ═══ RF-10 (v0.179.0): your league tonight — a member-scoped read over two EXISTING routes.
+     /api/profile/teams names the member's teams (with event_id); /api/live/events/:id names who
+     is on which court — by team NAME only, deliberately (the payload's no-personal-data walker),
+     so the member's game is found by exact name match within their own event. THE DECORATION
+     RULE: any failure — signed out, no teams, a fetch error, a name mismatch — renders NOTHING.
+     This page's job is the list; a banner must never take it down. */
+  async function tonight() {
+    const box = document.getElementById("lgTonight");
+    if (!box) return;
+    try {
+      if (!sessionStorage.getItem("bt_token")) return; // signed out: don't burn a 401 round trip
+      const now = new Date();
+      const live = all.filter(e => groupOf(e, now) === "In progress");
+      if (!live.length) return;
+      const mine = ((await api("/api/profile/teams")).teams || [])
+        .filter(t => live.some(e => e.id === t.event_id));
+      if (!mine.length) return;
+      const cards = [];
+      for (const t of mine) {
+        const ev = live.find(e => e.id === t.event_id);
+        const d = await api(`/api/live/events/${t.event_id}`);
+        const inMatch = mt => mt.team_a === t.name || mt.team_b === t.name;
+        const say = (mt, when) => {
+          const opp = mt.team_a === t.name ? mt.team_b : mt.team_a;
+          return `${when} on Court ${Number(mt.court) || "?"}${opp ? ` vs ${esc(opp)}` : ""}`;
+        };
+        const onNow = (d.on_now || []).find(inMatch);
+        const upNext = (d.up_next || []).find(inMatch);
+        const line = onNow ? say(onNow, "you're on now") : upNext ? say(upNext, "you're up next") : "your league is live";
+        cards.push(`<a class="lg-tonight" href="live.html?event=${encodeURIComponent(t.event_id)}">
+          <strong>Tonight &#8212; ${esc(ev.name)}:</strong> ${line}. <span class="lg-tn-go">See the live board &#8594;</span></a>`);
+      }
+      box.innerHTML = cards.join("");
+    } catch (e) { /* decoration: any failure renders nothing */ }
+  }
+
+  /** ONE judgement: which group an event belongs to. paint() renders the headings by it and
+      tonight() (RF-10) reads "In progress" through the SAME test — a banner claiming a league is
+      live while its heading says Upcoming is the two-readers drift this file must not grow. */
+  function groupOf(e, now) {
+    const s = e.starts_at ? new Date(String(e.starts_at).replace(" ", "T")) : null;
+    const f = e.ends_at ? new Date(String(e.ends_at).replace(" ", "T")) : s;
+    if (e.status === "in_progress" || (s && f && s <= now && now <= f)) return "In progress";
+    if (!s || s > now) return "Upcoming";
+    return "Recent";
   }
 
   function paint() {
@@ -56,13 +109,7 @@
     }
     const now = new Date();
     const groups = { "In progress": [], "Upcoming": [], "Recent": [] };
-    list.forEach(e => {
-      const s = e.starts_at ? new Date(String(e.starts_at).replace(" ", "T")) : null;
-      const f = e.ends_at ? new Date(String(e.ends_at).replace(" ", "T")) : s;
-      if (e.status === "in_progress" || (s && f && s <= now && now <= f)) groups["In progress"].push(e);
-      else if (!s || s > now) groups["Upcoming"].push(e);
-      else groups["Recent"].push(e);
-    });
+    list.forEach(e => groups[groupOf(e, now)].push(e));
     groups["Recent"].reverse();
     body.innerHTML = Object.entries(groups).filter(([, v]) => v.length).map(([label, evs]) => `
       <h2 style="font-size:16px;margin:18px 0 8px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em">${label}</h2>
