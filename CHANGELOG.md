@@ -1,5 +1,16 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.183.0 — 2026-08-23
+
+**Tournament-view link hardening (Gemini review round 2, 2026-08-23).** Two valid edge findings applied to the links added in v0.181.0–v0.182.0:
+
+- **No dangling separator for a nameless event.** The `aria-label` name prefix is now conditional in both `schedule.js` and `leagues.js` — an event with an empty name announces just "pools and bracket" / "standings and scores" instead of a bare "— …" that a screen reader reads as loose punctuation.
+- **A completed league always reaches its standings.** `leagues.js` now checks `status === "completed"` explicitly (aligning with `schedule.js`), so a completed league with no parseable start date links its live board instead of falling through to "Closed".
+
+`member_event_view.test.mjs` gains the name-fallback pins and an NC that a nameless event must not emit a dangling separator.
+
+A third finding was measured and NOT changed: the worry that `esc()` might not encode double quotes is a non-issue — both `esc()` helpers map `"` → `&quot;`, so an event named `Coed 4s "B" Division` is safely encoded in the attribute.
+
 ## v0.182.0 — 2026-08-23
 
 **Tournament-view links get an event-name aria-label (Gemini review 2026-08-23).** The "Pools & bracket" / "Standings & scores" links added in v0.181.0 all read identically; on a page listing several events, a screen-reader user navigating by links could not tell them apart (WCAG 2.4.4). Both `schedule.js` and `leagues.js` now put the event name in an `aria-label` on the link, so each announces e.g. "Summer Coed 6s — standings and scores". `member_event_view.test.mjs` pins the name-bearing label (+ a negative control that a constant label fails).

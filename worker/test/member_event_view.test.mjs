@@ -69,8 +69,10 @@ test("NC-2: widening the gate to every type would be caught", () => {
 test("leagues.js links an in-progress or past league to its live board (the dead label is gone)", () => {
   const t = blankComments(LG);
   assert.ok(linksLiveEvent(LG), "leagues.js no longer links live.html?event= — the list is a dead end again");
-  assert.match(t, /e\.status === "in_progress" \|\| \(d && d <= new Date\(\)\)/,
-    "the link is no longer gated to a started league — the gate that replaced the dead label is gone");
+  // v0.183.0: the gate is `liveOk` — in_progress OR completed (Gemini 2026-08-24, aligning with
+  // schedule.js) OR the started-date fallback. All three arms must be present.
+  assert.match(t, /const liveOk = e\.status === "in_progress" \|\| e\.status === "completed" \|\| \(d && d <= new Date\(\)\)/,
+    "the started/completed gate that replaced the dead label is gone or changed shape");
   assert.doesNotMatch(t, /"In progress"<\/span>|>In progress</,
     "the dead 'In progress' text label is back instead of a link");
 });
@@ -92,21 +94,36 @@ test("NC-3: dropping leagues.js's live link fails the wiring check", () => {
   assert.equal(linksLiveEvent(mutated), false, "with the destination gone the league list is a dead end");
 });
 
-/* ── the live links carry a name-bearing aria-label (Gemini review 2026-08-23, WCAG 2.4.4) ── */
+/* ── the live links carry a name-bearing aria-label (Gemini review 2026-08-23/24, WCAG 2.4.4) ── */
 
 // A list of links all reading "Pools & bracket"/"Standings & scores" is ambiguous in a screen
-// reader's links list; the aria-label must carry the event NAME. Pinned as the name interpolation,
-// not a fixed string, so it cannot be satisfied by a constant label.
-const nameAriaLabel = (src) => /aria-label="\$\{esc\(e\.name/.test(blankComments(src));
+// reader's links list; the aria-label must carry the event NAME, and (Gemini 2026-08-24) fall back
+// to the kind alone for a nameless event rather than render a dangling " — ". Both files build a
+// `liveAria` from esc(e.name) with a conditional prefix, then set aria-label="${liveAria}".
+const nameAriaLabel = (src) => {
+  const t = blankComments(src);
+  return /aria-label="\$\{liveAria\}"/.test(t) &&
+    /const nm = e\.name \? esc\(e\.name\.trim\(\)\)/.test(t) &&
+    /const liveAria = nm \?/.test(t);
+};
 
-test("both live links carry an event-name aria-label (screen-reader link disambiguation)", () => {
-  assert.ok(nameAriaLabel(SCHED), "schedule.js's live link has no event-name aria-label — identical link texts are ambiguous");
-  assert.ok(nameAriaLabel(LG), "leagues.js's live link has no event-name aria-label — identical link texts are ambiguous");
+test("both live links carry an event-name aria-label with an empty-name fallback (WCAG 2.4.4)", () => {
+  assert.ok(nameAriaLabel(SCHED), "schedule.js's live link is not a name-conditional aria-label — ambiguous, or a dangling separator when nameless");
+  assert.ok(nameAriaLabel(LG), "leagues.js's live link is not a name-conditional aria-label — ambiguous, or a dangling separator when nameless");
 });
 
-test("NC-4: an aria-label that drops the event name fails the check", () => {
-  // Replace the name interpolation with a constant — the exact regression the label prevents.
-  const mutated = SCHED.replace(/aria-label="\$\{esc\(e\.name[^"]*"/, 'aria-label="event"');
+test("NC-4: dropping the name from the aria-label construction fails the check", () => {
+  // Force the prefix off (nm always empty) — the exact regression the name prevents.
+  const mutated = SCHED.replace(/const nm = e\.name \? esc\(e\.name\.trim\(\)\)/, 'const nm = "" && esc(e.name.trim())');
   assert.notEqual(mutated, SCHED, "mutation did not land — NC is vacuous");
-  assert.equal(nameAriaLabel(mutated), false, "a constant aria-label must fail — the name is the point");
+  assert.equal(nameAriaLabel(mutated), false, "with the name derivation gone the label is a constant — the name is the point");
+});
+
+test("NC-5: a nameless event does NOT emit a dangling separator (Gemini 2026-08-24)", () => {
+  // The fallback must be the kind alone, never "${nm} — kind" with an empty nm. Assert both files
+  // carry the `nm ?` conditional so an empty name cannot produce " — standings and scores".
+  for (const [name, src] of [["schedule.js", SCHED], ["leagues.js", LG]]) {
+    assert.match(blankComments(src), /nm \? `\$\{nm\} —/,
+      `${name}: the name prefix is not conditional — a nameless event renders a dangling " — "`);
+  }
 });

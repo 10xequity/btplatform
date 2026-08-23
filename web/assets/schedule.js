@@ -1,5 +1,7 @@
 /* Boomtown Platform — Public Schedule
-   Version: v0.7.1 · Date: 2026-08-23 · Ships in: v0.182.0
+   Version: v0.7.2 · Date: 2026-08-23 · Ships in: v0.183.0
+   v0.7.2 (Gemini review 2026-08-23, round 2): the aria-label's name prefix is CONDITIONAL — a
+   nameless event no longer renders a dangling " — " that a screen reader reads as bare punctuation.
    v0.7.1 (Gemini review 2026-08-23): the live-view link gains an aria-label carrying the event
    name — a list of identical "Pools & bracket"/"Standings & scores" links is ambiguous to a
    screen-reader links list (WCAG 2.4.4).
@@ -48,12 +50,17 @@
     (e.status === "in_progress" || e.status === "completed");
   /* aria-label carries the event name (Gemini review 2026-08-23): a list of these links all read
      "Pools & bracket"/"Standings & scores" otherwise, so a screen-reader links list cannot tell
-     which event is which (WCAG 2.4.4). esc() escapes the name for the attribute. */
-  const liveLink = e => hasLiveView(e)
-    ? `<a class="btn ghost sched-cta" href="live.html?event=${encodeURIComponent(e.id)}"
-        aria-label="${esc(e.name || "")} — ${e.type === "tournament" ? "pools and bracket" : "standings and scores"}">${
-        e.type === "tournament" ? "Pools &amp; bracket" : "Standings &amp; scores"}</a>`
-    : "";
+     which event is which (WCAG 2.4.4). esc() escapes the name (incl. quotes) for the attribute.
+     The name prefix is CONDITIONAL (Gemini 2026-08-24): a nameless event must not render a
+     dangling " — " that a screen reader announces as bare punctuation. */
+  const liveLink = e => {
+    if (!hasLiveView(e)) return "";
+    const kind = e.type === "tournament" ? "pools and bracket" : "standings and scores";
+    const nm = e.name ? esc(e.name.trim()) : "";
+    const liveAria = nm ? `${nm} — ${kind}` : kind;
+    return `<a class="btn ghost sched-cta" href="live.html?event=${encodeURIComponent(e.id)}" aria-label="${liveAria}">${
+      e.type === "tournament" ? "Pools &amp; bracket" : "Standings &amp; scores"}</a>`;
+  };
 
   /** SG-6 (§-1o): the one place a URL value becomes a view mode. A WHITELIST, not a passthrough
       — render() branches `if (mode === "list") … else <calendar>`, so any unrecognised value

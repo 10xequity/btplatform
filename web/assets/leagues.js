@@ -1,5 +1,8 @@
 /* Boomtown Platform — Leagues
-   File: web/assets/leagues.js · Version: v1.5 · Date: 2026-08-23 · Ships in: v0.182.0
+   File: web/assets/leagues.js · Version: v1.6 · Date: 2026-08-23 · Ships in: v0.183.0
+   v1.6 (Gemini review 2026-08-23, round 2): the live-board gate now checks `completed` EXPLICITLY
+   (a completed league with no parseable date still links its standings, aligning with schedule.js),
+   and the aria-label's name prefix is conditional (no dangling " — " when a league has no name).
    v1.5 (Gemini review 2026-08-23): the live-board link gains an aria-label with the event name
    (WCAG 2.4.4 — identical link texts in a list); a comment documents why the `d <= now` fallback
    is safe against cancelled events (the public feed excludes them server-side).
@@ -131,6 +134,13 @@
     const d = e.starts_at ? new Date(String(e.starts_at).replace(" ", "T")) : null;
     const open = e.status === "published" && (!d || d > new Date());
     const price = e.price_cents ? "$" + (e.price_cents / 100).toFixed(2).replace(/\.00$/, "") : "";
+    /* A started-or-finished league links its live board. `completed` is checked EXPLICITLY (Gemini
+       2026-08-24, aligning with schedule.js's hasLiveView) so a completed league with no parseable
+       start date still reaches its final standings instead of falling through to "Closed". The
+       name prefix is conditional so a nameless event has no dangling " — " in its aria-label. */
+    const liveOk = e.status === "in_progress" || e.status === "completed" || (d && d <= new Date());
+    const nm = e.name ? esc(e.name.trim()) : "";
+    const liveAria = nm ? `${nm} — standings and scores` : "standings and scores";
     return `<div class="lg-ev">
       <div class="lg-date" aria-hidden="true">
         <div class="d">${d ? d.getDate() : "&#8212;"}</div>
@@ -143,9 +153,9 @@
       <div class="lg-cta">${open
         ? ((s) => `<a class="btn" href="${esc(s.href)}" style="text-decoration:none"
             ${s.external ? `target="_blank" rel="${esc(s.rel)}"` : ""}>${s.external ? esc(s.label) + " ↗" : "Register"}</a>`)(BT_SIGNUP(e))
-        : (e.status === "in_progress" || (d && d <= new Date()))
+        : liveOk
           ? `<a class="btn ghost" href="live.html?event=${encodeURIComponent(e.id)}" style="text-decoration:none"
-              aria-label="${esc(e.name || "")} — standings and scores">Standings &amp; scores</a>`
+              aria-label="${liveAria}">Standings &amp; scores</a>`
           : `<span class="lg-meta">Closed</span>`}</div>
     </div>`;
   }
