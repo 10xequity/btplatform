@@ -91,3 +91,22 @@ test("NC-3: dropping leagues.js's live link fails the wiring check", () => {
   assert.notEqual(mutated, LG, "mutation did not land — NC is vacuous");
   assert.equal(linksLiveEvent(mutated), false, "with the destination gone the league list is a dead end");
 });
+
+/* ── the live links carry a name-bearing aria-label (Gemini review 2026-08-23, WCAG 2.4.4) ── */
+
+// A list of links all reading "Pools & bracket"/"Standings & scores" is ambiguous in a screen
+// reader's links list; the aria-label must carry the event NAME. Pinned as the name interpolation,
+// not a fixed string, so it cannot be satisfied by a constant label.
+const nameAriaLabel = (src) => /aria-label="\$\{esc\(e\.name/.test(blankComments(src));
+
+test("both live links carry an event-name aria-label (screen-reader link disambiguation)", () => {
+  assert.ok(nameAriaLabel(SCHED), "schedule.js's live link has no event-name aria-label — identical link texts are ambiguous");
+  assert.ok(nameAriaLabel(LG), "leagues.js's live link has no event-name aria-label — identical link texts are ambiguous");
+});
+
+test("NC-4: an aria-label that drops the event name fails the check", () => {
+  // Replace the name interpolation with a constant — the exact regression the label prevents.
+  const mutated = SCHED.replace(/aria-label="\$\{esc\(e\.name[^"]*"/, 'aria-label="event"');
+  assert.notEqual(mutated, SCHED, "mutation did not land — NC is vacuous");
+  assert.equal(nameAriaLabel(mutated), false, "a constant aria-label must fail — the name is the point");
+});

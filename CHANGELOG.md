@@ -1,5 +1,13 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.182.0 — 2026-08-23
+
+**Tournament-view links get an event-name aria-label (Gemini review 2026-08-23).** The "Pools & bracket" / "Standings & scores" links added in v0.181.0 all read identically; on a page listing several events, a screen-reader user navigating by links could not tell them apart (WCAG 2.4.4). Both `schedule.js` and `leagues.js` now put the event name in an `aria-label` on the link, so each announces e.g. "Summer Coed 6s — standings and scores". `member_event_view.test.mjs` pins the name-bearing label (+ a negative control that a constant label fails).
+
+Two other findings from the same review were measured and NOT changed, with reasons recorded in the code:
+- **"cancelled league shows a live link":** cannot occur — the public schedule feed's worker query is `status IN ('published','in_progress','completed')`, so cancelled and draft events never reach the member list. A comment in `leagues.js` documents why the date fallback is safe rather than adding a guard for a state the server already prevents.
+- **`!isNaN(d)` date guard:** an invalid date already yields no link (the comparison is `false`), and `starts_at` is a server DB datetime, so the guarded input cannot occur on this feed.
+
 ## v0.181.0 — 2026-08-23
 
 **Members can reach the tournament view from an event (owner req 2026-08-23).** He asked whether members can see a read-only tournament display — pools, bracket, info — and enter scores "if needed." Measured: that view already exists as the public live board (`live.html?event=N`, `/api/live/events/:id`, team names only), which renders divisions → pools, brackets and standings and degrades gracefully for a not-started event. What was missing was the way in.

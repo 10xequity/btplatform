@@ -1,5 +1,8 @@
 /* Boomtown Platform — Leagues
-   File: web/assets/leagues.js · Version: v1.4 · Date: 2026-08-23 · Ships in: v0.181.0
+   File: web/assets/leagues.js · Version: v1.5 · Date: 2026-08-23 · Ships in: v0.182.0
+   v1.5 (Gemini review 2026-08-23): the live-board link gains an aria-label with the event name
+   (WCAG 2.4.4 — identical link texts in a list); a comment documents why the `d <= now` fallback
+   is safe against cancelled events (the public feed excludes them server-side).
    v1.4 (owner req 2026-08-23): an in-progress or past league now links to its live board
    (live.html?event=N — standings & scores) instead of rendering the dead "In progress"/"Closed"
    text. Members can finally reach the tournament view from the list. schedule.js does the same.
@@ -118,6 +121,12 @@
       ${evs.map(row).join("")}`).join("");
   }
 
+  /* The started-but-not-open case (below) links the live board. The d<=now fallback is SAFE against
+     the cancelled case Gemini flagged (2026-08-23): the ONLY source here is /api/schedule?view=public,
+     whose worker query is status IN ('published','in_progress','completed') — cancelled and draft
+     never reach this list, so no explicit exclusion is added (this repo does not guard states the
+     server prevents). The link carries an event-name aria-label so a screen-reader links list can
+     tell identical "Standings & scores" links apart (WCAG 2.4.4). */
   function row(e) {
     const d = e.starts_at ? new Date(String(e.starts_at).replace(" ", "T")) : null;
     const open = e.status === "published" && (!d || d > new Date());
@@ -135,7 +144,8 @@
         ? ((s) => `<a class="btn" href="${esc(s.href)}" style="text-decoration:none"
             ${s.external ? `target="_blank" rel="${esc(s.rel)}"` : ""}>${s.external ? esc(s.label) + " ↗" : "Register"}</a>`)(BT_SIGNUP(e))
         : (e.status === "in_progress" || (d && d <= new Date()))
-          ? `<a class="btn ghost" href="live.html?event=${encodeURIComponent(e.id)}" style="text-decoration:none">Standings &amp; scores</a>`
+          ? `<a class="btn ghost" href="live.html?event=${encodeURIComponent(e.id)}" style="text-decoration:none"
+              aria-label="${esc(e.name || "")} — standings and scores">Standings &amp; scores</a>`
           : `<span class="lg-meta">Closed</span>`}</div>
     </div>`;
   }

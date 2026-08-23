@@ -1,5 +1,8 @@
 /* Boomtown Platform — Public Schedule
-   Version: v0.7.0 · Date: 2026-08-23 · Ships in: v0.181.0
+   Version: v0.7.1 · Date: 2026-08-23 · Ships in: v0.182.0
+   v0.7.1 (Gemini review 2026-08-23): the live-view link gains an aria-label carrying the event
+   name — a list of identical "Pools & bracket"/"Standings & scores" links is ambiguous to a
+   screen-reader links list (WCAG 2.4.4).
    v0.7.0 (owner req 2026-08-23): a started tournament/league event card now links to its
    read-only tournament view (pools, bracket, standings — the existing public live board,
    live.html?event=N). Before, a member who opened a running event saw no way through to it.
@@ -43,8 +46,12 @@
      the dead no-action state a started event used to render on the member schedule. */
   const hasLiveView = e => (e.type === "tournament" || e.type === "league") &&
     (e.status === "in_progress" || e.status === "completed");
+  /* aria-label carries the event name (Gemini review 2026-08-23): a list of these links all read
+     "Pools & bracket"/"Standings & scores" otherwise, so a screen-reader links list cannot tell
+     which event is which (WCAG 2.4.4). esc() escapes the name for the attribute. */
   const liveLink = e => hasLiveView(e)
-    ? `<a class="btn ghost sched-cta" href="live.html?event=${encodeURIComponent(e.id)}">${
+    ? `<a class="btn ghost sched-cta" href="live.html?event=${encodeURIComponent(e.id)}"
+        aria-label="${esc(e.name || "")} — ${e.type === "tournament" ? "pools and bracket" : "standings and scores"}">${
         e.type === "tournament" ? "Pools &amp; bracket" : "Standings &amp; scores"}</a>`
     : "";
 
