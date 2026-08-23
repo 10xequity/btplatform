@@ -284,14 +284,13 @@
       { href: "admin-tryouts.html",       ico: "regs",   text: "Tryouts" },
       { href: "admin-squads.html",        ico: "members", text: "Tryout Squads" },
       { href: "admin-facility.html",      ico: "sched",  text: "Facility Calendar" },
-      { href: "tournament.html",          ico: "ops",    text: "Tournament Ops" },
-      { href: "admin-league.html",        ico: "league", text: "League Manager" },
-      { href: "admin-schedule-editor.html", ico: "sched",  text: "Schedule Editor" },
-      { href: "admin-brackets.html",       ico: "sched",  text: "Brackets" },
-      { href: "admin-divisions.html",     ico: "league", text: "Divisions" },
-      { href: "admin-pool-board.html",    ico: "sched",  text: "Pool Board" },
-      { href: "admin-kotc.html",          ico: "sched",  text: "Court Board" },
-      { href: "admin-score-links.html",   ico: "ops",    text: "Scoring Links" },
+      /* RF-4 (v0.184.0): the eight event-scoped tools — Tournament Ops, League Manager, Schedule
+         Editor, Brackets, Divisions, Pool Board, Court Board, Scoring Links — are OFF the rail.
+         The owner asked (2026-08-23) that the scheduler and its siblings not sit on the menu; they
+         are reached through Tournament/League Management → the event hub (admin-manager.html), which
+         frames each tool with the ?event= context the standalone rail entries never had. Their PARENT
+         map below keeps each page highlighting its section; nav_highlight.test.mjs pins the collapse.
+         KOTC's own way in is admin-event.html's "Court board →" button (the hub has no KOTC tab). */
     ]},
     { label: "Money", key: "money", items: [
       { href: "admin-reports.html",       ico: "sales",  text: "Sales & Reports" },
@@ -459,6 +458,21 @@
       "admin-event.html": "admin-events.html",     // one event → Events & Programs
       "admin-manager.html": "admin-events.html",   // one event's manager hub → Events & Programs (WF-5)
       "admin-consent.html": "admin-waivers.html",  // media consent → Waivers (same family of signed agreements)
+      /* RF-4 (v0.184.0): the collapsed event tools. Values carry the picker's HASH so the highlight
+         resolves — markActive matches the WHOLE href below, and the two management entries in the
+         rail are `admin-manage.html#tournaments` / `#leagues`. The six tournament-family tools and
+         Court Board point at #tournaments; League Manager at #leagues. The Schedule Editor serves
+         BOTH types (owner: "add the rail for scheduler to the tournament page/league page"); it is
+         reachable from both pickers via the hub's Schedule editor tab, and its highlight defaults to
+         #tournaments (its more common use). nav_highlight.test.mjs verifies each against a full-href. */
+      "tournament.html":          "admin-manage.html#tournaments",  // Tournament Ops
+      "admin-brackets.html":      "admin-manage.html#tournaments",  // Brackets
+      "admin-divisions.html":     "admin-manage.html#tournaments",  // Divisions
+      "admin-pool-board.html":    "admin-manage.html#tournaments",  // Pool Board
+      "admin-score-links.html":   "admin-manage.html#tournaments",  // Scoring Links
+      "admin-kotc.html":          "admin-manage.html#tournaments",  // Court Board (KOTC — tournament family)
+      "admin-schedule-editor.html": "admin-manage.html#tournaments", // Schedule Editor (shared; reachable from both)
+      "admin-league.html":        "admin-manage.html#leagues",      // League Manager
     };
     const markActive = () => {
       const items = [...aside.querySelectorAll(".nav-item")];
@@ -912,7 +926,7 @@
       if (window.BT_STATUS || document.getElementById("bt-status-js")) return;
       var s = document.createElement("script");
       s.id = "bt-status-js";
-      s.src = "assets/build-status.js?v=0.183.0";
+      s.src = "assets/build-status.js?v=0.184.0";
       s.async = false;
       document.head.appendChild(s);
     } catch (e) { /* indicators are never load-blocking */ }

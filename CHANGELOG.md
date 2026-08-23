@@ -1,5 +1,15 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.184.0 — 2026-08-23
+
+**The eight event-scoped tools come off the admin rail (RF-4, owner req 2026-08-23).** The owner asked that the Schedule Editor and its siblings not sit on the menu — "add the rail for scheduler to the tournament page/league page for custom builds when needed to edit. Do not have it on the menu." The two management pickers (Tournament Management / League Management, shipped v0.173.0) already lead to the event hub, which frames each tool with the `?event=` context the standalone rail entries never had, so the eight rail destinations were now redundant.
+
+- **Removed from the rail:** Tournament Ops, League Manager, Schedule Editor, Brackets, Divisions, Pool Board, Court Board, Scoring Links — gone from both `web/assets/rail.partial.html` and the `NAV` list in `admin-nav.js`, then synced into all 40 admin pages with `sync-rail.mjs`. The "Run events" group now reads Dashboard · Events & Programs · Tournament Management · League Management · Registrations · Waitlists · Check-in · Tryouts · Tryout Squads · Facility Calendar.
+- **Each collapsed page still highlights its section.** `admin-nav.js`'s `PARENT` map gains an entry for each: the seven tournament-family tools → `admin-manage.html#tournaments`, League Manager → `admin-manage.html#leagues`. The Schedule Editor serves both types and is reachable from both pickers through the hub's Schedule editor tab; its highlight defaults to `#tournaments`.
+- **Nothing lost its way in.** Seven tools are reached as tabs of the event hub (`admin-manager.html?event=N`); the Court Board keeps its own entry point — the per-session "Court board →" button on the event page (`admin-event.js`), which the hub has no tab for.
+
+`nav_highlight.test.mjs` (v1.1) is extended: its `PARENT` extractor now reads hash-carrying values, and a parent is verified against the WHOLE rail href — the way `markActive()` resolves it at runtime (`items.find(a => a.getAttribute("href") === PARENT[here])`) — because a parent that keeps the page but drops the hash (`admin-manage.html`, which no rail entry carries) would pass a page-part check while going dark on screen. New: a guard that the eight tools are off the rail yet each highlights a section, a positive control that the extractor actually reads a hash-carrying parent, and an NC that a hash-dropped parent reddens. `kotc_board_screen.test.mjs`'s reachability check is rewritten to the Court Board's new way in (the event-page button) instead of the rail.
+
 ## v0.183.0 — 2026-08-23
 
 **Tournament-view link hardening (Gemini review round 2, 2026-08-23).** Two valid edge findings applied to the links added in v0.181.0–v0.182.0:

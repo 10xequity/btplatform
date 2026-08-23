@@ -94,12 +94,17 @@ const patchesLocally = (src) => {
 
 /* ════════════════════════ the director's board ════════════════════════ */
 
-test("the board is registered, reachable from the rail, and loads its own script", () => {
+test("the board is registered, reachable from the event page, and loads its own script", () => {
   /* Reachability was half the point of the session-list route: the staff GET took an id nobody could
-     discover. A page nobody can navigate to is the same defect one layer up. */
-  assert.match(read("web/assets/rail.partial.html"), /href="admin-kotc\.html"/,
-    "the Court Board is not in the rail partial — sync-rail cannot put it on 37 pages if it is not the source");
-  assert.match(BOARD_HTML, /href="admin-kotc\.html"/, "the synced rail did not reach the page itself");
+     discover. A page nobody can navigate to is the same defect one layer up. RF-4 (v0.184.0) took the
+     Court Board OFF the rail with the other seven event-scoped tools (owner: "do not have it on the
+     menu"); its way in is now the event page's per-session "Court board →" button in admin-event.js,
+     which carries the event context the standalone rail entry never had. The reachability guarantee
+     did not go away — it moved, and this pins where. */
+  assert.match(read("web/assets/admin-event.js"), /href="admin-kotc\.html"[^>]*>Court board/,
+    "the Court Board lost its way in — admin-event.js no longer offers 'Court board →', and it is off the rail");
+  assert.doesNotMatch(read("web/assets/rail.partial.html"), /href="admin-kotc\.html"/,
+    "RF-4 collapsed the Court Board off the rail — it must not return as a rail destination");
   assert.match(BOARD_HTML, /src="assets\/admin-kotc\.js/, "the board does not load its own script");
   assert.match(read("web/assets/build-status.js"), /"admin-kotc\.html":/, "not in the tester registry");
 });
