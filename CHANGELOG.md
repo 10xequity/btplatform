@@ -1,5 +1,14 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.187.0 — 2026-08-23
+
+**Score entry reaches the membership account (RF-13 score-entry, second surface — owner req 2026-08-23).** The owner asked that score entry be reachable "through membership account and tournament/league page." v0.185.0 put it on the leagues page; this puts it in the account, covering both event types in one place.
+
+- `web/home.js` — the dashboard's "Your teams" card now shows "Enter your team's scores →" for any team whose event is live. It reads the `score_url` that `/api/profile/teams` already returns for the caller's own teams (own-team only, never public; date-derived live gate) — no server change, the card simply surfaces the link it was already being handed. A team that isn't live shows no action. Because `myTeams` returns tournament and league teams alike, a member on a live tournament team now reaches their scores from the account too — not just leagues.
+- `worker/test/member_score_entry.test.mjs` — the account card surfaces the link conditionally, with a negative control that dropping `score_url` removes the action.
+
+Still open: emailing the link to the team, a richer per-team view (opponents / play schedule), and the "highlight/filter the signed-in schedule to their team" alternative. QR stays a staff-only, non-primary path.
+
 ## v0.186.0 — 2026-08-23
 
 **RF-13 score-entry hardening — the two valid findings from the in-loop Gemini review of v0.185.0.** Both measured against the real code and folded; neither was a security leak (the token stays own-team-only), but both were worth fixing in a credential path:

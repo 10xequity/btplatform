@@ -28,6 +28,7 @@ import { blankComments } from "../testkit/route-extract.mjs";
 const ORIGIN = "https://boomtown.test";
 const SRC = readFileSync(new URL("../src/registrations.js", import.meta.url), "utf8");
 const LG = readFileSync(new URL("../../web/assets/leagues.js", import.meta.url), "utf8");
+const HOME = readFileSync(new URL("../../web/home.js", import.meta.url), "utf8");
 
 function boot() {
   const DB = createD1(readFileSync(new URL("../testkit/journey-schema.sql", import.meta.url), "utf8"));
@@ -206,6 +207,30 @@ test("RF-13: the leagues 'tonight' banner offers the member their own team's sco
 test("NC: a banner that drops score_url renders no score action — the check has teeth", () => {
   const mutated = LG.replace(/t\.score_url/g, "t.__gone__");
   const body = tonightBody(mutated);
+  assert.ok(body && !body.includes("t.score_url"),
+    "the mutation did not land — update this NC to the current score_url reference");
+});
+
+/* ═══════════ the account "Your teams" card surfaces it (the membership-account surface) ═══════════ */
+
+const loadTeamsBody = (src) => {
+  const t = blankComments(src);
+  const at = t.indexOf("async function loadTeams");
+  return at === -1 ? null : t.slice(at, t.indexOf("async function loadMembership", at));
+};
+
+test("RF-13: the account 'Your teams' card offers score entry for a live team, conditionally", () => {
+  const body = loadTeamsBody(HOME);
+  assert.ok(body, "loadTeams() is gone or renamed — update this extractor");
+  assert.ok(body.includes("t.score_url"),
+    "home.js's team card no longer reads the team's score_url — the membership-account path he named is gone");
+  assert.ok(body.includes("Enter your team"),
+    "the score-entry action text is gone from the account card");
+});
+
+test("NC: an account card that drops score_url renders no score action", () => {
+  const mutated = HOME.replace(/t\.score_url/g, "t.__gone__");
+  const body = loadTeamsBody(mutated);
   assert.ok(body && !body.includes("t.score_url"),
     "the mutation did not land — update this NC to the current score_url reference");
 });

@@ -1,5 +1,9 @@
 /* Boomtown Platform — My Dashboard
-   File: web/home.js · Version: v2.1.0 · Date: 2026-08-16 · Ships in: v0.14.0 (v2.1.0 in v0.162.0)
+   File: web/home.js · Version: v2.2.0 · Date: 2026-08-23 · Ships in: v0.14.0 (v2.2.0 in v0.187.0)
+   v2.2.0 (§-1r RF-13 score-entry — the "membership account" surface, owner req 2026-08-23): the
+   "Your teams" card now shows "Enter your team's scores →" for any team whose event is live — the
+   score_url /api/profile/teams already carries (own-team only, never public; the leagues banner was
+   the first surface, this is the account he named). No score_url (upcoming/not live) → no action.
    v2.1.0 (§-1h M-4 / §-0 B15): the motion pass — the arrival stagger (once per session, class
    removed after it plays), fill() (first-fill fade; re-renders stay instant), collapse()
    (dismiss/mute closes the list around the item; reduced motion checked in JS because a fenced
@@ -365,6 +369,7 @@
     fill($("teamList"), teams.length ? teams.map(t => `
       <div style="padding:10px 0;border-bottom:1px solid var(--border)">
         <div style="font-weight:700">${esc(t.name)} <span class="help-text" style="font-weight:400">· ${esc(t.event_name)}</span></div>
+        ${t.score_url ? `<a class="btn ghost sm" href="${esc(t.score_url)}" style="text-decoration:none;margin:6px 0 2px;display:inline-block">Enter your team&#8217;s scores &#8594;</a>` : ""}
         ${t.members.map(m => `
           <div class="tm-member" data-tm="${m.id}">
             <span>${esc(m.name || "Unnamed")}${m.is_sub ? " (sub)" : ""}</span>
