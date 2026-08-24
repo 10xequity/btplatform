@@ -1,6 +1,15 @@
 /**
  * Boomtown Platform — unified admin header guard
- * File: worker/test/header_shell.test.mjs · Version: v3.0 · Date: 2026-08-20 · Ships in: v0.171.0 (v2.1 v0.53.1 · v2.0 v0.53.0 · v1.0 v0.52.0)
+ * File: worker/test/header_shell.test.mjs · Version: v4.0 · Date: 2026-08-24 · Ships in: v0.194.0 (v3.0 v0.171.0 · v2.1 v0.53.1 · v2.0 v0.53.0 · v1.0 v0.52.0)
+ *
+ * v4.0 (v0.194.0, §-1r RF-16 — owner 2026-08-24): the member header's standalone Sign-out button
+ * becomes a hidden profile ICON (#btHdrProfile) opening a static menu (#btProfileMenu):
+ * Notifications, the four Account destinations, and #logoutBtn inside it (same id — the
+ * single-source logout binding and its guards carry over). memberHeaderVerdict requires the new
+ * set and FORBIDS any static admin affordance in the header (btSwitchAdmin/admin.html) — the
+ * role-gated switch is JS-rendered by site-nav.js and guarded in header_actions.test.mjs v5.0.
+ * NC-M5b proves the static-switch arm can fail. This SUPERSEDES the v2.0/v3.0 requirement that
+ * #logoutBtn stand alone in the header row — his 2026-08-24 word replaces his 2026-08-18 word.
  *
  * v3.0 (v0.171.0, §-1r RF-12 — owner 2026-08-18): the member canonical header LOSES #btHdrAdmin.
  * "There should be no admin access from this screen" — so memberHeaderVerdict now FORBIDS the
@@ -271,7 +280,31 @@ function memberHeaderVerdict(html) {
   if (h.includes("btHdrAdmin")) missing.push("UNEXPECTED #btHdrAdmin (RF-12: no admin affordance on member surfaces)");
   if (!/id="btHdrMail"[^>]*href="member-inbox\.html"|href="member-inbox\.html"[^>]*id="btHdrMail"/.test(h)) missing.push("#btHdrMail → member-inbox.html");
   if (!h.includes('id="themeToggle"')) missing.push("#themeToggle");
+  /* v4.0 (§-1r RF-16, owner 2026-08-24): "Change Sign Out button to profile icon then menu that
+     opens that has Account sub choices underneath … Add sign out as an option there too. Also move
+     notifications there too." The standalone Sign-out button becomes a hidden profile ICON
+     (revealed from the local token, the v2.14 rule) opening a static menu: Notifications (the
+     fragment D-50 pinned), the four Account destinations, and #logoutBtn INSIDE the menu — same
+     id, so site-nav.js's single-source logout binding and its guards carry over unchanged.
+     The role-gated "Switch to admin" is JS-RENDERED by site-nav.js, never static markup — a
+     static one would be an ungated admin affordance, which RF-12 still forbids. */
+  if (!/id="btHdrProfile"[^>]*hidden/.test(h)) missing.push("hidden #btHdrProfile icon");
+  if (!/id="btProfileMenu"[^>]*hidden/.test(h)) missing.push("hidden #btProfileMenu");
+  const menuAt = h.indexOf('id="btProfileMenu"');
   if (!/id="logoutBtn"[^>]*hidden/.test(h)) missing.push("hidden #logoutBtn");
+  else if (menuAt === -1 || h.indexOf('id="logoutBtn"') < menuAt)
+    missing.push("#logoutBtn outside the profile menu (RF-16: Sign out is a menu option now)");
+  for (const [href, label] of [
+    ["home.html#notifications", "Notifications"],
+    ["profile.html", "My Profile"],
+    ["membership.html", "Membership"],
+    ["settings.html", "Settings"],
+    ["help.html", "Help & FAQ"],
+  ]) {
+    if (menuAt === -1 || h.indexOf(`href="${href}"`, menuAt) === -1) missing.push(`profile-menu link missing: ${label}`);
+  }
+  if (h.includes("btSwitchAdmin") || h.includes("admin.html"))
+    missing.push("UNEXPECTED static admin affordance (RF-16: the switch is role-gated and JS-rendered, never static)");
   if (h.includes("orgSwitcher")) missing.push("UNEXPECTED #orgSwitcher (members act in one org)");
   if (missing.length) return { ok: false, why: "member header issues: " + missing.join(", ") };
   return { ok: true, header: h };
@@ -441,6 +474,16 @@ test("NC-M3: a re-added Admin anchor fails the verdict — even shipped hidden, 
   assert.notEqual(mutated, src, "mutation did not land — NC is vacuous");
   assert.equal(memberHeaderVerdict(mutated).ok, false,
     "the pre-RF-12 anchor must fail the verdict — hidden was the old rule, absent is the rule now");
+});
+
+test("NC-M5b: a STATIC Switch-to-admin in the member header fails (RF-16 — the switch is JS-rendered, role-gated)", () => {
+  const src = read("home.html");
+  const mutated = src.replace('<button id="logoutBtn" class="pm-item" hidden>Sign out</button>',
+    '<button id="btSwitchAdmin" class="pm-item">Switch to admin</button>\n        <button id="logoutBtn" class="pm-item" hidden>Sign out</button>');
+  assert.notEqual(mutated, src, "mutation did not land — NC is vacuous");
+  assert.equal(memberHeaderVerdict(mutated).ok, false,
+    "a static (ungated) admin switch in the header must fail — the sanctioned one is rendered by " +
+    "site-nav.js only when /api/me signs the role");
 });
 
 test("NC-M4: a member header carrying an org switcher fails (members act in one org)", () => {

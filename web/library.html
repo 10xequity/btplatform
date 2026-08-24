@@ -51,7 +51,19 @@
     <div class="spacer"></div>
     <a id="btHdrMail" class="btn ghost hdr-mail" href="member-inbox.html" aria-label="Messages">✉</a>
     <button id="themeToggle" class="btn ghost theme-toggle" aria-label="Toggle dark or light theme">◐</button>
-    <button id="logoutBtn" class="btn ghost" hidden>Sign out</button>
+    <div class="hdr-profile-wrap">
+      <button id="btHdrProfile" class="btn ghost hdr-profile" hidden aria-expanded="false" aria-controls="btProfileMenu" aria-label="Account menu">◉</button>
+      <div id="btProfileMenu" class="profile-menu" hidden aria-label="Account menu">
+        <a class="pm-item" href="home.html#notifications" data-pm-key="notifications">Notifications</a>
+        <div class="pm-sep" role="separator"></div>
+        <a class="pm-item" href="profile.html">My Profile</a>
+        <a class="pm-item" href="membership.html">Membership</a>
+        <a class="pm-item" href="settings.html">Settings</a>
+        <a class="pm-item" href="help.html">Help &amp; FAQ</a>
+        <div class="pm-sep" role="separator"></div>
+        <button id="logoutBtn" class="pm-item" hidden>Sign out</button>
+      </div>
+    </div>
   </header>
 
   <main class="lib-main" id="app" aria-live="polite">

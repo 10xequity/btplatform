@@ -1,6 +1,15 @@
 /**
  * Boomtown Platform — member rail paints before its badge fetches (§-1c D-15)
- * File: worker/test/member_nav_paint.test.mjs · Version: v1.1 · Date: 2026-08-20 · Ships in: v0.172.0
+ * File: worker/test/member_nav_paint.test.mjs · Version: v2.0 · Date: 2026-08-24 · Ships in: v0.194.0
+ *
+ * v2.0 (v0.194.0, §-1r RF-16 — owner 2026-08-24): the rail's content contract is REWRITTEN to his
+ * new word, which supersedes the 2026-08-18 order v1.1 pinned. His words: "Change Sign Out button
+ * to profile icon then menu that opens that has Account sub choices underneath and remove from
+ * left side menu. Add sign out as an option there too. Also move notifications there too … Explore
+ * and Player library can go under Inbox." So: Notifications and the Account group LEAVE the rail
+ * (they live in the header's profile menu now — presence pinned there, the forbid-needs-an-exit
+ * rule), and the signed-in rail leads Home · Inbox · Explore · Player Library. The D-50 fragment
+ * contract widens to the profile menu, whose Notifications item carries the rail's old fragment.
  *
  * v1.1 (v0.172.0, §-1r RF-12(4) + §-1c D-50 — owner 2026-08-18): this file also owns the member
  * rail's CONTENT contract now. His order pinned verbatim ("Inbox should be 2 or 3, while Home at
@@ -199,11 +208,17 @@ const signedInItemsOf = (src) => {
   const elseAt = t.indexOf("} else {", you);
   return navItemsOf(t.slice(you, elseAt === -1 ? undefined : elseAt));
 };
+/* v2.0 (RF-16): his 2026-08-24 word supersedes the 2026-08-18 three — Notifications moved into
+   the profile menu, and "Explore and Player library can go under Inbox". */
 const HIS_ORDER = [
   ["Home", "home.html"],
-  ["Notifications", "home.html#notifications"],
   ["Inbox", "member-inbox.html"],
+  ["Explore", "index.html"],
+  ["Player Library", "library.html"],
 ];
+/* the rail items RF-16 moves into the header's profile menu — forbidden on the rail, and the
+   menu markup (home.html, byte-identical across pages per header_shell v4.0) is the pinned exit */
+const MENU_ONLY_HREFS = ["profile.html", "membership.html", "settings.html", "help.html"];
 const deadFragmentsOf = (src) => {
   const dead = [];
   for (const i of navItemsOf(blankComments(src))) {
@@ -216,11 +231,11 @@ const deadFragmentsOf = (src) => {
   return dead;
 };
 
-test("RF-12(4): the signed-in rail leads with HIS order — Home, then Notifications, then Inbox", () => {
+test("RF-16: the signed-in rail leads with HIS order — Home, Inbox, then Explore and Player Library under it", () => {
   const items = signedInItemsOf(readNav());
-  assert.ok(items && items.length >= 12, `signed-in item extraction collapsed: ${items && items.length}`);
-  assert.deepEqual(items.slice(0, 3).map((i) => [i.text, i.href]), HIS_ORDER,
-    'owner 2026-08-18: "Inbox should be 2 or 3, while Home at #1, then notifications"');
+  assert.ok(items && items.length >= 9, `signed-in item extraction collapsed: ${items && items.length}`);
+  assert.deepEqual(items.slice(0, 4).map((i) => [i.text, i.href]), HIS_ORDER,
+    'owner 2026-08-24: "Explore and Player library can go under Inbox" — and Notifications moved to the profile menu');
   /* and You is the FIRST thing a signed-in member sees: the base literal carries no groups,
      so the first push in the file — the signed-in branch runs first — is the top of the rail */
   const t = blankComments(readNav());
@@ -240,35 +255,107 @@ test("RF-12(2)+D-19: ONE route to the public grid, named Explore — and no two 
 });
 
 test("D-50: every fragment href in the rail points at an id that EXISTS in the target page", () => {
+  /* v2.0: the rail legitimately carries ZERO fragments today (RF-16 moved Notifications, its one
+     fragment item, into the profile menu) — so the extractor-blindness protection lives in
+     NC-D50a's mutation, not in a some() precondition the correct rail can no longer satisfy. */
   const all = navItemsOf(blankComments(readNav()));
-  assert.ok(all.length >= 20, `rail item extraction collapsed: ${all.length}`);
-  assert.ok(all.some((i) => i.href.includes("#")),
-    "no fragment hrefs found at all — the extractor lost the very class this guards");
+  assert.ok(all.length >= 15, `rail item extraction collapsed: ${all.length}`);
   assert.deepEqual(deadFragmentsOf(readNav()), [],
     "rail items promise page sections that do not exist — the click silently lands at the top (D-50)");
 });
 
+/* v2.0 (RF-16): the fragment contract WIDENS to the profile menu — its Notifications item carries
+   the rail's old home.html#notifications promise, and the same seam (an anchor naming a section
+   nothing renders) fails the same silent way. The menu is byte-identical across the 18 canonical
+   pages (header_shell v4.0), so home.html speaks for all of them. */
+const menuBlockOf = (html) => {
+  const at = html.indexOf('id="btProfileMenu"');
+  if (at === -1) return null;
+  const end = html.indexOf("</header>", at);
+  return end === -1 ? null : html.slice(at, end);
+};
+const deadMenuFragmentsOf = (html) => {
+  const menu = menuBlockOf(html);
+  if (menu === null) return ["NO MENU — id=\"btProfileMenu\" missing from the header"];
+  const dead = [];
+  for (const m of menu.matchAll(/href="([^"#]+)#([^"]+)"/g)) {
+    const target = readFileSync(new URL(m[1], WEB_DIR), "utf8");
+    if (!target.includes(`id="${m[2]}"`)) dead.push(`${m[1]}#${m[2]}`);
+  }
+  return dead;
+};
+
+test("RF-16 + D-50: the profile menu's fragment hrefs point at ids that EXIST", () => {
+  const html = readFileSync(new URL("home.html", WEB_DIR), "utf8");
+  const menu = menuBlockOf(html);
+  assert.ok(menu !== null, "home.html carries no #btProfileMenu — the menu the rail items moved into is gone");
+  assert.match(menu, /href="home\.html#notifications"/,
+    "the menu's Notifications item lost its fragment — the rail gave that promise up to the menu (RF-16)");
+  assert.deepEqual(deadMenuFragmentsOf(html), [],
+    "profile-menu items promise page sections that do not exist (D-50's class, menu edition)");
+});
+
 test("NC-D50a: a rail fragment pointed at a missing id IS reported", () => {
   const src = readNav();
-  const mutated = src.replace('home.html#notifications', 'home.html#nope-never-an-id');
+  const mutated = src.replace('{ href: "home.html",     ico: "⌂", text: "Home" }',
+    '{ href: "home.html#nope-never-an-id", ico: "⌂", text: "Home" }');
   assert.notEqual(mutated, src, "mutation did not land — NC is vacuous");
-  assert.deepEqual(deadFragmentsOf(mutated), ["Notifications → home.html#nope-never-an-id"],
+  assert.deepEqual(deadFragmentsOf(mutated), ["Home → home.html#nope-never-an-id"],
     "a dead fragment must be reported by name — if this passes, the contract check is blind");
 });
 
-test("NC-D50b: swapping Notifications below Inbox FAILS the order pin", () => {
+test("NC-D50c: a MENU fragment pointed at a missing id IS reported", () => {
+  const html = readFileSync(new URL("home.html", WEB_DIR), "utf8");
+  const mutated = html.replace('href="home.html#notifications"', 'href="home.html#nope-never-an-id"');
+  assert.notEqual(mutated, html, "mutation did not land — NC is vacuous");
+  assert.deepEqual(deadMenuFragmentsOf(mutated), ["home.html#nope-never-an-id"],
+    "a dead menu fragment must be reported — if this passes, the menu contract check is blind");
+});
+
+test("NC-D50b: swapping Explore above Inbox FAILS the order pin", () => {
   const src = readNav();
   const items = signedInItemsOf(src);
-  assert.deepEqual(items.slice(0, 3).map((i) => [i.text, i.href]), HIS_ORDER,
+  assert.deepEqual(items.slice(0, 4).map((i) => [i.text, i.href]), HIS_ORDER,
     "the real source must satisfy his order or this NC proves nothing");
   const mutated = src
-    .replace('{ href: "home.html#notifications", ico: "◔", text: "Notifications", key: "notifications" },', "@@HOLD@@")
-    .replace('{ href: "member-inbox.html", ico: "✉", text: "Inbox", key: "inbox" },',
-      '{ href: "member-inbox.html", ico: "✉", text: "Inbox", key: "inbox" },\n        { href: "home.html#notifications", ico: "◔", text: "Notifications", key: "notifications" },')
+    .replace('{ href: "member-inbox.html", ico: "✉", text: "Inbox", key: "inbox" },', "@@HOLD@@")
+    .replace('{ href: "index.html",    ico: "▦", text: "Explore" },',
+      '{ href: "index.html",    ico: "▦", text: "Explore" },\n        { href: "member-inbox.html", ico: "✉", text: "Inbox", key: "inbox" },')
     .replace("@@HOLD@@\n", "");
   assert.notEqual(mutated, src, "mutation did not land — NC is vacuous");
-  assert.notDeepEqual(signedInItemsOf(mutated).slice(0, 3).map((i) => [i.text, i.href]), HIS_ORDER,
-    "with Notifications demoted the order pin must fail — his order is the assertion");
+  assert.notDeepEqual(signedInItemsOf(mutated).slice(0, 4).map((i) => [i.text, i.href]), HIS_ORDER,
+    "with Inbox demoted the order pin must fail — his order is the assertion");
+});
+
+/* ═══ v2.0 (RF-16): what LEFT the rail is forbidden on it — and pinned present at its new home ═══ */
+
+test("RF-16: Notifications and the Account group are OFF the rail — they live in the profile menu", () => {
+  const items = signedInItemsOf(readNav());
+  assert.ok(items && items.length >= 9, `signed-in item extraction collapsed: ${items && items.length}`);
+  const offenders = items.filter((i) =>
+    i.text === "Notifications" || MENU_ONLY_HREFS.includes(i.href.split("#")[0]));
+  assert.deepEqual(offenders.map((i) => `${i.text} → ${i.href}`), [],
+    "a rail item RF-16 moved into the profile menu is back on the rail — his 2026-08-24 word: " +
+    '"remove from left side menu" / "Also move notifications there too"');
+  /* the forbid's EXIT, pinned in the same breath: every moved destination is reachable from the
+     menu markup (byte-identical across pages per header_shell v4.0 — home.html speaks for all) */
+  const menu = menuBlockOf(readFileSync(new URL("home.html", WEB_DIR), "utf8"));
+  assert.ok(menu !== null, "no profile menu in home.html — the moved items would have NO home at all");
+  for (const href of [...MENU_ONLY_HREFS, "home.html#notifications"]) {
+    assert.ok(menu.includes(`href="${href}"`),
+      `${href} is neither on the rail nor in the profile menu — the move became a deletion`);
+  }
+});
+
+test("NC-RF16a: an Account destination put back on the rail IS reported", () => {
+  const src = readNav();
+  const mutated = src.replace('{ href: "library.html",  ico: "◎", text: "Player Library" },',
+    '{ href: "library.html",  ico: "◎", text: "Player Library" },\n        { href: "settings.html", ico: "⚙", text: "Settings" },');
+  assert.notEqual(mutated, src, "mutation did not land — NC is vacuous");
+  const offenders = signedInItemsOf(mutated).filter((i) =>
+    i.text === "Notifications" || MENU_ONLY_HREFS.includes(i.href.split("#")[0]));
+  assert.deepEqual(offenders.map((i) => i.href), ["settings.html"],
+    "a re-added Account rail item must be reported — if this passes, the forbid is blind");
 });
 
 /* ═══ RF-17 (v0.193.0, owner 2026-08-24): no brand row; sign-in lands on Home ═══ */

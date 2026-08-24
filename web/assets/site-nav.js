@@ -1,4 +1,20 @@
 /* Boomtown Platform — Site-wide sidebar navigation (shared)
+   v2.24 (v0.194.0, §-1r RF-16, owner 2026-08-24): the header's Sign-out button becomes a profile
+   ICON opening a static menu — his words: "Change Sign Out button to profile icon then menu that
+   opens that has Account sub choices underneath and remove from left side menu. Add sign out as
+   an option there too. Also move notifications there too, and then notifications can begin a
+   counter on the profile icon. Explore and Player library can go under Inbox." Plus his same-day
+   refinement: the admin switch is TWO-WAY and permission-gated in both directions. So:
+   · The rail loses Notifications and the whole Account group (they live in #btProfileMenu, static
+     markup on the 18 canonical pages — header_shell v4.0); Explore + Player Library move under
+     Inbox in the You group. This SUPERSEDES the v2.22 order (his 2026-08-18 word).
+   · The notification unread count rides the profile ICON (profileNotifFill) and the menu's
+     Notifications item, filled after the paint like every badge (D-15's rule).
+   · #btSwitchAdmin renders into the menu ONLY inside the server-signed role check from /api/me
+     (never a client hint), and routes through exitMemberView so a session parked in the act-as
+     drop is cleared, not bounced. The "Viewing as member — Exit" pill RIDES: it stays the preview
+     mode's state indicator and exit. The reverse direction ALREADY EXISTS: admin-nav.js's
+     "View as member" (btViewMember). Guards: header_actions v5.0, member_nav_paint v2.0.
    v2.23 (v0.193.0, §-1r RF-17, owner 2026-08-24): the rail's brand ROW is REMOVED — his words:
    "Remove the Boomtown athletics button from the menu, it is redundant to explore and the top
    left button/header." The Explore rail item keeps index.html reachable (no last-way-out lost).
@@ -160,7 +176,35 @@
   .site-nav .nav-brand-name { color: var(--brand-card-ink, #F2F0EA); font-weight: 700; font-size: 15px; line-height: 1.2; }
   .site-nav .nav-brand:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .site-layout > main, .site-layout > .site-content { flex: 1; min-width: 0; }
-  @media (hover: hover) and (pointer: fine) { .site-nav .nav-item:hover { background: var(--surface); } }
+  /* RF-16 (v0.194.0): the header profile menu — a disclosure anchored to the icon. Injected here
+     because this file owns header behavior (v2.13); the markup ships static and hidden, so there
+     is no unstyled flash. [hidden] overrides are NOT optional: .pm-item sets display, and author
+     display beats the UA's [hidden] rule (the E1/hidden_overlay class). */
+  .hdr-profile-wrap { position: relative; display: inline-flex; }
+  .profile-menu { position: absolute; right: 0; top: calc(100% + 8px); min-width: 224px; z-index: 70;
+    background: var(--surface-raised, var(--surface)); border: 1px solid var(--border);
+    border-radius: var(--radius-card, 10px); box-shadow: 0 10px 30px rgba(0,0,0,.28); padding: 6px;
+    transform-origin: top right; }
+  .profile-menu[hidden] { display: none; }
+  .profile-menu .pm-item { display: flex; align-items: center; gap: 10px; width: 100%;
+    box-sizing: border-box; min-height: 44px; padding: 10px 12px;
+    border-radius: var(--radius-control, 8px); color: var(--text); text-decoration: none;
+    font: inherit; font-size: 15px; font-weight: 600; background: none; border: 0;
+    text-align: left; cursor: pointer; }
+  .profile-menu .pm-item[hidden] { display: none; }
+  .profile-menu .pm-item:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .profile-menu .pm-sep { height: 1px; background: var(--border); margin: 6px 4px; }
+  .profile-menu .badge { margin-left: auto; flex: none; min-width: 20px; height: 20px; padding: 0 6px;
+    border-radius: 999px; background: var(--accent); color: var(--gold-ink); font-size: 12px;
+    font-weight: 800; display: grid; place-items: center; }
+  @media (prefers-reduced-motion: no-preference) {
+    .profile-menu:not([hidden]) { animation: btPmIn 120ms cubic-bezier(0.23, 1, 0.32, 1); }
+  }
+  @keyframes btPmIn { from { opacity: 0; transform: scale(0.97); } }
+  @media (hover: hover) and (pointer: fine) {
+    .site-nav .nav-item:hover { background: var(--surface); }
+    .profile-menu .pm-item:hover { background: var(--surface-2, var(--surface)); }
+  }
   @media (max-width: 860px) {
     .site-layout { display: block; }
     .site-nav { position: static; width: auto; max-height: none; display: flex; gap: 4px;
@@ -201,6 +245,27 @@
       try { sessionStorage.removeItem("bt_token"); sessionStorage.removeItem("bt_demo_member"); } catch (e) {}
       location.href = "index.html";
     });
+    /* RF-16 (v0.194.0): the profile icon + menu. Revealed from the LOCAL token, synchronously —
+       the same v2.14 rule as Sign out: a stale token showing the icon is the safe direction.
+       The menu is a plain disclosure (real links + buttons, Tab traverses them): click toggles,
+       Escape closes and returns focus, a click outside closes. aria-expanded mirrors state. */
+    const pb = document.getElementById("btHdrProfile");
+    const pm = document.getElementById("btProfileMenu");
+    if (pb && token) pb.hidden = false;
+    if (pb && pm) {
+      const closeMenu = () => { pm.hidden = true; pb.setAttribute("aria-expanded", "false"); };
+      pb.addEventListener("click", () => {
+        const opening = pm.hidden;
+        pm.hidden = !opening;
+        pb.setAttribute("aria-expanded", String(opening));
+      });
+      document.addEventListener("click", (e) => {
+        if (!pm.hidden && !pm.contains(e.target) && !pb.contains(e.target)) closeMenu();
+      });
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && !pm.hidden) { closeMenu(); pb.focus(); }
+      });
+    }
   }
 
   /* ---------- build nav after we know the role ---------- */
@@ -227,24 +292,20 @@
       } catch (e) { /* offline: render public nav */ }
     }
 
-    /* v2.22 (§-1r RF-12(4) + RF-12(2) + D-19/D-50, owner 2026-08-18): the member menu is built
-       per state, most-useful-first — his words: "Realign that menu from most useful to least
-       useful. Inbox should be 2 or 3, while Home at #1, then notifications… Group things
-       together that make sense."
-       · HOME IS THE MEMBER'S OWN HOME (home.html — the screen titled My Dashboard), because his
-         item 12 said "Dashboard should be the primary screen for members". That reading is an
-         assumption recorded in roadmap §-1r; if he corrects it, his word governs.
-       · The public card grid (index.html) keeps exactly ONE signed-in route, named EXPLORE —
-         his option B — which also ends D-19 (two landing pages both named like home).
-       · Groups follow the §-1f F-5/F-6 proposal (delivered v0.106.0, held until his order):
-         You (the badge-bearing three, his order) · Play (the product; Leagues above Live scores
-         because a league night is a weekly destination, live scores an event-day one) ·
-         Explore (browse surfaces) · Account (convention: account last, Help with it).
-       · F-5's signed-out/signed-in position stability is deliberately traded away — his
-         explicit order outranks it. Signed-out keeps the public list with Home first: a
-         visitor's home IS the front door.
-       Guards: member_nav_paint.test.mjs v1.1 (his order · one Explore route · no duplicate
-       names · the fragment contract). */
+    /* v2.24 (§-1r RF-16, owner 2026-08-24 — SUPERSEDES the v2.22 order, his 2026-08-18 word):
+       the rail slims to what he left on it. His words: "…remove from left side menu. Add sign
+       out as an option there too. Also move notifications there too… Explore and Player library
+       can go under Inbox." So:
+       · You: Home · Inbox · Explore · Player Library (the two browse items sit under Inbox, per
+         his sentence; the Explore item stays the ONE route to the public grid — D-19's rule).
+       · Play is unchanged (Leagues above Live scores — a league night is a weekly destination).
+       · Notifications and the Account group (My Profile · Membership · Settings · Help & FAQ)
+         moved into the header's #btProfileMenu, which is static markup on the 18 canonical
+         pages — header_shell v4.0 pins the menu, member_nav_paint v2.0 forbids them here and
+         pins the menu as the exit.
+       · Signed-out keeps the public list with Home first: a visitor's home IS the front door.
+       Guards: member_nav_paint.test.mjs v2.0 (his order · one Explore route · no duplicate
+       names · the fragment contract, rail + menu). */
     const NAV = [];
     if (signedIn) {
       /* v2.16 (§-1c D-15) — THE BADGE FETCHES NO LONGER GATE THE RAIL.
@@ -260,8 +321,9 @@
          PARALLEL rather than in series. member_nav_paint.test.mjs pins the ordering. */
       NAV.push({ label: "You", items: [
         { href: "home.html",     ico: "⌂", text: "Home" },
-        { href: "home.html#notifications", ico: "◔", text: "Notifications", key: "notifications" },
         { href: "member-inbox.html", ico: "✉", text: "Inbox", key: "inbox" },
+        { href: "index.html",    ico: "▦", text: "Explore" },
+        { href: "library.html",  ico: "◎", text: "Player Library" },
       ]});
       NAV.push({ label: "Play", items: [
         { href: "schedule.html", ico: "▣", text: "Event Schedule" },
@@ -270,25 +332,38 @@
         { href: "lfg.html",      ico: "◆", text: "Community Play" },
         { href: "subs.html",     ico: "◈", text: "Sub-Finder" },
       ]});
-      NAV.push({ label: "Explore", items: [
-        { href: "index.html",    ico: "▦", text: "Explore" },
-        { href: "library.html",  ico: "◎", text: "Player Library" },
-      ]});
-      NAV.push({ label: "Account", items: [
-        { href: "profile.html",  ico: "◉", text: "My Profile" },
-        { href: "membership.html", ico: "★", text: "Membership" },
-        { href: "settings.html", ico: "⚙", text: "Settings" },
-        { href: "help.html",     ico: "?", text: "Help & FAQ" },
-      ]});
       const demoMember = ssGet("bt_demo_member") === "1";
+      /* RF-16 (v0.194.0, owner 2026-08-24 — AMENDS RF-12(1)'s blanket removal): exactly ONE
+         admin affordance returns to member surfaces, inside the profile menu, and it renders
+         ONLY inside this role check. `role` is the SERVER-SIGNED /api/me role matched to the
+         active org (v2.15's rule — never a client hint, never a cross-org fallback). It routes
+         through exitMemberView because a session parked in the view-as-member drop must be
+         CLEARED first — a bare navigation would bounce off admin-nav's bt_demo_member guard
+         forever. The reverse direction is admin-nav.js's "View as member" (btViewMember), which
+         already exists. Guards: header_actions.test.mjs v5.0 (gate containment + the two-naming
+         allowance + an ungated-switch NC). */
+      if (role === "admin" || role === "staff") {
+        const menu = document.getElementById("btProfileMenu");
+        if (menu && !document.getElementById("btSwitchAdmin")) {
+          const sw = document.createElement("button");
+          sw.type = "button";
+          sw.id = "btSwitchAdmin";
+          sw.className = "pm-item";
+          sw.textContent = "Switch to admin";
+          sw.onclick = () => exitMemberView("admin.html");
+          menu.insertBefore(sw, document.getElementById("logoutBtn"));
+        }
+      }
       /* v2.17 (§-1r RF-12, owner 2026-08-18): the v2.11/v2.13 header Admin reveal is GONE, with
          the static #btHdrAdmin anchor it revealed. His words: "There should be no admin access
          from this screen." Said honestly: the anchor granted nothing — every admin route is
          gated server-side — but an affordance the owner ordered off the surface stays off.
-         Staff reach the Control Center by URL or bookmark now. The ONE admin.html reference
-         below (the exit pill) is the only way OUT of the view-as-member preview: admin pages
-         bounce back to home.html while bt_demo_member is set, so removing the pill would trap
-         staff in the preview. header_actions.test.mjs pins both halves. */
+         (RF-16, 2026-08-24, restored exactly one ROLE-GATED route — the menu switch above.)
+         The exit pill below stays the way OUT of the view-as-member preview AND its state
+         indicator: admin pages bounce back to home.html while bt_demo_member is set, so removing
+         the pill would trap staff in the preview and hide that the preview is on. The pill RIDES
+         the new switch (both route through exitMemberView). header_actions.test.mjs v5.0 pins
+         both, and the admin.html allowance is exactly two. */
       if ((role === "admin" || role === "staff") && demoMember) {
         const pill = document.createElement("button");
         pill.type = "button";
@@ -362,9 +437,37 @@
       count("/api/notifications"),
       count("/api/messages/unread-count"),
     ]);
-    setNavBadge(aside && aside.querySelector('[data-nav-key="notifications"]'), unread, "unread");
+    /* RF-16 (v2.24): the notifications count moved with its item — off the rail, onto the
+       profile ICON and the menu's Notifications row. Inbox keeps its rail badge + the header ✉. */
     setNavBadge(aside && aside.querySelector('[data-nav-key="inbox"]'), inboxUnread, "unread");
     headerMailFill(inboxUnread);
+    profileNotifFill(unread);
+  }
+
+  /* RF-16 (v0.194.0): the profile icon's counter — his "notifications can begin a counter on the
+     profile icon". Data fill only, after the paint (D-15's rule), same DOM-API + idempotency
+     rules as headerMailFill: built with createElement, written with textContent, an existing
+     .badge is reused, and a count that drops to zero removes it. The menu's Notifications row
+     gets the same count through setNavBadge. */
+  function profileNotifFill(unread) {
+    const pb = document.getElementById("btHdrProfile");
+    if (pb) {
+      pb.setAttribute("aria-label", unread ? "Account menu — " + unread + " unread notifications" : "Account menu");
+      let badge = pb.querySelector(".badge");
+      if (unread) {
+        pb.style.position = "relative";
+        if (!badge) {
+          badge = document.createElement("span");
+          badge.className = "badge";
+          badge.setAttribute("style", "position:absolute;top:2px;right:2px;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:var(--accent);color:var(--gold-ink);font-size:11px;font-weight:800;display:grid;place-items:center");
+          pb.appendChild(badge);
+        }
+        badge.textContent = unread > 9 ? "9+" : String(unread);
+      } else if (badge) {
+        badge.remove();
+      }
+    }
+    setNavBadge(document.querySelector('#btProfileMenu [data-pm-key="notifications"]'), unread, "unread");
   }
 
   /* DOM APIs, idempotent — the v2.14 rule. textContent can never be parsed as markup, and reusing

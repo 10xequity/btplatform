@@ -1,6 +1,20 @@
 /**
  * Boomtown Platform — header-actions guard
- * File: worker/test/header_actions.test.mjs · Version: v4.0 · Date: 2026-08-20 · Ships in: v0.171.0
+ * File: worker/test/header_actions.test.mjs · Version: v5.0 · Date: 2026-08-24 · Ships in: v0.194.0
+ *
+ * v5.0 (v0.194.0, §-1r RF-16 — owner 2026-08-24, AMENDING RF-12(1)): "From the new profile menu,
+ * there neesd to be a button that allows the switch to admin view. This button only appears when
+ * there is the correct permission to access admin mode." And his same-day refinement: the switch
+ * is TWO-WAY and permission-gated in both directions — "There should be a member view in the
+ * reverse to switch back, not applicable for members without the permission."
+ * So EXACTLY ONE admin affordance returns to member surfaces, and it is ROLE-GATED on the
+ * server-signed /api/me role (never a client hint): site-nav.js renders #btSwitchAdmin into the
+ * profile menu only inside the role check, and it routes through exitMemberView so a session
+ * parked in the view-as-member drop is cleared rather than bounced. The sanctioned admin.html
+ * count in site-nav.js rises 1 → 2 (the preview-exit pill RIDES — it stays the preview mode's
+ * state indicator and exit; the menu switch is the standing affordance). Static/ungated
+ * affordances stay forbidden everywhere (header_shell v4.0 forbids them in the header markup;
+ * the widest-set scan below still catches every unsanctioned naming).
  *
  * v4.0 (v0.171.0, §-1r RF-12 — owner 2026-08-18): "There should be no admin access from this
  * screen." EVERY admin-leading affordance is REMOVED from every member surface: the static
@@ -285,10 +299,11 @@ test("the member sidebar offers NO admin destination (v2.15 — the reported she
 });
 
 test("NC-A1: re-adding one admin link to the member NAV FAILS the verdict", () => {
-  // Mutate the REAL source, in the real idiom, at a real insertion point.
+  // Mutate the REAL source, in the real idiom, at a real insertion point. (v5.0: the anchor moved
+  // from profile.html — RF-16 took the Account group off the rail — to library.html, still there.)
   const src = read("assets/site-nav.js");
-  const mutated = src.replace('{ href: "profile.html"',
-    '{ href: "admin-events.html", ico: "x", text: "Events and Programs" },\n        { href: "profile.html"');
+  const mutated = src.replace('{ href: "library.html"',
+    '{ href: "admin-events.html", ico: "x", text: "Events and Programs" },\n        { href: "library.html"');
   assert.notEqual(mutated, src, "mutation did not land — NC is vacuous");
   assert.deepEqual(memberNavVerdict(mutated), ["admin-events.html"],
     "the verdict must catch an admin href put back into the member nav");
@@ -297,8 +312,8 @@ test("NC-A1: re-adding one admin link to the member NAV FAILS the verdict", () =
 test("NC-A2: tournament.html counts as an admin surface (it loads admin-nav.js)", () => {
   // It does not match /^admin[-.]/, so it needs its own arm — and that arm needs its own control.
   const src = read("assets/site-nav.js");
-  const mutated = src.replace('{ href: "profile.html"',
-    '{ href: "tournament.html", ico: "x", text: "Tournament Ops" },\n        { href: "profile.html"');
+  const mutated = src.replace('{ href: "library.html"',
+    '{ href: "tournament.html", ico: "x", text: "Tournament Ops" },\n        { href: "library.html"');
   assert.notEqual(mutated, src, "mutation did not land — NC is vacuous");
   assert.deepEqual(memberNavVerdict(mutated), ["tournament.html"]);
   assert.match(read("tournament.html"), /assets\/admin-nav\.js/,
@@ -403,15 +418,112 @@ test("D-22+RF-12: the member CARD GRID offers NO admin destination — admin.htm
     "an admin destination is on the member front door — RF-12 ended the one-card exemption");
 });
 
-test("RF-12: the sanctioned exit from view-as-member EXISTS — the pill is not a member affordance", () => {
-  /* Admin pages bounce back to home.html while bt_demo_member is set, so this pill is the ONLY
-     exit from the preview mode. It renders only for a staff/admin session that is already in
-     that mode — a member can never see it. Deleting it is a lockout, not a hardening. */
+test("RF-16: site-nav.js names admin.html EXACTLY twice — the preview-exit pill and the role-gated switch", () => {
+  /* Admin pages bounce back to home.html while bt_demo_member is set, so the pill stays the
+     preview mode's state indicator and exit (it RIDES the new switch — RF-16's measured call).
+     The menu switch is the standing affordance his 2026-08-24 word restored. BOTH route through
+     exitMemberView: a bare navigation would bounce off admin-nav's bt_demo_member guard forever
+     when the session is parked in the act-as drop. */
   const code = stripJs(read("assets/site-nav.js"));
-  assert.match(code, /exitMemberView\("admin\.html"\)/,
+  assert.match(code, /pill\.onclick = \(\) => exitMemberView\("admin\.html"\)/,
     "the Viewing-as-member Exit pill is gone — staff who enter the preview cannot leave it");
-  assert.equal((code.match(/admin\.html/g) || []).length, 1,
-    "site-nav.js code must name admin.html EXACTLY once (the pill) — a second naming is a new affordance");
+  assert.match(code, /sw\.onclick = \(\) => exitMemberView\("admin\.html"\)/,
+    "the profile menu's Switch-to-admin is gone (RF-16) — or it stopped routing through exitMemberView, " +
+    "which strands a dropped session bouncing between shells");
+  assert.equal((code.match(/admin\.html/g) || []).length, 2,
+    "site-nav.js code must name admin.html EXACTLY twice (pill + switch) — a third naming is a new affordance");
+});
+
+/* ═══════════ v5.0 (RF-16): the switch renders ONLY inside the server-signed role gate ═══════════ */
+
+/* The gate literal is the SWITCH's own spelling — the pill's gate reads
+   `if ((role === "admin" || role === "staff") && demoMember) {` (extra paren, extra clause), so it
+   can never satisfy this search. Brace-matched containment, not proximity: the switch's creation
+   must sit INSIDE the gated block. */
+const SWITCH_GATE = 'if (role === "admin" || role === "staff") {';
+const switchGateVerdict = (src) => {
+  const code = stripJs(src);
+  const mk = code.indexOf('sw.id = "btSwitchAdmin"');
+  if (mk === -1) return { ok: false, why: "the switch is gone from site-nav.js" };
+  const gate = code.lastIndexOf(SWITCH_GATE, mk);
+  if (gate === -1) return { ok: false, why: "no role gate above the switch — it would render for every member" };
+  const end = blockEnd(code, gate + SWITCH_GATE.length - 1);
+  if (!(mk < end)) return { ok: false, why: "the switch's creation sits OUTSIDE the role-gated block" };
+  return { ok: true };
+};
+
+test("RF-16: #btSwitchAdmin is created only inside the role gate (server-signed /api/me role, the ratchet rule)", () => {
+  const v = switchGateVerdict(read("assets/site-nav.js"));
+  assert.ok(v.ok, `the admin switch lost its gate: ${v.why}`);
+  /* scope control: the PILL's own differently-spelled gate must still exist, or this verdict is
+     matching the wrong block and the preview pill lost its role check silently */
+  assert.ok(stripJs(read("assets/site-nav.js")).includes('if ((role === "admin" || role === "staff") && demoMember) {'),
+    "the pill's role+demoMember gate vanished — the verdict above may be pinning the wrong block");
+});
+
+test("NC-G1: ungating the switch FAILS the verdict (the gate replaced with a tautology)", () => {
+  const src = read("assets/site-nav.js");
+  const mutated = src.replace(SWITCH_GATE, "if (true) {");
+  assert.notEqual(mutated, src, "mutation did not land — NC is vacuous");
+  assert.equal(switchGateVerdict(mutated).ok, false,
+    "an ungated switch must fail — it would render admin affordances for plain members");
+});
+
+test("NC-G2: moving the switch's creation OUTSIDE the gated block FAILS the verdict", () => {
+  const src = read("assets/site-nav.js");
+  const mutated = src.replace('sw.id = "btSwitchAdmin";', "")
+    + '\n(function () { const sw = document.createElement("button"); sw.id = "btSwitchAdmin"; })();';
+  assert.notEqual(mutated, src, "mutation did not land — NC is vacuous");
+  assert.equal(switchGateVerdict(mutated).ok, false,
+    "a switch created at top level must fail containment — outside the gate is ungated");
+});
+
+test("RF-16: no shipped page carries btSwitchAdmin as static markup — the switch is JS-rendered only", () => {
+  const offenders = pages().filter((f) => read(f).includes("btSwitchAdmin"));
+  assert.deepEqual(offenders, [],
+    "a static Switch-to-admin shipped in page markup — static markup cannot be role-gated");
+});
+
+test("RF-16: the ADMIN side keeps its member-view switch — the reverse direction of the two-way pair", () => {
+  /* His refinement: "There should be a member view in the reverse to switch back." MEASURED
+     2026-08-24: admin-nav.js's #btViewMember (the Sandbox group) ALREADY does exactly this —
+     act-as member (the real privilege drop) + bt_demo_member + land on the member home. This pin
+     records that the reverse half EXISTS and keeps it; a rebuild would be a duplicate, not a fix. */
+  assert.ok(adminNavSrc.includes('id="btViewMember"'),
+    "admin-nav.js lost its View-as-member entry — the two-way switch lost its reverse direction");
+  assert.match(stripJs(adminNavSrc), /"\/api\/auth\/act-as"/,
+    "View as member no longer drops privileges through act-as — the member view would be admin-eyed");
+});
+
+/* ── v5.0: the profile icon's notification counter — same badge safety rules as the mail fill ── */
+
+const profileBadgeVerdict = (src) => {
+  const sig = src.indexOf("function profileNotifFill(");
+  if (sig < 0) return { ok: false, why: "profileNotifFill not found" };
+  const body = src.slice(sig, blockEnd(src, src.indexOf("{", sig)));
+  if (/insertAdjacentHTML|innerHTML\s*=/.test(body)) return { ok: false, why: "badge built by parsing markup" };
+  if (!body.includes("createElement")) return { ok: false, why: "badge not built with createElement" };
+  if (!body.includes("textContent")) return { ok: false, why: "count not written via textContent" };
+  if (!/querySelector\(["'`]\.badge/.test(body)) return { ok: false, why: "no existing-badge lookup — not idempotent" };
+  if (!body.includes('getElementById("btHdrProfile")')) return { ok: false, why: "does not resolve the static #btHdrProfile" };
+  if (!body.includes("badge.remove()")) return { ok: false, why: "a count dropping to zero must remove the badge" };
+  return { ok: true };
+};
+
+test("RF-16: the profile icon's counter is a DOM-API, idempotent fill on the static icon", () => {
+  const v = profileBadgeVerdict(read("assets/site-nav.js"));
+  assert.ok(v.ok, `profile badge fill regressed: ${v.why}`);
+  /* and it is CALLED, not merely defined (failure class 1 — the F-15 rule) */
+  const code = stripJs(read("assets/site-nav.js"));
+  const called = /profileNotifFill\(/.test(code.replace(/function profileNotifFill\s*\([^)]*\)/, ""));
+  assert.ok(called, "profileNotifFill is defined but never invoked — the counter would never render");
+});
+
+test("NC-G3: a profile badge fill without the existing-badge lookup FAILS (idempotency)", () => {
+  const src = read("assets/site-nav.js");
+  const mutated = src.replace('let badge = pb.querySelector(".badge");', "let badge = null;");
+  assert.notEqual(mutated, src, "mutation did not land — NC is vacuous");
+  assert.equal(profileBadgeVerdict(mutated).ok, false);
 });
 
 test("NC-D22a: putting one admin destination back into the card grid FAILS the verdict", () => {
@@ -505,9 +617,13 @@ test("RF-12: no script a member page loads names an admin surface — the pill e
   const offenders = [];
   for (const s of scripts) {
     let code = stripJs(read(s));
-    /* the one sanctioned reference: String.replace removes only the FIRST occurrence, so the
-       allowance is exactly one — a second naming stays in `code` and is reported */
-    if (s === "assets/site-nav.js") code = code.replace('exitMemberView("admin.html")', "");
+    /* v5.0 (RF-16): TWO sanctioned references, each its own full-line literal removed exactly
+       once (String.replace removes only the FIRST occurrence) — the preview-exit pill and the
+       role-gated menu switch. A third naming stays in `code` and is reported. */
+    if (s === "assets/site-nav.js") {
+      code = code.replace('pill.onclick = () => exitMemberView("admin.html")', "")
+                 .replace('sw.onclick = () => exitMemberView("admin.html")', "");
+    }
     const named = adminNamesIn(code, admins);
     if (named.length) offenders.push(`${s} → ${named.join(", ")}`);
   }
@@ -555,12 +671,14 @@ test("NC-R4: a JS comment naming an admin page does NOT trip the scan — and th
     ["admin-events.html"], "the stripper ate live code — it is deleting more than comments");
 });
 
-test("NC-R5: a SECOND code-level admin.html in site-nav.js is caught — the pill allowance is one", () => {
+test("NC-R5: a THIRD code-level admin.html in site-nav.js is caught — the allowances are two, exactly", () => {
   const admins = adminSurfaceSet();
   const src = read("assets/site-nav.js");
   const mutated = src + '\nlocation.href = "admin.html";';
   assert.notEqual(mutated, src, "mutation did not land — NC is vacuous");
-  const code = stripJs(mutated).replace('exitMemberView("admin.html")', "");
+  const code = stripJs(mutated)
+    .replace('pill.onclick = () => exitMemberView("admin.html")', "")
+    .replace('sw.onclick = () => exitMemberView("admin.html")', "");
   assert.deepEqual(adminNamesIn(code, admins), ["admin.html"],
-    "with the pill's single allowance spent, a second admin.html reference must be reported");
+    "with both sanctioned allowances spent, a third admin.html reference must be reported");
 });

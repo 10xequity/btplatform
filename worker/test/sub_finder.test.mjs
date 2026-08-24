@@ -98,7 +98,10 @@ test("NC-3: removing the leagues entry link is caught", () => {
 
 test("the rail carries exactly one Sub-Finder button and it leads to the module", () => {
   const items = signedInRailItems(navJs);
-  assert.ok(items.length >= 12, `rail item extraction collapsed: ${items.length}`);
+  /* floor 12 → 9 (v0.194.0, RF-16): the rail deliberately slimmed — Notifications and the four
+     Account items moved into the header's profile menu (member_nav_paint v2.0 owns that
+     contract). 9 is the full signed-in rail now; a collapsed extractor reads far below it. */
+  assert.ok(items.length >= 9, `rail item extraction collapsed: ${items.length}`);
   const finder = items.filter((i) => i.text === "Sub-Finder");
   assert.equal(finder.length, 1, `expected exactly one "Sub-Finder" rail item, found ${finder.length}`);
   assert.equal(finder[0].href, "subs.html", `the Sub-Finder rail item points at ${finder[0].href}, not the module`);
