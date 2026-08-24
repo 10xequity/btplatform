@@ -1,6 +1,13 @@
 /* Boomtown Platform — League Manager
-   File: web/assets/admin-league.js · Version: v1.4 · Date: 2026-08-05 · Ships in: v0.93.0
+   File: web/assets/admin-league.js · Version: v1.5 · Date: 2026-08-24 · Ships in: v0.93.0 (v1.5 in v0.192.0)
 
+   v1.5 (§-1r RF-2 Unit B + RF-3, owner rules 2026-08-24):
+   · The generate press sends roundsPerNight (1-3) and gamesPerMatch (1-2) from the toolbar
+     selects. A structured night renders each game's number ("Game N", the night's play order)
+     and the copy/CSV/email shapes carry it, so the schedule reads in order on paper and in a text.
+   · Forfeits: the score modal offers "X forfeits" — POST { forfeit_by } stores the conventional
+     points_to-0 plus the flag; a forfeited row reads "25-0 · forfeit". The differential rule
+     (one point, not twenty-five) lives server-side in computeStandings, never here.
    v1.4 (§-1b W-B): the week is HAND-EDITABLE AND EXPORTABLE, closing the owner's league loop.
    · Edit a matchup by ENTRY: every unscored game gets Edit → two team pickers →
      POST /api/admin/events/:id/schedule/teams (built in formats.js since the format engine,
@@ -139,7 +146,7 @@
           <a class="wk-top no-print" href="#weekTop">↑ Top</a>
           <button class="btn ghost no-print" data-copyweek="${w.round}">Copy as text</button>
           ${unscored ? `<button class="btn ghost" data-delweek="${w.round}">Remove week</button>` : ""}</div>
-        <div class="wk-body" id="wkb-${w.round}">${w.matches.map(m => matchRow(m)).join("")}</div>
+        <div class="wk-body" id="wkb-${w.round}">${w.matches.map(m => matchRow(m, w.matches.some(x => (x.game_number || 1) > 1))).join("")}</div>
       </section>`;
     }).join("") : `<section class="card"><p class="help-text" style="margin:0">No weeks yet. Set team levels, then generate week 1.</p></section>`;
 
@@ -161,15 +168,17 @@
     });
   }
 
-  function matchRow(m) {
+  /* RF-2B: `structured` is true when the WEEK carries game numbers past 1 (a multi-rotation or
+     two-game night) — only then does the row show its play order, so a plain week stays clean. */
+  function matchRow(m, structured) {
     const scored = m.score_a != null;
     const aWin = scored && m.score_a > m.score_b;
     return `<div class="mt-row">
-      <span class="court">Court ${m.court}</span>
+      <span class="court">Court ${m.court}${structured ? ` · Game ${m.game_number || 1}` : ""}</span>
       <span class="vs"><b class="${aWin ? "win" : ""}">${esc(m.team_a || "TBD")}</b> vs
         <b class="${scored && !aWin ? "win" : ""}">${esc(m.team_b || "TBD")}</b></span>
       ${scored
-        ? `<span class="score">${m.score_a}–${m.score_b}</span>`
+        ? `<span class="score">${m.score_a}–${m.score_b}${m.forfeit_by ? " · forfeit" : ""}</span>`
         : `<button class="btn ghost no-print" data-edit="${m.id}" aria-label="Change who plays this game">Edit</button>
            <button class="btn ghost" data-score="${m.id}">Score</button>`}
     </div>`;
@@ -211,8 +220,9 @@
      were about to be two spellings of the same sentence, and the pasted week and the emailed
      week disagreeing about how a score reads is exactly the drift this repo keeps paying for. */
   function weekLines(w) {
+    const structured = w.matches.some(x => (x.game_number || 1) > 1); // RF-2B: play order only when the night has one
     return [`Week ${w.round}`,
-      ...w.matches.map(m => `Court ${m.court}: ${m.team_a || "TBD"} vs ${m.team_b || "TBD"}${m.score_a != null ? ` (${m.score_a}–${m.score_b})` : ""}`)];
+      ...w.matches.map(m => `${structured ? `Game ${m.game_number || 1} · ` : ""}Court ${m.court}: ${m.team_a || "TBD"} vs ${m.team_b || "TBD"}${m.score_a != null ? ` (${m.score_a}–${m.score_b}${m.forfeit_by ? " forfeit" : ""})` : ""}`)];
   }
 
   /* WF-6: the whole schedule as a spreadsheet. One row per game, unplayed games included with
@@ -220,11 +230,12 @@
   function csvWeeks() {
     const weeks = (data && data.weeks) || [];
     if (!weeks.length) { say("No weeks yet — generate week 1 first.", true); return; }
-    const rows = [csvRow(["Week", "Court", "Team A", "Team B", "Score A", "Score B"])];
+    const rows = [csvRow(["Week", "Game", "Court", "Team A", "Team B", "Score A", "Score B", "Forfeit"])];
     for (const w of weeks) {
       for (const m of w.matches) {
-        rows.push(csvRow([w.round, m.court, m.team_a || "", m.team_b || "",
-          m.score_a != null ? m.score_a : "", m.score_b != null ? m.score_b : ""]));
+        rows.push(csvRow([w.round, m.game_number || 1, m.court, m.team_a || "", m.team_b || "",
+          m.score_a != null ? m.score_a : "", m.score_b != null ? m.score_b : "",
+          m.forfeit_by ? (m.forfeit_by === "a" ? (m.team_a || "A") : (m.team_b || "B")) : ""]));
       }
     }
     downloadText(`${new Date().toISOString().slice(0, 10)}_${(data.event.name || "league").replace(/\W+/g, "-")}_schedule.csv`,
@@ -272,12 +283,26 @@
           <input id="diffCustom" type="number" min="1" max="${m.points_to}" placeholder="More" style="width:84px" aria-label="Point difference" />
         </div>
       </div>
+      <p class="help-text" style="margin:12px 0 4px">Or record a forfeit — pick the team that didn't play.
+        It shows as ${m.points_to}–0, but only moves the standings differential by one point.</p>
+      <div class="diff-btns">
+        <button class="btn ghost" data-ff="a">${esc(m.team_a)} forfeits</button>
+        <button class="btn ghost" data-ff="b">${esc(m.team_b)} forfeits</button>
+      </div>
       <div class="actions"><button class="btn ghost" data-cancel>Cancel</button></div>`);
     let winner = null;
     back.querySelectorAll("[data-w]").forEach(b => b.onclick = () => {
       winner = b.dataset.w;
       back.querySelectorAll("[data-w]").forEach(x => x.classList.toggle("ghost", x !== b));
       back.querySelector("#diffStep").hidden = false;
+    });
+    // RF-3 (owner ruling 2026-08-24): one press, no second step — the server writes the
+    // conventional score and the flag; the one-point rule lives in computeStandings.
+    back.querySelectorAll("[data-ff]").forEach(b => b.onclick = async () => {
+      const r = await api(`/api/matches/${matchId}/score`, { method: "POST", body: JSON.stringify({ forfeit_by: b.dataset.ff }) });
+      closeModal();
+      say(r.ok ? `Forfeit recorded — ${m.points_to}–0, one point of differential` : r.data.error, !r.ok);
+      if (r.ok) load();
     });
     const send = async diff => {
       const r = await api(`/api/matches/${matchId}/score`, { method: "POST", body: JSON.stringify({ winner, diff }) });
@@ -296,11 +321,17 @@
   async function generateWeek() {
     if (!leagueId) return;
     $("genWeek").disabled = true;
-    const r = await api(`/api/leagues/${leagueId}/week`, { method: "POST", body: JSON.stringify({}) });
+    // RF-2B: the night's shape rides the press. Missing selects (an old cached shell) fall back
+    // to today's single-game night — the server clamps to 1-3 / 1-2 either way.
+    const body = {
+      roundsPerNight: Number($("wkRounds") && $("wkRounds").value) || 1,
+      gamesPerMatch: Number($("wkGames") && $("wkGames").value) || 1,
+    };
+    const r = await api(`/api/leagues/${leagueId}/week`, { method: "POST", body: JSON.stringify(body) });
     $("genWeek").disabled = false;
     if (!r.ok) { say(r.data.error, true); return; }
     let note = `Week ${r.data.round} created — ${r.data.matches} game${r.data.matches === 1 ? "" : "s"}`;
-    if ((r.data.byes || []).length) note += ` · sitting: ${r.data.byes.map(b => b.name).join(", ")}`;
+    if ((r.data.byes || []).length) note += ` · sitting: ${[...new Set(r.data.byes.map(b => b.name))].join(", ")}`;
     say(note, false);
     if ((r.data.warnings || []).length) {
       $("status").insertAdjacentHTML("beforeend",

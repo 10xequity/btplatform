@@ -177,8 +177,17 @@ function computeStandings(matches, teamIds) {
     if (m.scoreA == null || m.scoreB == null) continue;
     const A = s.get(m.teamA), B = s.get(m.teamB);
     if (!A || !B) continue;
-    A.pf += m.scoreA; A.pa += m.scoreB; A.diff += m.scoreA - m.scoreB;
-    B.pf += m.scoreB; B.pa += m.scoreA; B.diff += m.scoreB - m.scoreA;
+    if (m.forfeitBy === "a" || m.forfeitBy === "b") {
+      // RF-3 (owner ruling 2026-08-24): a forfeit is a full win/loss, but it moves the point
+      // columns by ONE — "does not change differential standings too much." The stored 25-0 is
+      // the DISPLAY; rows without the flag (every caller that predates it) take the normal path.
+      const winSide = m.forfeitBy === "a" ? B : A;
+      const losSide = m.forfeitBy === "a" ? A : B;
+      winSide.pf += 1; losSide.pa += 1; winSide.diff += 1; losSide.diff -= 1;
+    } else {
+      A.pf += m.scoreA; A.pa += m.scoreB; A.diff += m.scoreA - m.scoreB;
+      B.pf += m.scoreB; B.pa += m.scoreA; B.diff += m.scoreB - m.scoreA;
+    }
     const winner = m.scoreA > m.scoreB ? m.teamA : m.teamB;
     const loser = winner === m.teamA ? m.teamB : m.teamA;
     s.get(winner).wins++; s.get(loser).losses++;

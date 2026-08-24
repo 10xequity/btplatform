@@ -1,8 +1,14 @@
 /**
  * Boomtown Platform — Tournament API routes
- * Version: v0.4.0 · Date: 2026-07-24 (v0.4.0/M12B: schedule generation auto-claims courts on the
- *   facility calendar via facility.js — default courts, moved to open courts on conflict,
- *   drag-editable like any booking. v0.3.0: export refreshStandings for captain self-scoring)
+ * Version: v0.5.0 · Date: 2026-08-24 (v0.5.0/§-1r RF-3, owner ruling 2026-08-24: scoreMatch takes
+ *   a THIRD way in — { forfeit_by: 'a'|'b' } writes the conventional points_to-0 for the opponent
+ *   and sets matches.forfeit_by; a later normal entry CLEARS the flag, because typing a real score
+ *   says the game was played. refreshStandings passes the flag through so computeStandings counts
+ *   a forfeit as a full win/loss but a ±1 differential — the rule rides the FLAG, never the score,
+ *   because an earned 25-0 keeps its 25.
+ *   v0.4.0/M12B: schedule generation auto-claims courts on the facility calendar via facility.js —
+ *   default courts, moved to open courts on conflict, drag-editable like any booking.
+ *   v0.3.0: export refreshStandings for captain self-scoring)
  * Mounted by worker/src/index.js. All writes require admin/staff role in the event's org.
  * Reads: published events are public; drafts require staff.
  */
@@ -321,6 +327,25 @@ async function scoreMatch(request, env, ctx, matchId) {
   const body = await request.json().catch(() => ({}));
   const { winner, diff } = body;
 
+  // RF-3 (owner ruling 2026-08-24): the THIRD way in — a forfeit. Displays as the conventional
+  // points_to-0 for the opponent; the FLAG carries the one-point differential rule downstream.
+  if (body.forfeit_by !== undefined) {
+    if (!["a", "b"].includes(body.forfeit_by)) {
+      return json({ error: "Send forfeit_by as 'a' or 'b' — the team that didn't play." }, 400);
+    }
+    const [fa, fb] = body.forfeit_by === "a" ? [0, mt.points_to] : [mt.points_to, 0];
+    const wasScored = mt.score_a !== null && mt.score_b !== null;
+    await env.DB.prepare(
+      "UPDATE matches SET score_a=?1, score_b=?2, forfeit_by=?3, updated_at=datetime('now') WHERE id=?4"
+    ).bind(fa, fb, body.forfeit_by, matchId).run();
+    await audit(env, ctx, "match.score", "matches", matchId,
+      { forfeit_by: body.forfeit_by, score: `${fa}-${fb}`, corrected: wasScored || undefined });
+    await refreshStandings(env, mt.event_id, mt.org_id);
+    const advF = await advanceBracketFor(env, mt.org_id, mt.event_id);
+    return json({ ok: true, score_a: fa, score_b: fb, forfeit_by: body.forfeit_by,
+      bracket_advanced: advF.advanced, bracket_held: advF.held || 0 });
+  }
+
   let sa, sb;
   const exact = body.score_a !== undefined || body.score_b !== undefined;
   if (exact) {
@@ -344,7 +369,8 @@ async function scoreMatch(request, env, ctx, matchId) {
   }
 
   const wasScored = mt.score_a !== null && mt.score_b !== null;
-  await env.DB.prepare("UPDATE matches SET score_a=?1, score_b=?2, updated_at=datetime('now') WHERE id=?3").bind(sa, sb, matchId).run();
+  // A typed score clears any forfeit flag — entering a real result says the game was played.
+  await env.DB.prepare("UPDATE matches SET score_a=?1, score_b=?2, forfeit_by=NULL, updated_at=datetime('now') WHERE id=?3").bind(sa, sb, matchId).run();
   await audit(env, ctx, "match.score", "matches", matchId,
     wasScored
       ? { corrected: true, from: `${mt.score_a}-${mt.score_b}`, to: `${sa}-${sb}`, exact }
@@ -378,7 +404,7 @@ async function scoreMatch(request, env, ctx, matchId) {
    inherit from your callers, and the orgId needed to fix it was already a parameter. Free. */
 export async function refreshStandings(env, eventId, orgId) {
   const rows = (await env.DB.prepare(
-    "SELECT team_a_id AS teamA, team_b_id AS teamB, score_a AS scoreA, score_b AS scoreB FROM matches WHERE event_id=?1 AND org_id=?2 AND stage='pool' AND deleted_at IS NULL"
+    "SELECT team_a_id AS teamA, team_b_id AS teamB, score_a AS scoreA, score_b AS scoreB, forfeit_by AS forfeitBy FROM matches WHERE event_id=?1 AND org_id=?2 AND stage='pool' AND deleted_at IS NULL"
   ).bind(eventId, orgId).all()).results;
   const teams = (await env.DB.prepare("SELECT id FROM teams WHERE event_id=?1 AND org_id=?2 AND deleted_at IS NULL").bind(eventId, orgId).all()).results.map((t) => t.id);
   const table = computeStandings(rows, teams);

@@ -1,6 +1,10 @@
 # SESSION PROMPT OF RECORD — Boomtown Platform
 
-**File:** `PROMPT.md` · **Version:** v1.2 · **Created:** 2026-08-16 · **Updated:** 2026-08-23
+**File:** `PROMPT.md` · **Version:** v1.3 · **Created:** 2026-08-16 · **Updated:** 2026-08-24
+**v1.3 (owner request 2026-08-24):** §8 cadence — reviews BATCH every third loop instead of every
+release ("try to batch reviews after 3 loops instead of after every, then add the work to the next
+loop. If any are missed, rerun them."), a missed file carries forward, and never-reviewed code joins
+the backlog over time. §8.3 added (the review-loop mechanics + the pending list's home).
 **v1.2 (owner request 2026-08-23):** §8 rewritten — the Gemini API is loaded, so the session RUNS the
 review in-loop and the close REPORTS only the results + what was kept vs rejected (no paste-ready
 prompt or diff). Retires v1.1's §8.1 paste-ready block.
@@ -204,15 +208,27 @@ Close per RALPH PHASE 4: ledger, handoff §1 row by row, next-session prompt, re
 loop WORKING, not a failure** — the actionable queue has been empty since v0.166.0 and the
 remaining gates are all owner-side.
 
-## §8. OWNER RIDER — the Gemini review, run in-loop and reported briefly
+## §8. OWNER RIDER — the Gemini review, batched every third loop, reported briefly
 
-**The owner asked (2026-08-15) for each session's base code to be reviewed in Gemini; the Gemini API
-is now loaded (owner 2026-08-23), so the session RUNS the review itself.** After the release is
-verified, run the `mcp__gemini-code-reviewer__*` review in-loop (`review_specific_files` on the
-substantive files — `review_recent_changes` TRUNCATES on the buster churn of a ~75-file release),
-MEASURE each finding against the real code (§C: a review is a report to measure — a premise is often
-refuted by a server-side filter or an existing guard the diff does not show), and fold the validated
-ones (or record them in §-1c).
+**The owner asked (2026-08-15) for the code to be reviewed in Gemini; the API is loaded (2026-08-23);
+and the CADENCE is now every THIRD loop (owner 2026-08-24).** His words: *"For future gemini reviews,
+try to batch reviews after 3 loops instead of after every then add the work to the next loop. If any
+are missed, rerun them."* So a normal loop ships WITHOUT a review; every third loop is a REVIEW LOOP
+that runs `mcp__gemini-code-reviewer__review_specific_files` over every substantive file shipped since
+the last review (never `review_recent_changes` — it TRUNCATES on the buster churn), MEASURES each
+finding against the real code (§C: a review is a report to measure — a premise is often refuted by a
+server-side filter or a guard the diff does not show), and folds the validated ones into that loop's
+work (or records them in §-1c). The free tier is 20 requests/day — batch files per call where the
+payload allows.
+
+**§8.3 — THE PENDING LIST AND THE BACKLOG (owner request 2026-08-24).** Each loop's LOOP.md entry
+ends with a Gemini line naming what that loop added to the PENDING list (its substantive files) and
+whether this was a review loop; the review loop collects pending files from the LOOP entries since
+the last review. A file the review COULD NOT reach (503 after one retry, quota 429) STAYS pending
+and is rerun next review loop — a missed review is carried, never dropped. Separately, the owner
+asked (2026-08-24) that code NEVER reviewed by Gemini join future reviews over time: each review
+loop adds 2-3 modules from the never-reviewed backlog (oldest/most-load-bearing first) on top of the
+since-last-review set. Roadmap §-1r RF-19 tracks that backlog's state.
 
 **§8.1 — THE CLOSE REPORTS THE RESULTS, NOT THE PROMPT OR THE DIFF (owner request 2026-08-23).** His
 words: *"No need to display the gemini points or prompt, just the results and what was kept vs

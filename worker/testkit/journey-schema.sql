@@ -1133,3 +1133,7 @@ CREATE TABLE user_module_grants (
   deleted_at TEXT
 );
 CREATE UNIQUE INDEX idx_umg_live ON user_module_grants (org_id, user_id, module_key) WHERE deleted_at IS NULL;
+
+-- Migration 0053 (RF-3, owner ruling 2026-08-24) — which side forfeited ('a'|'b', NULL = played).
+-- The flag, not the 25-0 score, carries the one-point differential rule.
+ALTER TABLE matches ADD COLUMN forfeit_by TEXT;

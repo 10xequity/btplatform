@@ -1,6 +1,15 @@
 /**
  * Boomtown Platform — League Manager (Module 8, RECOVERY BUILD)
- * File: worker/src/leagues_admin.js · Version: v1.2.0 · Date: 2026-07-24
+ * File: worker/src/leagues_admin.js · Version: v1.3.0 · Date: 2026-08-24
+ * v1.3.0 (§-1r RF-2 Unit B, owner rule 2026-08-24): a league NIGHT can hold more than one
+ *   rotation. `roundsPerNight` (1-3) re-runs the pairing over ALL teams per rotation — meetCount
+ *   and games are updated between rotations, so rotation 2 prefers fresh opponents and a
+ *   rotation-1 bye gets priority — and `gamesPerMatch` (1-2) writes that many game rows per
+ *   pairing (same court, back to back). The whole night stays ONE `round` (round = the week
+ *   number; every board/print/standings surface groups by it); the play order rides
+ *   `game_number` (the axis tournament pools already write): (rotation-1)*gamesPerMatch + game.
+ *   The facility claim's DEFAULT window scales with rotations (180min each); explicit
+ *   weekMinutes still wins.
  * v1.2.0 (M12B): week generation auto-claims courts for that week night on the facility
  *   calendar (window = starts_at time + weekMinutes, default 180); deleting a week releases it.
  * The original v1.0 shipped in the v0.7.0 ZIP, which was never uploaded to the
@@ -85,12 +94,13 @@ async function board(env, ctx, id) {
 
   const matches = (await env.DB.prepare(
     `SELECT m.id, m.round, m.court, m.team_a_id, m.team_b_id, m.score_a, m.score_b, m.points_to,
+            m.game_number, m.forfeit_by,
             ta.name AS team_a, tb.name AS team_b
      FROM matches m
      LEFT JOIN teams ta ON ta.id=m.team_a_id
      LEFT JOIN teams tb ON tb.id=m.team_b_id
      WHERE m.event_id=?1 AND m.deleted_at IS NULL
-     ORDER BY m.round DESC, m.court`
+     ORDER BY m.round DESC, m.game_number, m.court`
   ).bind(id).all()).results;
   const weeks = [];
   for (const mt of matches) {
@@ -207,36 +217,72 @@ async function generateWeek(request, env, ctx, id) {
     meetCount.set(k, (meetCount.get(k) || 0) + 1);
   }
 
-  const { pairs, byes, warnings } = pairWeek(teams, meetCount);
-  if (!pairs.length) return json({ error: "Couldn't build matchups from these teams." }, 422);
+  let cfg = {}; try { cfg = JSON.parse(ev.config_json || "{}") || {}; } catch { cfg = {}; }
+  // RF-2 Unit B (owner rule 2026-08-24): "rotate through all the teams more than once … 3 rounds
+  // with 2 games each" — rotations re-pair EVERYBODY, games multiply the rows per pairing.
+  const roundsPerNight = Math.min(3, Math.max(1, Number(b.roundsPerNight) || Number(cfg.roundsPerNight) || 1));
+  const gamesPerMatch = Math.min(2, Math.max(1, Number(b.gamesPerMatch) || Number(cfg.gamesPerMatch) || 1));
+
+  // Each rotation pairs the CURRENT state: meetCount grows with the rotations already scheduled
+  // tonight (so rotation 2 prefers a fresh opponent — rematches stay the flagged fallback), and
+  // `games` grows for whoever got paired (so a rotation-1 bye sorts first in rotation 2).
+  const nights = [];
+  const byes = [], warnings = [];
+  for (let rot = 1; rot <= roundsPerNight; rot++) {
+    const result = pairWeek(teams, meetCount);
+    if (!result.pairs.length && rot === 1) {
+      return json({ error: "Couldn't build matchups from these teams." }, 422);
+    }
+    nights.push(result.pairs);
+    for (const by of result.byes) byes.push(roundsPerNight > 1 ? { ...by, rotation: rot } : by);
+    for (const w of result.warnings) warnings.push(roundsPerNight > 1 ? { ...w, rotation: rot } : w);
+    for (const [a, bb] of result.pairs) {
+      const k = keyOf(a, bb);
+      meetCount.set(k, (meetCount.get(k) || 0) + 1);
+      for (const t of teams) if (t.id === a || t.id === bb) t.games += gamesPerMatch;
+    }
+  }
 
   const maxRound = await env.DB.prepare(
     "SELECT COALESCE(MAX(round),0) AS r FROM matches WHERE event_id=?1 AND deleted_at IS NULL"
   ).bind(id).first();
   const round = (maxRound.r || 0) + 1;
-  let cfg = {}; try { cfg = JSON.parse(ev.config_json || "{}") || {}; } catch { cfg = {}; }
   const pointsTo = Number(b.pointsTo) || cfg.pointsTo || 21;
   const cap = Number(b.cap) || cfg.cap || pointsTo + 2;
   const courts = Math.max(1, Number(b.courts) || ev.court_count || 4);
 
-  let court = 1;
-  for (const [a, bb] of pairs) {
-    await env.DB.prepare(
-      `INSERT INTO matches (org_id, event_id, stage, round, court, team_a_id, team_b_id, points_to, cap)
-       VALUES (?1,?2,'pool',?3,?4,?5,?6,?7,?8)`
-    ).bind(ev.org_id, id, round, court, a, bb, pointsTo, cap).run();
-    court = court % courts + 1;
+  // ONE round for the whole night; play order rides game_number. A pairing's games share a court
+  // (played back to back); the court cycles per PAIRING so a team lands wherever the night takes
+  // it — different courts across rotations is the owner's stated shape, not a defect.
+  let court = 1, inserted = 0;
+  for (let rot = 1; rot <= roundsPerNight; rot++) {
+    for (const [a, bb] of nights[rot - 1] || []) {
+      for (let g = 1; g <= gamesPerMatch; g++) {
+        // game_number is NOT NULL DEFAULT 1 on live (measured) — a plain night's single game IS
+        // game 1, so the number is always bound; a structured night counts on up from there.
+        const gameNo = (rot - 1) * gamesPerMatch + g;
+        await env.DB.prepare(
+          `INSERT INTO matches (org_id, event_id, stage, round, court, team_a_id, team_b_id, points_to, cap, game_number)
+           VALUES (?1,?2,'pool',?3,?4,?5,?6,?7,?8,?9)`
+        ).bind(ev.org_id, id, round, court, a, bb, pointsTo, cap, gameNo).run();
+        inserted++;
+      }
+      court = court % courts + 1;
+    }
   }
-  await audit(env, ctx, "league.week.generate", "events", id, { round, matches: pairs.length, byes: byes.length });
+  await audit(env, ctx, "league.week.generate", "events", id,
+    { round, matches: inserted, byes: byes.length, roundsPerNight, gamesPerMatch });
 
   // M12 Phase B: claim this week's courts on the facility calendar. Never blocks the week.
+  // The DEFAULT window scales with the night's rotations; an explicit weekMinutes wins.
   let facility_claim = null;
   try {
     facility_claim = await autoClaimForEvent(env, ctx, ev,
-      { courts, budgetMinutes: Number(b.weekMinutes) || cfg.weekMinutes || 180, weekRound: round });
+      { courts, budgetMinutes: Number(b.weekMinutes) || cfg.weekMinutes || 180 * roundsPerNight, weekRound: round });
   } catch (e) { console.error("autoclaim failed", e); facility_claim = { skipped: "Court claim failed — book manually on the Facility calendar." }; }
 
-  return json({ ok: true, round, matches: pairs.length, byes, warnings, facility_claim });
+  return json({ ok: true, round, matches: inserted, byes, warnings,
+    rounds_per_night: roundsPerNight, games_per_match: gamesPerMatch, facility_claim });
 }
 
 async function deleteWeek(env, ctx, id, round) {

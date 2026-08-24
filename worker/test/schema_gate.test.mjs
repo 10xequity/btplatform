@@ -146,7 +146,7 @@ test("pad produces the 4-digit form used in filenames and the ledger", () => {
   assert.equal(pad(2026), "2026");
 });
 
-test("the real db/migrations directory parses cleanly and reports 0052", () => {
+test("the real db/migrations directory parses cleanly and reports 0053", () => {
   // This number is a deliberate ratchet, not a nuisance: it reddens on every new migration and
   // makes whoever added one confirm the scanner still reads the whole directory. Bump it in the
   // same commit as the migration, AFTER the ledger row exists in live D1 (v0.60.0 → 0036;
@@ -202,10 +202,17 @@ test("the real db/migrations directory parses cleanly and reports 0052", () => {
   // pragma_table_info('users') showed default_org_id present, and `COUNT(*) WHERE
   // default_org_id IS NOT NULL` came back 0 of 1 users: nobody holds a default, so the deploy
   // changes where nobody lands. The column is a PREFERENCE and the foreign key is NOT its
-  // permission check — the route's role join is, and default_org.test.mjs pins both directions.)
+  // permission check — the route's role join is, and default_org.test.mjs pins both directions.
+  // THIRTEENTH time 2026-08-24: migration 0053 (matches.forfeit_by, §-1r RF-3, owner ruling
+  // 2026-08-24) — additive, ONE nullable TEXT column ('a'|'b', NULL = played). The flag, not the
+  // 25-0 score, carries the one-point differential rule — an EARNED shutout keeps its points.
+  // Moved once live D1 answered MAX(version)='0053', COUNT(*)=53, pragma_table_info('matches')
+  // showed forfeit_by present and nullable, and `COUNT(*) WHERE forfeit_by IS NOT NULL` came back
+  // 0: no match was ever a forfeit until a director records one, so the deploy rescored nothing.
+  // league_night.test.mjs pins the write, the ±1 rule, and the earned-shutout discriminator.)
   const { highest, files, unparseable } = scanMigrations(DEFAULT_DIR);
   assert.deepEqual(unparseable, [], `unparseable migration filenames: ${unparseable.join(", ")}`);
-  assert.equal(highest, 52);
+  assert.equal(highest, 53);
   assert.ok(files >= 20, `expected at least 20 .sql files, saw ${files}`);
 });
 

@@ -1,5 +1,37 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.192.0 — 2026-08-24
+
+Batch 4 — the two owner-unlocked league engines, one release.
+
+- **RF-2 Unit B (owner rule 2026-08-24: "2 games to 21, A") — the structured league night.**
+  The generate press takes "Rounds tonight" (1-3) and "Games per matchup" (1-2): each rotation
+  re-pairs ALL teams with meet-counts and games updated between rotations (fresh opponents
+  preferred — 4 teams over 3 rotations is a full round robin; a rotation-1 bye gets priority
+  next rotation), a pairing's two games share a court back to back, and teams move courts
+  across the night. The night stays ONE week number — play order rides `game_number`, the
+  axis tournament pools already write — so every board/print/standings surface keeps working.
+  Structured weeks render "Game N" and the copy/CSV/email shapes carry it. Defaults unchanged
+  (a plain single-game night is byte-identical). The facility claim's default window scales
+  with rotations. No migration.
+- **RF-3 forfeit half (owner ruling 2026-08-24, confirmed "yes") — migration 0053.**
+  `matches.forfeit_by` ('a'|'b', NULL = played), applied to live D1 and read back (ledger
+  0053/53, zero pre-existing forfeits). The ONE score writer takes `{ forfeit_by }`: stores
+  the conventional points_to-0 for the opponent plus the flag; a typed correction clears the
+  flag; junk refuses in a sentence. Standings count a forfeit as a full win/loss but ONE point
+  of differential either way — and an EARNED shutout keeps its full points (the flag, not the
+  score, carries the rule; the discriminator is pinned). The league score modal offers
+  one-press "X forfeits"; forfeited rows read "25-0 · forfeit".
+- **PROMPT.md v1.3 (owner points 4+5):** Gemini reviews batch every THIRD loop; missed files
+  carry forward; never-reviewed code joins the backlog (2-3 modules per review loop). §8.3
+  documents the pending list's home; §-1r RF-19 tracks the backlog.
+- Owner points 3 and 6-10 recorded: RF-16 refined (two-way, permission-gated admin/member
+  switch), RF-19 Gemini backlog, RF-20 copy consistency sweep, RF-21 load/speed tests,
+  RF-22 test-data regen + field-count stress, RF-23 repeated-press audit.
+
+Suite 2208 -> 2215 across 149 files (+1: league_night.test.mjs, real-router, watched red).
+Migration 0053 (additive) applied live before push. No new page, one extended route contract.
+
 ## v0.191.0 — 2026-08-24
 
 Batch 3 — five units, one release (owner's batch mode).
