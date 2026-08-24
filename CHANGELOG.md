@@ -1,5 +1,15 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.194.0 — 2026-08-24
+
+**The owner's 2026-08-24 design batch, second half — the profile-icon menu, the schedule measured and repaired, the theme picker from the button (§-1r RF-16 + RF-14 + RF-15).**
+
+- **RF-16 — the profile-icon menu (AMENDS RF-12(1)).** The member header's Sign-out button is now a profile icon opening a menu: Notifications (with the unread count as a counter on the icon itself), the Account group (My Profile · Membership · Settings · Help & FAQ), and Sign out — all off the left rail, which slims to Home · Inbox · Explore · Player Library + Play. His refinement lands two-way: a **Switch to admin** appears in the menu ONLY for accounts whose server-signed `/api/me` role is staff/admin (never a client hint), routed through the act-as clear so a "Viewing as member" preview can't trap anyone; the preview's Exit pill stays as its state indicator, and the admin side's existing "View as member" is the reverse switch (measured already-built, now pinned). Guards rewritten to his new word, never deleted: `header_shell` v4.0, `header_actions` v5.0, `member_nav_paint` v2.0.
+- **RF-14 — the Event Schedule, all three claims measured on the live page in both themes.** (1) "Does not list anything properly": the window filtered on `starts_at` alone, so the running league (Aug 12 → Oct 7) vanished from the list mid-season — the window is now an **overlap** test (server) and the list judges an event's **end** (client). (2) "Months view is not even" was literal: `repeat(7, 1fr)` let one long event name blow up its column and **clip Friday/Saturday — two of five live events — out of the grid**; columns are now `minmax(0, 1fr)`. (3) Tile contrast: the event tile's fill rises 16% → 30% primary (hover 40%), ink pinned to `var(--text)`, ≥7:1 computed across all six theme blocks. New guard file `schedule_window.test.mjs`; `events_calendar` v2.1.
+- **RF-15 — the theme picker opens from the button.** The color choice already existed (the four templates + Light/Dark, `mountPicker`, on Settings and the admin Appearance modal since v0.160.0); what was missing was reach. `BT_THEME.attachPicker` (config.js v0.8.0) makes the ◐ open a popover mounting the SAME six chips on every shell — and the four shell-less pages (check-in, kiosk, waiver signing, guardian landing) gain the button plus the pre-paint saved-theme read three of them never had, so a choice there survives reload. The ◐'s aria-label ("Toggle dark or light theme", now false) swept to "Theme and colors" on 59 pages.
+
+Suite 2230 → **2255** (every new assertion watched red first) · test files 149 → **150** · no migration · README's ledger row corrected 0052 → 0053 (stale since the forfeit migration shipped).
+
 ## v0.193.0 — 2026-08-24
 
 Batch 5 — six units under the new in-loop review cadence (owner correction 2026-08-24).
