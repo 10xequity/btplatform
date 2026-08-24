@@ -1,9 +1,11 @@
 # SESSION PROMPT OF RECORD — Boomtown Platform
 
-**File:** `PROMPT.md` · **Version:** v1.1 · **Created:** 2026-08-16 · **Updated:** 2026-08-23
-**v1.1 (owner request 2026-08-23):** §8 gains §8.1 (the review block is a paste-ready Gemini prompt
-that asks Gemini to reply Claude-ready) and §8.2 (Claude may run the `gemini-review` skill / MCP
-in-loop and measure the findings).
+**File:** `PROMPT.md` · **Version:** v1.2 · **Created:** 2026-08-16 · **Updated:** 2026-08-23
+**v1.2 (owner request 2026-08-23):** §8 rewritten — the Gemini API is loaded, so the session RUNS the
+review in-loop and the close REPORTS only the results + what was kept vs rejected (no paste-ready
+prompt or diff). Retires v1.1's §8.1 paste-ready block.
+**v1.1 (owner request 2026-08-23):** §8 gained §8.1 (paste-ready Gemini prompt) and §8.2 (Claude may
+run the review in-loop) — §8.1 now superseded by v1.2.
 **Status:** ACTIVE — the standing half of every session prompt. Read from disk at session start.
 **Companion:** `RALPH.md` (the loop's instruction set) · `LOOP.md` (the ledger)
 
@@ -202,33 +204,27 @@ Close per RALPH PHASE 4: ledger, handoff §1 row by row, next-session prompt, re
 loop WORKING, not a failure** — the actionable queue has been empty since v0.166.0 and the
 remaining gates are all owner-side.
 
-## §8. OWNER RIDER — carry this
+## §8. OWNER RIDER — the Gemini review, run in-loop and reported briefly
 
-**The owner asked (2026-08-15) for each session's base code to be reviewable in Gemini.** End the
-session with the release's substantive diff in ONE paste-ready fenced block, labelled for external
-review, after the ledger is closed. State what mechanical churn (busters, uniform sweeps) is
-excluded and show one representative instance. **A session that ships nothing says plainly that
-there is no code to review.**
+**The owner asked (2026-08-15) for each session's base code to be reviewed in Gemini; the Gemini API
+is now loaded (owner 2026-08-23), so the session RUNS the review itself.** After the release is
+verified, run the `mcp__gemini-code-reviewer__*` review in-loop (`review_specific_files` on the
+substantive files — `review_recent_changes` TRUNCATES on the buster churn of a ~75-file release),
+MEASURE each finding against the real code (§C: a review is a report to measure — a premise is often
+refuted by a server-side filter or an existing guard the diff does not show), and fold the validated
+ones (or record them in §-1c).
 
-**§8.1 — THE REVIEW BLOCK IS A PASTE-READY GEMINI PROMPT (owner request 2026-08-23).** His words:
-*"in future gemini code review, please add the prompt instructions and code for gemini, and have
-gemini also write back the answer back with a prompt for claude."* So the fenced block is not just a
-diff — it opens with a short instruction to Gemini (what this is, what to look for: correctness,
-security, a11y, and whether a flagged issue can actually occur given the code shown), then the
-substantive diff, then a closing instruction telling Gemini to **reply as a Claude-ready prompt** —
-findings ranked, each labelled [FACT]/[INTERPRETATION]/[SPECULATION], each with enough context that
-Claude can MEASURE it (§C: a review is a report to measure — Gemini's premise is often refuted by a
-server-side filter or an existing guard the diff does not show). Keep it one fenced block he can copy
-whole into Gemini.
+**§8.1 — THE CLOSE REPORTS THE RESULTS, NOT THE PROMPT OR THE DIFF (owner request 2026-08-23).** His
+words: *"No need to display the gemini points or prompt, just the results and what was kept vs
+rejected."* So do NOT emit a paste-ready Gemini prompt or the diff any more. The close carries a short
+plain-English line: the review's verdict, and for each finding whether it was KEPT (folded, and in
+which release) or REJECTED (and why — measured false, can't-fire, out-of-scope). If the review found
+nothing actionable, say so in one line. A session that ships no code says plainly there is nothing to
+review.
 
-**§8.2 — CLAUDE CAN RUN THE GEMINI REVIEW ITSELF (automation, owner asked 2026-08-23).** This
-environment has a `gemini-review` skill and `mcp__gemini-code-reviewer__*` MCP tools
-(`review_recent_changes` / `review_specific_files`). When they are reachable, a session MAY run the
-Gemini review in-loop after the release is verified, MEASURE each finding against the real code, and
-fold the validated ones (or record them in §-1c) — closing the paste-back loop the owner has been
-doing by hand. Still EMIT the §8.1 paste-ready block regardless, so he can run his own review; the
-in-loop run is a convenience, not a replacement, and a Gemini finding is DISTRUSTED prose like any
-other (measure before building).
+**§8.2 — IF THE REVIEW IS UNREACHABLE.** If the `gemini-review` MCP is not reachable in-loop (no key,
+headless), say so in one line and skip it — do not reconstruct a paste-ready block by hand (retired by
+§8.1). A Gemini finding is DISTRUSTED prose like any other: measure before building.
 
 ## §9. DEPLOY HAZARDS
 
