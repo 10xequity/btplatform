@@ -1,5 +1,5 @@
 /* Boomtown Platform — Admin sidebar (shared)
-   Version: v2.23 · Date: 2026-08-16 · Ships in: v0.160.0
+   Version: v2.24 · Date: 2026-08-24 · Ships in: v0.194.0 (v2.23 v0.160.0)
    v2.23 (§-1j T2-15 / W1): the ◐ toggle's body delegates the flip to the theme service
    (config.js's BT_THEME — the one theme-state writer, both shells; the call literal appears
    ONLY in code so header_shell's verdict cannot be satisfied by this comment — D-33's class),
@@ -853,17 +853,14 @@
   }
 
   /* v2.19: theme toggle — SINGLE SOURCE. The shared inline <head> snippet applies the saved
-     (or system) theme BEFORE first paint; this listener only flips + persists. Fired often →
-     the swap itself is instant, no transition (emil: no animation on high-frequency actions). */
+     (or system) theme BEFORE first paint. v2.24 (RF-15, owner 2026-08-24): the ◐ opens the
+     six-chip picker — BT_THEME.attachPicker binds the click and owns the popover; the flip is
+     the picker's first two chips. The Appearance modal below stays as a second door to the SAME
+     mountPicker (a named control admins already know). */
   (function themeToggle() {
     const t = document.getElementById("themeToggle");
     if (!t) return;
-    t.addEventListener("click", () => {
-      /* v2.23 (T2-15): the flip is BT_THEME's — mode toggles instantly, and the side you land
-         on restores the template you last used there (or the plain default). */
-      BT_THEME.toggleMode();
-      syncThemeColor();
-    });
+    if (window.BT_THEME) BT_THEME.attachPicker(t, () => syncThemeColor());
     /* v2.23 (T2-15/W1): the Appearance entry — the template picker behind a NAMED control,
        injected so the static headers stay untouched. Shares config.js's one picker. */
     const ap = document.createElement("button");

@@ -1,5 +1,5 @@
 /* Boomtown Platform — App Shell
-   Version: v0.10.0 · Date: 2026-08-24 · Ships in: v0.177.0 (v0.10.0 in v0.193.0)
+   Version: v0.11.0 · Date: 2026-08-24 · Ships in: v0.177.0 (v0.11.0 in v0.194.0)
    v0.10.0 (§-1r RF-17, owner 2026-08-24 "Default view to home"): completing a sign-in with no
    carried return page lands on home.html — the member's own dashboard — instead of this public
    grid. A SIGNED-IN member who navigates here (the rail's Explore item) still gets the grid;
@@ -52,9 +52,11 @@
      disagreed with this one. Every other surface — 38 admin pages via admin-nav.js and 17 member
      pages via site-nav.js — already delegates to BT_THEME; index.html was the 56th and the only
      holdout. config.js loads at index.html:33, ahead of this script, so the service is always there.
-     THIS FILE STILL OWNS THE LISTENER, deliberately: site-nav.js gates its own binding on
-     #btHdrMail, which index.html does not carry, precisely so the two cannot double-bind. */
-  themeToggle.addEventListener("click", () => { window.BT_THEME.toggleMode(); });
+     THIS FILE STILL OWNS THE HANDOFF, deliberately: site-nav.js gates its own binding on
+     #btHdrMail, which index.html does not carry, precisely so the two cannot double-bind.
+     v0.11.0 (RF-15, owner 2026-08-24): the ◐ opens the six-chip picker — attachPicker binds the
+     click and owns the popover; the flip is the picker's first two chips. */
+  window.BT_THEME.attachPicker(themeToggle);
 
   /* ---------- config guard (catches stale cached config.js) ---------- */
   if (!API || API.includes("PENDING")) {

@@ -15,6 +15,10 @@
      drop is cleared, not bounced. The "Viewing as member — Exit" pill RIDES: it stays the preview
      mode's state indicator and exit. The reverse direction ALREADY EXISTS: admin-nav.js's
      "View as member" (btViewMember). Guards: header_actions v5.0, member_nav_paint v2.0.
+   · ALSO in v2.24 (§-1r RF-15): the ◐ handoff — this file no longer binds the toggle itself; it
+     hands the button to BT_THEME.attachPicker (config.js), whose popover mounts the six-chip
+     picker. The v2.19 "instant flip" contract is SUPERSEDED by his 2026-08-24 word ("Theme
+     picker should be available from the button"); the flip is the picker's first two chips.
    v2.23 (v0.193.0, §-1r RF-17, owner 2026-08-24): the rail's brand ROW is REMOVED — his words:
    "Remove the Boomtown athletics button from the menu, it is redundant to explore and the top
    left button/header." The Explore rail item keeps index.html reachable (no last-way-out lost).
@@ -86,7 +90,7 @@
    falls back to `roles[0]`, which handed a caller their role in ANOTHER org when they had none in
    the org on screen. Both are presentation-only — requireStaff re-checks userId + orgId on every
    admin route — but presentation is what was reported. Guards: header_actions.test.mjs.
-   File: web/assets/site-nav.js · Version: v2.23 · Date: 2026-08-22 · Ships in: v0.180.0
+   File: web/assets/site-nav.js · Version: v2.24 · Date: 2026-08-24 · Ships in: v0.194.0
    v2.23 (owner req 2026-08-22): "Sub-Finder" (subs.html) added to the signed-in Play group — the
    sub finder is its own module now (moved off leagues.html); one rail button leads to it.
    v2.11: header "Admin" switch (owner 2026-08-02) — staff/admin who are also players get a
@@ -227,10 +231,11 @@
   const canonHdr = !!document.getElementById("btHdrMail");
   if (canonHdr) {
     const tt = document.getElementById("themeToggle");
-    if (tt) tt.addEventListener("click", () => {
-      /* v2.19 (T2-15): the flip is BT_THEME's — mode toggles instantly, and the side you land
-         on restores the template you last used there (or the plain default). */
-      BT_THEME.toggleMode();
+    /* v2.24 (RF-15, owner 2026-08-24): the ◐ opens the six-chip picker — BT_THEME.attachPicker
+       binds the click and owns the popover; this onChange keeps the meta theme-color and
+       settings.html's #themeNow label in step, exactly as the old instant flip did. (The flip
+       itself is the picker's first two chips.) */
+    if (tt && window.BT_THEME) BT_THEME.attachPicker(tt, () => {
       syncThemeColor();
       const lbl = document.getElementById("themeNow"); /* settings.html label, if present */
       if (lbl) lbl.textContent = BT_THEME.describe();

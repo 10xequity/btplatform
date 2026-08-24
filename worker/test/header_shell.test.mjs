@@ -111,13 +111,14 @@ const navSwitcherVerdict = (src) =>
   persistsOrgChoice(src) &&
   src.includes("dataset.orgSwitchHref");
 
-/** admin-nav.js must own the theme toggle listener — and since v0.160.0 (T2-15) the flip's
-    PERSISTENCE lives in BT_THEME (config.js), so the listener's load-bearing line is the
-    delegation. The reverts-on-next-page failure this verdict exists for is now caught by
-    themePersistVerdict below, which follows the write to its one home. */
+/** admin-nav.js must own the theme toggle HANDOFF — v4.1 (RF-15, owner 2026-08-24: "Theme picker
+    should be available from the button, not just from menu"): the ◐ no longer blind-flips; each
+    shell hands the element to BT_THEME.attachPicker, which opens the six-chip picker (the SAME
+    mountPicker Settings and the admin Appearance modal mount — one judgement, third mount).
+    The flip's PERSISTENCE stays in BT_THEME (themePersistVerdict follows the write). */
 const navThemeVerdict = (src) =>
   src.includes('document.getElementById("themeToggle")') &&
-  src.includes("BT_THEME.toggleMode()");
+  src.includes("BT_THEME.attachPicker(");
 /** config.js's BT_THEME must actually persist a flip: choose() writes the mode through put(),
     and put() is a real setItem. Strip either and every toggle reverts on the next page. */
 const themePersistVerdict = (src) =>
@@ -234,11 +235,11 @@ test("NC-3: stripping the change-persistence line from admin-nav.js fails the sw
 });
 
 test("NC-4: stripping either link of the theme chain fails its verdict", () => {
-  // Link 1: the listener stops routing through the one writer.
+  // Link 1: the shell stops handing the button to the service.
   const nav = read("assets/admin-nav.js");
-  const navMutated = nav.replace("BT_THEME.toggleMode()", "");
+  const navMutated = nav.replace("BT_THEME.attachPicker(", "x(");
   assert.notEqual(navMutated, nav, "the nav mutation did not land — this control tests nothing");
-  assert.equal(navThemeVerdict(navMutated), false, "a flip that bypasses BT_THEME must fail");
+  assert.equal(navThemeVerdict(navMutated), false, "a ◐ that bypasses BT_THEME must fail");
   // Link 2: the writer stops persisting.
   const cfg = read("assets/config.js");
   const cfgMutated = cfg.replace('put("bt_theme", mode)', "");
@@ -310,10 +311,11 @@ function memberHeaderVerdict(html) {
   return { ok: true, header: h };
 }
 
-/* site-nav.js single-source behavior verdicts. The theme flip delegates to BT_THEME since
-   v0.160.0 (T2-15); persistence is asserted at its one home by themePersistVerdict above. */
+/* site-nav.js single-source behavior verdicts. v4.1 (RF-15): the shell HANDS the ◐ to
+   BT_THEME.attachPicker — the service binds the click and opens the picker; persistence is
+   asserted at its one home by themePersistVerdict above. */
 const siteNavThemeVerdict = (src) =>
-  src.includes('tt.addEventListener("click"') && src.includes("BT_THEME.toggleMode()");
+  src.includes("BT_THEME.attachPicker(");
 const siteNavLogoutVerdict = (src) =>
   src.includes('lo.addEventListener("click"') && src.includes('"/api/auth/logout"');
 /* a member page-script keeping a theme copy double-binds → dead button (v0.52.0 class) */
@@ -337,7 +339,9 @@ const bindsListener = (src, id) => {
   const bound = new RegExp(`(?:const|let|var)\\s+([A-Za-z_$][\\w$]*)\\s*=\\s*document\\.getElementById\\("${id}"\\)`).exec(src);
   return !!(bound && new RegExp(`\\b${bound[1]}\\s*\\.\\s*(onclick|addEventListener)`).test(src));
 };
-const delegatesTheme = (src) => /BT_THEME\s*\.\s*toggleMode\s*\(/.test(src);
+/* v4.1 (RF-15): delegation is EITHER service door — toggleMode (the old flip, still a valid
+   primitive for a page that wants it) or attachPicker (the picker handoff every shell uses now). */
+const delegatesTheme = (src) => /BT_THEME\s*\.\s*(toggleMode|attachPicker)\s*\(/.test(src);
 const privateThemeWriter = (src) =>
   /function setTheme\s*\(/.test(src) || /documentElement\.dataset\.theme\s*=/.test(src);
 
@@ -358,8 +362,8 @@ const LOGOUT_OWNERS = new Set(["site-nav.js", "admin-nav.js", "app.js"]);
 
 test("RF-9: index.html's theme toggle delegates to the one writer and keeps no private setTheme", () => {
   const src = read("assets/app.js");
-  assert.match(src, /BT_THEME\s*\.\s*toggleMode\s*\(/,
-    "app.js no longer delegates the ◐ to BT_THEME.toggleMode() — index.html was the 56th page and the only holdout");
+  assert.match(src, /BT_THEME\s*\.\s*attachPicker\s*\(/,
+    "app.js no longer hands the ◐ to BT_THEME.attachPicker — index.html was the 56th page and the only holdout (RF-15: the picker opens from the button)");
   assert.ok(!privateThemeWriter(src),
     "a private theme writer is back in app.js; it can only write half the state — data-theme without data-template, which tokens.css then overrides at equal specificity");
 });
@@ -386,8 +390,14 @@ test("NC-RF9: the rebuilt copy check catches the PRE-FIX spelling and clears the
 
   assert.deepEqual(memberPageCopyKeys(read("assets/schedule.js")), [],
     "an innocent page script must stay clean, or the widened binding pattern over-reaches");
-  assert.ok(bindsListener(read("assets/site-nav.js"), "themeToggle"),
-    "the sanctioned owner must be VISIBLE to the binding check — it passes on the property, not by being unmatchable");
+  /* v4.1 (RF-15): the shells no longer bind the ◐ themselves — they hand the element to
+     BT_THEME.attachPicker, and the SERVICE binds it. The positive control moves with the
+     binding: attachPicker's body must install the click listener, or no shell's ◐ does anything. */
+  const cfg = read("assets/config.js").replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
+  const at = cfg.indexOf("function attachPicker(");
+  assert.ok(at > -1, "BT_THEME.attachPicker is gone — every shell's ◐ went dead");
+  assert.ok(cfg.slice(at).includes('addEventListener("click"'),
+    "attachPicker no longer binds the button — the service is the one binder now, and it isn't binding");
 });
 
 test("the 16 canonical member pages carry the complete member header, byte-identical", () => {
@@ -491,11 +501,51 @@ test("NC-M4: a member header carrying an org switcher fails (members act in one 
   assert.equal(memberHeaderVerdict(html).ok, false);
 });
 
-test("NC-M5: stripping the theme-service delegation from site-nav.js fails the theme verdict", () => {
+test("NC-M5: stripping the theme-service handoff from site-nav.js fails the theme verdict", () => {
   const src = read("assets/site-nav.js");
-  const mutated = src.replace("BT_THEME.toggleMode()", "x()");
+  const mutated = src.replace("BT_THEME.attachPicker(", "x(");
   assert.notEqual(mutated, src, "the mutation did not land — this control tests nothing");
   assert.equal(siteNavThemeVerdict(mutated), false);
+});
+
+test("RF-15: attachPicker renders THROUGH mountPicker — one chip judgement, a third mount", () => {
+  /* The popover must be the SAME six chips Settings and the admin Appearance modal mount. A
+     picker that re-implements its own chip list drifts from the palette roster the moment a
+     template is added — the one-judgement rule that put BT_CAL in config.js applies here too. */
+  const cfg = read("assets/config.js").replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
+  const at = cfg.indexOf("function attachPicker(");
+  assert.ok(at > -1, "attachPicker is gone");
+  const body = cfg.slice(at, cfg.indexOf("\n  }", at));
+  assert.ok(body.includes("mountPicker("),
+    "attachPicker no longer mounts mountPicker's chips — the button's picker drifted from the one judgement");
+  assert.ok(/aria-expanded/.test(body), "the ◐ no longer mirrors its open state to aria-expanded");
+  assert.ok(/Escape/.test(body), "the picker popover lost its Escape close");
+});
+
+test("RF-15: the four shell-less pages carry the ◐ AND read the saved theme before first paint", () => {
+  /* checkin, kiosk, sign and guardian-complete load no shell script — config.js's
+     DOMContentLoaded fallback binds their button. The pre-paint read is NOT optional: three of
+     the four shipped with data-theme pinned "dark" and no bt_theme reader, so a picker choice
+     would silently revert on the next load — a control reporting success it did not keep. */
+  for (const f of ["checkin.html", "kiosk.html", "sign.html", "guardian-complete.html"]) {
+    const html = read(f);
+    assert.ok(html.includes('id="themeToggle"'), `${f}: no ◐ button (RF-15 — every surface gets one)`);
+    assert.ok(html.includes('localStorage.getItem("bt_theme")'),
+      `${f}: no pre-paint bt_theme read — a picker choice on this page reverts on reload`);
+    assert.ok(html.includes("bt_template"),
+      `${f}: no bt_template read — a color-template choice reverts to the plain mode here`);
+  }
+});
+
+test("NC-M11: an attachPicker that re-implements chips (no mountPicker call) FAILS", () => {
+  const cfg = read("assets/config.js").replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
+  const at = cfg.indexOf("function attachPicker(");
+  assert.ok(at > -1, "attachPicker is gone");
+  const body = cfg.slice(at, cfg.indexOf("\n  }", at));
+  const mutated = body.replace("mountPicker(", "myOwnChips(");
+  assert.notEqual(mutated, body, "mutation did not land — NC is vacuous");
+  assert.equal(mutated.includes("mountPicker("), false,
+    "the verdict must reject a picker that stopped mounting the shared chips");
 });
 
 test("NC-M6: a re-added per-page theme copy fails the no-copy scan (exact subject line)", () => {

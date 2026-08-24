@@ -21,6 +21,7 @@
   <meta name="referrer" content="no-referrer" />
   <title>Confirm a young participant's account</title>
   <script>try{var btTpl=localStorage.getItem("bt_template");if(btTpl)document.documentElement.dataset.template=btTpl;}catch(e){}</script>
+  <script>/* RF-15 pre-paint (v0.194.0): the saved theme + color template, applied before the first stylesheet — without this the page pins dark and any picker choice reverts on reload. */(function(){try{var t=(window.localStorage&&localStorage.getItem("bt_theme"))||(matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.dataset.theme=t;var p=localStorage.getItem("bt_template");if(p)document.documentElement.dataset.template=p;}catch(e){}})();</script>
   <link rel="stylesheet" href="assets/tokens.css?v=0.193.0" />
   <link rel="stylesheet" href="assets/app.css?v=0.193.0" />
   <style>
@@ -55,6 +56,7 @@
   </style>
 </head>
 <body>
+  <button id="themeToggle" class="btn ghost theme-toggle" aria-label="Theme and colors" style="position:fixed;top:10px;right:10px;z-index:60">◐</button>
   <main class="g-wrap">
     <h1 style="font-size:22px;line-height:1.25;margin:0 0 4px">Confirm this account</h1>
     <p class="help-text" style="margin:0 0 18px">

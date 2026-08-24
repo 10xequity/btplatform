@@ -1,5 +1,9 @@
 /* Boomtown Platform — Public Schedule
-   Version: v0.7.2 · Date: 2026-08-23 · Ships in: v0.183.0
+   Version: v0.8.0 · Date: 2026-08-24 · Ships in: v0.194.0
+   v0.8.0 (§-1r RF-14, owner 2026-08-24): the list's "current or upcoming" filter judges the
+   event's END (ends_at || starts_at) — a running multi-week league used to drop off the list
+   the day its start aged past the window while any future event existed. Pairs with the server
+   window's overlap fix (worker/src/schedule.js). Guard: schedule_window.test.mjs.
    v0.7.2 (Gemini review 2026-08-23, round 2): the aria-label's name prefix is CONDITIONAL — a
    nameless event no longer renders a dangling " — " that a screen reader reads as bare punctuation.
    v0.7.1 (Gemini review 2026-08-23): the live-view link gains an aria-label carrying the event
@@ -294,7 +298,12 @@
       postHeight(); return;
     }
     if (mode === "list") {
-      const future = upcoming.filter(e => new Date((e.starts_at || "").replace(" ", "T")) >= new Date(Date.now() - 86400000));
+      /* RF-14 (v0.194.0): "current or upcoming" judges the event's END — a running multi-week
+         league stays listed until it ends (with one future event present, the empty-future
+         fallback below never fires, so a start-judged filter dropped running leagues exactly
+         when the list had anything else to show). ends_at NULL falls back to starts_at: a
+         one-day event keeps the old behavior. Guard: schedule_window.test.mjs. */
+      const future = upcoming.filter(e => new Date(((e.ends_at || e.starts_at) || "").replace(" ", "T")) >= new Date(Date.now() - 86400000));
       el.innerHTML = sortEvents(future.length ? future : upcoming, sortKey, sortRev).map(e => {
         const d = new Date((e.starts_at || "").replace(" ", "T"));
         return `<div class="sched-ev">

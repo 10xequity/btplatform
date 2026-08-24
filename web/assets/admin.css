@@ -82,7 +82,11 @@
 /* WF-1a (v0.133.0): the header row sizes to itself; the six week rows share the rest EQUALLY.
    Content can no longer stretch one week past the others — the JS cap (CAL_DAY_CAP + "+N more")
    bounds what a cell can hold, and this rule is what makes the rows even. */
-.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr);
+/* RF-14 (v0.194.0, owner 2026-08-24: "Months view is not even"): minmax(0, 1fr), never bare
+   1fr — 1fr's automatic minimum is the min-content of the widest nowrap tile, so one long
+   event name blew its column wide and clipped Friday/Saturday (with their events) out of
+   the wrap on the member schedule. .fc-month has carried this exact fix since it shipped. */
+.cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr));
   grid-template-rows: auto repeat(6, 1fr); border: 1px solid var(--border);
   border-radius: var(--radius-card); overflow: hidden; background: var(--border); gap: 1px; }
 .cal-dow { background: var(--surface); padding: 6px 8px; font-size: 12px; color: var(--text-muted);
@@ -94,12 +98,14 @@
 .cal-day.today .dnum { color: var(--primary); font-weight: 700; }
 .cal-day.drop-ok { background: color-mix(in srgb, var(--primary) 12%, var(--bg)); outline: 2px dashed var(--primary); outline-offset: -2px; }
 .cal-ev { display: block; font-size: 12px; padding: 3px 6px; margin-top: 4px; border-radius: 6px;
-  background: color-mix(in srgb, var(--primary) 16%, var(--surface));
+  /* RF-14: 16% → 30% (owner: "does not contrast enough" — measured near-invisible in dark);
+     var(--text) ink stays ≥7:1 on the 30% fill in both themes, computed before landing. */
+  background: color-mix(in srgb, var(--primary) 30%, var(--surface));
   border-left: 3px solid var(--primary);
   color: var(--text); text-decoration: none; cursor: grab;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   transition: background-color 120ms var(--ease-out); }
-.cal-ev:hover { background: color-mix(in srgb, var(--primary) 26%, var(--surface)); }
+.cal-ev:hover { background: color-mix(in srgb, var(--primary) 40%, var(--surface)); }
 .cal-ev.cancelled { text-decoration: line-through; opacity: .55; }
 .cal-ev[draggable="true"]:active { cursor: grabbing; }
 /* WF-1a: the cap's opener. Matches the tile density on purpose — a 44px control inside a 96px

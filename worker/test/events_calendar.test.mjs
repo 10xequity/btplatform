@@ -1,6 +1,13 @@
 /**
  * Boomtown Platform — §-1p WF-1 (§-0 B23): the Events & Programs page
- * File: worker/test/events_calendar.test.mjs · Version: v2.0 · Date: 2026-08-22 · Ships in: v0.176.0
+ * File: worker/test/events_calendar.test.mjs · Version: v2.1 · Date: 2026-08-24 · Ships in: v0.194.0
+ *
+ * v2.1 (§-1r RF-14, owner 2026-08-24): "Months view is not even adjusted on calendar" + "The
+ * color of tiles does not contrast enough" — both measured on the live page in both themes.
+ * Columns pinned to minmax(0, 1fr) (1fr's auto minimum let one nowrap tile blow up its column
+ * and clip Friday/Saturday — with their events — out of the wrap), and the tile fill raised
+ * 16% → 30% primary (hover 26% → 40%) with the ink pinned to var(--text). NCs prove both pins
+ * reject the pre-fix spellings. The window half of RF-14 lives in schedule_window.test.mjs.
  *
  * v2.0 (§-1r RF-7, owner 2026-08-18): "the calendar boxes are STILL not correct" — true for the
  * MEMBER calendar, which never got WF-1's cap, while the admin one has been fixed and guarded
@@ -196,4 +203,59 @@ test("NC-C2: a second cap literal in the member reader FAILS the one-judgement p
   const withOwnCap = blankComments(SCHED) + "\nconst CAL_DAY_CAP = 4;\n";
   assert.match(withOwnCap, /(?:CAL_)?DAY_CAP\s*=\s*\d/,
     "the forbidden-literal scan cannot see the planted literal — shippedCap()'s one-judgement assertion is blind");
+});
+
+/* ==================== v2.1 — RF-14 (owner 2026-08-24): even columns, legible tiles ==================== */
+
+/* "Months view is not even adjusted on calendar" — MEASURED on the live page in both themes
+   (2026-08-24): `repeat(7, 1fr)` means minmax(auto, 1fr), so a day cell's automatic minimum is
+   the min-content of its widest nowrap tile. One long event name blew its column wide, squeezed
+   the others, and pushed FRIDAY AND SATURDAY past the wrap's clipped edge — two of the five live
+   events were INVISIBLE in Month view. minmax(0, 1fr) is the fix: columns share equally, tiles
+   ellipsize inside them. One stylesheet serves both calendars, so the admin grid heals too. */
+const stripCss = (s) => s.replace(/\/\*[\s\S]*?\*\//g, " ");
+const calGridColumns = (css) => {
+  const m = stripCss(css).match(/\.cal-grid \{[^}]*grid-template-columns:\s*([^;]+);/);
+  return m ? m[1].trim() : null;
+};
+
+test("RF-14: the month grid's 7 columns are minmax(0, 1fr) — a long tile cannot blow up its column", () => {
+  assert.equal(calGridColumns(CSS), "repeat(7, minmax(0, 1fr))",
+    "the calendar columns lost their 0 minimum — one nowrap event name makes the columns uneven " +
+    "and clips whole weekdays (with their events) out of the visible grid");
+});
+
+test("NC-RF14a: the pre-fix repeat(7, 1fr) spelling FAILS the column pin", () => {
+  /* anchored WITH the selector — .fc-month (the facility calendar) already carries the exact
+     minmax(0, 1fr) string, so a bare-declaration replace lands on the wrong rule (measured:
+     this NC's first draft mutated .fc-month and reported green against an unfixed .cal-grid) */
+  const mutated = CSS.replace(".cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr))",
+    ".cal-grid { display: grid; grid-template-columns: repeat(7, 1fr)");
+  assert.notEqual(mutated, CSS, "mutation did not land — the .cal-grid rule moved; update this NC");
+  assert.notEqual(calGridColumns(mutated), "repeat(7, minmax(0, 1fr))",
+    "the verdict must reject the auto-minimum spelling — if it passes, the pin is blind");
+});
+
+/* "The color of tiles does not contrast enough" — measured: at a 16% primary mix the dark-theme
+   tile is a near-black chip on a near-black cell (~#332D1C on #0B0B0D). 30% (40% hover) keeps the
+   ink var(--text) at ≥7:1 on the mixed fill in BOTH shipped themes (computed against tokens.css's
+   values before landing) while making the tile itself read as a tile. */
+test("RF-14: the event tile's fill mixes 30% primary (40% on hover) — the tile reads in dark theme", () => {
+  const flat = stripCss(CSS);
+  assert.ok(flat.includes(".cal-ev { display: block;"),
+    "the .cal-ev rule moved — update this pin with its new anchor");
+  assert.ok(/\.cal-ev \{[^}]*color-mix\(in srgb, var\(--primary\) 30%, var\(--surface\)\)/.test(flat),
+    "the tile fill fell back below 30% primary — the owner measured the old 16% as not contrasting enough");
+  assert.ok(/\.cal-ev:hover \{[^}]*color-mix\(in srgb, var\(--primary\) 40%, var\(--surface\)\)/.test(flat),
+    "the hover fill must sit visibly above the resting fill");
+  assert.ok(/\.cal-ev \{[^}]*color: var\(--text\)/.test(flat),
+    "the tile ink left var(--text) — the contrast floor was computed against that ink");
+});
+
+test("NC-RF14b: the pre-fix 16% fill FAILS the tile pin", () => {
+  const mutated = CSS.replace("color-mix(in srgb, var(--primary) 30%, var(--surface))",
+    "color-mix(in srgb, var(--primary) 16%, var(--surface))");
+  assert.notEqual(mutated, CSS, "mutation did not land — the .cal-ev fill moved; update this NC");
+  assert.equal(/\.cal-ev \{[^}]*color-mix\(in srgb, var\(--primary\) 30%, var\(--surface\)\)/.test(stripCss(mutated)), false,
+    "the verdict must reject the 16% fill — if it passes, the pin is blind");
 });

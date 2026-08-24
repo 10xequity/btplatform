@@ -144,7 +144,14 @@ async function feed(env, url, ctx) {
   const orgId = view.org_id || orgParam; // a view locked to an org wins over the query param
 
   const binds = [from, to];
-  let where = "e.deleted_at IS NULL AND e.status IN ('published','in_progress','completed') AND date(e.starts_at) BETWEEN ?1 AND ?2";
+  /* RF-14 (v0.194.0, owner 2026-08-24: "does not list anything properly"): the window is an
+     OVERLAP test, never a starts_at slice. Measured live: a league running Aug 12 → Oct 7
+     vanished from the member list's rolling window (today-7 → +180) the day its start aged past
+     `from` — weeks before it finished. An event is in window when its span
+     [starts_at, ends_at||starts_at] touches [from, to]; a one-day event (ends_at NULL) behaves
+     exactly as before, and NULL starts_at stays excluded (NULL comparisons fail, as they always
+     did). Guard: schedule_window.test.mjs, both directions. */
+  let where = "e.deleted_at IS NULL AND e.status IN ('published','in_progress','completed') AND date(COALESCE(e.ends_at, e.starts_at)) >= ?1 AND date(e.starts_at) <= ?2";
   if (orgId) { binds.push(orgId); where += ` AND e.org_id=?${binds.length}`; }
   if (view.type_filter) {
     const types = view.type_filter.split(",").map(t => t.trim()).filter(Boolean);

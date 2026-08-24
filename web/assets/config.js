@@ -1,5 +1,12 @@
 /* Boomtown Platform — frontend config
-   Version: v0.7.0 · Date: 2026-08-22
+   Version: v0.8.0 · Date: 2026-08-24
+   v0.8.0 (v0.194.0, §-1r RF-15, owner 2026-08-24): BT_THEME.attachPicker — "Theme picker should
+   be available from the button, not just from menu. And option to choose colors should be
+   available." The ◐ opens a compact popover mounting the SAME six chips mountPicker renders on
+   Settings and the admin Appearance modal (one judgement, third mount); Light/Dark are the first
+   two chips, so the flip stays one tap inside the picker. Every shell hands its button here, and
+   a DOMContentLoaded fallback binds shell-less pages (kiosk, check-in, waiver, guardian) that
+   carry the button alone. Guards: header_shell.test.mjs v4.1.
    The ONLY file that changes when the backend URL changes.
    v0.3.0: RENTALS_ENABLED feature flag (owner decision D-M12B-2 — the member court-rental
    request form stays HIDDEN until the owner flips this to true).
@@ -203,5 +210,63 @@ window.BT_THEME = (function () {
       if (onChange) onChange(state());
     });
   }
-  return { templates: TEMPLATES, state, choose, toggleMode, describe, mountPicker };
+  /* RF-15 (v0.194.0): the picker, FROM the button. The click is bound HERE — the service is the
+     one binder — and opens a fixed-positioned popover computed from the button's rect, so no
+     shell has to provide a positioning context. The chips are mountPicker's (mounted once,
+     re-synced on every open so a choice made elsewhere — Settings, the admin Appearance modal —
+     reads back correctly). Closes on Escape (focus returned), outside click, or re-press.
+     Idempotent per button via data-bt-picker: a second attach, including the DOMContentLoaded
+     fallback below, is a no-op, so a shell and the fallback can never double-bind. */
+  function attachPicker(btn, onChange) {
+    if (!btn || btn.dataset.btPicker) return;
+    btn.dataset.btPicker = "1";
+    btn.setAttribute("aria-haspopup", "true");
+    btn.setAttribute("aria-expanded", "false");
+    const pop = document.createElement("div");
+    pop.className = "theme-pop";
+    pop.hidden = true;
+    pop.setAttribute("aria-label", "Theme and colors");
+    const chips = document.createElement("div");
+    chips.className = "tpl-chips";
+    pop.appendChild(chips);
+    document.body.appendChild(pop);
+    let mounted = false;
+    const close = () => { pop.hidden = true; btn.setAttribute("aria-expanded", "false"); };
+    const syncActive = () => {
+      const active = state().template || state().mode;
+      pop.querySelectorAll(".tpl-chip").forEach((chip) => {
+        const on = chip.dataset.choose === active;
+        chip.classList.toggle("active", on);
+        chip.setAttribute("aria-pressed", String(on));
+      });
+    };
+    btn.addEventListener("click", () => {
+      if (!pop.hidden) { close(); return; }
+      if (!mounted) { mounted = true; mountPicker(chips, onChange); }
+      syncActive();
+      const r = btn.getBoundingClientRect();
+      pop.style.top = (r.bottom + 8) + "px";
+      pop.style.right = Math.max(8, window.innerWidth - r.right) + "px";
+      pop.hidden = false;
+      btn.setAttribute("aria-expanded", "true");
+    });
+    document.addEventListener("click", (e) => {
+      if (!pop.hidden && !pop.contains(e.target) && !btn.contains(e.target)) close();
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && !pop.hidden) { close(); btn.focus(); }
+    });
+  }
+
+  return { templates: TEMPLATES, state, choose, toggleMode, describe, mountPicker, attachPicker };
 })();
+
+/* RF-15: the binder of last resort — a page with a ◐ but NO shell script (kiosk, check-in, the
+   waiver page, the guardian landing) gets the picker by carrying the button alone. Runs at
+   DOMContentLoaded, which is AFTER every shell binder (sync scripts and deferred site-nav both
+   precede it), and attachPicker's data-bt-picker guard makes a second attach a no-op — so a
+   shell's onChange always wins where a shell exists. */
+document.addEventListener("DOMContentLoaded", () => {
+  const t = document.getElementById("themeToggle");
+  if (t && !t.dataset.btPicker) window.BT_THEME.attachPicker(t);
+});
