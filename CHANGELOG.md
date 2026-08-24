@@ -1,5 +1,35 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.191.0 — 2026-08-24
+
+Batch 3 — five units, one release (owner's batch mode).
+
+- **RF-1 print polish (the pool sheet) — RF-1 fully closed.** `tournament.css` v0.4: `@page`
+  margins for every print job from Tournament Ops, a named `@page pool` (letter landscape) that
+  only the pool grid asks for, a print fit (the cells drop their 130px screen floor;
+  `table-layout: fixed` shares the page width; nothing scrolls or clips), and a frame — a 2px
+  border and a titled header rule, so the printed sheet reads as a document. The day sheet's job
+  keeps the default page; the print button is untouched. Guards: day_sheet.test.mjs v1.2 (+5).
+- **RF-11 achievements/history — RF-11 fully closed.** profile.js v1.3 adds an "Event history"
+  card: the cross-event check-in list from `GET /api/profile/attendance`, a route that had ZERO
+  web callers since it shipped. Event name, date, staff/self label in plain words, honest empty
+  state, everything escaped. Guards: member_history.test.mjs NEW (+4).
+- **D-39 closed (owner word 2026-08-24: "My events not loading").** home.js v2.4.0 fills the
+  "My events" card — `#myEvList` had shipped a "Loading…" line no script referenced since v2.0.0.
+  It renders `/api/profile/upcoming` (registrations incl. family; independent of the feed's
+  my_events mute, which strips the category from the feed payload). Honest empty and error
+  sentences. Guards: home_my_events.test.mjs NEW (+4, incl. a forbid on feeding the card from the
+  mute-filtered feed category).
+- **D-45 cluster 2 (signup_sheet).** The five raw source reads in signup_sheet.test.mjs now go
+  through blankComments — a commented-out source fails those guards instead of passing them.
+  Re-measured by raw-source-sweep: 5 → 0 raw pairs for the file.
+- **D-46 closed.** default_org.test.mjs's forbidding assertion widened `[^)]*` → `[^;\n]*` so it
+  reaches the paren-ful arrow and single-line function spellings, with a positive control planted
+  per spelling. Measured before widening: live admin-nav.js has zero `all.some(`/`all.find(`
+  sites — no false red possible.
+
+Suite 2195 → 2208 across 148 files (+2 files). No migration, no new page, no route change.
+
 ## v0.190.0 — 2026-08-24
 
 **Batch: RF-8(a) default login brand, RF-2 Unit A league week-nav, D-55 aria-label, D-51 dead links.** Four small items in one release.

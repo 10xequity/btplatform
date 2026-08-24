@@ -257,3 +257,65 @@ test("NC-2: the mode's ONE exit function serves both the afterprint listener and
   const mutated = JS.replace(/exitPrintDay/g, "XXGONE");
   assert.ok(!mutated.includes("exitPrintDay"), "the mutation landed");
 });
+
+/* ═══ RF-1 (v0.191.0): pool-sheet print polish — the page, the fit, the frame ═══ */
+
+/** The FIRST `@media print { … }` rule body, brace-matched — the main print block at the top of
+    the print section (the trailing one-liner block is the [hidden] guard, not this). Anchored on
+    the rule token, so prose mentions in comments are skipped. */
+function poolPrintBlock(css) {
+  const m = /@media print\s*\{/.exec(css);
+  if (!m) return null;
+  const open = m.index + m[0].length - 1;
+  let depth = 0;
+  for (let i = open; i < css.length; i++) {
+    if (css[i] === "{") depth++;
+    else if (css[i] === "}") { depth--; if (depth === 0) return css.slice(open + 1, i); }
+  }
+  return null;
+}
+
+test("RF-1 — the page: @page sets margins and the grid asks for the named landscape page", () => {
+  assert.match(CSS, /@page\s*\{[^}]*margin/,
+    "no plain @page rule — print jobs from this screen have no controlled margins");
+  assert.match(CSS, /@page pool\s*\{[^}]*landscape/,
+    "no named landscape page — a wide courts×rounds grid prints portrait and clips");
+  const body = poolPrintBlock(CSS);
+  assert.ok(body, "tournament.css lost its @media print block");
+  assert.match(body, /#gridPanel\s*\{[^}]*page:\s*pool/,
+    "#gridPanel no longer asks for the pool page — the landscape rule is defined but unused");
+});
+
+test("RF-1 — the fit: in print the grid drops its 130px floor and fixed layout shares the width", () => {
+  const body = poolPrintBlock(CSS);
+  assert.match(body, /\.grid-scroll\s*\{[^}]*overflow-x:\s*visible/,
+    "the grid still prints inside a scroll container — everything past the fold clips");
+  assert.match(body, /\.pool-grid\s*\{[^}]*table-layout:\s*fixed/,
+    "the grid keeps content-sized columns in print — wide events overflow the page");
+  assert.match(body, /\.pool-grid th, \.pool-grid td\s*\{[^}]*min-width:\s*0/,
+    "the cells keep their 130px screen floor in print — the fit cannot happen");
+});
+
+test("RF-1 — the frame: the printed sheet carries a border and a titled header", () => {
+  const body = poolPrintBlock(CSS);
+  assert.match(body, /#gridPanel\s*\{[^}]*border:\s*2px solid #000/,
+    "the sheet lost its frame — the print reads as a screen dump again");
+  assert.match(body, /\.print-title\s*\{[^}]*border-bottom/,
+    "the print title lost its header rule — the frame has no titled header");
+});
+
+test("RF-1 NC — a print block that stops fitting the grid is caught (mutation on the real CSS)", () => {
+  const mutated = CSS.replace("table-layout: fixed", "table-layout: auto");
+  assert.notEqual(mutated, CSS, "the mutation did not land — table-layout: fixed is not in the CSS");
+  assert.ok(!/\.pool-grid\s*\{[^}]*table-layout:\s*fixed/.test(poolPrintBlock(mutated)),
+    "the fit check still passes with the fit removed — it is not reading the print block");
+});
+
+test("RF-1 NC — a renamed page rule is caught (mutation on the real CSS)", () => {
+  // Anchor on the RULE's bytes ("@page pool {"), not the phrase — the header comment also says
+  // "@page pool", and a first-occurrence replace there leaves the real rule standing.
+  const mutated = CSS.replace("@page pool {", "@page poolZZ {");
+  assert.notEqual(mutated, CSS, "the mutation did not land — the @page pool rule is not in the CSS");
+  assert.ok(!/@page pool\s*\{[^}]*landscape/.test(mutated),
+    "the named-page check still passes after the rename — the anchor is spelling-blind");
+});

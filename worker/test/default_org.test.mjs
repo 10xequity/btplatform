@@ -1,6 +1,9 @@
 /**
  * Boomtown Platform — the account's own default organization (§6 item 1, owner raised 2026-08-06)
- * File: worker/test/default_org.test.mjs · Version: v1.0 · Date: 2026-08-17 · Ships in: v0.169.0
+ * File: worker/test/default_org.test.mjs · Version: v1.1 · Date: 2026-08-24 · Ships in: v0.169.0
+ * v1.1 (D-46, v0.191.0): the forbidding assertion widened `[^)]*` → `[^;\n]*` so it reaches the
+ * paren-ful arrow and single-line function spellings, with a positive control planted PER spelling.
+ * Measured before widening: live NAV has zero `all.some(`/`all.find(` sites — no false red possible.
  *
  * WHAT THIS PINS. `users.default_org_id` (migration 0052) is a PREFERENCE, not a permission. The
  * column's `REFERENCES orgs(id)` proves only that the org exists; it says nothing about whether
@@ -176,7 +179,13 @@ test("admin-nav.js CONSULTS the default, and only inside the role-filtered list"
     "admin-nav.js never mentions default_org_id in live code — the column reaches the client and is ignored");
   // The preference is only ever honoured through `orgs`, which is already role-filtered above it.
   // Reading it off `all` (every org on the instance) would turn a preference into an access grant.
-  assert.doesNotMatch(NAV, /all\.(some|find)\([^)]*default_org_id/,
+  // D-46 (v0.191.0): widened from `[^)]*` — which could not cross a `)`, so it saw the paren-less
+  // arrow only — to `[^;\n]*`, which reaches every same-statement spelling: `o =>`, `(o) =>`, and a
+  // single-line `function (o) {…}`. Measured before widening: live NAV has ZERO `all.some(`/`all.find(`
+  // sites, so the wider net cannot redden correct code. Residual (named, not hidden): a callback
+  // whose default_org_id sits on a LATER line still evades — the controls below plant the shapes
+  // this regex is claimed to see, so the claim stays measured.
+  assert.doesNotMatch(NAV, /all\.(some|find)\([^;\n]*default_org_id/,
     "the default is being resolved against the UNFILTERED org list — that is an access path, not a preference");
 });
 
@@ -200,13 +209,21 @@ test("NC: those two literals COMMENTED OUT fail this guard — they are code, no
   }
   /* And the forbidding assertion above must NOT be blanked — pinned, so a later "consistency" edit
      goes red carrying its reason. */
-  /* The planted shape is PAREN-LESS on purpose. Measured 2026-08-18: that regex's `[^)]*` cannot
-     cross a `)`, so it reaches `all.some(o => ...)` and NOT `all.some((o) => ...)`. Recorded as
-     §-1c D-46 rather than widened here — widening a FORBIDDING assertion can redden correct code,
-     and that is its own unit. A control tests the check that exists, not the one I wish existed. */
-  const planted = NAV + "\n// const x = all.some(o => o.default_org_id);\n";
-  assert.match(planted, /all\.(some|find)\([^)]*default_org_id/,
-    "raw view: a commented-out unfiltered lookup is still visible to the forbidding check");
-  assert.doesNotMatch(blankComments(planted), /all\.(some|find)\([^)]*default_org_id/,
+  /* D-46 CLOSED (v0.191.0): the regex was `[^)]*`, which cannot cross a `)`, so it reached the
+     paren-less arrow only — the OTHER spellings are the ones the rest of NAV actually uses, so the
+     likelier regression was invisible. Now `[^;\n]*`, and every spelling it is claimed to see is
+     planted here as its own positive control. A control tests the check that exists. */
+  const FORBID = /all\.(some|find)\([^;\n]*default_org_id/;
+  const SPELLINGS = [
+    "const x = all.some(o => o.default_org_id);",                       // paren-less arrow (the old reach)
+    "const x = all.some((o) => o.id === me.default_org_id);",           // paren-ful arrow (D-46's blind spot)
+    "const x = all.find((o) => o.id === me.default_org_id);",           // find, same shape
+    "const x = all.some(function (o) { return o.default_org_id; });",   // single-line function callback
+  ];
+  for (const s of SPELLINGS) {
+    assert.match(NAV + "\n// " + s + "\n", FORBID,
+      `raw view: this spelling evades the forbidding check — the widening regressed: ${s}`);
+  }
+  assert.doesNotMatch(blankComments(NAV + "\n// " + SPELLINGS[0] + "\n"), FORBID,
     "blanked view: it disappears — which is why that check reads NAV, not NAV_LIVE");
 });

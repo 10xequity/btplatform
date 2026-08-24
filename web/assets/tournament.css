@@ -1,5 +1,10 @@
 /* Boomtown Platform — Tournament Ops styles
-   Version: v0.3 · Date: 2026-08-16
+   Version: v0.4 · Date: 2026-08-24
+   v0.4 (§-1r RF-1 print polish): the pool sheet gets a page, a fit, and a frame. @page pool is
+   letter-landscape because the grid is courts × rounds; in print the cells drop their 130px
+   min-width and table-layout:fixed shares the page width, so wide events fit instead of
+   clipping at .grid-scroll's overflow edge. A browser without named pages ignores `page:` and
+   falls back to the plain @page — the fit and the frame still apply.
    v0.3 (v0.163.0, §-1n P-E / §-0 B19): the day sheet — a print MODE of this page. #daySheet is
    never visible on screen; body.print-day (set by tournament.js around print(), removed on
    afterprint) makes it the ONLY printed document, one section per page. The pool sheet's own
@@ -79,13 +84,27 @@ body.print-day .ds-close { display: inline-block; }
 .ds-note { font-size: 12px; margin: 4px 0; }
 
 /* print: the clipboard pool sheet */
+/* RF-1 (v0.4): the page. Margins for every print job from this screen; the pool grid asks for
+   letter-landscape by name because courts × rounds is wider than it is tall. The day sheet
+   (print-day mode) hides #gridPanel, so its job never picks up the landscape page. */
+@page { margin: 10mm; }
+@page pool { size: letter landscape; margin: 10mm; }
 @media print {
   .no-print, .header { display: none !important; }
   body { background: #fff; color: #000; }
+  /* RF-1 (v0.4): the fit — on screen the grid scrolls; on paper nothing scrolls, so the cells
+     give up their 130px floor and fixed layout shares the page width across however many
+     rounds the event has. overflow-wrap keeps long team names inside their cell. */
+  .grid-scroll { overflow-x: visible; }
+  .pool-grid { table-layout: fixed; margin-top: 4px; }
+  .pool-grid th, .pool-grid td { min-width: 0; padding: 3px 5px; font-size: 11px; overflow-wrap: anywhere; }
+  .pool-grid td.round-label { min-width: 0; }
+  /* RF-1 (v0.4): the frame — the printed sheet reads as a document, not a screen dump. */
+  #gridPanel { page: pool; border: 2px solid #000; padding: 8px 10px; }
+  .print-title { display: block; font-size: 22px; border-bottom: 2px solid #000; padding: 0 0 4px; }
   .pool-grid th, .pool-grid td { border-color: #000; color: #000; }
   .pool-grid th { background: #eee; }
   .match-cell .score { color: #000; }
-  .print-title { display: block; }
   #standingsPanel { break-before: page; border: 0; }
   /* P-E: print-day mode — the day sheet is the ONLY document in the job. */
   body.print-day #daySheet { display: block; }

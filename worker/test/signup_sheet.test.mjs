@@ -1,6 +1,9 @@
 /**
  * Boomtown Platform — §-0 B18 / SG-1: the drop-in sheet (§-1o, owner "sheets first" 2026-08-11)
- * File: worker/test/signup_sheet.test.mjs · Version: v1.0 · Date: 2026-08-11 · Ships in: v0.132.0
+ * File: worker/test/signup_sheet.test.mjs · Version: v1.1 · Date: 2026-08-24 · Ships in: v0.132.0
+ * v1.1 (D-45 cluster 2, v0.191.0): the five raw source reads (registrations, waitlists, sheet.js,
+ * config.js, and the caller loop) now go through blankComments, so a commented-out source fails
+ * these guards instead of passing them. Verified by raw-source-sweep: 5 → 0 raw pairs.
  *
  * An event of type training/event gets a PUBLIC sign-up sheet: capacity, live count, who is
  * coming, one-tap sign-up for a signed-in member, name+email form for a guest. Individual
@@ -376,8 +379,10 @@ test("a member who already holds an active registration gets duplicate, not a se
 /* ==================== source guards: one predicate, one page, forked CTAs ==================== */
 
 test("the sign-up INSERT interpolates ACTIVE_REG_STATUSES — no third hand-rolled status list", () => {
-  const src = readFileSync(new URL("../src/registrations.js", import.meta.url), "utf8");
-  const wl = readFileSync(new URL("../src/waitlists.js", import.meta.url), "utf8");
+  // D-45 (v0.191.0): stripped reads — a needle in a comment must not satisfy a behaviour claim,
+  // and a commented-out source must fail this test, not pass it.
+  const src = blankComments(readFileSync(new URL("../src/registrations.js", import.meta.url), "utf8"));
+  const wl = blankComments(readFileSync(new URL("../src/waitlists.js", import.meta.url), "utf8"));
   assert.match(wl, /export const ACTIVE_REG_STATUSES/,
     "waitlists.js no longer exports the one status list the sheet SQL interpolates");
   const start = src.indexOf("async function sheetSignup");
@@ -396,7 +401,7 @@ test("sheet.html is a real page: own script (§11), config, site-nav, live statu
   assert.match(html, /assets\/config\.js\?v=/);
   assert.match(html, /assets\/site-nav\.js\?v=/);
   assert.match(html, /aria-live/, "sign-up feedback needs a live region");
-  const js = readFileSync(new URL("../../web/assets/sheet.js", import.meta.url), "utf8");
+  const js = blankComments(readFileSync(new URL("../../web/assets/sheet.js", import.meta.url), "utf8")); // D-45: stripped read
   assert.match(js, /\/api\/events\/.*\/sheet|\/sheet`/, "sheet.js never fetches the sheet route");
   assert.match(js, /\/signup/, "sheet.js never posts the sign-up");
   assert.match(js, /bt_token/, "sheet.js must attach the session so the one-tap works for members");
@@ -409,7 +414,7 @@ test("the advertised links fork by type: drop-in types → sheet.html, team type
   // needed the same rule and wrote its own — with the wrong parameter — so the rule moved to
   // config.js and both original sites became callers. The pin follows it: the behaviour it
   // protects (a drop-in advertises its sheet, a team event its registration form) is unchanged.
-  const cfg = readFileSync(new URL("../../web/assets/config.js", import.meta.url), "utf8");
+  const cfg = blankComments(readFileSync(new URL("../../web/assets/config.js", import.meta.url), "utf8")); // D-45: stripped read
   assert.match(cfg, /sheet\.html\?event=/, "the shared rule never points at the sheet");
   assert.match(cfg, /register\.html\?event=/, "team events must keep the registration form");
   // REWRITTEN AGAIN in v0.147.0, still not deleted, and only the SPELLING moved. PM-1 gave this
@@ -421,7 +426,7 @@ test("the advertised links fork by type: drop-in types → sheet.html, team type
   assert.match(cfg, /e\.type === "training" \|\| e\.type === "event"/,
     "the fork must read the event type, not guess");
   for (const caller of ["assets/schedule.js", "assets/admin-event.js"]) {
-    const src = readFileSync(new URL("../../web/" + caller, import.meta.url), "utf8");
+    const src = blankComments(readFileSync(new URL("../../web/" + caller, import.meta.url), "utf8")); // D-45: stripped read
     assert.match(src, /BT_SIGNUP\(/, `${caller} stopped using the shared rule — a second copy is how D-29 happened`);
   }
   // The staff screen's link is the one that gets advertised (§-1o), so it must still be absolute

@@ -1,5 +1,8 @@
 /* Boomtown Platform — Member Profile page
-   File: web/profile.js · Version: v1.2 · Date: 2026-07-30 · Ships in: v0.39.0 (was v1.1/v0.37.0, v1.0/v0.5.0)
+   File: web/profile.js · Version: v1.3 · Date: 2026-08-24 · Ships in: v0.191.0 (was v1.2/v0.39.0, v1.1/v0.37.0, v1.0/v0.5.0)
+   v1.3 (§-1r RF-11 history half): "Event history" card — the cross-event check-in list from
+   GET /api/profile/attendance, a route that had ZERO callers since it shipped. Own-session
+   only (the route 401s signed-out); staff vs self check-ins labeled in plain words.
    v1.2: "Your check-in pass" card (owner req #20) — 8-char kiosk code minted on first view,
    rendered as a Code 128 barcode (JsBarcode via cdnjs, the cropper precedent) on a WHITE
    patch in both themes because scanners need dark-on-light; large-type code is the always-on
@@ -164,6 +167,12 @@
         <div id="resumeList"><p class="meta">Loading…</p></div>
       </section>
 
+      <section class="section card">
+        <h2>Event history</h2>
+        <p class="meta">Every event you've checked in at, most recent first.</p>
+        <div id="historyList"><p class="meta">Loading…</p></div>
+      </section>
+
       <section class="section card" id="passkeyCard" hidden>
         <h2>Sign in faster with Face ID or fingerprint</h2>
         <p class="meta">Add this device once. After that, signing in is one tap — no email link needed.</p>
@@ -181,6 +190,7 @@
     loadUpcoming();
     loadPass();
     loadResume(c.id);
+    loadHistory();
     setupPasskeyCard();
   }
 
@@ -424,6 +434,26 @@
           <div><strong>${esc(x.name)}</strong><div class="meta">${fmtDate(x.starts_at)} · ${esc(x.team_name || "")}</div></div>
           <div class="meta">${x.rank ? ordinal(x.rank) + " of " + x.teams_in_event : ""}</div>
           <div>${x.wins}–${x.losses}</div>
+        </div>`).join("")}`;
+  }
+
+  /* ---------- event history (RF-11: the cross-event check-in list) ---------- */
+  async function loadHistory() {
+    const r = await api("/api/profile/attendance");
+    const el = document.getElementById("historyList");
+    if (!el) return;
+    if (!r.ok) { el.innerHTML = `<p class="meta">${esc(r.data.error || "Couldn't load your history.")}</p>`; return; }
+    const rows = r.data.attendance || [];
+    if (!rows.length) {
+      el.innerHTML = "<p class='meta'>No check-ins yet. When you check in at an event, it shows up here.</p>";
+      return;
+    }
+    el.innerHTML = `
+      <p class="meta">${r.data.total} check-in${r.data.total === 1 ? "" : "s"}</p>
+      ${rows.map((a) => `
+        <div class="results-row">
+          <div><strong>${esc(a.event_name)}</strong><div class="meta">${fmtDate(a.starts_at)}</div></div>
+          <div class="meta">${a.method === "staff" ? "Checked in by staff" : "Self check-in"}</div>
         </div>`).join("")}`;
   }
 

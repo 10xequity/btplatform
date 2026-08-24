@@ -1,5 +1,9 @@
 /* Boomtown Platform — My Dashboard
-   File: web/home.js · Version: v2.3.0 · Date: 2026-08-23 · Ships in: v0.14.0 (v2.3.0 in v0.188.0)
+   File: web/home.js · Version: v2.4.0 · Date: 2026-08-24 · Ships in: v0.14.0 (v2.4.0 in v0.191.0)
+   v2.4.0 (§-1c D-39, owner word 2026-08-24 "My events not loading"): the "My events" card is
+   FILLED — #myEvList shipped a "Loading…" line no script referenced since v2.0.0. It now renders
+   /api/profile/upcoming (the profile page's own source: registrations incl. family, independent
+   of the feed's my_events mute), with honest empty and error sentences.
    v2.3.0 (§-1r RF-13 score-entry — the EMAIL channel, owner req 2026-08-23): the captain of a live
    team gets an "Email the link to my team" button beside "Enter your team's scores"; it POSTs
    /api/profile/teams/:id/email-scorelink (own-team, live-gated, keyless-honest). Non-captains and
@@ -106,6 +110,7 @@
     api("/api/profile/connect-teams", { method: "POST" }); // fire-and-forget roster link
     loadMembership();
     loadTeams();
+    loadMyEvents();      // D-39 — the card's fill (its container shipped empty since v2.0.0)
     loadFeed();          // v2.0.0 — the announcement box (replaces notifications/upcoming/lfg cards)
     loadAchievements();  // v2.0.0
     loadAgreements();
@@ -339,6 +344,23 @@
       <div class="feed-item"><div class="fx"><b>${esc(x.name)}</b>
         <span>${esc(x.team_name || "")}${x.rank ? ` · finished #${x.rank} of ${x.teams_in_event}` : ""} · ${x.wins || 0}&ndash;${x.losses || 0}</span></div></div>`).join("") +
       `<a class="btn ghost" href="profile.html" style="text-decoration:none;margin-top:8px;display:inline-block">Full résumé</a>`);
+  }
+
+  /* ---------------- my events card (D-39: the fill the card never had) ---------------- */
+  async function loadMyEvents() {
+    const r = await api("/api/profile/upcoming");
+    const el = $("myEvList");
+    if (!el) return;
+    if (!r.ok) { fill(el, `<p class="help-text" style="margin:0">${esc(r.data.error || "Couldn't load this just now. Refresh to try again.")}</p>`); return; }
+    const rows = r.data.upcoming || [];
+    if (!rows.length) {
+      fill(el, `<p class="help-text" style="margin:0">Nothing on your calendar yet. <a href="schedule.html">Browse the schedule</a> and grab a spot.</p>`);
+      return;
+    }
+    fill(el, rows.map((e) => `
+      <div class="feed-item"><div class="fx"><b>${esc(e.name)}</b>
+        <span>${fmt(e.starts_at)}${e.location ? " · " + esc(e.location) : ""}</span></div>
+        <a class="btn ghost" style="text-decoration:none" href="${API}/api/events/ics?event_id=${e.event_id}">Calendar</a></div>`).join(""));
   }
 
   /* ---------------- messages summary card ---------------- */
