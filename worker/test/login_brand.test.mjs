@@ -152,6 +152,28 @@ test("F-3: the brand path fails closed at every step", () => {
   assert.match(body, /display_name/, "the swap must not run on a payload with no name");
 });
 
+/* ---------- RF-8(a) (v0.190.0): the DEFAULT arrival is branded, not bare ---------- */
+
+test("RF-8(a): the lockup ships unconditionally — a no-?org arrival still shows a brand", () => {
+  const t = blankComments(readApp());
+  const r = loginRenderRegion(t);
+  assert.ok(r, "renderLogin's template could not be located");
+  const region = t.slice(r.start, r.end);
+  assert.ok(region.includes(BRAND_SLOT), "the brand lockup is gone from renderLogin");
+  assert.match(region, /loginBrandName">Boomtown Athletics</,
+    "the default lockup carries no fallback name — a no-?org arrival lands on a bare card (RF-8(a))");
+});
+
+test("RF-8(a) NC: reverting the default name to empty is caught", () => {
+  const src = readApp();
+  const mutated = src.replace('<span id="loginBrandName">Boomtown Athletics</span>', '<span id="loginBrandName"></span>');
+  assert.notEqual(mutated, src, "mutation did not land — update the RF-8(a) anchor");
+  const t = blankComments(mutated);
+  const r = loginRenderRegion(t);
+  assert.ok(!/loginBrandName">Boomtown Athletics</.test(t.slice(r.start, r.end)),
+    "emptying the default name was not caught — the default arrival would be unbranded again");
+});
+
 /* ---------- negative controls: each MUTATES THE REAL SOURCE and asserts the mutation landed ---------- */
 
 test("NC-B1: removing the lockup from the template FAILS the verdict", () => {

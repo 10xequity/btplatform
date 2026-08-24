@@ -41,7 +41,7 @@
   function render(players) {
     if (!players.length) {
       $("results").innerHTML = `<div class="pl-card"><div class="who"><b>No players found</b>
-        <p class="pl-bio">Try fewer filters${signedIn ? "" : " — or <a href='index.html#signin'>sign in</a> to see members-only profiles"}.</p></div></div>`;
+        <p class="pl-bio">Try fewer filters${signedIn ? "" : " — or <a href='index.html'>sign in</a> to see members-only profiles"}.</p></div></div>`;
       return;
     }
     $("results").innerHTML = players.map((p) => {
@@ -50,7 +50,7 @@
         .map((t) => `<span class="pl-tag">${esc(t)}</span>`).join("");
       const msgBtn = signedIn
         ? `<button class="btn" data-msg="${p.contact_id}" data-name="${esc(p.name)}" type="button">Message</button>`
-        : `<a class="btn ghost" href="index.html#signin">Sign in to message</a>`;
+        : `<a class="btn ghost" href="index.html">Sign in to message</a>`;
       return `<div class="pl-card">
         ${p.avatar_url ? `<img class="avatar" src="${API}${esc(p.avatar_url)}" alt="" loading="lazy">` : `<div class="avatar" aria-hidden="true">${initials}</div>`}
         <div class="who">

@@ -272,3 +272,17 @@ test("every page whose script builds a sign-up link loads config.js FIRST", () =
   }
   assert.deepEqual(offenders, [], "BT_SIGNUP is undefined when these scripts run:\n" + offenders.join("\n"));
 });
+
+/* D-51 (v0.190.0): the login card is JS-rendered, so a static `id="signin"` can never exist —
+   `index.html#signin` is a dead fragment. Three page scripts carried it; all now link plain
+   `index.html`. This ratchets that: the dead fragment must not come back. */
+test("D-51 — no page script links the dead index.html#signin fragment", () => {
+  const SCRIPTS = ["library.js", "member-inbox.js", "membership.js"];
+  const offenders = SCRIPTS.filter((f) => read("assets/" + f).includes("index.html#signin"));
+  assert.deepEqual(offenders, [], `these scripts still link the dead #signin fragment: ${offenders.join(", ")}`);
+});
+
+test("D-51 NC — the dead-fragment scan actually fires on the removed form", () => {
+  assert.ok("<a href='index.html#signin'>".includes("index.html#signin"), "the D-51 scan cannot see the form it removed");
+  assert.ok(!"<a href='index.html'>".includes("index.html#signin"), "the D-51 scan flags a clean link");
+});

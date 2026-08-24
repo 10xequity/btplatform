@@ -100,11 +100,15 @@ test("NC-3: dropping leagues.js's live link fails the wiring check", () => {
 // reader's links list; the aria-label must carry the event NAME, and (Gemini 2026-08-24) fall back
 // to the kind alone for a nameless event rather than render a dangling " — ". Both files build a
 // `liveAria` from esc(e.name) with a conditional prefix, then set aria-label="${liveAria}".
+// D-55 (v0.190.0): the WHOLE aria-label attribute is conditional now — liveAria is
+// ` aria-label="<name> — <kind>"` when named and "" when nameless (a nameless link's visible text
+// is already its accessible name), interpolated straight after the href.
 const nameAriaLabel = (src) => {
   const t = blankComments(src);
-  return /aria-label="\$\{liveAria\}"/.test(t) &&
-    /const nm = e\.name \? esc\(e\.name\.trim\(\)\)/.test(t) &&
-    /const liveAria = nm \?/.test(t);
+  return /const nm = e\.name \? esc\(e\.name\.trim\(\)\)/.test(t) &&
+    /const liveAria = nm \? ` aria-label="\$\{nm\} —/.test(t) &&
+    /\$\{liveAria\}>/.test(t) &&               // the whole attribute is interpolated before the >
+    !/aria-label="\$\{liveAria\}"/.test(t);    // not the old always-on form
 };
 
 test("both live links carry an event-name aria-label with an empty-name fallback (WCAG 2.4.4)", () => {
@@ -123,7 +127,7 @@ test("NC-5: a nameless event does NOT emit a dangling separator (Gemini 2026-08-
   // The fallback must be the kind alone, never "${nm} — kind" with an empty nm. Assert both files
   // carry the `nm ?` conditional so an empty name cannot produce " — standings and scores".
   for (const [name, src] of [["schedule.js", SCHED], ["leagues.js", LG]]) {
-    assert.match(blankComments(src), /nm \? `\$\{nm\} —/,
-      `${name}: the name prefix is not conditional — a nameless event renders a dangling " — "`);
+    assert.match(blankComments(src), /nm \? ` aria-label="\$\{nm\} —/,
+      `${name}: the name prefix is not conditional — a nameless event renders a dangling " — " (or a redundant kind-only label, D-55)`);
   }
 });

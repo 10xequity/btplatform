@@ -114,16 +114,42 @@
 
   function renderWeeks() {
     const weeks = data.weeks || [];
+    /* RF-2 Unit A: a long season scrolls forever. Each week card gets an id (#wk-N); the toolbar's
+       jump control (hidden until there are 2+ weeks) lands on any of them, each week carries an
+       "↑ Top" link back to the toolbar, and a per-week chevron collapses its matches (the pool
+       board's #pbCollapse idiom). No pairing/engine change — this is navigation only. */
+    const jump = $("weekJump");
+    if (jump) {
+      jump.hidden = weeks.length < 2;
+      jump.innerHTML = weeks.length < 2 ? "" :
+        `<option value="">Jump to week…</option>` +
+        weeks.map(w => `<option value="wk-${w.round}">Week ${w.round}</option>`).join("");
+      jump.onchange = () => {
+        const el = jump.value && document.getElementById(jump.value);
+        if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+        jump.value = "";
+      };
+    }
     $("weeks").innerHTML = weeks.length ? weeks.map(w => {
       const unscored = w.matches.every(m => m.score_a == null);
-      return `<section class="card wk-card">
-        <div class="wk-head"><h3>Week ${w.round}</h3><div class="spacer"></div>
+      return `<section class="card wk-card" id="wk-${w.round}">
+        <div class="wk-head">
+          <button class="btn ghost sm wk-collapse no-print" type="button" aria-expanded="true" aria-controls="wkb-${w.round}" title="Collapse or expand this week">▾</button>
+          <h3>Week ${w.round}</h3><div class="spacer"></div>
+          <a class="wk-top no-print" href="#weekTop">↑ Top</a>
           <button class="btn ghost no-print" data-copyweek="${w.round}">Copy as text</button>
           ${unscored ? `<button class="btn ghost" data-delweek="${w.round}">Remove week</button>` : ""}</div>
-        ${w.matches.map(m => matchRow(m)).join("")}
+        <div class="wk-body" id="wkb-${w.round}">${w.matches.map(m => matchRow(m)).join("")}</div>
       </section>`;
     }).join("") : `<section class="card"><p class="help-text" style="margin:0">No weeks yet. Set team levels, then generate week 1.</p></section>`;
 
+    $("weeks").querySelectorAll(".wk-collapse").forEach(b => b.onclick = () => {
+      const body = document.getElementById(b.getAttribute("aria-controls"));
+      const open = b.getAttribute("aria-expanded") === "true";
+      b.setAttribute("aria-expanded", String(!open));
+      b.textContent = open ? "▸" : "▾";
+      if (body) body.hidden = open;
+    });
     $("weeks").querySelectorAll("[data-score]").forEach(b => b.onclick = () => scoreModal(+b.dataset.score));
     $("weeks").querySelectorAll("[data-edit]").forEach(b => b.onclick = () => matchupModal(+b.dataset.edit));
     $("weeks").querySelectorAll("[data-copyweek]").forEach(b => b.onclick = () => copyWeek(+b.dataset.copyweek, b));

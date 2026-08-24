@@ -1,5 +1,16 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.190.0 — 2026-08-24
+
+**Batch: RF-8(a) default login brand, RF-2 Unit A league week-nav, D-55 aria-label, D-51 dead links.** Four small items in one release.
+
+- **RF-8(a) — the sign-in page is branded even with no `?org`.** The brand lockup used to render only when an org hint was present, so the default arrival got a bare card. It now always ships the Boomtown lockup; `applyLoginBrand` still swaps in an org's own name/logo when one resolves.
+- **RF-2 Unit A — getting around a long league season.** Each week card now has an id; the League Manager toolbar has a "jump to a week" control (hidden until there are 2+ weeks); each week has an "↑ Top" link back to the toolbar; and a per-week chevron collapses that week's matches (the pool board's collapse idiom). A week collapsed on screen still prints in full. No pairing-engine change — navigation only. *(RF-2 Unit B — a second round per night — is a pairing-engine change that needs your word on the scheduling behaviour; skipped, see below.)*
+- **D-55 — no redundant screen-reader label.** On the member schedule/leagues live links, the `aria-label` is now emitted only when the event has a name; a nameless link's visible text ("Pools & bracket" / "Standings & scores") is already its accessible name.
+- **D-51 — dead `#signin` links removed.** Three member page scripts (library, inbox, membership) linked `index.html#signin`, but the sign-in card is drawn by JavaScript so no `#signin` anchor exists; they now link plain `index.html`.
+
+Guards: `login_brand.test.mjs` (+2 RF-8(a) + NC), `league_week_nav.test.mjs` (new, RF-2A: ids/jump/top/collapse/print + NC), `member_event_view.test.mjs` (updated to the D-55 shape), `dangling_refs.test.mjs` (+2 D-51 + NC). In-loop Gemini review: see below. Skipped this batch, needing your decision: **RF-2 Unit B** (how many rounds/night, and how a second round shares courts), **RF-3** (the court/schedule editor needs a team-move migration and a ruling on what a forfeit writes to standings), and **D-54** (whether the home page's "I'm open to subbing" strip should become a link to the Sub-Finder or stay a quick toggle).
+
 ## v0.189.0 — 2026-08-24
 
 **Batch: RF-11 rename, D-49 dead filter, RF-1 print (owner asked for more per build).** Three of the owner's list items in one release.

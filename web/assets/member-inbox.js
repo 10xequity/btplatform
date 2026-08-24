@@ -27,7 +27,7 @@
 
   if (!sessionStorage.getItem("bt_token")) {
     $("box").innerHTML = `<p>Your inbox lives behind sign-in.</p>
-      <p style="margin-top:10px"><a class="btn" href="index.html#signin">Sign in</a></p>`;
+      <p style="margin-top:10px"><a class="btn" href="index.html">Sign in</a></p>`;
     return;
   }
 

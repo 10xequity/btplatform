@@ -57,8 +57,10 @@
     if (!hasLiveView(e)) return "";
     const kind = e.type === "tournament" ? "pools and bracket" : "standings and scores";
     const nm = e.name ? esc(e.name.trim()) : "";
-    const liveAria = nm ? `${nm} — ${kind}` : kind;
-    return `<a class="btn ghost sched-cta" href="live.html?event=${encodeURIComponent(e.id)}" aria-label="${liveAria}">${
+    // D-55 (Gemini nicety): emit aria-label ONLY when the event is named. A nameless link's visible
+    // text ("Pools & bracket") is already its accessible name, so a kind-only aria-label just repeats it.
+    const liveAria = nm ? ` aria-label="${nm} — ${kind}"` : "";
+    return `<a class="btn ghost sched-cta" href="live.html?event=${encodeURIComponent(e.id)}"${liveAria}>${
       e.type === "tournament" ? "Pools &amp; bracket" : "Standings &amp; scores"}</a>`;
   };
 

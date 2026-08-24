@@ -152,7 +152,8 @@
        name prefix is conditional so a nameless event has no dangling " — " in its aria-label. */
     const liveOk = e.status === "in_progress" || e.status === "completed" || (d && d <= new Date());
     const nm = e.name ? esc(e.name.trim()) : "";
-    const liveAria = nm ? `${nm} — standings and scores` : "standings and scores";
+    // D-55 (Gemini nicety): aria-label only when named — a nameless link's visible "Standings & scores" is already its name.
+    const liveAria = nm ? ` aria-label="${nm} — standings and scores"` : "";
     return `<div class="lg-ev">
       <div class="lg-date" aria-hidden="true">
         <div class="d">${d ? d.getDate() : "&#8212;"}</div>
@@ -166,8 +167,7 @@
         ? ((s) => `<a class="btn" href="${esc(s.href)}" style="text-decoration:none"
             ${s.external ? `target="_blank" rel="${esc(s.rel)}"` : ""}>${s.external ? esc(s.label) + " ↗" : "Register"}</a>`)(BT_SIGNUP(e))
         : liveOk
-          ? `<a class="btn ghost" href="live.html?event=${encodeURIComponent(e.id)}" style="text-decoration:none"
-              aria-label="${liveAria}">Standings &amp; scores</a>`
+          ? `<a class="btn ghost" href="live.html?event=${encodeURIComponent(e.id)}" style="text-decoration:none"${liveAria}>Standings &amp; scores</a>`
           : `<span class="lg-meta">Closed</span>`}</div>
     </div>`;
   }

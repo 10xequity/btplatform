@@ -40,7 +40,7 @@
   async function loadCurrent(signedIn) {
     if (!signedIn) {
       $("current").innerHTML = `<div class="ms-banner"><b>Sign in to manage a membership.</b>
-        <a href="index.html#signin" style="margin-left:8px">Sign in →</a></div>`;
+        <a href="index.html" style="margin-left:8px">Sign in →</a></div>`;
       return;
     }
     const r = await api("/api/profile/subscription");
