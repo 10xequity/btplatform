@@ -288,7 +288,9 @@ test("RF-1 — the page: @page sets margins and the grid asks for the named land
 
 test("RF-1 — the fit: in print the grid drops its 130px floor and fixed layout shares the width", () => {
   const body = poolPrintBlock(CSS);
-  assert.match(body, /\.grid-scroll\s*\{[^}]*overflow-x:\s*visible/,
+  // PURPOSE: nothing scrolls or clips on paper. Both spellings reach it — the shorthand
+  // (`overflow: visible`, the shipped form since the v0.193.0 Gemini fold) resets both axes.
+  assert.match(body, /\.grid-scroll\s*\{[^}]*overflow(-x)?:\s*visible/,
     "the grid still prints inside a scroll container — everything past the fold clips");
   assert.match(body, /\.pool-grid\s*\{[^}]*table-layout:\s*fixed/,
     "the grid keeps content-sized columns in print — wide events overflow the page");

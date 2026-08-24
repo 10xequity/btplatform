@@ -1,5 +1,11 @@
 /* Boomtown Platform — My Dashboard
-   File: web/home.js · Version: v2.4.0 · Date: 2026-08-24 · Ships in: v0.14.0 (v2.4.0 in v0.191.0)
+   File: web/home.js · Version: v2.5.0 · Date: 2026-08-24 · Ships in: v0.14.0 (v2.5.0 in v0.193.0)
+   v2.5.0 (§-1r RF-18, owner order 2026-08-24): the page reads in HIS order — sub strip on top,
+   Messages under it, My events first of the main cards, the NEW "Upcoming league" box (fed from
+   the same /api/profile/teams read — live night links score entry, otherwise standings/start
+   date, honest empty state), Your results underneath, and the aggregated feed renamed UPDATES
+   at the bottom (his "Home views (or something like that)" — the plain name won). All ids kept,
+   so the rail's Notifications anchor and every loader keep their targets.
    v2.4.0 (§-1c D-39, owner word 2026-08-24 "My events not loading"): the "My events" card is
    FILLED — #myEvList shipped a "Loading…" line no script referenced since v2.0.0. It now renders
    /api/profile/upcoming (the profile page's own source: registrations incl. family, independent
@@ -389,9 +395,31 @@
     wire("rentalTile", "rentalPanel");
   }
 
+  /* RF-18 (v0.193.0): the "Upcoming league" box the owner asked for — filled from the SAME
+     /api/profile/teams read the teams card uses (no extra fetch). A league that is live links
+     the board and, for this member's own team, the score entry; an upcoming one says when it
+     starts; no leagues is an invitation to the schedule, never a blank. */
+  function renderUpcomingLeague(teams) {
+    const el = $("upLeague");
+    if (!el) return;
+    const leagues = teams.filter(t => t.type === "league" && t.event_status !== "cancelled");
+    if (!leagues.length) {
+      fill(el, `<p class="help-text" style="margin:0">No league on your calendar. <a href="leagues.html">See the leagues</a> and grab a spot.</p>`);
+      return;
+    }
+    fill(el, leagues.map(t => `
+      <div class="feed-item"><div class="fx"><b>${esc(t.event_name)}</b>
+        <span>${esc(t.name)}${t.event_status === "completed" ? " · season finished" : t.score_url ? " · league night is live" : t.starts_at ? " · " + fmt(t.starts_at) : ""}</span></div>
+        ${t.score_url
+          ? `<a class="btn ghost" style="text-decoration:none" href="${esc(t.score_url)}">Enter scores</a>`
+          : `<a class="btn ghost" style="text-decoration:none" href="live.html?event=${t.event_id}">Standings</a>`}
+      </div>`).join(""));
+  }
+
   async function loadTeams() {
     const r = await api("/api/profile/teams");
     const teams = r.ok ? r.data.teams || [] : [];
+    renderUpcomingLeague(teams);
     fill($("teamList"), teams.length ? teams.map(t => `
       <div style="padding:10px 0;border-bottom:1px solid var(--border)">
         <div style="font-weight:700">${esc(t.name)} <span class="help-text" style="font-weight:400">· ${esc(t.event_name)}</span></div>

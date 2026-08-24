@@ -1,5 +1,9 @@
 /* Boomtown Platform — App Shell
-   Version: v0.9.0 · Date: 2026-08-22 · Ships in: v0.177.0
+   Version: v0.10.0 · Date: 2026-08-24 · Ships in: v0.177.0 (v0.10.0 in v0.193.0)
+   v0.10.0 (§-1r RF-17, owner 2026-08-24 "Default view to home"): completing a sign-in with no
+   carried return page lands on home.html — the member's own dashboard — instead of this public
+   grid. A SIGNED-IN member who navigates here (the rail's Explore item) still gets the grid;
+   only the sign-in completion redirects, so Explore stays reachable.
    Handles: magic-link login, verify (?token=), session (Bearer, in-memory + sessionStorage),
    org switcher (≤2 clicks), theme toggle (instant — high-frequency action).
    v0.8.0 (§-1r RF-12, owner 2026-08-18): the v0.6.0 Member/Manager sign-in switch and the
@@ -115,7 +119,10 @@
       bearer = r.data.token;
       ssSet("bt_token", bearer);
       if (returnTo) { location.replace(returnTo); return; } // D-48: the emailed link carried the way back
-      route();
+      // RF-17 (v0.193.0, owner: "Default view to home"): a fresh sign-in lands on the member's
+      // own dashboard. Navigating HERE while signed in (the Explore rail item) still renders the
+      // grid — only the sign-in completion redirects, so Explore keeps its way in.
+      location.replace("home.html");
     } else {
       renderLogin(r.data.error || "Sign-in failed. Request a new link.");
     }
@@ -161,7 +168,7 @@
     if (nameEl) nameEl.textContent = brand.display_name;
     const img = document.getElementById("loginBrandLogo");
     if (img && brand.logo_url) {
-      img.onerror = () => { img.src = "assets/logo-boom-icon-512.png?v=0.192.0"; }; // fail closed on 404
+      img.onerror = () => { img.src = "assets/logo-boom-icon-512.png?v=0.193.0"; }; // fail closed on 404
       img.src = brand.logo_url;
     }
   }
@@ -177,7 +184,7 @@
     /* RF-8(a): the lockup ships UNCONDITIONALLY with the Boomtown default, so an arrival with no
        ?org hint gets a branded card instead of a bare one. applyLoginBrand(org) swaps in an org's
        own name/logo when one resolves; with no org it is a no-op and this default stands. */
-    const brandSlot = `<div class="login-brand"><img id="loginBrandLogo" src="assets/logo-boom-icon-512.png?v=0.192.0" alt="" width="36" height="36" /><span id="loginBrandName">Boomtown Athletics</span></div>`;
+    const brandSlot = `<div class="login-brand"><img id="loginBrandLogo" src="assets/logo-boom-icon-512.png?v=0.193.0" alt="" width="36" height="36" /><span id="loginBrandName">Boomtown Athletics</span></div>`;
     render(`
       <div class="login-wrap">
         <div class="card login-card reveal">

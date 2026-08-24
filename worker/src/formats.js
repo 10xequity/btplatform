@@ -1000,5 +1000,56 @@ export async function formatsRoutes(request, env, url, ctx) {
     return json({ ok: true, ...loaded });
   }
 
+  /* T2-1b (§-1r RF-3, v0.193.0): move a team to ANOTHER event — the server gap the register
+     recorded ("no route moves a team across events… a bare event_id UPDATE orphans its matches,
+     standings, registrations and score_token"). The conservative rules, each stated:
+       · REFUSED (409) while the team has ANY match here, scored or not — its games reference
+         opponents in THIS event; edit the matchups or remove the unscored week first.
+       · REGISTRATIONS STAY on the original event — they are the financial record of what was
+         bought; a move is a scheduling act, not a refund. The response says so out loud.
+       · Event-SCOPED fields reset (pool, division, seed, team number, board order) — they name
+         structures of the event being left; level_num is the team's own and travels.
+       · The score_token travels with the team (team-scoped); the live gate reads the team's
+         CURRENT event, so an upcoming destination keeps the link closed.
+       · Any standings row here is soft-deleted — a matchless team has nothing to rank. */
+  if ((x = p.match(/^\/api\/admin\/events\/(\d+)\/teams\/(\d+)\/move-event$/)) && m === "POST") {
+    const denied = await requireStaff(env, ctx);
+    if (denied) return denied;
+    const eventId = +x[1], teamId = +x[2];
+    const b = await request.json().catch(() => ({}));
+    const toId = Number(b.to_event_id);
+    if (!toId) return json({ error: "Say which event the team is moving to." }, 400);
+    if (toId === eventId) return json({ error: "That team is already in this event." }, 400);
+
+    const team = await env.DB.prepare(
+      "SELECT id, name FROM teams WHERE id=?1 AND org_id=?2 AND event_id=?3 AND deleted_at IS NULL"
+    ).bind(teamId, ctx.orgId, eventId).first();
+    if (!team) return json({ error: "That team isn't in this event." }, 404);
+
+    const target = await env.DB.prepare(
+      "SELECT id, name FROM events WHERE id=?1 AND org_id=?2 AND deleted_at IS NULL"
+    ).bind(toId, ctx.orgId).first();
+    if (!target) return json({ error: "The destination event wasn't found in this organization." }, 404);
+
+    const games = await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM matches WHERE org_id=?1 AND event_id=?2 AND (team_a_id=?3 OR team_b_id=?3) AND deleted_at IS NULL"
+    ).bind(ctx.orgId, eventId, teamId).first();
+    if (games.n > 0) {
+      return json({ error: `${team.name} still has ${games.n} game${games.n === 1 ? "" : "s"} on this event's schedule. Edit those matchups or remove the unscored week first — moving the team now would strand its opponents.` }, 409);
+    }
+
+    await env.DB.prepare(
+      `UPDATE teams SET event_id=?1, pool_id=NULL, division_id=NULL, seed=NULL, team_no=NULL,
+              board_order=0, updated_at=datetime('now') WHERE id=?2 AND org_id=?3`
+    ).bind(toId, teamId, ctx.orgId).run();
+    await env.DB.prepare(
+      "UPDATE standings SET deleted_at=datetime('now') WHERE org_id=?1 AND event_id=?2 AND team_id=?3 AND deleted_at IS NULL"
+    ).bind(ctx.orgId, eventId, teamId).run();
+    await audit(env, ctx, "team.move_event", "teams", teamId, { from: eventId, to: toId });
+
+    return json({ ok: true, moved: team.name, to: target.name,
+      note: "Registrations stay on the original event — they record what was bought." });
+  }
+
   return null;
 }

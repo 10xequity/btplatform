@@ -196,3 +196,70 @@ test("RF-3 NC — junk forfeit_by refuses with its own sentence and writes nothi
   assert.equal(row.score_a, null, "a refused forfeit still wrote a score");
   assert.equal(row.forfeit_by, null, "a refused forfeit still set the flag");
 });
+
+/* ═══════════════════ T2-1b (RF-3): move a team to another event ═══════════════════ */
+
+function seedSecondLeague(env) {
+  env.DB.exec(`INSERT INTO events (id, org_id, type, name, status, court_count, starts_at)
+    VALUES (8, 1, 'league', 'Thursday League', 'published', 2, datetime('now','+3 days'));`);
+}
+
+test("T2-1b — a team with games on the schedule is REFUSED, with the reason in a sentence", async () => {
+  const env = makeEnv();
+  const token = await seedLeague(env, 4);
+  seedSecondLeague(env);
+  await seedNight(env, token); // team 1 now has a game in event 7
+  const r = await call(env, "POST", "/api/admin/events/7/teams/1/move-event", {
+    body: { to_event_id: 8 }, token,
+  });
+  expectStatus(r, 409, "move with games");
+  assert.match(String(r.data.error || ""), /matchups|week/, "the refusal does not say what to clear first");
+  assert.equal(env.DB.one("SELECT event_id FROM teams WHERE id=1").event_id, 7,
+    "a refused move still changed the team's event");
+});
+
+test("T2-1b — a matchless team moves: event-scoped fields reset, standings row retired, money untouched", async () => {
+  const env = makeEnv();
+  const token = await seedLeague(env, 4);
+  seedSecondLeague(env);
+  // Give the team event-scoped baggage that MUST NOT travel: a pool, a seed, a frozen number,
+  // and a standings row — the T2-1b hazard was exactly these orphans.
+  env.DB.exec(`
+    INSERT INTO pools (id, org_id, event_id, name) VALUES (1, 1, 7, 'Pool A');
+    UPDATE teams SET pool_id=1, seed=2, team_no=5, board_order=3 WHERE id=1;
+    INSERT INTO standings (org_id, event_id, team_id, wins, losses, point_diff, points_for, points_against, rank)
+      VALUES (1, 7, 1, 0, 0, 0, 0, 0, 4);
+  `);
+  const r = await call(env, "POST", "/api/admin/events/7/teams/1/move-event", {
+    body: { to_event_id: 8 }, token,
+  });
+  expectStatus(r, 200, "clean move");
+  assert.match(String(r.data.note || ""), /Registrations stay/,
+    "the response no longer says the financial record is untouched");
+  const t = env.DB.one("SELECT event_id, pool_id, seed, team_no, board_order FROM teams WHERE id=1");
+  assert.equal(t.event_id, 8, "the team did not move");
+  assert.equal(t.pool_id, null, "the OLD event's pool travelled with the team");
+  assert.equal(t.seed, null, "the old event's seed travelled");
+  assert.equal(t.team_no, null, "the old event's frozen number travelled");
+  assert.equal(t.board_order, 0, "the old event's board order travelled");
+  const s = env.DB.one("SELECT deleted_at FROM standings WHERE event_id=7 AND team_id=1");
+  assert.ok(s.deleted_at, "the old event's standings row was not retired — a ghost rank remains");
+});
+
+test("T2-1b NC — hostile shapes refuse and write nothing: no destination, and a cross-org target", async () => {
+  const env = makeEnv();
+  const token = await seedLeague(env, 4);
+  env.DB.exec(`
+    INSERT INTO orgs (id, name, slug, active) VALUES (2, 'Other Org', 'other', 1);
+    INSERT INTO events (id, org_id, type, name, status, court_count, starts_at)
+      VALUES (9, 2, 'league', 'Foreign League', 'published', 2, datetime('now','+3 days'));
+  `);
+  const none = await call(env, "POST", "/api/admin/events/7/teams/1/move-event", { body: {}, token });
+  expectStatus(none, 400, "move with no destination");
+  const foreign = await call(env, "POST", "/api/admin/events/7/teams/1/move-event", {
+    body: { to_event_id: 9 }, token,
+  });
+  expectStatus(foreign, 404, "move to another org's event");
+  assert.equal(env.DB.one("SELECT event_id FROM teams WHERE id=1").event_id, 7,
+    "a refused move still changed the team's event");
+});

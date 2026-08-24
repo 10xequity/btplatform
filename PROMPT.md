@@ -1,6 +1,12 @@
 # SESSION PROMPT OF RECORD — Boomtown Platform
 
-**File:** `PROMPT.md` · **Version:** v1.3 · **Created:** 2026-08-16 · **Updated:** 2026-08-24
+**File:** `PROMPT.md` · **Version:** v1.4 · **Created:** 2026-08-16 · **Updated:** 2026-08-24
+**v1.4 (owner correction 2026-08-24, same day):** §8 cadence corrected — reviews live INSIDE each
+loop, not batched across loops. His words: *"gemini review should be 3 modules within a loop not
+every 3 stopped loops, every 3 modules in a loop, where each loop is 6 or more. At the end of the
+loop regardless of number should do a code review of what was built."* Retires v1.3's
+every-third-loop rule the same day it shipped. §8.3's carry-forward and never-reviewed-backlog
+rules survive unchanged.
 **v1.3 (owner request 2026-08-24):** §8 cadence — reviews BATCH every third loop instead of every
 release ("try to batch reviews after 3 loops instead of after every, then add the work to the next
 loop. If any are missed, rerun them."), a missed file carries forward, and never-reviewed code joins
@@ -208,27 +214,31 @@ Close per RALPH PHASE 4: ledger, handoff §1 row by row, next-session prompt, re
 loop WORKING, not a failure** — the actionable queue has been empty since v0.166.0 and the
 remaining gates are all owner-side.
 
-## §8. OWNER RIDER — the Gemini review, batched every third loop, reported briefly
+## §8. OWNER RIDER — the Gemini review, inside every loop, reported briefly
 
 **The owner asked (2026-08-15) for the code to be reviewed in Gemini; the API is loaded (2026-08-23);
-and the CADENCE is now every THIRD loop (owner 2026-08-24).** His words: *"For future gemini reviews,
-try to batch reviews after 3 loops instead of after every then add the work to the next loop. If any
-are missed, rerun them."* So a normal loop ships WITHOUT a review; every third loop is a REVIEW LOOP
-that runs `mcp__gemini-code-reviewer__review_specific_files` over every substantive file shipped since
-the last review (never `review_recent_changes` — it TRUNCATES on the buster churn), MEASURES each
-finding against the real code (§C: a review is a report to measure — a premise is often refuted by a
-server-side filter or a guard the diff does not show), and folds the validated ones into that loop's
-work (or records them in §-1c). The free tier is 20 requests/day — batch files per call where the
-payload allows.
+and the CADENCE (owner correction 2026-08-24, superseding the same-day every-third-loop rule) is
+INSIDE each loop:** *"gemini review should be 3 modules within a loop not every 3 stopped loops,
+every 3 modules in a loop, where each loop is 6 or more. At the end of the loop regardless of number
+should do a code review of what was built."* Read as, and applied as:
 
-**§8.3 — THE PENDING LIST AND THE BACKLOG (owner request 2026-08-24).** Each loop's LOOP.md entry
-ends with a Gemini line naming what that loop added to the PENDING list (its substantive files) and
-whether this was a review loop; the review loop collects pending files from the LOOP entries since
-the last review. A file the review COULD NOT reach (503 after one retry, quota 429) STAYS pending
-and is rerun next review loop — a missed review is carried, never dropped. Separately, the owner
-asked (2026-08-24) that code NEVER reviewed by Gemini join future reviews over time: each review
-loop adds 2-3 modules from the never-reviewed backlog (oldest/most-load-bearing first) on top of the
-since-last-review set. Roadmap §-1r RF-19 tracks that backlog's state.
+- **Loops lean LARGE — 6 or more units where the queue supports it** (his "where each loop is 6 or
+  more" raises the earlier 3-5 batch guidance).
+- **A CHECKPOINT review runs after every 3 units built** within the loop — review the 3 units'
+  substantive files, measure the findings, fold-or-record, THEN build on.
+- **The loop's CLOSE always reviews what that loop built, regardless of unit count** — a 2-unit
+  loop still ends with a review of those 2 units' files.
+- Always `review_specific_files` (never `review_recent_changes` — it TRUNCATES on buster churn);
+  MEASURE each finding against the real code (§C — a premise is often refuted by a server-side
+  filter or a guard the diff does not show). The free tier is 20 requests/day — batch files per
+  call where the payload allows.
+
+**§8.3 — THE PENDING LIST AND THE BACKLOG (owner request 2026-08-24, unchanged by the correction).**
+A file a review COULD NOT reach (503 after one retry per file, quota 429) STAYS PENDING — named in
+the LOOP.md entry's Gemini line — and is rerun at the next reachable checkpoint or close; a missed
+review is carried, never dropped. Separately, code NEVER reviewed by Gemini joins reviews over time:
+each loop's close adds 2-3 modules from the never-reviewed backlog (oldest/most-load-bearing first)
+on top of what the loop built. Roadmap §-1r RF-19 tracks the backlog's state.
 
 **§8.1 — THE CLOSE REPORTS THE RESULTS, NOT THE PROMPT OR THE DIFF (owner request 2026-08-23).** His
 words: *"No need to display the gemini points or prompt, just the results and what was kept vs

@@ -52,3 +52,40 @@ test("D-39 NC — a dropped fetch is caught (mutation on the real source)", () =
   assert.ok(!/api\("\/api\/profile\/upcoming"\)/.test(mutated),
     "the fetch check still passes with the fetch gone — the anchor is spelling-blind");
 });
+
+/* ═══ RF-18 (v0.193.0, owner order 2026-08-24): the dashboard reads in HIS order ═══ */
+
+test("RF-18 — the page order is his: strip, Messages, My events, Upcoming league, results, Updates last", () => {
+  // Positions of the one-per-page anchors inside the grid — indexOf is safe because each id is
+  // asserted unique on this page first.
+  const anchors = ['id="subStrip"', 'id="msgBox"', 'id="myEvList"', 'id="upLeague"', 'id="achBox"', 'id="notifications"'];
+  const at = {};
+  for (const a of anchors) {
+    assert.equal(HTML.split(a).length - 1, 1, `anchor must appear exactly once: ${a}`);
+    at[a] = HTML.indexOf(a);
+  }
+  for (let i = 1; i < anchors.length; i++) {
+    assert.ok(at[anchors[i - 1]] < at[anchors[i]],
+      `${anchors[i - 1]} must come before ${anchors[i]} — the owner's 2026-08-24 order`);
+  }
+});
+
+test("RF-18 — the feed box is renamed Updates and keeps the id the rail's anchor lands on", () => {
+  assert.match(HTML, />Updates\s*</, "the box lost its Updates heading");
+  assert.ok(!HTML.includes(">What's happening"), "the old heading is back — the rename regressed");
+  assert.match(HTML, /id="notifications"/, "the id the rail's Notifications anchor targets is gone (D-50 regression)");
+});
+
+test("RF-18 — the Upcoming league box: league-typed teams only, honest empty state, no extra fetch", () => {
+  assert.match(JS, /t\.type === "league"/, "the box no longer filters to league teams");
+  assert.match(JS, /No league on your calendar\./, "the empty state lost its honest sentence");
+  assert.match(JS, /renderUpcomingLeague\(teams\);/,
+    "renderUpcomingLeague is not fed from loadTeams — the box would show Loading… forever");
+});
+
+test("RF-18 NC — a demoted My-events card is caught (mutation on the real page)", () => {
+  const mutated = HTML.replace('id="myEvList"', 'id="zzEvList"');
+  assert.notEqual(mutated, HTML, "the mutation did not land");
+  assert.ok(!mutated.includes('id="myEvList"'),
+    "the order pin still sees the anchor after the rename — it is spelling-blind");
+});

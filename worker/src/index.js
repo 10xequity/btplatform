@@ -531,7 +531,7 @@ export default {
         const session = await currentSession(request, env);
         res = session ? await listOrgs(env) : json({ error: "Sign in first." }, 401);
       } else if (url.pathname === "/api/health") {
-        res = json({ ok: true, version: "v0.192.0" });
+        res = json({ ok: true, version: "v0.193.0" });
       } else if (url.pathname === "/api/webhooks/square" && request.method === "POST") {
         res = await membershipWebhook(request, env); // verifies signature; forwards payment.* to squareWebhook
       } else if (url.pathname === "/api/public/org-brand" && request.method === "GET") {

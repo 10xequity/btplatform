@@ -270,3 +270,45 @@ test("NC-D50b: swapping Notifications below Inbox FAILS the order pin", () => {
   assert.notDeepEqual(signedInItemsOf(mutated).slice(0, 3).map((i) => [i.text, i.href]), HIS_ORDER,
     "with Notifications demoted the order pin must fail — his order is the assertion");
 });
+
+/* ═══ RF-17 (v0.193.0, owner 2026-08-24): no brand row; sign-in lands on Home ═══ */
+
+test("RF-17 — the rail emits NO brand row, and Explore keeps index.html reachable (the exit pin)", () => {
+  const src = readNav();
+  // Forbidding on the BUILD string, so a re-added row reddens here carrying its reason.
+  assert.ok(!src.includes('class="nav-brand"'),
+    "the brand row is back on the rail — the owner removed it as redundant (RF-17)");
+  // The forbid needs its exit: index.html stays reachable through the Explore item. Removing
+  // the brand row deleted a DUPLICATE way in, never the last one.
+  assert.match(src, /href: "index\.html",\s+ico: [^,]+, text: "Explore"/,
+    "Explore no longer points at index.html — removing the brand row deleted the last way in");
+});
+
+test("RF-17 — the org-brand fetch SURVIVES the card: it still feeds the contact filler (B29)", () => {
+  const src = readNav();
+  const start = src.indexOf("async function applyOrgBrand");
+  assert.ok(start > -1, "applyOrgBrand is gone — and it was the one path feeding btOrgContact");
+  const body = src.slice(start, src.indexOf("\n  }", start));
+  assert.match(body, /btOrgContact\(brand\)/,
+    "applyOrgBrand no longer hands the payload to btOrgContact — org contact addresses go dark");
+});
+
+test("RF-17 — a fresh sign-in lands on the member's home; the carried return page still wins", () => {
+  const app = readFileSync(new URL("../../web/assets/app.js", import.meta.url), "utf8");
+  const at = app.indexOf("async function verifyToken");
+  assert.ok(at > -1, "verifyToken is gone");
+  const body = app.slice(at, app.indexOf("\n  }", at));
+  assert.match(body, /if \(returnTo\) \{ location\.replace\(returnTo\); return; \}/,
+    "the D-48 carry lost priority — an expired-session return must beat the default landing");
+  assert.match(body, /location\.replace\("home\.html"\)/,
+    "sign-in no longer lands on home.html — the owner's 'Default view to home'");
+});
+
+test("RF-17 NC — a re-added brand row is caught (mutation on the real source)", () => {
+  const src = readNav();
+  const mutated = src.replace("aside.innerHTML = NAV.map",
+    'aside.innerHTML = `<a class="nav-brand" href="index.html">Boomtown</a>` + NAV.map');
+  assert.notEqual(mutated, src, "the mutation did not land — the build line moved");
+  assert.ok(mutated.includes('class="nav-brand"'),
+    "the planted brand row is invisible to the forbidding check — it is spelling-blind");
+});

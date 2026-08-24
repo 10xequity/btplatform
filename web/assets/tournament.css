@@ -87,6 +87,10 @@ body.print-day .ds-close { display: inline-block; }
 /* RF-1 (v0.4): the page. Margins for every print job from this screen; the pool grid asks for
    letter-landscape by name because courts × rounds is wider than it is tall. The day sheet
    (print-day mode) hides #gridPanel, so its job never picks up the landscape page. */
+/* Screen half of the print title — hidden until a print job reveals it. Sits BEFORE the print
+   block (Gemini v0.193.0, measured): an unconditional rule after the block would win the cascade
+   at equal specificity and silently override the print typography. */
+.print-title { display: none; margin: 0 0 6px; }
 @page { margin: 10mm; }
 @page pool { size: letter landscape; margin: 10mm; }
 @media print {
@@ -95,7 +99,7 @@ body.print-day .ds-close { display: inline-block; }
   /* RF-1 (v0.4): the fit — on screen the grid scrolls; on paper nothing scrolls, so the cells
      give up their 130px floor and fixed layout shares the page width across however many
      rounds the event has. overflow-wrap keeps long team names inside their cell. */
-  .grid-scroll { overflow-x: visible; }
+  .grid-scroll { overflow: visible; }
   .pool-grid { table-layout: fixed; margin-top: 4px; }
   .pool-grid th, .pool-grid td { min-width: 0; padding: 3px 5px; font-size: 11px; overflow-wrap: anywhere; }
   .pool-grid td.round-label { min-width: 0; }
@@ -114,6 +118,7 @@ body.print-day .ds-close { display: inline-block; }
   .ds-close { display: none !important; }
   .ds-section { break-before: page; }
   .ds-section:first-of-type { break-before: auto; }
+  /* folded from the retired trailing one-liner block (Gemini v0.193.0): a [hidden] panel stays
+     hidden in print even though the reveal rules above force display on the visible ones. */
+  #gridPanel[hidden], #standingsPanel[hidden] { display: none; }
 }
-.print-title { display: none; font-size: 20px; margin: 0 0 6px; }
-@media print { .print-title { display: block; } #gridPanel[hidden], #standingsPanel[hidden] { display: none; } }

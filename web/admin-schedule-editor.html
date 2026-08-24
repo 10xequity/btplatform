@@ -12,9 +12,9 @@
   <title>Schedule editor — Boomtown Athletics</title>
   <script>/* Pre-paint state — collapse + theme (uiux-review §4/§6.4, v0.52.0): read the bt_nav cookie and the saved theme BEFORE the first stylesheet so the rail state AND the theme are right on frame one — no post-paint snap of either. admin-nav.js writes the cookie on rail toggle and bt_theme on theme toggle; the localStorage bt_nav fallback migrates pre-v0.51 sessions. */(function(){try{var m=document.cookie.match(/(?:^|; )bt_nav=([^;]*)/);var v=m?m[1]:((window.localStorage&&localStorage.getItem("bt_nav_collapsed")==="1")?"min":"");if(v==="min")document.documentElement.dataset.nav="min";var t=(window.localStorage&&localStorage.getItem("bt_theme"))||(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.dataset.theme=t;}catch(e){}})();</script>
   <script>try{var btTpl=localStorage.getItem("bt_template");if(btTpl)document.documentElement.dataset.template=btTpl;}catch(e){}</script>
-  <link rel="stylesheet" href="assets/tokens.css?v=0.192.0" />
-  <link rel="stylesheet" href="assets/app.css?v=0.192.0" />
-  <link rel="stylesheet" href="assets/admin.css?v=0.192.0" />
+  <link rel="stylesheet" href="assets/tokens.css?v=0.193.0" />
+  <link rel="stylesheet" href="assets/app.css?v=0.193.0" />
+  <link rel="stylesheet" href="assets/admin.css?v=0.193.0" />
   <style>
     .mf-head { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; margin-bottom: 12px; }
     .mf-head p { max-width: 68ch; }
@@ -71,11 +71,21 @@
       .ed-slot { min-width: 128px; height: 70px; }
       .ed-match { font-size: 11px; }
     }
+
+    /* RF-3 (v0.193.0): print prints what you see — filter to one week and the print IS the
+       per-week hand-out. The chrome, controls and fairness panel go; the grid stays and stops
+       scrolling. admin.css's global print block already drops the rail and header. */
+    @media print {
+      .mf-row, .ed-side-panel, .no-print { display: none !important; }
+      .ed-layout { grid-template-columns: 1fr; }
+      .ed-grid-scroll { overflow: visible; }
+      .ed-grid th, .ed-grid td { border-color: #000; color: #000; }
+    }
   </style>
 </head>
 <body>
     <header class="header chrome-glass no-print">
-    <a class="wordmark" href="admin.html" style="text-decoration:none;color:inherit"><img class="brand-logo" src="assets/logo-boom-icon-512.png?v=0.192.0" alt="" width="22" height="22" />Boomtown <span>Athletics</span></a>
+    <a class="wordmark" href="admin.html" style="text-decoration:none;color:inherit"><img class="brand-logo" src="assets/logo-boom-icon-512.png?v=0.193.0" alt="" width="22" height="22" />Boomtown <span>Athletics</span></a>
     <div class="spacer"></div>
     <select id="orgSwitcher" class="org-switcher" aria-label="Switch organization"></select>
     <a id="btHdrMail" class="btn ghost hdr-mail" href="admin-messages.html" aria-label="Messages">✉</a>
@@ -160,6 +170,14 @@
             <select id="sEvent" aria-label="Choose an event"></select>
           </label>
           <button class="btn ghost" id="sReload" type="button">Reload</button>
+          <!-- RF-3 (v0.193.0): the week-first flow — show one week (league) / round (tournament)
+               at a time; Print prints exactly what is shown, so this is also the per-week print. -->
+          <label class="mf-inline">Show
+            <select id="sWeek" aria-label="Show one week or the whole schedule"><option value="0">All</option></select>
+          </label>
+          <button class="btn ghost" id="sPrint" type="button">Print</button>
+          <button class="btn ghost" id="sCsv" type="button">Download CSV</button>
+          <button class="btn ghost" id="sEmail" type="button">Email schedule</button>
           <!-- Grid axis (owner, 2026-08-16): courts down the side is the default; this switches
                to the old rounds-down shape and back. The label names the ACTION, not the state. -->
           <button class="btn ghost" id="sAxis" type="button">Courts across the top</button>
@@ -189,8 +207,8 @@
       </div>
     </main>
   </div>
-  <script src="assets/config.js?v=0.192.0"></script>
-  <script src="assets/admin-nav.js?v=0.192.0"></script>
-  <script src="assets/admin-schedule-editor.js?v=0.192.0"></script>
+  <script src="assets/config.js?v=0.193.0"></script>
+  <script src="assets/admin-nav.js?v=0.193.0"></script>
+  <script src="assets/admin-schedule-editor.js?v=0.193.0"></script>
 </body>
 </html>

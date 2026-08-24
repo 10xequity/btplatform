@@ -83,10 +83,40 @@
           ${[1, 2, 3, 4, 5].map(n => `<option value="${n}"${n === t.level_num ? " selected" : ""}>${n}</option>`).join("")}
         </select>
         <button class="btn ghost" type="button" data-roster="${t.id}" aria-label="Open the roster for ${esc(t.name)}">Roster</button>
+        <button class="btn ghost" type="button" data-move="${t.id}" data-name="${esc(t.name)}" aria-label="Move ${esc(t.name)} to another league">Move</button>
       </div>`).join("") || `<p class="help-text">No teams yet — teams land here from registrations or Tournament Ops.</p>`;
     // W-A (v0.92.0): each team opens the roster its registration created — names editable there.
     $("levels").querySelectorAll("[data-roster]").forEach(b => b.addEventListener("click", () =>
       window.BT_ROSTER && window.BT_ROSTER.open(Number(b.dataset.roster))));
+    // T2-1b (v0.193.0): move a team to another league — the server refuses while it has games here.
+    $("levels").querySelectorAll("[data-move]").forEach(b => b.addEventListener("click", () =>
+      moveModal(Number(b.dataset.move), b.dataset.name)));
+  }
+
+  /* T2-1b: the destination list is the league picker's own, minus this league. Registrations stay
+     on the original event (the server says so too) — this moves scheduling, not money. */
+  function moveModal(teamId, name) {
+    const opts = [...$("leagueSelect").options]
+      .filter(o => o.value && Number(o.value) !== leagueId)
+      .map(o => `<option value="${o.value}">${esc(o.textContent)}</option>`).join("");
+    if (!opts) { say("No other league to move to — create one first.", true); return; }
+    const back = openModal(`
+      <h2>Move ${esc(name)}</h2>
+      <p class="help-text">Registrations stay on the original event — this moves the team's
+        scheduling only. A team with games on this schedule can't move until those matchups
+        are cleared.</p>
+      <div class="field"><label>To league</label><select id="mvTo">${opts}</select></div>
+      <div class="actions"><button class="btn ghost" id="mvCancel">Cancel</button>
+        <button class="btn" id="mvGo">Move team</button></div>`);
+    back.querySelector("#mvCancel").onclick = closeModal;
+    back.querySelector("#mvGo").onclick = async () => {
+      const r = await api(`/api/admin/events/${leagueId}/teams/${teamId}/move-event`, {
+        method: "POST", body: JSON.stringify({ to_event_id: +back.querySelector("#mvTo").value }),
+      });
+      closeModal();
+      say(r.ok ? `${name} moved to ${r.data.to}. ${r.data.note || ""}` : r.data.error, !r.ok);
+      if (r.ok) load();
+    };
   }
 
   async function saveLevels() {

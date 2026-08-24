@@ -324,3 +324,48 @@ test("moving an already-played match asks first", () => {
   assert.match(SRC, /score_a !== null && x\.score_b !== null/,
     "the server must tell the client which matches have been played");
 });
+
+/* ═══ RF-3 (v0.193.0): the week-first flow — a Show filter and the per-week print ═══ */
+
+test("RF-3 — the Show filter exists and is a VIEW: it re-renders without touching held state", () => {
+  assert.match(EDHTML, /id="sWeek"/, "the Show filter left the toolbar");
+  assert.match(EDHTML, /id="sPrint"/, "the print button left the toolbar");
+  // The filter's handler calls render() only — data, undoStack and baseline are untouched, the
+  // same property the axis switch has. A handler that reloads would drop held moves.
+  assert.ok(EDJS.includes('$("sWeek").addEventListener("change", () => { weekFilter = Number($("sWeek").value) || 0; render(); });'),
+    "the filter stopped being a pure view — held moves are at risk");
+  assert.ok(EDJS.includes('$("sPrint").addEventListener("click", () => window.print());'),
+    "print stopped printing what is shown");
+});
+
+test("RF-3 — a stale filter falls back to All, and a league is filtered by WEEK vocabulary", () => {
+  assert.ok(EDJS.includes("if (weekFilter && weekFilter <= data.rounds) return [weekFilter];"),
+    "shownRounds no longer guards a filter past the schedule's end — an empty grid would render");
+  assert.match(EDJS, /weekFilter = 0;\s*\n\s*return all;/,
+    "the stale filter is not reset — the select would show a week the grid ignores");
+  assert.ok(EDJS.includes('eventType === "league" ? "Week" : "Round"'),
+    "the filter lost the event's own vocabulary — a league's rounds ARE its weeks");
+});
+
+test("RF-3 — the per-week print: the page print CSS drops the controls and unclips the grid", () => {
+  const m = /@media print\s*\{/.exec(EDHTML);
+  assert.ok(m, "the editor page lost its @media print block — the per-week print prints the chrome");
+  let depth = 0, body = null;
+  for (let i = m.index + m[0].length - 1; i < EDHTML.length; i++) {
+    if (EDHTML[i] === "{") depth++;
+    else if (EDHTML[i] === "}") { depth--; if (depth === 0) { body = EDHTML.slice(m.index + m[0].length, i); break; } }
+  }
+  assert.ok(body, "unbalanced print block");
+  assert.match(body, /\.mf-row[^}]*display:\s*none/, "the toolbar prints");
+  assert.match(body, /\.ed-side-panel/, "the fairness panel prints");
+  assert.match(body, /\.ed-grid-scroll\s*\{\s*overflow:\s*visible/, "the grid still clips at the scroll edge on paper");
+});
+
+test("RF-3 NC — a filter handler that reloads instead of rendering is caught (mutation on real source)", () => {
+  const good = '$("sWeek").addEventListener("change", () => { weekFilter = Number($("sWeek").value) || 0; render(); });';
+  const mutated = EDJS.replace("weekFilter = Number($(\"sWeek\").value) || 0; render();",
+    "weekFilter = Number($(\"sWeek\").value) || 0; loadSchedule();");
+  assert.notEqual(mutated, EDJS, "the mutation did not land — the handler is not in the code");
+  assert.ok(!mutated.includes(good),
+    "the view-property check still passes on a reloading handler — the anchor is shape-blind");
+});

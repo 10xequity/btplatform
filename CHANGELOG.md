@@ -1,5 +1,41 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.193.0 — 2026-08-24
+
+Batch 5 — six units under the new in-loop review cadence (owner correction 2026-08-24).
+
+- **RF-3, the editor's week-first flow.** The Schedule editor gained a Show filter — one week
+  (leagues) or round (tournaments) at a time, a pure view: held moves and undo history are
+  untouched; a stale filter falls back to All. Print prints what is shown, so a filtered view IS
+  the per-week print; the page's print CSS drops the controls and fairness panel. Per the
+  all-three rule the editor also gained Download CSV and Email schedule, both honoring the
+  filter. Guards: schedule_editor.test.mjs (+4, incl. an NC on a reloading handler).
+- **T2-1b closed — a team can move to another event.** `POST
+  /api/admin/events/:id/teams/:teamId/move-event`: refused (409, in a sentence) while the team
+  has any games on this schedule; on a clean move the event-scoped baggage resets (pool,
+  division, seed, frozen number, board order), the old standings row retires, and REGISTRATIONS
+  STAY on the original event — the financial record is untouched, and the response says so.
+  League Manager team rows gained a Move button + modal. Guards: league_night.test.mjs (+3).
+- **RF-17 — the rail's brand row is gone** (owner: redundant with Explore and the header);
+  Explore keeps index.html reachable, and the org-brand fetch SURVIVES the card because it
+  feeds the org contact filler (B29 — named side effect, data path kept). **Sign-in now lands
+  on Home** — a fresh sign-in without a carried return page opens home.html; a signed-in
+  member can still browse to Explore. Guards: member_nav_paint.test.mjs (+4).
+- **RF-18 — the home page reads in the owner's order:** sub strip on top (now a solid card),
+  Messages under it, My events first of the main cards, a NEW "Upcoming league" box (fed from
+  the same teams read — a live night links score entry, otherwise standings/start date, honest
+  empty state), Your results underneath, and the aggregated feed renamed UPDATES at the bottom.
+  All ids kept — the rail's Notifications anchor still lands. Guards: home_my_events.test.mjs
+  (+4, incl. the order pin).
+- **Gemini (PROMPT.md v1.4, owner correction):** reviews now live INSIDE each loop — every 3
+  units and at the close. tournament.css was reviewed and BOTH findings folded (a cascade
+  collision that silently shrank the print title, and overflow shorthand); the remaining
+  pending set carried on quota 429s.
+- **Recorded:** RF-22's "fields" = rows of data (owner answer).
+
+Suite 2215 → 2230 across 149 files. No migration this release. A CRLF drift from git stash
+cycles was caught by the byte-identical header/rail guards and normalized before commit.
+
 ## v0.192.0 — 2026-08-24
 
 Batch 4 — the two owner-unlocked league engines, one release.

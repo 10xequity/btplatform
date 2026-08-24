@@ -1,4 +1,10 @@
 /* Boomtown Platform — Site-wide sidebar navigation (shared)
+   v2.23 (v0.193.0, §-1r RF-17, owner 2026-08-24): the rail's brand ROW is REMOVED — his words:
+   "Remove the Boomtown athletics button from the menu, it is redundant to explore and the top
+   left button/header." The Explore rail item keeps index.html reachable (no last-way-out lost).
+   NAMED SIDE EFFECT: the row was also the org-brand rail card (v2.12) — that DECORATION is gone,
+   but applyOrgBrand's fetch SURVIVES because it is the one path that feeds window.btOrgContact,
+   which fills the org's contact address on member pages (B29). Data path kept, card retired.
    v2.22 (v0.172.0, §-1r RF-12(4)/(2) + §-1c D-19/D-50, owner 2026-08-18): the member menu is
    rebuilt most-useful-first per his order — You (Home · Notifications · Inbox) · Play · Explore ·
    Account. "Home" is now the member's own home (home.html); the public card grid's one signed-in
@@ -328,8 +334,8 @@
     const aside = document.createElement("nav");
     aside.className = "site-nav";
     aside.setAttribute("aria-label", "Site navigation");
-    aside.innerHTML = `<a class="nav-brand" href="index.html" aria-label="Boomtown Athletics home">
-      <img src="assets/logo-boom-icon-512.png" alt="" width="36" height="36"><span class="nav-brand-name">Boomtown Athletics</span></a>` + NAV.map(g => `
+    // RF-17 (v0.193.0): no brand row — the owner called it redundant with Explore and the header.
+    aside.innerHTML = NAV.map(g => `
       <div class="nav-group" role="group" aria-label="${g.label}">
         <div class="nav-label">${g.label}</div>
         ${g.items.map(i => `<a class="nav-item${i.href.split("#")[0] === here ? " active" : ""}" href="${i.href}"
@@ -416,7 +422,11 @@
     }
   }
 
-  /* v2.12: org-brand rail card. Cache ~5 min per org; fail closed to the default. */
+  /* v2.12: org-brand rail card → v2.23 (RF-17): the CARD is retired, but this fetch survives —
+     it is the one path that hands the org-brand payload to window.btOrgContact, which fills the
+     org's contact address on member pages (B29). The nav-brand selectors below null-guard, so
+     with no card they are no-ops; kept minimal rather than rewritten to avoid touching the
+     contact path's shape. Cache ~5 min per org; fail closed to the default. */
   async function applyOrgBrand(aside) {
     const org = safeGet("bt_org");
     if (!org || !API || API.includes("PENDING")) return;
@@ -549,7 +559,7 @@
       if (window.BT_STATUS || document.getElementById("bt-status-js")) return;
       var s = document.createElement("script");
       s.id = "bt-status-js";
-      s.src = "assets/build-status.js?v=0.192.0";
+      s.src = "assets/build-status.js?v=0.193.0";
       s.async = false;
       document.head.appendChild(s);
     } catch (e) { /* indicators are never load-blocking */ }
