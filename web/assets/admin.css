@@ -1,5 +1,9 @@
 /* Boomtown Platform — Admin Panel styles
-   Version: v0.6.0 · Date: 2026-08-02 (rail tighten + centered main, uiux-review §2; ships in v0.47.0)
+   Version: v0.7.0 · Date: 2026-08-24 (RF-1 print; ships in v0.189.0)
+   v0.7.0 (§-1r RF-1 print half): a global @media print block (bottom of file) drops the rail, the
+   header and the collapse handle and collapses .admin-layout to one full-width column, so admin
+   pages stop printing the 216px sidebar. Consolidates the per-page copies that lived on
+   admin-league.html and admin-score-links.html.
    v0.6.0: rail 232px → 216px behind --bt-rail-w (the edge handle in admin-nav.js binds to
    the same var — no more magic 219px); tighter group rhythm; .admin-main centered
    (max-width 1360px, margin auto) so content stops drifting left on ultrawide; the two
@@ -226,3 +230,15 @@
 .mgr-subtabs .tab { font-size: 13px; padding: 6px 10px; min-height: 44px; }
 .mgr-frame { width: 100%; border: 0; display: block; min-height: 420px; background: var(--bg); }
 .mgr-note { font-size: 13px; color: var(--text-muted); margin: 10px 0 0; }
+
+/* RF-1 (v0.189.0): admin pages print without the rail. admin.css had ZERO @media print, so
+   .admin-layout's 216px 1fr grid printed the sidebar and stole 216px of every admin sheet (the pool
+   sheet, scoring links, any hand-out). The precedent lived per-page on admin-league.html and
+   admin-score-links.html; this is the ONE place it belongs, so every admin page inherits it. Chrome
+   and the collapse handle go, the grid becomes a single full-width column, and .no-print is honoured.
+   The day-sheet print MODE (tournament.css) layers on top and still owns which panels show. */
+@media print {
+  .sidebar, .bt-edge, .bt-backbar-admin, .header, .no-print { display: none !important; }
+  .admin-layout { display: block; }
+  .admin-main { padding: 0 !important; margin: 0; max-width: none; }
+}

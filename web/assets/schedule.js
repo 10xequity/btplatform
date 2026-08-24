@@ -71,7 +71,10 @@
   }
 
   let events = [], mode = modeFromUrl(params.get("mode")), org = "";
-  let typeFilter = "", sortKey = "date", sortRev = false;
+  // D-49: seed the type tab from ?type= so index.html's "Tournaments" card actually lands filtered
+  // (it links schedule.html?type=tournament). buildControls() reconciles this against the types
+  // actually loaded — an unknown/empty type falls back to All, so junk cannot wedge the filter.
+  let typeFilter = params.get("type") || "", sortKey = "date", sortRev = false;
   let calCursor = new Date(); calCursor.setDate(1);
   let calExpanded = null; // RF-7: the one day whose "+N more" is open (a YYYY-MM-DD string)
 
@@ -256,7 +259,7 @@
     catch { document.getElementById("schedBody").innerHTML = `<div class="empty">Can't reach the schedule right now — try refreshing.</div>`; return; }
     if (r.error) { document.getElementById("schedBody").innerHTML = `<div class="empty">${esc(r.error)}</div>`; return; }
     events = r.events || [];
-    document.getElementById("schedTitle").textContent = r.view && r.view.name !== "Public" ? `Schedule — ${r.view.name}` : "Schedule";
+    document.getElementById("schedTitle").textContent = r.view && r.view.name !== "Public" ? `Event Schedule — ${r.view.name}` : "Event Schedule";
     const orgSel = document.getElementById("orgFilter");
     const seen = new Map(events.map(e => [e.org_id, e.org_name]));
     if (orgSel.options.length <= 1 && seen.size > 1) {

@@ -374,3 +374,46 @@ test("SG-6 NC — renaming the sync call is CAUGHT, so the containment check can
   assert.ok(!mutated.slice(at, end).includes("syncModeUrl()"),
     "the mutated span still matches — the containment check above cannot fail and proves nothing");
 });
+
+/* ══════════════ RF-11 (v0.189.0): the member page is "Event Schedule", not bare "Schedule" ══════════════
+   Owner item 11: rename Schedule → Event Schedule. The label is four surfaces — the page title and
+   heading (schedule.html), the runtime heading text (schedule.js overwrites the <h1>), the member
+   nav item (site-nav.js), and the home card (app.js). D-19's live hook: no two nav items share a
+   name; the admin rail's "Schedule Page" is a distinct label, so this does not collide. */
+
+const NAVJS = read("assets/site-nav.js");
+const APPJS = read("assets/app.js");
+
+test("RF-11 — the member schedule reads 'Event Schedule' across its four surfaces", () => {
+  assert.match(SHTML, /<title>Event Schedule —/, "the page <title> was not renamed");
+  assert.match(SHTML, /id="schedTitle"[^>]*>Event Schedule</, "the static heading was not renamed");
+  assert.match(blankComments(SJS), /"Event Schedule"/, "the runtime heading text was not renamed (schedule.js overwrites the h1)");
+  assert.match(blankComments(NAVJS), /text: "Event Schedule"/, "the member nav item was not renamed");
+  assert.match(blankComments(APPJS), /"schedule\.html", "Event Schedule"/, "the home 'Event Schedule' card was not renamed");
+});
+
+test("RF-11 NC — a bare 'Schedule' nav label must not survive the rename", () => {
+  assert.ok(!/text: "Schedule"/.test(blankComments(NAVJS)),
+    "a bare 'Schedule' member nav item survived — the rename is incomplete");
+});
+
+/* ══════════════ D-49 (v0.189.0): the home Tournaments card lands FILTERED ══════════════
+   index.html's "Tournaments" card links schedule.html?type=tournament, but schedule.js only ever set
+   typeFilter from a tab click — the param was dead, so the card landed on the unfiltered list and a
+   member could not tell the click worked. The fix seeds typeFilter from ?type= at init; buildControls
+   reconciles it against the loaded types (unknown/empty → All), the same shape as ?mode=. */
+
+test("D-49 — the type filter is INITIALISED from ?type=, so the Tournaments card lands filtered", () => {
+  assert.match(blankComments(SJS), /typeFilter = params\.get\("type"\)/,
+    "typeFilter is not seeded from ?type= — the Tournaments card lands on the unfiltered list (D-49)");
+  assert.match(blankComments(APPJS), /schedule\.html\?type=tournament/,
+    "the home Tournaments card no longer sends ?type=tournament — the reader would have no producer");
+});
+
+test("D-49 NC — a schedule.js that ignores ?type= is caught", () => {
+  const code = blankComments(SJS);
+  const mutated = code.replace('params.get("type")', '""');
+  assert.notEqual(mutated, code, "the mutation did not land — update the anchor for D-49");
+  assert.ok(!/typeFilter = params\.get\("type"\)/.test(mutated),
+    "the reader survived the mutation — the D-49 check proves nothing");
+});

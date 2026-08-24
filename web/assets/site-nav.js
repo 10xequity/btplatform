@@ -258,7 +258,7 @@
         { href: "member-inbox.html", ico: "✉", text: "Inbox", key: "inbox" },
       ]});
       NAV.push({ label: "Play", items: [
-        { href: "schedule.html", ico: "▣", text: "Schedule" },
+        { href: "schedule.html", ico: "▣", text: "Event Schedule" },
         { href: "leagues.html",  ico: "◇", text: "Leagues" },
         { href: "live.html",     ico: "◉", text: "Live scores" },
         { href: "lfg.html",      ico: "◆", text: "Community Play" },
@@ -306,7 +306,7 @@
     } else {
       NAV.push({ label: "Explore", items: [
         { href: "index.html",    ico: "⌂", text: "Home" },
-        { href: "schedule.html", ico: "▣", text: "Schedule" },
+        { href: "schedule.html", ico: "▣", text: "Event Schedule" },
         { href: "leagues.html",  ico: "◇", text: "Leagues" },
         { href: "live.html",     ico: "◉", text: "Live scores" },
         { href: "lfg.html",      ico: "◆", text: "Community Play" },
@@ -549,7 +549,7 @@
       if (window.BT_STATUS || document.getElementById("bt-status-js")) return;
       var s = document.createElement("script");
       s.id = "bt-status-js";
-      s.src = "assets/build-status.js?v=0.188.0";
+      s.src = "assets/build-status.js?v=0.189.0";
       s.async = false;
       document.head.appendChild(s);
     } catch (e) { /* indicators are never load-blocking */ }

@@ -1,5 +1,15 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.189.0 — 2026-08-24
+
+**Batch: RF-11 rename, D-49 dead filter, RF-1 print (owner asked for more per build).** Three of the owner's list items in one release.
+
+- **RF-11 — the member page is "Event Schedule", not "Schedule".** Renamed across its four surfaces: the page `<title>` and heading (`schedule.html`), the runtime heading (`schedule.js` overwrites the `<h1>`), the member nav item (`site-nav.js`, both signed-out and signed-in), and the home card (`app.js`). The admin rail's "Schedule Page" is a distinct label, so D-19's no-two-items-share-a-name rule still holds.
+- **D-49 — the home "Tournaments" card now lands filtered.** `index.html`'s card links `schedule.html?type=tournament`, but `schedule.js` only ever set the type filter from a tab click — the param was dead and the card landed on the unfiltered list. It now seeds `typeFilter` from `?type=` at boot, the same shape as `?mode=`; `buildControls` reconciles it against the loaded types (unknown/empty → All).
+- **RF-1 (print half) — admin pages print without the rail.** `admin.css` had ZERO `@media print`, so `.admin-layout`'s `216px 1fr` grid printed the sidebar and stole 216px of every admin sheet (the pool sheet, scoring links, any hand-out). Added ONE global `@media print` block that drops the rail, header and collapse handle and collapses the layout to a single full-width column — consolidating the per-page copies that lived on `admin-league.html` and `admin-score-links.html`. The day-sheet print mode layers on top unchanged.
+
+Guards: `schedule_tabs.test.mjs` gains the RF-11 four-surface rename check (+ an NC that a bare "Schedule" nav label is caught) and the D-49 `?type=` seed check (+ NC); `admin_print.test.mjs` (new) pins the `@media print` block hides `.sidebar` and collapses `.admin-layout` (+ NC). RF-13(b') was measured and needs no build — a team's own opponents/schedule already renders on `score.html` (reached via the score link) and the live board, and (d) the account "Your teams" card already filters to the member's teams; RF-13 score-entry is complete across the account, the leagues page, and email.
+
 ## v0.188.0 — 2026-08-23
 
 **The captain can email the team its scoring link (RF-13 score-entry, third channel — owner req 2026-08-23).** The owner asked that score entry be reachable via email. The score link was already surfaced to a signed-in member on the leagues banner (v0.185.0) and the account (v0.187.0); this lets the captain push it out to the whole team, including members who don't open the app.
