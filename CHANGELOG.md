@@ -1,5 +1,15 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.188.0 — 2026-08-23
+
+**The captain can email the team its scoring link (RF-13 score-entry, third channel — owner req 2026-08-23).** The owner asked that score entry be reachable via email. The score link was already surfaced to a signed-in member on the leagues banner (v0.185.0) and the account (v0.187.0); this lets the captain push it out to the whole team, including members who don't open the app.
+
+- `POST /api/profile/teams/:id/email-scorelink` (new, authenticated) — the captain (or staff) of that team emails the team's own `score.html?t=` link to every roster teammate with an email on file. Own-team only (captain/staff of this team), live-gated (`scoringOpen` — the same date-derived rule the account card uses, now one shared helper), and keyless-honest: with no mail key it reports "Email isn't connected yet (sandbox) — nothing was sent, but the link is ready on this page" rather than pretending it sent. The send is audited. The raw token travels only in the email body, never in the JSON response.
+- `web/home.js` — the account "Your teams" card shows the captain of a live team an "Email the link to my team" button beside "Enter your team's scores"; non-captains and not-live teams see no button.
+- `worker/test/member_score_entry.test.mjs` — the captain send returns the honest sandbox notice and audits (token absent from the response); a non-captain roster member is refused (403); an upcoming event refuses and mints no token (409); a team with no addressable teammate refuses (400); the account card carries the captain-gated button.
+
+Still open: a richer per-team opponents/play-schedule view, and the "highlight/filter the signed-in schedule to their team" alternative.
+
 ## v0.187.0 — 2026-08-23
 
 **Score entry reaches the membership account (RF-13 score-entry, second surface — owner req 2026-08-23).** The owner asked that score entry be reachable "through membership account and tournament/league page." v0.185.0 put it on the leagues page; this puts it in the account, covering both event types in one place.

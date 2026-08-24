@@ -154,6 +154,7 @@ export async function registrationRoutes(request, env, url, ctx) {
   if ((match = p.match(/^\/api\/admin\/team-members\/(\d+)$/)) && m === "DELETE") return removeTeamMember(env, ctx, +match[1]);
   if (p === "/api/profile/connect-teams" && m === "POST") return connectTeams(env, ctx);
   if (p === "/api/profile/teams" && m === "GET") return myTeams(env, ctx);
+  if ((match = p.match(/^\/api\/profile\/teams\/(\d+)\/email-scorelink$/)) && m === "POST") return emailScoreLink(env, ctx, +match[1]);
   if ((match = p.match(/^\/api\/events\/(\d+)\/import$/)) && m === "POST") return importRows(request, env, ctx, +match[1]);
   if ((match = p.match(/^\/api\/events\/(\d+)\/score-links$/)) && m === "POST") return scoreLinks(env, ctx, +match[1]);
   if ((match = p.match(/^\/api\/score\/([a-f0-9]{16,64})$/))) {
@@ -1044,6 +1045,16 @@ export async function ensureScoreToken(env, team) {
   return token;
 }
 
+/* Scoring is OPEN for an event that is live — marked in_progress, or started by date. A
+   missing/unparseable date is not a start signal (matches the client's groupOf; the D-53/RF-4b
+   lesson — nothing on the owner's path reliably sets in_progress). One spelling for both the account
+   link (myTeams) and the email path (emailScoreLink), so they cannot disagree about "live". */
+function scoringOpen(startsAt, status) {
+  if (status === "in_progress") return true;
+  const s = startsAt ? new Date(String(startsAt).replace(" ", "T")) : null;
+  return !!(s && !isNaN(s.getTime()) && s <= new Date());
+}
+
 async function scoreLinks(env, ctx, eventId) {
   const { ev, deny } = await staffEventGate(env, ctx, eventId);
   if (deny) return deny;
@@ -1410,21 +1421,15 @@ async function myTeams(env, ctx) {
        AND (t.captain_contact_id = ?2 OR tm.contact_id = ?2)
      ORDER BY e.starts_at`
   ).bind(ctx.orgId, me.id).all()).results;
-  const now = new Date();
   for (const t of teams) {
     t.is_captain = t.captain_contact_id === me.id;
     /* RF-13 (owner req 2026-08-23): "score entry ... accessible through membership account and
        tournament/league page." A team on THIS account can reach its own score entry once the event
-       is live; the token is surfaced only here to a member of this team, never on the public board or
-       schedule. The gate is DATE-DERIVED, not status-only — nothing on the owner's path reliably sets
-       status='in_progress' (the D-53/RF-4b lesson), so an event that has STARTED by date counts as
-       live even while still 'published'. Upcoming events surface no link (and mint no token). */
-    const startsAt = t.starts_at ? new Date(String(t.starts_at).replace(" ", "T")) : null;
-    // Surface the link only when the event is CLEARLY live: marked in_progress, or started by date.
-    // A missing/unparseable date is NOT a start signal, so it stays closed (and mints no token) —
-    // this matches the client's groupOf, which files a date-less event under Upcoming.
-    const live = t.event_status === "in_progress" || (startsAt && !isNaN(startsAt.getTime()) && startsAt <= now);
-    t.score_url = live ? `${env.APP_URL}/score.html?t=${await ensureScoreToken(env, t)}` : null;
+       is live (scoringOpen — date-derived, see the helper); the token is surfaced only here to a
+       member of this team, never on the public board or schedule. Upcoming events surface no link
+       and mint no token. */
+    t.score_url = scoringOpen(t.starts_at, t.event_status)
+      ? `${env.APP_URL}/score.html?t=${await ensureScoreToken(env, t)}` : null;
     delete t.score_token;    // the raw token never ships as its own field; score_url carries it, own-team only
     delete t.event_status;   // internal to the gate above
     t.members = (await env.DB.prepare(
@@ -1470,4 +1475,50 @@ async function inviteTeammate(env, ctx, tmId) {
   return ok
     ? json({ ok: true, mode: "email", message: `Invite sent to ${tm.member_email}.` })
     : json({ ok: true, mode: "sandbox", message: "Email isn't connected yet (sandbox) — marked as invited, but no email went out." });
+}
+
+/* RF-13 score-entry, the EMAIL channel (owner req 2026-08-23: score entry "presented in email").
+   The captain (or staff) emails their OWN team its scoring link — the third surface over the same
+   score_url the account card and leagues banner use. The token is a credential, so this stays
+   own-team: only the captain/staff of THIS team may send, and it goes only to that team's own roster
+   addresses. Live-gated (scoringOpen) and keyless-honest (sendEmail returns false in sandbox → the
+   caller surfaces the "not connected" sentence, the standing email rule — the link is still on the
+   page). */
+async function emailScoreLink(env, ctx, teamId) {
+  if (!ctx.session) return json({ error: "Sign in first." }, 401);
+  const team = await env.DB.prepare(
+    `SELECT t.id, t.org_id, t.name, t.score_token, t.captain_contact_id,
+            e.name AS event_name, e.starts_at, e.status
+     FROM teams t JOIN events e ON e.id = t.event_id AND e.deleted_at IS NULL
+     WHERE t.id = ?1 AND t.deleted_at IS NULL`
+  ).bind(teamId).first();
+  if (!team) return json({ error: "Team not found." }, 404);
+  const me = await myContact(env, ctx);
+  const staff = await isStaff(env, ctx, team.org_id);
+  if (!staff && (!me || me.id !== team.captain_contact_id)) {
+    return json({ error: "Only the team captain (or staff) can email the scoring link." }, 403);
+  }
+  if (!scoringOpen(team.starts_at, team.status)) {
+    return json({ error: "Scoring isn't open for this event yet — the link appears once play starts." }, 409);
+  }
+  const roster = (await env.DB.prepare(
+    `SELECT member_name, member_email FROM team_members
+     WHERE team_id=?1 AND deleted_at IS NULL AND member_email IS NOT NULL AND member_email <> ''`
+  ).bind(teamId).all()).results;
+  if (!roster.length) return json({ error: "No teammate has an email on file to send to." }, 400);
+
+  const url = `${env.APP_URL}/score.html?t=${await ensureScoreToken(env, team)}`;
+  let sent = 0;
+  for (const r of roster) {
+    const ok = await sendEmail(env, r.member_email, `Score your games — ${team.name}`,
+      `<p>Hi ${escapeHtml(r.member_name || "there")} — here is your scoring link for <strong>${escapeHtml(team.name)}</strong> (${escapeHtml(team.event_name)}).</p>` +
+      `<p><a href="${escapeHtml(url)}">Enter your team's scores</a> — tap the winner, then the point margin. No sign-in needed; keep this link to your team.</p>`,
+      team.org_id);
+    if (ok) sent++;
+  }
+  await audit(env, { orgId: team.org_id, userId: ctx.userId }, "team.email_scorelink", "teams", teamId,
+    { recipients: roster.length, mode: sent ? "email" : "sandbox" });
+  return sent
+    ? json({ ok: true, mode: "email", message: `Scoring link sent to ${sent} teammate${sent === 1 ? "" : "s"}.` })
+    : json({ ok: true, mode: "sandbox", message: "Email isn't connected yet (sandbox) — nothing was sent, but the link is ready on this page." });
 }

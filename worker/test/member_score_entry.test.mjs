@@ -184,6 +184,65 @@ test("RF-13: one spelling mints the token — both staff links and the member pa
     "myTeams inlined its own token mint — that is the drift the helper exists to prevent");
 });
 
+/* ═══════════ the email channel — the captain emails the team its link ═══════════ */
+
+/** A captain (contact 50) of a live team (500) with one roster teammate who has an email. */
+function seedEmailTeam(env, userId) {
+  env.DB.exec(`INSERT INTO contacts (id, org_id, user_id, email, full_name) VALUES (50, 1, ${userId}, 'cap@bt.test', 'Cap')`);
+  env.DB.exec(`INSERT INTO events (id, org_id, name, type, status, starts_at) VALUES (400, 1, 'Live Cup', 'tournament', 'published', '2020-06-01 09:00')`);
+  env.DB.exec(`INSERT INTO teams (id, org_id, event_id, name, captain_contact_id, score_token) VALUES (500, 1, 400, 'Spikes', 50, 'tok5000000000000')`);
+  env.DB.exec(`INSERT INTO team_members (org_id, team_id, member_name, member_email) VALUES (1, 500, 'Mate', 'mate@bt.test')`);
+}
+
+test("RF-13 email: the captain emails their team the scoring link — keyless-honest in sandbox, token not in the response", async () => {
+  const env = boot();
+  const me = await member(env, "cap@bt.test");
+  seedEmailTeam(env, me.id);
+  const r = await call(env, "POST", "/api/profile/teams/500/email-scorelink", { token: me.token });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  assert.equal(r.data.mode, "sandbox", "no BREVO key in tests → the honest 'not connected' notice, never a false 'sent'");
+  assert.ok(!JSON.stringify(r.data).includes("tok5000000000000"),
+    "the JSON response leaked the raw score token — it belongs only in the email body");
+  assert.ok(env.DB.one("SELECT 1 AS n FROM audit_log WHERE action='team.email_scorelink'"),
+    "the send was not audited");
+});
+
+test("RF-13 email: a non-captain roster member cannot send — 403", async () => {
+  const env = boot();
+  const cap = await member(env, "cap@bt.test");
+  seedEmailTeam(env, cap.id);
+  // a second member, on the roster of team 500 but NOT the captain
+  const mate = await signIn(env, "mate@bt.test");
+  env.DB.exec(`INSERT INTO contacts (id, org_id, user_id, email, full_name) VALUES (51, 1, ${mate.id}, 'mate@bt.test', 'Mate')`);
+  env.DB.exec(`INSERT INTO team_members (org_id, team_id, contact_id, member_name, member_email) VALUES (1, 500, 51, 'Mate', 'mate@bt.test')`);
+  const r = await call(env, "POST", "/api/profile/teams/500/email-scorelink", { token: mate.token });
+  assert.equal(r.status, 403, `a non-captain must not be able to blast the team: ${JSON.stringify(r.data)}`);
+});
+
+test("RF-13 email: an upcoming event refuses — scoring isn't open yet (409)", async () => {
+  const env = boot();
+  const me = await member(env, "cap@bt.test");
+  env.DB.exec(`INSERT INTO contacts (id, org_id, user_id, email, full_name) VALUES (50, 1, ${me.id}, 'cap@bt.test', 'Cap')`);
+  env.DB.exec(`INSERT INTO events (id, org_id, name, type, status, starts_at) VALUES (401, 1, 'Later Cup', 'tournament', 'published', '2099-01-01 09:00')`);
+  env.DB.exec(`INSERT INTO teams (id, org_id, event_id, name, captain_contact_id) VALUES (501, 1, 401, 'Spikes', 50)`);
+  env.DB.exec(`INSERT INTO team_members (org_id, team_id, member_name, member_email) VALUES (1, 501, 'Mate', 'mate@bt.test')`);
+  const r = await call(env, "POST", "/api/profile/teams/501/email-scorelink", { token: me.token });
+  assert.equal(r.status, 409, `an upcoming event must refuse the send: ${JSON.stringify(r.data)}`);
+  assert.equal(env.DB.one("SELECT score_token FROM teams WHERE id=501").score_token, null,
+    "an upcoming event must mint no token even on an email attempt");
+});
+
+test("RF-13 email: a team with no teammate email refuses — nothing to send to (400)", async () => {
+  const env = boot();
+  const me = await member(env, "cap@bt.test");
+  env.DB.exec(`INSERT INTO contacts (id, org_id, user_id, email, full_name) VALUES (50, 1, ${me.id}, 'cap@bt.test', 'Cap')`);
+  env.DB.exec(`INSERT INTO events (id, org_id, name, type, status, starts_at) VALUES (402, 1, 'Live Cup', 'tournament', 'published', '2020-06-01 09:00')`);
+  env.DB.exec(`INSERT INTO teams (id, org_id, event_id, name, captain_contact_id) VALUES (502, 1, 402, 'Spikes', 50)`);
+  env.DB.exec(`INSERT INTO team_members (org_id, team_id, member_name) VALUES (1, 502, 'No-email Mate')`); // no email
+  const r = await call(env, "POST", "/api/profile/teams/502/email-scorelink", { token: me.token });
+  assert.equal(r.status, 400, `no addressable teammate must refuse: ${JSON.stringify(r.data)}`);
+});
+
 /* ═══════════ the leagues 'tonight' banner surfaces it ═══════════ */
 
 const tonightBody = (src) => {
@@ -226,6 +285,16 @@ test("RF-13: the account 'Your teams' card offers score entry for a live team, c
     "home.js's team card no longer reads the team's score_url — the membership-account path he named is gone");
   assert.ok(body.includes("Enter your team"),
     "the score-entry action text is gone from the account card");
+});
+
+test("RF-13 email: the account card gives the captain an 'email the link to my team' action", () => {
+  const body = loadTeamsBody(HOME);
+  assert.ok(body.includes("data-emaillink"),
+    "home.js's team card has no email-the-team button — the email channel has no entry point");
+  assert.ok(body.includes("email-scorelink"),
+    "home.js no longer POSTs the email-scorelink route");
+  // gated to the captain of a live team; the server enforces it too (a non-captain POST is 403)
+  assert.ok(body.includes("t.is_captain"), "the email action is not gated to the captain");
 });
 
 test("NC: an account card that drops score_url renders no score action", () => {

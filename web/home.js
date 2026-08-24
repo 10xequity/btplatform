@@ -1,5 +1,9 @@
 /* Boomtown Platform — My Dashboard
-   File: web/home.js · Version: v2.2.0 · Date: 2026-08-23 · Ships in: v0.14.0 (v2.2.0 in v0.187.0)
+   File: web/home.js · Version: v2.3.0 · Date: 2026-08-23 · Ships in: v0.14.0 (v2.3.0 in v0.188.0)
+   v2.3.0 (§-1r RF-13 score-entry — the EMAIL channel, owner req 2026-08-23): the captain of a live
+   team gets an "Email the link to my team" button beside "Enter your team's scores"; it POSTs
+   /api/profile/teams/:id/email-scorelink (own-team, live-gated, keyless-honest). Non-captains and
+   not-live teams show no button. The result shows in #status, mirroring the invite handler.
    v2.2.0 (§-1r RF-13 score-entry — the "membership account" surface, owner req 2026-08-23): the
    "Your teams" card now shows "Enter your team's scores →" for any team whose event is live — the
    score_url /api/profile/teams already carries (own-team only, never public; the leagues banner was
@@ -370,6 +374,7 @@
       <div style="padding:10px 0;border-bottom:1px solid var(--border)">
         <div style="font-weight:700">${esc(t.name)} <span class="help-text" style="font-weight:400">· ${esc(t.event_name)}</span></div>
         ${t.score_url ? `<a class="btn ghost sm" href="${esc(t.score_url)}" style="text-decoration:none;margin:6px 0 2px;display:inline-block">Enter your team&#8217;s scores &#8594;</a>` : ""}
+        ${t.is_captain && t.score_url ? `<button class="btn ghost sm" data-emaillink="${t.id}" style="margin:6px 0 2px 8px">Email the link to my team</button>` : ""}
         ${t.members.map(m => `
           <div class="tm-member" data-tm="${m.id}">
             <span>${esc(m.name || "Unnamed")}${m.is_sub ? " (sub)" : ""}</span>
@@ -387,6 +392,14 @@
       b.disabled = false;
       $("status").innerHTML = `<p class="${r2.ok ? "notice-ok" : "notice-err"}">${esc(r2.data.message || r2.data.error || "")}</p>`;
       if (r2.ok) loadTeams();
+    });
+    // RF-13 email channel (v0.188.0): the captain emails the team its own scoring link (own-team,
+    // live-gated, keyless-honest — the server surfaces the sandbox sentence). No page reload needed.
+    $("teamList").querySelectorAll("[data-emaillink]").forEach(b => b.onclick = async () => {
+      b.disabled = true;
+      const r2 = await api(`/api/profile/teams/${b.dataset.emaillink}/email-scorelink`, { method: "POST" });
+      b.disabled = false;
+      $("status").innerHTML = `<p class="${r2.ok ? "notice-ok" : "notice-err"}">${esc(r2.data.message || r2.data.error || "")}</p>`;
     });
   }
 
