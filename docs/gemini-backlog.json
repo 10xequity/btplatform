@@ -86,9 +86,9 @@
  {
   "file": "worker/src/facility.js",
   "status": "pending",
-  "tier": "never-reviewed",
+  "tier": "carry",
   "last_review": null,
-  "note": null
+  "note": "D-57/D-58 rewrite v0.200.0-v0.201.0 — review first"
  },
  {
   "file": "worker/src/family.js",
