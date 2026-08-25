@@ -1,5 +1,15 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.196.0 — 2026-08-25
+
+**The copy sweep's worker half — RF-20 FULLY CLOSED — and the D-45 raw-read class measured to its tail (§-1r RF-20 + §-1c D-45).**
+
+- **RF-20, the worker half.** The 237 member-facing strings in the worker — every error sentence, email subject and body, Square catalog name, calendar-feed name, and the sandbox seed copy members see when sample data is generated — are now em-dash-free, hand-rewritten to plain punctuation. `copy_style.test.mjs` v1.1 widens its corpus to `worker/src`, so the class is dead on both halves of the ship. Seven route-test pins moved with the copy. One naming change was **measured live before shipping**: the guest-pass grant name doubles as its once-a-month dedup key, and live D1 holds zero August grants, so the rename opens no double-grant window. Square catalog items created from now on read "Event · date"; existing items keep their names.
+- **D-45, clusters 5 and 6 + the honest total.** `header_shell` and the five 3-pair holders (`event_cancel_notify`, `human_chaos`, `names`, `team_roster`, `asset_versions`) now comment-blank the `.js` sources they read — re-measured to zero each — with ONE deliberate keep recorded at the site: `asset_versions`' C6 test feeds `versionFromIndex` the same raw bytes the production sweep script parses, and blanking would let the two instruments disagree. The owed full same-corpus re-run (untruncated, written to a file): **44 raw pairs across 34 files** on the 151-file corpus (2,191 in-scope pairs, 328 comment-sensitive) — the stale 70/41 total retired.
+- **Gemini (RF-19):** the 20/day quota finally rolled mid-loop — and every attempt then hit Google-side 503s (model overloaded), two retries per batch. Nothing reviewed for a fourth loop; tonight's blocker is availability, not the cap. The carry stands.
+
+Suite 2265 → **2266** · no migration · no new page or route.
+
 ## v0.195.0 — 2026-08-25
 
 **The copy sweep, the league recency note, and two D-45 clusters (§-1r RF-20 web half + the RF-3 remnant + §-1c D-45).**
