@@ -30,10 +30,11 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+import { blankComments } from "../testkit/route-extract.mjs";
 
 const ROOT = new URL("../../", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1");
 const CSS = readFileSync(join(ROOT, "web/assets/tokens.css"), "utf8");
-const CONFIG = readFileSync(join(ROOT, "web/assets/config.js"), "utf8");
+const CONFIG = blankComments(readFileSync(join(ROOT, "web/assets/config.js"), "utf8")); // D-45
 
 /* ── WCAG 2.x maths (copy: token_contrast.test.mjs) ── */
 const rgb = (hex) => {

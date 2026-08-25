@@ -15,7 +15,7 @@ import {
 } from "../src/marketing.js";
 // segmentReach is imported DYNAMICALLY in its tests: a static import of a not-yet-existing
 // export reddens the whole file at load, hiding the per-test watch-it-fail picture.
-import { statementFrom, functionBodyAfter } from "../testkit/route-extract.mjs"; // v0.111.0 §-1c D-17b — regions, not distances
+import { statementFrom, functionBodyAfter, blankComments } from "../testkit/route-extract.mjs"; // v0.111.0 §-1c D-17b — regions, not distances
 import { createD1 } from "../testkit/d1-memory.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -284,7 +284,7 @@ test("SG-4 — every counting caller routes through segmentReach, and the old si
 });
 
 test("SG-4 — the screens carry the axis and the honesty line: modal fields, the aged description, and the no-birthdate sentence on list, preview AND composer", () => {
-  const ui = readFileSync(join(here, "../../web/assets/admin-marketing.js"), "utf8");
+  const ui = blankComments(readFileSync(join(here, "../../web/assets/admin-marketing.js"), "utf8")); // D-45
   assert.ok(ui.includes('id="mSegAgeMin"'), "the modal offers the band's lower end");
   assert.ok(ui.includes('id="mSegAgeMax"'), "…and its upper end — a constraint arrives as one end of a band");
   assert.match(ui, /aged /, "describeFilter says the band in words");

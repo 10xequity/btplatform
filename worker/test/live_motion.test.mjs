@@ -37,10 +37,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { statementFrom } from "../testkit/route-extract.mjs"; // v0.111.0 §-1c D-17b — regions, not distances
+import { statementFrom, blankComments } from "../testkit/route-extract.mjs"; // v0.111.0 §-1c D-17b — regions, not distances
 
 const HTML = readFileSync(new URL("../../web/live.html", import.meta.url), "utf8");
-const PAGE = readFileSync(new URL("../../web/assets/live.js", import.meta.url), "utf8");
+const PAGE = blankComments(readFileSync(new URL("../../web/assets/live.js", import.meta.url), "utf8")); // D-45
+/* the degraded-state pin anchors on the "// do not diff" comment DELIBERATELY; raw view for it */
+const PAGE_RAW = readFileSync(new URL("../../web/assets/live.js", import.meta.url), "utf8");
 const TOKENS = readFileSync(new URL("../../web/assets/tokens.css", import.meta.url), "utf8");
 
 /* ── pure verdicts ── */
@@ -219,7 +221,7 @@ test("a degraded board animates nothing", () => {
   // A section that came back empty because its read failed looks exactly like a section that
   // emptied. Motion would assert a change we cannot know happened.
   assert.match(PAGE, /const quiet = reduced\(\) \|\| !!d\.degraded/);
-  assert.match(PAGE, /prev = null;\s*\/\/ do not diff/,
+  assert.match(PAGE_RAW, /prev = null;\s*\/\/ do not diff/,
     "after a degraded poll the snapshot must be dropped, not diffed against");
 });
 

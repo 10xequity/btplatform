@@ -19,9 +19,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import worker from "../src/index.js";
 import { createD1 } from "../testkit/d1-memory.mjs";
+import { blankComments } from "../testkit/route-extract.mjs";
 
 const SCHEMA = readFileSync(new URL("../testkit/journey-schema.sql", import.meta.url), "utf8");
-const PAGE = readFileSync(new URL("../../web/assets/admin-brackets.js", import.meta.url), "utf8");
+const PAGE = blankComments(readFileSync(new URL("../../web/assets/admin-brackets.js", import.meta.url), "utf8")); // D-45
 const ORIGIN = "https://boomtown.test";
 
 function boot(teamCount = 10) {

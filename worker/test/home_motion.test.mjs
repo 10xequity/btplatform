@@ -15,11 +15,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { blankComments } from "../testkit/route-extract.mjs";
 
 const WEB = new URL("../../web/", import.meta.url);
 const HOME_HTML = readFileSync(new URL("home.html", WEB), "utf8");
-const HOME_JS = readFileSync(new URL("home.js", WEB), "utf8");
-const SITE_NAV = readFileSync(new URL("assets/site-nav.js", WEB), "utf8");
+const HOME_JS = blankComments(readFileSync(new URL("home.js", WEB), "utf8")); // D-45
+const SITE_NAV = blankComments(readFileSync(new URL("assets/site-nav.js", WEB), "utf8")); // D-45
 
 /** The body of the FIRST `@media (prefers-reduced-motion: no-preference)` block, by brace
  *  depth (it holds nested rule braces). Null when absent. */

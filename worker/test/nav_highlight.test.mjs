@@ -29,9 +29,10 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+import { blankComments } from "../testkit/route-extract.mjs";
 
 const ROOT = new URL("../../", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1");
-const NAVJS = readFileSync(join(ROOT, "web/assets/admin-nav.js"), "utf8");
+const NAVJS = blankComments(readFileSync(join(ROOT, "web/assets/admin-nav.js"), "utf8")); // D-45
 const RAIL = readFileSync(join(ROOT, "web/assets/rail.partial.html"), "utf8");
 
 /** Every href the static rail can highlight, page part only (hash discarded). This is the set the

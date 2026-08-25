@@ -381,7 +381,7 @@ test("RF-17 — the org-brand fetch SURVIVES the card: it still feeds the contac
 });
 
 test("RF-17 — a fresh sign-in lands on the member's home; the carried return page still wins", () => {
-  const app = readFileSync(new URL("../../web/assets/app.js", import.meta.url), "utf8");
+  const app = blankComments(readFileSync(new URL("../../web/assets/app.js", import.meta.url), "utf8")); // D-45
   const at = app.indexOf("async function verifyToken");
   assert.ok(at > -1, "verifyToken is gone");
   const body = app.slice(at, app.indexOf("\n  }", at));

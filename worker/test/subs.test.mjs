@@ -15,14 +15,15 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { blankComments } from "../testkit/route-extract.mjs";
 import {
   parseList, subMatches, normalizeSignup, normalizeRequest, displayName,
   SKILLS, GENDERS, GAME_TYPES, OPEN_REQUESTS_MAX, NOTIFY_FANOUT_MAX,
 } from "../src/subs.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const subsSrc = readFileSync(join(here, "../src/subs.js"), "utf8");
-const indexSrc = readFileSync(join(here, "../src/index.js"), "utf8");
+const subsSrc = blankComments(readFileSync(join(here, "../src/subs.js"), "utf8")); // D-45
+const indexSrc = blankComments(readFileSync(join(here, "../src/index.js"), "utf8")); // D-45: a commented-out dispatch entry must not satisfy a wiring pin
 
 /* ---------------- parseList ---------------- */
 test("parseList keeps only allowed values, lowercased and deduped", () => {

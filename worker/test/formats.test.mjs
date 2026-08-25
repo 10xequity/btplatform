@@ -335,10 +335,11 @@ test("6-on-2 is clean at 6 rounds and unavoidably repeats beyond 7", () => {
 import { readFileSync } from "node:fs";
 import worker from "../src/index.js";
 import { createD1 } from "../testkit/d1-memory.mjs";
+import { blankComments } from "../testkit/route-extract.mjs";
 
 const FORMATS_SRC = readFileSync(new URL("../src/formats.js", import.meta.url), "utf8");
-const BRACKETS_SRC = readFileSync(new URL("../src/brackets.js", import.meta.url), "utf8");
-const TOURN_JS = readFileSync(new URL("../../web/assets/tournament.js", import.meta.url), "utf8");
+const BRACKETS_SRC = blankComments(readFileSync(new URL("../src/brackets.js", import.meta.url), "utf8")); // D-45
+const TOURN_JS = blankComments(readFileSync(new URL("../../web/assets/tournament.js", import.meta.url), "utf8")); // D-45
 const TOURN_HTML = readFileSync(new URL("../../web/tournament.html", import.meta.url), "utf8");
 const ORIGIN = "https://boomtown.test";
 

@@ -16,10 +16,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import worker from "../src/index.js";
 import { createD1 } from "../testkit/d1-memory.mjs";
-import { statementFrom } from "../testkit/route-extract.mjs"; // v0.111.0 §-1c D-17b — regions, not distances
+import { statementFrom, blankComments } from "../testkit/route-extract.mjs"; // v0.111.0 §-1c D-17b — regions, not distances
 
 const SCHEMA = readFileSync(new URL("../testkit/journey-schema.sql", import.meta.url), "utf8");
-const PAGE = readFileSync(new URL("../../web/assets/live.js", import.meta.url), "utf8");
+const PAGE = blankComments(readFileSync(new URL("../../web/assets/live.js", import.meta.url), "utf8")); // D-45
 const HTML = readFileSync(new URL("../../web/live.html", import.meta.url), "utf8");
 const ORIGIN = "https://boomtown.test";
 

@@ -21,7 +21,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { isLive, muteKeyValid, normalizeSubBody, CATEGORIES } from "../src/announcements.js";
-import { statementFrom, mountsAndWires } from "../testkit/route-extract.mjs"; // v0.111.0 §-1c D-17b — regions, not distances
+import { statementFrom, mountsAndWires, blankComments } from "../testkit/route-extract.mjs"; // v0.111.0 §-1c D-17b — regions, not distances
 
 const SRC = readFileSync(new URL("../src/announcements.js", import.meta.url), "utf8");
 const INDEX = readFileSync(new URL("../src/index.js", import.meta.url), "utf8");
@@ -225,8 +225,8 @@ test("NC-5: the statement scanner counts a miss when SQL is unreadable", () => {
    the same rules the API enforces, scanning the REAL page/JS sources (never trust). */
 
 const PAGE = readFileSync(new URL("../../web/admin-announcements.html", import.meta.url), "utf8");
-const PAGE_JS = readFileSync(new URL("../../web/assets/admin-announcements.js", import.meta.url), "utf8");
-const HOME_JS = readFileSync(new URL("../../web/home.js", import.meta.url), "utf8");
+const PAGE_JS = blankComments(readFileSync(new URL("../../web/assets/admin-announcements.js", import.meta.url), "utf8")); // D-45
+const HOME_JS = blankComments(readFileSync(new URL("../../web/home.js", import.meta.url), "utf8")); // D-45
 
 test("authoring JS drives all four staff routes (list, create, update, soft delete)", () => {
   assert.ok(PAGE_JS.includes('api("/api/admin/announcements")'), "GET list call missing");

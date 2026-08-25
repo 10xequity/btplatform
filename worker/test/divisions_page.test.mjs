@@ -21,12 +21,15 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { functionBodyAfter } from "../testkit/route-extract.mjs"; // v0.111.0 §-1c D-17b — regions, not distances
+import { functionBodyAfter, blankComments } from "../testkit/route-extract.mjs"; // v0.111.0 §-1c D-17b — regions, not distances
 
-const JS = readFileSync(new URL("../../web/assets/admin-divisions.js", import.meta.url), "utf8");
+const JS = blankComments(readFileSync(new URL("../../web/assets/admin-divisions.js", import.meta.url), "utf8")); // D-45
+/* the recompute pin below anchors on the "// the numbers moved" comment DELIBERATELY — the
+   prose is half the record; that one assertion reads the raw view */
+const JS_RAW = readFileSync(new URL("../../web/assets/admin-divisions.js", import.meta.url), "utf8");
 const HTML = readFileSync(new URL("../../web/admin-divisions.html", import.meta.url), "utf8");
 const QRJS = readFileSync(new URL("../../web/assets/qr.js", import.meta.url), "utf8");
-const SLJS = readFileSync(new URL("../../web/assets/admin-score-links.js", import.meta.url), "utf8");
+const SLJS = blankComments(readFileSync(new URL("../../web/assets/admin-score-links.js", import.meta.url), "utf8")); // D-45
 
 /* ================================ the page reaches the engine ================================ */
 
@@ -61,7 +64,7 @@ test("the reason and the numbers behind it are both displayed", () => {
 test("accepting or declining recomputes the plan rather than patching the screen", () => {
   // Every acceptance changes the medians, which changes what else is misplaced. Editing the list in
   // place would leave stale suggestions on screen that no longer follow from the data.
-  assert.match(JS, /await check\(\);\s+\/\/ the numbers moved/,
+  assert.match(JS_RAW, /await check\(\);\s+\/\/ the numbers moved/,
     "after a decision the plan must be re-read from the server");
 });
 

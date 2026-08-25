@@ -11,7 +11,7 @@
 
    Everything in this file is pure. No database, no fixture, no clock. */
 import { test } from "node:test";
-import { mountsAndWires } from "../testkit/route-extract.mjs";
+import { mountsAndWires, blankComments } from "../testkit/route-extract.mjs";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
@@ -19,7 +19,10 @@ import {
   tally, rankPlayers, partnerHistory, nextRound, NET_SIZES,
 } from "../src/kotc.js";
 
-const SRC = readFileSync(new URL("../src/kotc.js", import.meta.url), "utf8");
+const SRC = blankComments(readFileSync(new URL("../src/kotc.js", import.meta.url), "utf8")); // D-45
+/* three pins below anchor on comment RECORDS in kotc.js by design (the no-formula decision and
+   the no-free-choice finding are prose the module must keep); they read the raw view */
+const SRC_RAW = readFileSync(new URL("../src/kotc.js", import.meta.url), "utf8");
 
 /** Every unordered pair in a list, as "low:high" keys. */
 const allPairs = (xs) => {
@@ -397,7 +400,7 @@ test("a director's move_up is honoured when it is workable, and is never compute
   // Nothing derives move_up from how many nets there are — no formula was encoded, deliberately.
   assert.ok(!/moveUp\s*=\s*[^;]*nets\.length/.test(SRC),
     "move_up must not be computed from the net count — the owner declined to fix a formula");
-  assert.match(SRC, /director sets it each session/i,
+  assert.match(SRC_RAW, /director sets it each session/i,
     "the source must record whose decision this is");
 });
 
@@ -464,9 +467,9 @@ test("the source records that partner repeats cannot be steered, because that is
      no free choice: a net plays ALL its pairings. Whoever next reads this file will otherwise go
      looking for the optimiser the spec promised, so the finding is written down in the module and
      asserted here — an explanation nobody can delete by accident. */
-  assert.match(SRC, /IT NEVER HAS A FREE CHOICE/,
+  assert.match(SRC_RAW, /IT NEVER HAS A FREE CHOICE/,
     "the module must record why the spec's soft-constraint optimiser does not exist");
-  assert.match(SRC, /reporting/i);
+  assert.match(SRC_RAW, /reporting/i);
 });
 
 /* ================================ the format, end to end ================================ */

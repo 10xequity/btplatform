@@ -13,14 +13,15 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { blankComments } from "../testkit/route-extract.mjs";
 import {
   CODE_ALPHABET, CODE_LENGTH, MISS_LIMIT, MISS_WINDOW_MIN,
   mintCode, normalizeCode, scanDecision, displayName,
 } from "../src/kiosk.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const kioskSrc = readFileSync(join(here, "../src/kiosk.js"), "utf8");
-const indexSrc = readFileSync(join(here, "../src/index.js"), "utf8");
+const kioskSrc = blankComments(readFileSync(join(here, "../src/kiosk.js"), "utf8")); // D-45
+const indexSrc = blankComments(readFileSync(join(here, "../src/index.js"), "utf8")); // D-45: a commented-out dispatch entry must not satisfy a wiring pin
 
 /* ---------------- mintCode ---------------- */
 

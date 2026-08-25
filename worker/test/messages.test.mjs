@@ -3,10 +3,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { blankComments } from "../testkit/route-extract.mjs";
 import { tierClause, buildLibraryWhere, relayEmailHtml, overFlood, muteUntilIso, normalizeMuteBody, LIBRARY_ADULT_PREDICATE,
          MESSAGE_FLAG_SCOPE, FLAG_STATUSES, flagStatusOf } from "../src/messages.js";
 
-const SRC = readFileSync(new URL("../src/messages.js", import.meta.url), "utf8");
+const SRC = blankComments(readFileSync(new URL("../src/messages.js", import.meta.url), "utf8")); // D-45
 
 test("tierClause: anonymous visitors only see public profiles", () => {
   const c = tierClause(false, false);

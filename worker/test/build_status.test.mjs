@@ -26,8 +26,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
+import { blankComments } from "../testkit/route-extract.mjs";
 
 const WEB = new URL("../../web/", import.meta.url);
+/* D-45: this read stays RAW on purpose — pagesKeys() slices the registry between the
+   "const PAGES = {" code anchor and the "2. FEATURES" COMMENT marker, so the comment is a
+   load-bearing structural anchor. The raw-source-sweep counts this pair; it is a recorded keep. */
 const statusSrc = readFileSync(new URL("assets/build-status.js", WEB), "utf8");
 const checkinSrc = readFileSync(new URL("../src/checkin.js", import.meta.url), "utf8");
 

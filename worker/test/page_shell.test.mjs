@@ -34,6 +34,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
+import { blankComments } from "../testkit/route-extract.mjs";
 
 const WEB_DIR = new URL("../../web/", import.meta.url);
 const stripHtmlComments = (s) => s.replace(/<!--[\s\S]*?-->/g, "");
@@ -188,7 +189,7 @@ test("every admin-nav.js page carries the pre-paint state snippet (collapse + th
 });
 
 test("admin-nav.js writes the bt_nav cookie on toggle and keeps NO post-paint read", () => {
-  const src = readFileSync(new URL("assets/admin-nav.js", WEB_DIR), "utf8");
+  const src = blankComments(readFileSync(new URL("assets/admin-nav.js", WEB_DIR), "utf8")); // D-45
   assert.ok(src.includes('document.cookie = "bt_nav="'),
     "the collapse toggle must persist to the bt_nav cookie the snippet reads");
   assert.ok(!/localStorage\.getItem\("bt_nav_collapsed"\)/.test(src),

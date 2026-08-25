@@ -39,6 +39,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
+import { blankComments } from "../testkit/route-extract.mjs";
 
 const WEB_DIR = new URL("../../web/", import.meta.url);
 const ASSETS_DIR = new URL("../../web/assets/", import.meta.url);
@@ -61,7 +62,7 @@ function brandCorpus() {
     corpus.set("web/" + f, stripHtmlComments(readFileSync(new URL(f, WEB_DIR), "utf8")));
   }
   for (const f of readdirSync(WEB_DIR).filter((f) => f.endsWith(".js") || f === "manifest.webmanifest")) {
-    corpus.set("web/" + f, stripJsBlockComments(readFileSync(new URL(f, WEB_DIR), "utf8")));
+    corpus.set("web/" + f, blankComments(readFileSync(new URL(f, WEB_DIR), "utf8"))); // D-45: line comments too
   }
   for (const f of readdirSync(ASSETS_DIR).filter((f) => f.endsWith(".js"))) {
     corpus.set("web/assets/" + f, stripJsBlockComments(readFileSync(new URL(f, ASSETS_DIR), "utf8")));

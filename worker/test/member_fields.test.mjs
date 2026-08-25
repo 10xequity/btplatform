@@ -10,7 +10,7 @@
 
    Every guard ships a negative control that mutates real input and proves it can fail. */
 import { test } from "node:test";
-import { mountsAndWires } from "../testkit/route-extract.mjs";
+import { mountsAndWires, blankComments } from "../testkit/route-extract.mjs";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import worker from "../src/index.js";
@@ -20,7 +20,7 @@ import {
   FIELD_TYPES, MAX_FIELDS_PER_ORG, MAX_VALUE_LEN,
 } from "../src/member_fields.js";
 
-const SRC = readFileSync(new URL("../src/member_fields.js", import.meta.url), "utf8");
+const SRC = blankComments(readFileSync(new URL("../src/member_fields.js", import.meta.url), "utf8")); // D-45
 const INDEX_SRC = readFileSync(new URL("../src/index.js", import.meta.url), "utf8");
 
 /* ============================ 1. pure functions ============================ */

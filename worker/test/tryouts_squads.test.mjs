@@ -31,6 +31,7 @@ import { readFileSync } from "node:fs";
 import worker from "../src/index.js";
 import { createD1 } from "../testkit/d1-memory.mjs";
 import { squadNeeds } from "../src/tryouts.js";
+import { blankComments } from "../testkit/route-extract.mjs";
 
 const SCHEMA = readFileSync(new URL("../testkit/journey-schema.sql", import.meta.url), "utf8") + `
 CREATE UNIQUE INDEX ux_tryout_profiles_live ON tryout_profiles (org_id, event_id, contact_id) WHERE deleted_at IS NULL;
@@ -104,9 +105,9 @@ test("all five squad routes have a caller in the shipped client", () => {
 });
 
 test("the page is registered where a page has to be registered", () => {
-  const nav = readFileSync(new URL("../../web/assets/admin-nav.js", import.meta.url), "utf8");
+  const nav = blankComments(readFileSync(new URL("../../web/assets/admin-nav.js", import.meta.url), "utf8")); // D-45
   const rail = readFileSync(new URL("../../web/assets/rail.partial.html", import.meta.url), "utf8");
-  const status = readFileSync(new URL("../../web/assets/build-status.js", import.meta.url), "utf8");
+  const status = blankComments(readFileSync(new URL("../../web/assets/build-status.js", import.meta.url), "utf8")); // D-45
   assert.match(nav, /href: "admin-squads\.html"/, "a page missing from NAV is a page with no way in");
   assert.match(rail, /href="admin-squads\.html"/, "the rail partial is the source of truth sync-rail writes from");
   assert.match(status, /"admin-squads\.html":/, "every page is registered in build-status");

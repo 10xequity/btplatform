@@ -861,7 +861,7 @@ test("K-1 tier 2 NC — stripping the numbering write leaves every team unfrozen
   // (`SET team_no=?1`). The first attempt mutated whichever came first and then asserted the
   // column was unwritten, which the surviving statement falsified. The victim has to be the one
   // that ASSIGNS a number, named exactly.
-  const src = readFileSync(new URL("../src/divisions.js", import.meta.url), "utf8");
+  const src = blankComments(readFileSync(new URL("../src/divisions.js", import.meta.url), "utf8")); // D-45
   assert.match(src, /SET team_no=\?1/, "the numbering write is gone — this NC has no victim");
   assert.match(src, /SET team_no=NULL/, "the per-save clear is gone — a dragged-out team would keep a stale number");
   const mutated = src.replace("SET team_no=?1", "SET board_order=board_order");

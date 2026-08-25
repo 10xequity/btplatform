@@ -11,8 +11,9 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import worker from "../src/index.js";
 import { createD1 } from "../testkit/d1-memory.mjs";
+import { blankComments } from "../testkit/route-extract.mjs";
 
-const SRC = readFileSync(new URL("../src/formats.js", import.meta.url), "utf8");
+const SRC = blankComments(readFileSync(new URL("../src/formats.js", import.meta.url), "utf8")); // D-45
 const EDJS = readFileSync(new URL("../../web/assets/admin-schedule-editor.js", import.meta.url), "utf8");
 const EDHTML = readFileSync(new URL("../../web/admin-schedule-editor.html", import.meta.url), "utf8");
 const SCHEMA = readFileSync(new URL("../testkit/journey-schema.sql", import.meta.url), "utf8");

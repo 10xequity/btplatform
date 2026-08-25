@@ -14,6 +14,10 @@ import { csvCell, buildRevenueCsv, REVENUE_CSV_HEADERS, buildCrossOrgRevenueCsv,
 import { blankComments, functionBodyAfter } from "../testkit/route-extract.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
+/* D-45: RAW on purpose — checkCrossOrgConfinement slices between the CROSS-ORG READ /
+   END CROSS-ORG READ markers, which are comments by design (they make the confinement
+   region auditable). Recorded keep; the residual (a fully-commented file would still
+   carry the markers) is accepted because the checker also demands live SQL needles. */
 const reportsSrc = readFileSync(join(here, "../src/reports.js"), "utf8");
 
 /* ---------------- csvCell (RFC 4180) ---------------- */

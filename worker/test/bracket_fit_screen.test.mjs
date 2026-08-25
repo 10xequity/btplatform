@@ -20,8 +20,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { blankComments } from "../testkit/route-extract.mjs";
 
-const JS = readFileSync(new URL("../../web/assets/admin-brackets.js", import.meta.url), "utf8");
+const JS = blankComments(readFileSync(new URL("../../web/assets/admin-brackets.js", import.meta.url), "utf8")); // D-45
 const HTML = readFileSync(new URL("../../web/admin-brackets.html", import.meta.url), "utf8");
 
 test("the estimate is asked of the server, not computed in the browser", () => {

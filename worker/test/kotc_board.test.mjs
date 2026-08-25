@@ -36,6 +36,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import worker from "../src/index.js";
 import { createD1 } from "../testkit/d1-memory.mjs";
+import { blankComments } from "../testkit/route-extract.mjs";
 
 const SCHEMA = readFileSync(new URL("../testkit/journey-schema.sql", import.meta.url), "utf8");
 const ORIGIN = "https://boomtown.test";
@@ -468,7 +469,7 @@ test("an unknown or deleted session is a 404 on the public read, and says nothin
 test("all three new routes are reachable as CALL SITES in the shipped module (standards §6.5)", () => {
   /* Assert the dispatch entries, never the definitions: a route defined and never matched is the
      failure class this module already paid for in v0.76.0. */
-  const src = readFileSync(new URL("../src/kotcplay.js", import.meta.url), "utf8");
+  const src = blankComments(readFileSync(new URL("../src/kotcplay.js", import.meta.url), "utf8")); // D-45
   for (const [what, re] of [
     ["the session list", /p === "\/api\/admin\/kotc" && m === "GET"/],
     ["the drag", /p\.match\(\/\^\\\/api\\\/admin\\\/kotc\\\/\(\\d\+\)\\\/move\$\/\)\) && m === "POST"/],

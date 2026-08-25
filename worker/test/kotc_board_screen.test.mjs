@@ -42,7 +42,7 @@ import { join } from "node:path";
 import { blankComments, adminDispatchesIn, dispatchRegion } from "../testkit/route-extract.mjs";
 
 const ROOT = new URL("../../", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1");
-const read = (p) => readFileSync(join(ROOT, p), "utf8");
+const read = (p) => { const s = readFileSync(join(ROOT, p), "utf8"); return p.endsWith(".js") ? blankComments(s) : s; }; // D-45 door
 
 const BOARD_HTML = read("web/admin-kotc.html");
 const BOARD_JS = read("web/assets/admin-kotc.js");

@@ -11,10 +11,10 @@ import worker from "../src/index.js";
 import { createD1 } from "../testkit/d1-memory.mjs";
 import { passStatus, normalizePassInput, monthKey, guestPassName, PASS_USED_SQL } from "../src/passes.js";
 import { computePay, hoursBetween, pickRate, normalizeRateInput, PAY_BASES, MAX_RATE_CENTS } from "../src/staff_pay.js";
-import { templateTailsAfter, mountsAndWires } from "../testkit/route-extract.mjs"; // v0.111.0 §-1c D-17b — regions, not distances
+import { templateTailsAfter, mountsAndWires, blankComments } from "../testkit/route-extract.mjs"; // v0.111.0 §-1c D-17b — regions, not distances
 
 const PASSES_SRC = readFileSync(new URL("../src/passes.js", import.meta.url), "utf8");
-const PAY_SRC = readFileSync(new URL("../src/staff_pay.js", import.meta.url), "utf8");
+const PAY_SRC = blankComments(readFileSync(new URL("../src/staff_pay.js", import.meta.url), "utf8")); // D-45
 const INDEX_SRC = readFileSync(new URL("../src/index.js", import.meta.url), "utf8");
 
 const NOW = "2026-08-03T12:00:00Z";

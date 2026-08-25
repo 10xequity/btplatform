@@ -27,6 +27,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import worker from "../src/index.js";
 import { createD1 } from "../testkit/d1-memory.mjs";
+import { blankComments } from "../testkit/route-extract.mjs";
 
 const SCHEMA = readFileSync(new URL("../testkit/journey-schema.sql", import.meta.url), "utf8");
 const ORIGIN = "https://boomtown.test";
@@ -169,7 +170,7 @@ test("when the filter empties the board, the page's empty state + generate butto
   const html = readFileSync(new URL("../../web/admin-brackets.html", import.meta.url), "utf8");
   assert.match(html, /id="bGen"/, "the Generate button is gone — the filter would have deleted the last way out");
   assert.match(html, /id="bEmpty"/, "the empty state is gone — an empty filtered board would read as a hung page");
-  const js = readFileSync(new URL("../../web/assets/admin-brackets.js", import.meta.url), "utf8");
+  const js = blankComments(readFileSync(new URL("../../web/assets/admin-brackets.js", import.meta.url), "utf8")); // D-45
   assert.match(js, /\$\("bEmpty"\)\.hidden = list\.length > 0/,
     "render() no longer toggles the empty state on the list length");
   // NEGATIVE CONTROL — the detectors must be able to fail: strip the ids from a COPY and re-run them.

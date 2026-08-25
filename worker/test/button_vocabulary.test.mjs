@@ -41,6 +41,7 @@ import assert from "node:assert/strict";
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
+import { blankComments } from "../testkit/route-extract.mjs";
 
 const WEB = fileURLToPath(new URL("../../web/", import.meta.url));
 const ASSETS = join(WEB, "assets");
@@ -165,7 +166,7 @@ test("no shipped script emits a .btn modifier without the btn base", () => {
   const mods = btnModifiers(APP_CSS);
   const offences = [];
   for (const s of scripts) {
-    const src = readFileSync(join(ASSETS, s), "utf8");
+    const src = blankComments(readFileSync(join(ASSETS, s), "utf8")); // D-45: button markup in a comment is not a button
     for (const b of unstyledModifierUses(src, pageCssFor(s), mods)) offences.push(`assets/${s}  ${b}`);
   }
   assert.equal(offences.length, 0,

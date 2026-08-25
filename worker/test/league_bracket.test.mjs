@@ -428,7 +428,7 @@ import { BEST_OF_3_GAMES, guaranteedGames } from "../src/brackets.js";
 test("the games floor has ONE definition and it is the one formats.js already owned", () => {
   assert.equal(MIN_GAMES_PER_TEAM, 8, "the owner's floor is 8 games");
   // If brackets.js ever hard-codes its own 8, this is the test that should have caught it.
-  const src = readFileSync(new URL("../src/brackets.js", import.meta.url), "utf8");
+  const src = blankComments(readFileSync(new URL("../src/brackets.js", import.meta.url), "utf8")); // D-45
   assert.ok(/MIN_GAMES_PER_TEAM/.test(src), "brackets.js must import the floor, never restate it");
 });
 
@@ -591,6 +591,7 @@ import {
 // v0.150.0 (T2-4): the ceiling moved to formats.js beside the floor — one home per bound. This
 // file's PURPOSE (pin the value and the over-ceiling behaviour) is unchanged; only the address is.
 import { MAX_GAMES_PER_TEAM } from "../src/formats.js";
+import { blankComments } from "../testkit/route-extract.mjs";
 
 test("the template: quarters are one game, semi and final are best of 3", () => {
   assert.equal(BEST_OF_3_FROM_ROUND, 2, "round 1 is the final and round 2 the semi");

@@ -128,7 +128,8 @@ test("monthsUntil18 agrees with ageOn about the 18th-birthday boundary (F-38)", 
    decision it encodes. Together they fail if the gate is removed, narrowed to only
    'public', or flipped to fail-open on a NULL DOB. */
 import { readFileSync } from "node:fs";
-const PROFILES_SRC = readFileSync(new URL("../src/profiles.js", import.meta.url), "utf8");
+import { blankComments } from "../testkit/route-extract.mjs";
+const PROFILES_SRC = blankComments(readFileSync(new URL("../src/profiles.js", import.meta.url), "utf8")); // D-45
 const UPDATE_FN = PROFILES_SRC.slice(
   PROFILES_SRC.indexOf("async function update("),
   PROFILES_SRC.indexOf("async function avatarUpload(")
