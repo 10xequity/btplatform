@@ -115,7 +115,7 @@
     </div>
 
     <section class="card" style="margin-top:14px">
-      <h2 style="font-size:16px;margin:0 0 10px" id="formTitle">New plan</h2>
+      <h2 style="font-size:var(--fs-h2);margin:0 0 10px" id="formTitle">New plan</h2>
       <form class="mp-form" id="planForm">
         <div><label for="pName">Name</label><input id="pName" required maxlength="120" placeholder="Open Gym Unlimited" /></div>
         <div><label for="pPrice">Price (USD)</label><input id="pPrice" required type="number" min="1" step="0.01" placeholder="49.00" /></div>
@@ -134,13 +134,13 @@
     </section>
 
     <section class="card" style="margin-top:14px">
-      <h2 style="font-size:16px;margin:0 0 8px">Plans</h2>
+      <h2 style="font-size:var(--fs-h2);margin:0 0 8px">Plans</h2>
       <table class="tbl"><thead><tr><th>Plan</th><th>Price</th><th>Billing</th><th>Subscribers</th><th>Square</th><th>Status</th><th></th></tr></thead>
         <tbody id="planRows"></tbody></table>
     </section>
 
     <section class="card" style="margin-top:14px">
-      <h2 style="font-size:16px;margin:0 0 8px">Subscribers</h2>
+      <h2 style="font-size:var(--fs-h2);margin:0 0 8px">Subscribers</h2>
       <table class="tbl"><thead><tr><th>Member</th><th>Plan</th><th>Status</th><th>Started</th><th>Period end</th><th>Card</th></tr></thead>
         <tbody id="subRows"></tbody></table>
     </section>

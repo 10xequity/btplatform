@@ -18,7 +18,7 @@
     @media (min-width: 1100px) { .wv-grid { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); } }
 
     .wv-current { border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
-    .wv-current h2 { margin: 0 0 4px; font-size: 1rem; }
+    .wv-current h2 { margin: 0 0 4px; font-size: var(--fs-h2); }
     .wv-current .wv-meta { color: var(--text-muted); font-size: 13px; }
     .wv-body-preview {
       margin-top: 12px; max-height: 200px; overflow-y: auto; white-space: pre-wrap;
@@ -160,7 +160,7 @@
 
       <div class="wv-grid">
         <section aria-labelledby="wvPublishH">
-          <h2 id="wvPublishH" style="font-size:1.05rem">Publish a new version</h2>
+          <h2 id="wvPublishH" style="font-size:var(--fs-h2)">Publish a new version</h2>
 
           <div class="wv-impact" id="wvImpact" hidden aria-live="polite"></div>
 
@@ -196,7 +196,7 @@
         </section>
 
         <section aria-labelledby="wvHistoryH">
-          <h2 id="wvHistoryH" style="font-size:1.05rem">Current &amp; history</h2>
+          <h2 id="wvHistoryH" style="font-size:var(--fs-h2)">Current &amp; history</h2>
           <div id="wvCurrent" class="wv-current" aria-live="polite">Loading…</div>
 
           <table class="wv-table">
@@ -212,7 +212,7 @@
 
   <dialog class="wv-dialog" id="wvViewDlg" aria-labelledby="wvViewTitle">
     <div class="wv-dialog-head">
-      <h2 id="wvViewTitle" style="margin:0;font-size:1rem">Waiver text</h2>
+      <h2 id="wvViewTitle" style="margin:0;font-size:var(--fs-h2)">Waiver text</h2>
       <span class="wv-meta" id="wvViewMeta" style="color:var(--text-muted);font-size:13px"></span>
     </div>
     <div class="wv-body-preview" id="wvViewBody" tabindex="0"></div>
@@ -220,7 +220,7 @@
   </dialog>
 
   <dialog class="wv-dialog" id="wvConfirmDlg" aria-labelledby="wvConfirmTitle">
-    <h2 id="wvConfirmTitle" style="margin:0 0 8px;font-size:1rem">Publish this waiver version?</h2>
+    <h2 id="wvConfirmTitle" style="margin:0 0 8px;font-size:var(--fs-h2)">Publish this waiver version?</h2>
     <div id="wvConfirmText" style="font-size:0.95rem;line-height:1.5"></div>
     <div class="wv-body-preview" id="wvConfirmBody" tabindex="0" style="margin-top:12px"></div>
     <div style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">

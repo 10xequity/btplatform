@@ -56,6 +56,15 @@
   --font: "Inter", -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-size-body: 17px;    /* v0.4.0 F-36 — was 16px while `body` set 17px. See the foot of this file. */
 
+  /* v0.9.0 — THE TITLE SCALE (owner 2026-08-25: "Follow title hierarchy for sizes and fonts").
+     Measured pre-sweep: h1 shipped at 20/22/24/28 across pages and the card-h2 mode was 16px —
+     BELOW the 17px body, an inverted hierarchy. One scale, every screen; deliberate miniatures
+     (eyebrow labels, the kiosk display title) are named exemptions in type_scale.test.mjs,
+     which also pins the relationship h1 > h2 > h3 ≥ body. */
+  --fs-h1: 24px;
+  --fs-h2: 18px;
+  --fs-h3: 16px;
+
   /* Motion — emil-design-eng: ≤300ms, strong ease-out, no ease-in, reduced-motion respected */
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);

@@ -28,7 +28,7 @@
     .pos-grid { display: grid; gap: 16px; grid-template-columns: 1fr 1fr; align-items: start; }
     @media (max-width: 1020px) { .pos-grid { grid-template-columns: 1fr; } }
     .pos-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card); padding: 16px; }
-    .pos-card h2 { margin: 0 0 8px; font-size: 17px; }
+    .pos-card h2 { margin: 0 0 8px; font-size: var(--fs-h2); }
     .pos-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--border); flex-wrap: wrap; }
     .pos-row:first-of-type { border-top: 0; }
     .pos-row .grow { flex: 1; min-width: 160px; }
@@ -142,7 +142,7 @@
       <button class="bt-edge" type="button" aria-label="Collapse or expand navigation"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
     </aside>
     <main class="admin-main" style="padding:16px; max-width:1100px; margin:0 auto;">
-      <h1 style="font-size:28px; margin:8px 0 4px;">Point of Sale</h1>
+      <h1 style="font-size:var(--fs-h1); margin:8px 0 4px;">Point of Sale</h1>
       <p class="pos-hint" style="margin:0 0 12px;">Gear, drop-ins, and anything sold at the desk. Square payments stay in <b>sandbox</b> until you say go; cash and comp record normally.</p>
       <div class="pos-tabs" role="tablist" aria-label="Point of sale sections">
         <button class="pos-tab" role="tab" data-tab="sell" aria-selected="true">Sell</button>

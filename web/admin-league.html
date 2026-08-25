@@ -24,7 +24,7 @@
     .lvl-row select { width: 72px; min-height: 40px; }
     .wk-card { margin-bottom: 14px; }
     .wk-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
-    .wk-head h3 { font-size: 16px; margin: 0; }
+    .wk-head h3 { font-size: var(--fs-h3); margin: 0; }
     .mt-row { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--border); }
     .mt-row:last-child { border-bottom: 0; }
     .mt-row .court { flex: none; width: 52px; font-size: 12.5px; color: var(--text-muted); }
@@ -145,18 +145,18 @@
       <div class="lm-grid">
         <div>
           <section class="card">
-            <h2 style="font-size:16px;margin:0 0 4px">Team levels</h2>
+            <h2 style="font-size:var(--fs-h2);margin:0 0 4px">Team levels</h2>
             <p class="help-text" style="margin-top:0">1 = strongest, 5 = newest. Teams more than 2 levels apart never get matched.</p>
             <div id="levels"></div>
             <button class="btn" id="saveLevels" style="margin-top:12px">Save levels</button>
           </section>
           <section class="card" style="margin-top:14px">
-            <h2 style="font-size:16px;margin:0 0 4px">Staff for the night</h2>
+            <h2 style="font-size:var(--fs-h2);margin:0 0 4px">Staff for the night</h2>
             <p class="help-text" style="margin-top:0">Shows on the Control Center schedule.</p>
             <select id="staffSelect" aria-label="Assign staff" style="width:100%"></select>
           </section>
           <section class="card" style="margin-top:14px">
-            <h2 style="font-size:16px;margin:0 0 8px">Standings</h2>
+            <h2 style="font-size:var(--fs-h2);margin:0 0 8px">Standings</h2>
             <table class="tbl"><thead><tr><th>#</th><th>Team</th><th>W–L</th><th>±</th></tr></thead>
               <tbody id="standings"></tbody></table>
           </section>

@@ -35,6 +35,26 @@ window.BT_CAL = {
     const shown = dayEvents.slice(0, this.DAY_CAP);
     return { shown, hidden: dayEvents.length - shown.length };
   },
+  /** D-56 (owner 2026-08-25: "Yes agree with adding leagues to every night"): which days an
+      event PAINTS on in a month grid. One-day events keep their start cell. A short span — a
+      weekend tournament — paints each of its days. A league, or any span past a week, paints
+      WEEKLY on its start weekday through ends_at, so a season running Aug 12 → Oct 7 shows on
+      every one of its nights instead of leaving September an empty month. Derived from
+      starts_at/ends_at because no schedule row carries a per-night date (matches have rounds,
+      not dates) — a league that moves weeknights mid-season still paints its original night.
+      Guard: events_calendar.test.mjs v2.2 executes these bytes on fixtures. */
+  paintsOn(e, ds) {
+    const s = (e.starts_at || "").slice(0, 10);
+    if (!s) return false;
+    if (s === ds) return true;
+    const en = (e.ends_at || "").slice(0, 10);
+    if (!en || en <= s || ds < s || ds > en) return false;
+    const spanDays = Math.round((Date.parse(en) - Date.parse(s)) / 86400000);
+    if (e.type === "league" || spanDays > 7) {
+      return Math.round((Date.parse(ds) - Date.parse(s)) / 86400000) % 7 === 0;
+    }
+    return true; // a short multi-day run shows on each of its days
+  },
 };
 
 /* WHERE A SIGN-UP LINK POINTS — ONE JUDGEMENT, EVERY CALLER.

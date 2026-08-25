@@ -117,7 +117,7 @@
           (d.starts_at ? " on <b>" + esc(String(d.starts_at).slice(0, 10)) + "</b>" : "") +
           ".<br>Everyone playing needs a current waiver on file before check-in.</p>" +
         '<div class="sign-card">' +
-          '<h2 style="margin:0 0 10px;font-size:18px">Waiver (' + esc(d.waiver.label) + ")</h2>" +
+          '<h2 style="margin:0 0 10px;font-size:var(--fs-h2)">Waiver (' + esc(d.waiver.label) + ")</h2>" +
           '<div class="waiver-box" tabindex="0" role="region" aria-label="Waiver text, scrollable">' +
             esc(d.waiver.body) +
           "</div>" +

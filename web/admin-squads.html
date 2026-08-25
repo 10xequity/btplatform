@@ -33,7 +33,7 @@
     /* 18px is this product's h2 step (admin.css `.modal h2`), between the 22px page h1 and the
        14.5px body. Taken from the shared scale, never invented — a heading that lands on the h3
        step collides with a player's name and stops outranking the rows it introduces. */
-    .sq-card h2 { font-size: 18px; margin: 0 0 2px; }
+    .sq-card h2 { font-size: var(--fs-h2); margin: 0 0 2px; }
     .sq-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
 
     /* Pressables. `:active` scale is the whole feedback budget of this page — placing a player is

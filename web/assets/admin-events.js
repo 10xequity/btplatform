@@ -88,15 +88,21 @@
     const { shown, hidden } = BT_CAL.split(dayEvents);
     return `<div class="cal-day${classes}" data-date="${ds}">
         <div class="dnum">${dayNum}</div>
-        ${shown.map(e => `<a class="cal-ev ${e.status}" draggable="true" data-ev="${e.id}"
-            href="admin-event.html?id=${e.id}" title="${esc(e.name)}: click to manage, drag to reschedule">${esc(e.name)}</a>`).join("")}
+        ${shown.map(e => {
+          /* D-56: only the TRUE start tile drags — dragging a derived league-night tile would
+             silently reschedule the whole event's starts_at. No starts_at = not derived. */
+          const isStart = !e.starts_at || e.starts_at.slice(0, 10) === ds;
+          return `<a class="cal-ev ${e.status}" draggable="${isStart}" data-ev="${e.id}"
+            href="admin-event.html?id=${e.id}" title="${esc(e.name)}${isStart ? ": click to manage, drag to reschedule" : ": a night of this event. Click to manage; drag its start tile to reschedule"}">${esc(e.name)}</a>`;
+        }).join("")}
         ${hidden > 0 ? `<button type="button" class="cal-more" data-more="${ds}" aria-label="Show all ${dayEvents.length} events on this day">+${hidden} more</button>` : ""}
       </div>`;
   }
 
   /** The whole day, when the cap hid some of it — every event, with its manage link. */
   function dayModal(ds) {
-    const dayEvents = events.filter(e => e.starts_at && e.starts_at.slice(0, 10) === ds);
+    /* D-56 (v0.198.0): the day opener shows what the cell shows — nights included. */
+    const dayEvents = events.filter(e => BT_CAL.paintsOn(e, ds));
     const when = new Date(ds + "T12:00");
     openModal(`
       <h2>${isNaN(when) ? esc(ds) : when.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}</h2>
@@ -123,7 +129,9 @@
     for (let i = 0; i < 42; i++) {
       const d = new Date(start); d.setDate(start.getDate() + i);
       const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-      const dayEvents = events.filter(e => e.starts_at && e.starts_at.slice(0, 10) === ds);
+      /* D-56 (v0.198.0): placement judged by BT_CAL.paintsOn — a league paints its weekly
+         nights, a tournament each of its days, through ends_at. One judgement, both grids. */
+      const dayEvents = events.filter(e => BT_CAL.paintsOn(e, ds));
       const classes = `${d.getMonth() !== mo ? " other" : ""}${ds === todayStr ? " today" : ""}`;
       html += dayCellHtml(ds, d.getDate(), classes, dayEvents);
     }

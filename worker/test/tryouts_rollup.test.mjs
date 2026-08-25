@@ -201,18 +201,24 @@ test("the roll-up heading outranks the rows it introduces", () => {
      one row's label. Asserting "18px" would pin one spelling of the fix and redden on the next
      legitimate change to the scale, which is a mistake this repo has now made twice; asserting the
      ORDER cannot. */
+  /* v0.198.0 (type_scale): the heading now reads var(--fs-h2) from tokens.css — the invariant
+     is unchanged, so the reader RESOLVES the token instead of demanding a px literal. */
+  const TOKENS = readFileSync(new URL("../../web/assets/tokens.css", import.meta.url), "utf8");
   const size = (re) => {
     const m = HTML.match(re);
     assert.ok(m, `could not read a font-size for ${re} — this check is reading the wrong rule`);
-    return parseFloat(m[1]);
+    const v = m[1].trim();
+    const tok = v.match(/^var\((--fs-h[123])\)$/);
+    if (!tok) return parseFloat(v);
+    const def = TOKENS.match(new RegExp(`${tok[1]}:\\s*([\\d.]+)px`));
+    assert.ok(def, `${tok[1]} is not declared in px in tokens.css`);
+    return parseFloat(def[1]);
   };
-  const heading = size(/\.roll h2 \{ font-size: ([\d.]+)px/);
-  const cardName = size(/\.eval-top b \{ font-size: ([\d.]+)px/);
+  const heading = size(/\.roll h2 \{ font-size: ([^;]+);/);
+  const cardName = size(/\.eval-top b \{ font-size: ([^;]+);/);
   assert.ok(heading > cardName,
     `the roll-up heading (${heading}px) must outrank a player's name on a card (${cardName}px)`);
-  // And it must come from the shared scale rather than a number invented for this page: admin.css
-  // declares h1 at 22 and h2 at 18, so anything between the card name and the page title is a step
-  // that already exists.
+  // And it must come from the shared scale rather than a number invented for this page.
   assert.ok(heading >= 18 && heading <= 22, `${heading}px is not a step on the shared heading scale`);
 });
 

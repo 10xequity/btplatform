@@ -333,7 +333,11 @@
       for (let i = 0; i < 42; i++) {
         const d = new Date(start); d.setDate(start.getDate() + i);
         const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-        const day = upcoming.filter(e => (e.starts_at || "").slice(0, 10) === ds);
+        /* D-56 (v0.198.0): placement judged by BT_CAL.paintsOn — league nights and tournament
+           days paint, not just the start cell. A stale cached config.js without it degrades to
+           the old start-only cell for its cache window (the RF-7 fallback precedent). */
+        const day = upcoming.filter(e => (window.BT_CAL && BT_CAL.paintsOn)
+          ? BT_CAL.paintsOn(e, ds) : (e.starts_at || "").slice(0, 10) === ds);
         /* RF-7 (v0.176.0): the cap judgement is config.js's BT_CAL — one judgement, and the admin
            calendar is its other reader. "+N more" expands the day IN PLACE (no modal on the member
            side); a stale cached config.js without BT_CAL degrades to the uncapped pre-RF-7 cell

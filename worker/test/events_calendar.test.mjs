@@ -259,3 +259,71 @@ test("NC-RF14b: the pre-fix 16% fill FAILS the tile pin", () => {
   assert.equal(/\.cal-ev \{[^}]*color-mix\(in srgb, var\(--primary\) 30%, var\(--surface\)\)/.test(stripCss(mutated)), false,
     "the verdict must reject the 16% fill — if it passes, the pin is blind");
 });
+
+/* ══ v2.2 (§-1c D-56, owner 2026-08-25: "Yes agree with adding leagues to every night") ══════
+   A SPANNING EVENT PAINTED ONLY ON ITS START-DATE CELL — a league running Aug 12 → Oct 7
+   appeared on Aug 12 and NOWHERE ELSE: September rendered an empty month while the league ran
+   every week of it ("calendar is broken on certain member views" — measured live, September
+   2026 blank). The paint judgement is BT_CAL.paintsOn — ONE judgement (the split() precedent),
+   both grids read it: one-day events keep their start cell, a short span (a weekend
+   tournament) paints each of its days, and a league — or any span past a week — paints WEEKLY
+   on its start weekday through ends_at. Derived from starts_at/ends_at because no schedule row
+   carries a per-night date (matches have rounds, not dates). In the ADMIN grid a derived night
+   tile must NOT be draggable: dragging reschedules the event's start, and a tile that LOOKS
+   like a normal event on Sep 9 would silently move the whole league. */
+
+const LEAGUE = { type: "league", starts_at: "2026-08-12 18:00", ends_at: "2026-10-07 21:00" };
+
+test("D-56: paintsOn — a league paints weekly, start through end, and nowhere else", () => {
+  const cal = shippedBtCal();
+  assert.equal(typeof cal.paintsOn, "function", "BT_CAL.paintsOn is gone — both grids lose the night paint");
+  for (const day of ["2026-08-12", "2026-08-19", "2026-09-09", "2026-10-07"]) {
+    assert.equal(cal.paintsOn(LEAGUE, day), true, `a league night (${day}) must paint`);
+  }
+  for (const day of ["2026-08-13", "2026-09-10", "2026-08-05", "2026-10-14"]) {
+    assert.equal(cal.paintsOn(LEAGUE, day), false, `${day} is not a league night and must not paint`);
+  }
+});
+
+test("D-56: paintsOn — a weekend tournament paints each day of its run; a one-day event only its start", () => {
+  const cal = shippedBtCal();
+  const weekend = { type: "tournament", starts_at: "2026-08-14 09:00", ends_at: "2026-08-16 17:00" };
+  for (const day of ["2026-08-14", "2026-08-15", "2026-08-16"]) assert.equal(cal.paintsOn(weekend, day), true, day);
+  assert.equal(cal.paintsOn(weekend, "2026-08-17"), false, "the day after a tournament must not paint");
+  assert.equal(cal.paintsOn({ starts_at: "2026-08-15 18:00" }, "2026-08-15"), true);
+  assert.equal(cal.paintsOn({ starts_at: "2026-08-15 18:00" }, "2026-08-16"), false);
+  assert.equal(cal.paintsOn({}, "2026-08-15"), false, "no starts_at paints nowhere");
+  assert.equal(cal.paintsOn({ starts_at: "2026-08-15 18:00", ends_at: "2026-08-01 00:00" }, "2026-08-15"), true,
+    "a backwards ends_at degrades to start-only, not to nothing");
+  const longRun = { type: "training", starts_at: "2026-08-03 18:00", ends_at: "2026-09-01 20:00" };
+  assert.equal(cal.paintsOn(longRun, "2026-08-10"), true, "any span past a week paints weekly, league or not");
+  assert.equal(cal.paintsOn(longRun, "2026-08-11"), false);
+});
+
+test("D-56: both grids place events through BT_CAL.paintsOn — no second spelling", () => {
+  assert.match(blankComments(SCHED), /BT_CAL\.paintsOn\(/,
+    "schedule.js no longer places through the shared judgement — the member grid loses league nights");
+  const adminUses = (js.match(/BT_CAL\.paintsOn\(/g) || []).length;
+  assert.ok(adminUses >= 2,
+    `admin-events.js must place BOTH the month grid and the day modal through paintsOn — saw ${adminUses}`);
+});
+
+test("D-56: a derived night tile in the admin grid is NOT draggable; the start tile still is", () => {
+  const ev = { id: 7, name: "TEST League", status: "published", starts_at: "2026-08-12 18:00", ends_at: "2026-10-07 21:00" };
+  const onNight = cellFn()("2026-09-09", 9, "", [ev], esc, shippedBtCal());
+  assert.match(onNight, /draggable="false"/,
+    "a derived league-night tile is draggable — dragging it would silently reschedule the whole league");
+  const onStart = cellFn()("2026-08-12", 12, "", [ev], esc, shippedBtCal());
+  assert.match(onStart, /draggable="true"/, "the true start tile must keep reschedule-by-drag");
+});
+
+test("NC-D56: a config.js without paintsOn is caught by the extractor, not hallucinated", () => {
+  const mutated = CONFIG.replace(/paintsOn\(/g, "paintsOff(");
+  if (mutated !== CONFIG) {
+    const cal = shippedBtCal(mutated);
+    assert.equal(typeof (cal && cal.paintsOn), "undefined", "the mutation did not reach the extraction");
+  } else {
+    // Pre-build: paintsOn does not exist yet — the presence test above is the watched red.
+    assert.equal(typeof (shippedBtCal() || {}).paintsOn, "undefined");
+  }
+});

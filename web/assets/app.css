@@ -145,7 +145,7 @@ html, body {
   place-items: center;
 }
 .login-card { width: min(420px, 92vw); }
-.login-card h1 { font-size: 22px; margin: 0 0 4px; }
+.login-card h1 { font-size: var(--fs-h1); margin: 0 0 4px; }
 .login-card p { color: var(--text-muted); margin: 0 0 16px; }
 
 /* v0.106.0 (§-1f F-3): the per-org lockup above "Sign in". Borrows the rail's .nav-brand idiom
@@ -181,7 +181,7 @@ html, body {
 
 /* ---------- dashboard ---------- */
 .grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); margin-top: 18px; }
-.module h3 { margin: 0 0 6px; font-size: 16px; }
+.module h3 { margin: 0 0 6px; font-size: var(--fs-h3); }
 .module p { margin: 0; color: var(--text-muted); font-size: 14px; }
 .status { display: inline-block; font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; margin-top: 10px; }
 .status.live { color: var(--positive); }
@@ -217,7 +217,7 @@ button, .btn, .tab, .nav-item, a[href], input, select { touch-action: manipulati
 /* Settings page */
 .settings-wrap { max-width: 720px; }
 .settings-section { margin-bottom: 16px; }
-.settings-section h3 { margin: 0 0 4px; font-size: 16px; }
+.settings-section h3 { margin: 0 0 4px; font-size: var(--fs-h3); }
 .settings-row { display: flex; align-items: center; gap: 12px; padding: 12px 0;
   border-bottom: 1px solid var(--border); }
 .settings-row:last-child { border-bottom: 0; }
