@@ -1,5 +1,15 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.197.0 — 2026-08-25
+
+**The repeated-press audit and the load/speed baseline (§-1r RF-23 + RF-21).**
+
+- **RF-23 — button clicking multiple times, hunted and fixed.** Every write route was driven twice through the real router (`double_press.test.mjs` NEW). Most of the surface was already right — registration, sheet signup, sub claims (atomic), check-in, pass grants, bracket generation and the sign-in link all refuse or answer idempotently, each now pinned. **Four were not, and all four are fixed:** posting a sub request twice notified every matching sub twice; a community post landed on the board twice; starting a conversation twice minted TWO threads (each notifying the recipient); and the same reply landed twice in a thread. The rule, all four: an identical post from the same person within a short window (30 seconds for board posts, 15 for messages) is the same click — the first one is handed back. A genuinely different second post still lands, and tests pin that exit both ways. League week generation stays as designed (each press deliberately makes the next round; the button disables while working).
+- **RF-21 — load and speed, measured on both halves.** In-process (the real router over the full sandbox seed, 50 sequential + a 20-burst per route, 19 routes across the module families): every route answers 2xx with p50 ≤ 0.7 ms and worst p95 1.8 ms — no pathological SQL anywhere on the hot paths. Live (read-only, 10 samples each, low volume): health p50 17 ms, org-brand 53 ms, schedule 125 ms, Pages 13 ms, all 2xx. The harness ships as `worker/scripts/load-baseline.mjs` (rerun and compare — drift is the finding); the baseline table is recorded in the RF-21 row.
+- **Gemini (RF-19):** fifth loop, still zero throughput — and the finding sharpened: the morning's Google-side 503 failures still consumed the fresh daily quota, so on the free tier an overloaded day eats the next day's budget too.
+
+Suite 2266 → **2274** (test file 152) · no migration · no new page or route.
+
 ## v0.196.0 — 2026-08-25
 
 **The copy sweep's worker half — RF-20 FULLY CLOSED — and the D-45 raw-read class measured to its tail (§-1r RF-20 + §-1c D-45).**
