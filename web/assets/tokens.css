@@ -138,8 +138,14 @@ select option { background: var(--surface); color: var(--text); }
   outline: 2px solid var(--focus-ring); outline-offset: 2px;
 }
 input::placeholder, textarea::placeholder { color: var(--text-muted); opacity: 1; }
-a { color: var(--primary); }
-a:visited { color: var(--primary); }
+/* v0.9.0 (owner 2026-08-25: "buttons still not always appearing with black text") — links are
+   styled at ZERO specificity. The old bare pair read as harmless, but `a:visited` is (0,1,1)
+   and outranks every single-class component (0,1,0): a VISITED <a class="btn"> painted its
+   text var(--primary) — gold on the gold .btn fill in dark themes, navy on navy in light —
+   and getComputedStyle reports the UNVISITED style (anti-history-sniffing), so no computed
+   check can ever see it. :where() is zero-specificity by definition: bare links keep the
+   brand color, and any classed component wins in both link states. theme_tokens v1.1 pins it. */
+:where(a, a:visited) { color: var(--primary); }
 body { font-size: var(--font-size-body); } /* v0.4.0 F-36 — was a bare 17px, divergent from the token */
 
 /* ============================================================

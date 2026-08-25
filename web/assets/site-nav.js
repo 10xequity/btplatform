@@ -158,7 +158,9 @@
 
   /* ---------- styles (tokens only, per design-system v1.0) ---------- */
   const css = `
-  .site-layout { display: flex; align-items: flex-start; max-width: 1240px; margin: 0 auto; }
+  .site-layout { display: flex; align-items: flex-start; } /* v2.25 (owner 2026-08-25): full-bleed
+    like .admin-layout — the centered 1240px box floated the rail at x=100 with dead gutters
+    ("not all the way to the left … a lot of wasted space"); member_nav_paint v2.1 pins it */
   .site-nav { position: sticky; top: 76px; flex: none; width: 216px; padding: 20px 12px 40px;
     max-height: calc(100dvh - 76px); overflow-y: auto; }
   .site-nav .nav-label { font-size: 12px; font-weight: 700; letter-spacing: .06em;

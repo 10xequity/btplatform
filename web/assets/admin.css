@@ -33,6 +33,10 @@
   padding: 10px 12px; min-height: 44px;
   border-radius: var(--radius-control);
   color: var(--text); text-decoration: none; font-size: 15px;
+  /* press_stability v1.0: weight lives HERE, not on .active — a weight flip re-widths the
+     label and shifts what trails it on every press. The member rail (site-nav.js) is already
+     600 on its base; this also makes the two rails read the same. */
+  font-weight: 600;
   position: relative;
   transition: background-color 140ms var(--ease-out), color 140ms var(--ease-out);
 }
@@ -47,7 +51,7 @@
   transition: opacity 140ms var(--ease-out), transform 140ms var(--ease-out);
 }
 .nav-item:hover::before { opacity: .45; transform: scaleY(1); }
-.nav-item.active { background: color-mix(in srgb, var(--primary) 14%, transparent); font-weight: 600; }
+.nav-item.active { background: color-mix(in srgb, var(--primary) 14%, transparent); }
 .nav-item.active::before { opacity: 1; transform: scaleY(1); }
 .nav-item:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 
@@ -147,10 +151,12 @@
 /* ---------- misc ---------- */
 .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 14px; }
 .tab { padding: 10px 14px; min-height: 44px; border: 0; background: none; color: var(--text-muted);
-  font-size: 15px; cursor: pointer; border-bottom: 2px solid transparent;
+  font-size: 15px; font-weight: 600; /* press_stability v1.0: weight on the base — the active
+  flip re-widthed the label and shifted every sibling tab on press (measured: Month 1218→1220) */
+  cursor: pointer; border-bottom: 2px solid transparent;
   transition: color 140ms var(--ease-out), border-color 140ms var(--ease-out); }
 .tab:hover { color: var(--text); }
-.tab.active { color: var(--text); font-weight: 600; border-bottom-color: var(--primary); }
+.tab.active { color: var(--text); border-bottom-color: var(--primary); }
 
 .toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
 .toolbar input[type="search"] { min-width: 220px; }

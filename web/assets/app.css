@@ -57,6 +57,17 @@ html, body {
 .hdr-mail { min-width: 44px; min-height: 44px; display: inline-flex;
   align-items: center; justify-content: center; text-decoration: none; }
 
+/* v0.9.0 (owner 2026-08-25) — the header must FIT a phone. At 390px the wordmark + three 44px
+   actions need ~444px, so the theme and profile buttons sat past the viewport edge: no theme
+   picker, no account menu, and a horizontal scroll on every member page. Below 560px the brand
+   drops its second word and the chrome tightens; every action keeps its 44px target.
+   header_shell v4.2 pins this rule. */
+@media (max-width: 560px) {
+  .header { gap: 8px; padding: 10px 12px; }
+  .wordmark { font-size: 16px; gap: 8px; }
+  .wordmark span { display: none; }
+}
+
 .header .spacer { flex: 1; }
 
 /* Org switcher — spec click budget: org switch ≤2 clicks (open + pick = 2) */
@@ -86,6 +97,7 @@ html, body {
   padding: 10px 18px;
   min-height: 44px;
   cursor: pointer;
+  text-decoration: none; /* v0.9.0 — <a class="btn"> must not underline like prose links */
   transition: transform var(--dur-press) var(--ease-out);
 }
 .btn:active { transform: scale(0.97); }

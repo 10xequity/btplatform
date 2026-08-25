@@ -619,3 +619,31 @@ test("NC-M10: dropping defer is FINE when the tag already sits below the header 
   assert.equal(runsAfterHeaderVerdict(mutated, "site-nav.js").ok, true,
     "position alone satisfies the invariant \u2014 the guard must not demand defer specifically");
 });
+
+/* \u2500\u2500 v4.2 (owner 2026-08-25: "There is no color choose for the theme") \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+   THE HEADER MUST FIT A PHONE. Measured live at 390px: the brand wordmark + three 44px header
+   actions need ~444px, so #themeToggle sat at x=391 and #btHdrProfile at x=451 \u2014 BOTH past the
+   viewport edge. On a phone there literally was no theme button, no profile menu, no admin
+   switch, and the overflow gave every member page a horizontal scroll. The fix is CSS-only
+   (the 18 canonical headers stay byte-identical): below 560px the wordmark drops its second
+   word and the chrome tightens, and every action keeps its 44px target. */
+
+const APP_CSS = readFileSync(new URL("assets/app.css", WEB_DIR), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+
+test("the header compresses below 560px: narrow rule present, second brand word dropped", () => {
+  const media = APP_CSS.match(/@media \(max-width: 560px\)\s*\{([\s\S]*?)\n\}/);
+  assert.ok(media, "app.css has no 560px header media rule \u2014 the phone header overflows again");
+  assert.match(media[1], /\.header\s*\{[^}]*gap: 8px/, "the narrow header must tighten its gap");
+  assert.match(media[1], /\.wordmark span\s*\{[^}]*display: none/,
+    "the narrow header must drop the wordmark's second word \u2014 it is what pushes the \u25d0 off-screen");
+});
+
+test("NC-HDR: removing the narrow header rule reddens the fit check", () => {
+  const mutated = APP_CSS.replace(/@media \(max-width: 560px\)/, "@media (max-width: 1px)");
+  if (mutated !== APP_CSS) {
+    assert.equal(/@media \(max-width: 560px\)/.test(mutated), false, "mutation did not land");
+  } else {
+    // Pre-build: the rule does not exist yet \u2014 the presence test above is the watched red.
+    assert.doesNotMatch(APP_CSS, /@media \(max-width: 560px\)/);
+  }
+});

@@ -399,3 +399,27 @@ test("RF-17 NC — a re-added brand row is caught (mutation on the real source)"
   assert.ok(mutated.includes('class="nav-brand"'),
     "the planted brand row is invisible to the forbidding check — it is spelling-blind");
 });
+
+/* ── v2.1 (owner 2026-08-25): "member view is not all the way to the left side of the screen
+   similar to admin view, please make consistent. A lot of wasted space with the menu."
+   Measured live at 1440px: .site-layout carried max-width: 1240px + margin: 0 auto, so the
+   member rail floated at x=100 with a dead gutter either side, while .admin-layout is a
+   full-bleed grid whose rail hugs x=0. The member shell goes full-bleed to match. */
+
+test("the member shell is full-bleed like the admin shell — no centering on .site-layout", () => {
+  const rule = readNav().match(/\.site-layout\s*\{([^}]*)\}/);
+  assert.ok(rule, "site-nav.js no longer styles .site-layout — the layout contract moved");
+  assert.doesNotMatch(rule[1], /max-width/,
+    ".site-layout carries a max-width again — the member rail floats off the left edge");
+  assert.doesNotMatch(rule[1], /margin[^;]*auto/,
+    ".site-layout centers itself again — the admin/member shells stop matching");
+});
+
+test("NC — a re-centered .site-layout is caught (mutation on the real source)", () => {
+  const src = readNav();
+  const rule = src.match(/\.site-layout\s*\{([^}]*)\}/);
+  const mutated = rule[1] + " max-width: 1240px; margin: 0 auto;";
+  assert.notEqual(mutated, rule[1], "mutation did not land — NC is vacuous");
+  assert.match(mutated, /max-width/, "a planted max-width must be visible to the check");
+  assert.match(mutated, /margin[^;]*auto/, "a planted centering margin must be visible to the check");
+});

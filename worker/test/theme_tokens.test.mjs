@@ -237,3 +237,58 @@ test("NC-4: the config parser is reading config.js, not a constant", () => {
     assert.deepEqual(keys, ["synthetic"]);
   }
 });
+
+/* ── v1.1 (owner 2026-08-25: "buttons still not always appearing with black text") ──────────
+   THE VISITED-LINK CASCADE TRAP. `a:visited` is specificity (0,1,1), which outranks every
+   single-class component rule (0,1,0) — so a VISITED <a class="btn"> painted its text
+   var(--primary): gold ON the gold .btn fill in dark themes, navy on navy in light. Invisible
+   either way, and only on links the member has already followed — which is why it read as
+   "not always". getComputedStyle CANNOT see it: browsers deliberately report the unvisited
+   style to JS (anti-history-sniffing), so no computed-style check — ours or a browser
+   extension's — ever fails. The pin is therefore on the SELECTOR: tokens.css styles links
+   only through :where(), which is zero-specificity by definition, so any class wins in both
+   link states. Live-verified 2026-08-25: the schedule list's visited "Sign up" pill painted
+   blank; the :where() form repainted it dark-on-gold. */
+
+const cssStripped = CSS.replace(/\/\*[\s\S]*?\*\//g, "");
+const APPCSS = readFileSync(join(ROOT, "web/assets/app.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+
+test("positive control: the CSS comment stripper strips", () => {
+  assert.equal("x /* gone */ y".replace(/\/\*[\s\S]*?\*\//g, ""), "x  y");
+});
+
+test("tokens.css styles links ONLY at zero specificity (:where), both link states", () => {
+  assert.match(cssStripped, /:where\(a, a:visited\)\s*\{\s*color: var\(--primary\);\s*\}/,
+    "the zero-specificity link rule is gone — bare links lose their brand color");
+  // No element-level link rule may survive: a whole-selector `a` or `a:visited` outranks
+  // every single-class button/tile/CTA and repaints its VISITED text with the link color.
+  assert.doesNotMatch(cssStripped, /(^|\})\s*a\s*\{/,
+    "a bare `a { … }` rule is back — it beats no one today but invites the :visited twin");
+  assert.doesNotMatch(cssStripped, /(^|\})\s*a:visited\s*\{/,
+    "a bare `a:visited { … }` rule is back — visited link-buttons paint gold-on-gold again");
+});
+
+test("NC: a restored bare a:visited rule fails the cascade guard", () => {
+  const mutated = cssStripped + "\na:visited { color: var(--primary); }\n";
+  assert.notEqual(mutated, cssStripped, "mutation did not land — NC is vacuous");
+  assert.match(mutated, /(^|\})\s*a:visited\s*\{/, "an unguarded sheet must be caught");
+});
+
+test("NC: a stripped :where rule fails the presence half", () => {
+  const mutated = cssStripped.replace(/:where\(a, a:visited\)[^{]*\{[^}]*\}/, "");
+  if (mutated !== cssStripped) {
+    assert.doesNotMatch(mutated, /:where\(a, a:visited\)/);
+  } else {
+    // Pre-build: the rule does not exist yet, so the presence test above is the red — prove
+    // the replace at least works on a synthetic copy.
+    const syn = ":where(a, a:visited) { color: var(--primary); }".replace(/:where\(a, a:visited\)[^{]*\{[^}]*\}/, "");
+    assert.equal(syn, "");
+  }
+});
+
+test("link-buttons render as buttons: .btn kills the UA underline", () => {
+  // <a class="btn"> is the corpus's normal CTA shape; without this the UA underlines every
+  // link-button the moment the link color stops masking it.
+  assert.match(APPCSS, /\.btn\s*\{[^}]*text-decoration: none/,
+    ".btn must declare text-decoration: none — link-buttons underline without it");
+});
