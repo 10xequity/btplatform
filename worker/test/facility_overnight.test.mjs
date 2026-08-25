@@ -182,10 +182,16 @@ test("a season-sized import lands in ONE request, atomically, inside the stateme
   assert.equal(env.raw.one("SELECT COUNT(*) AS n FROM space_bookings").n, 300);
   assert.equal(env.raw.one("SELECT COUNT(*) AS n FROM booking_spaces").n, 300);
   // The budget IS the pin: the old per-row loop spent ~2 statements per row on conflict reads
-  // plus 1 per booking plus 1 per link (~900 here). The batched path reads the window once,
-  // reads MAX(id) once, and writes chunked multi-row VALUES — orders of magnitude under.
+  // plus 1 per booking plus 1 per link (~1,800 on this file, and the proxy counts each batched
+  // statement TWICE — once at prepare, once as a batch entry — so the old path would read
+  // ~2,700 here). The batched path: 300 bookings/5-per-statement = 60 + 300 links/50 = 6, each
+  // counted twice (132), plus a handful of reads ≈ 143. Chunks are sized to LIVE D1's
+  // 100-bound-params-per-statement limit (MEASURED 2026-08-25: a 306-bind statement 500'd on
+  // live while node's SQLite, limit 999, passed it in-process) — so the LOWER bound guards
+  // against chunks quietly growing past what live accepts.
   assert.ok(counter.batches >= 1, "the write must go through env.DB.batch — that is the atomicity");
-  assert.ok(spent <= 40, `the import spent ${spent} statements for 300 rows — the per-row loop is back`);
+  assert.ok(spent <= 170, `the import spent ${spent} statements for 300 rows — the per-row loop is back`);
+  assert.ok(spent >= 120, `only ${spent} statements — chunks grew past D1's 100-bind limit; that passes here and 500s on live`);
 });
 
 test("an intra-file duplicate still conflict-skips (the semantics the chunked live run relied on)", async () => {

@@ -463,18 +463,22 @@ async function importCsv(request, env, ctx) {
         for (const sid of a.space_ids) linkRows.push([id, sid]);
       }
     }
-    // Chunk sizes keep bound-parameter counts under SQLite's per-statement limit (999):
-    // 50 bookings × 17 params = 850; 400 links × 2 = 800.
+    // Chunk sizes keep bound-parameter counts under LIVE D1's per-statement limit of 100
+    // (MEASURED 2026-08-25: a 306-bind statement 500'd on live while node's SQLite, limit
+    // 999, passed it in-process — the harness is more permissive than production on exactly
+    // this axis, the d1-memory FK lesson again): 5 bookings × 17 = 85; 50 links × 2 = 100.
+    // A 300-row file is ~66 write statements + 3 reads — still ~40× under the old per-row
+    // loop and inside the 1,000-queries-per-invocation cap up to ~4,000-row files.
     const chunk = (arr, n) => Array.from({ length: Math.ceil(arr.length / n) }, (_, i) => arr.slice(i * n, i * n + n));
     const multiInsert = (sql, cols, rows) => env.DB.prepare(
       `${sql} VALUES ${rows.map(() => `(${Array.from({ length: cols }, () => "?").join(",")})`).join(",")}`
     ).bind(...rows.flat());
     const stmts = [
-      ...chunk(bookingRows, 50).map((c) => multiInsert(
+      ...chunk(bookingRows, 5).map((c) => multiInsert(
         `INSERT INTO space_bookings (id, org_id, title, date, start_min, end_min, share_ok, is_closure,
           staffing_json, catering, door_charge_cents, poc_name, poc_email, poc_phone, est_attendees, series_id, notes)`,
         17, c)),
-      ...chunk(linkRows, 400).map((c) => multiInsert(
+      ...chunk(linkRows, 50).map((c) => multiInsert(
         "INSERT INTO booking_spaces (booking_id, space_id)", 2, c)),
     ];
     await env.DB.batch(stmts);

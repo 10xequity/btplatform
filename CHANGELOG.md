@@ -1,5 +1,9 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.201.0 — 2026-08-25
+
+The v0.200.0 importer chunks were sized to the in-process engine, not to production: live D1 caps bound parameters at 100 per statement (measured: a 306-bind statement 500 while the test harness, whose SQLite allows 999, passed it), so the first live season-file import through the new batched path failed while the suite stayed green. Chunks now bind at most 85/100 parameters per statement, and the statement-budget test gained a LOWER bound so a chunk that quietly grows past what live accepts reddens in-process instead of on the button.
+
 ## v0.200.0 — 2026-08-25
 
 D-57 closed on the owner's word ("Go with midnight after with your recommendation"): a booking that runs past midnight now books as a LINKED PAIR split at midnight, one row to 24:00 and one from 00:00 on the next date, sharing a series_id so the existing series option edits or deletes both together. The create route, the conflict check, and the CSV importer all split through the one rule; ending exactly at midnight stays a single row, a zero-length booking is still refused with a sentence that names the overnight path, and a conflict against either half refuses the whole pair. D-58 closed: the importer's write is now ONE atomic batch (chunked multi-row inserts, everything bound) over ONE preloaded conflict window, so a season-sized file lands in a handful of statements instead of dying mid-file at D1's per-invocation query cap the way the owner's 272-row operations sheet did; intra-file duplicates still conflict-skip, and a statement-budget test pins the class. Building that pin caught a third defect: "VB 1" as a spaces value substring-matched the preset name "Full Hardwood (VB 1-8)" and silently booked eight courts for a one-court row; exact courts and ranges now resolve before presets.
