@@ -43,6 +43,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { versionFromIndex } from "../scripts/sweep-buster.mjs";
+import { blankComments } from "../testkit/route-extract.mjs";
 
 const WEB_DIR = new URL("../../web/", import.meta.url);
 const ASSETS_DIR = new URL("../../web/assets/", import.meta.url);
@@ -51,7 +52,10 @@ const ROOT_DIR = new URL("../../", import.meta.url);
 /* ── pure helpers — the real corpus and every negative control go through these ── */
 
 const stripHtmlComments = (s) => s.replace(/<!--[\s\S]*?-->/g, "");
-const stripJsBlockComments = (s) => s.replace(/\/\*[\s\S]*?\*\//g, "");
+/* D-45 c6 (v0.196.0): full blanking, not just block comments — a `//` line comment carrying a
+   versioned src could satisfy the buster scan. blankComments is string-aware at both grains;
+   the helper keeps its name so the NCs and call sites read unchanged. */
+const stripJsBlockComments = (s) => blankComments(s);
 
 /** All `?v=` buster values in already-stripped text, in order. */
 const collectBusters = (s) => [...s.matchAll(/\?v=([0-9][0-9.]*)/g)].map((m) => m[1]);
@@ -144,6 +148,10 @@ test("every ?v= buster across web/ shares one release-form value", () => {
    The CORPUS, though, is this file's own (readdirSync over three URL roots) and shares nothing with
    the script's walk — that separation is C14 and it is the half that must stay independent. */
 test("C6: the one shared buster value IS the version index.js reports", () => {
+  /* D-45: this read stays RAW on purpose — sweep-buster.mjs parses the raw file with the SAME
+     versionFromIndex (its line ~166), and the test must feed the parser exactly what production
+     feeds it. Blanking here would let the test and the shipped script disagree about a version
+     line the other one sees. The raw-source-sweep counts this pair; it is a recorded keep. */
   const version = versionFromIndex(readFileSync(new URL("../src/index.js", import.meta.url), "utf8"));
   assert.match(version, /^\d+\.\d+\.\d+$/, "index.js does not carry a parseable version");
 

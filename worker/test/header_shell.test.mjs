@@ -72,9 +72,16 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
+import { blankComments } from "../testkit/route-extract.mjs";
 
 const WEB_DIR = new URL("../../web/", import.meta.url);
-const read = (p) => readFileSync(new URL(p, WEB_DIR), "utf8");
+/* D-45 cluster 5 (v0.196.0): .js reads are comment-blanked at the door — raw-source-sweep
+   measured 3 pairs here a commented-out line could satisfy. HTML reads stay RAW on purpose:
+   the header byte-identity checks compare shipped bytes, comments included. */
+const read = (p) => {
+  const s = readFileSync(new URL(p, WEB_DIR), "utf8");
+  return p.endsWith(".js") ? blankComments(s) : s;
+};
 const htmlPages = () => readdirSync(WEB_DIR).filter((f) => f.endsWith(".html"));
 const isAdminPage = (html) => /<script[^>]+src="assets\/admin-nav\.js[^"]*"/.test(html);
 

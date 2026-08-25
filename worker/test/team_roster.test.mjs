@@ -11,6 +11,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { blankComments } from "../testkit/route-extract.mjs";
 import { readFileSync } from "node:fs";
 import worker from "../src/index.js";
 import { createD1 } from "../testkit/d1-memory.mjs";
@@ -157,7 +158,7 @@ test("a team outside the caller's org answers 404 — and a nameless rename is r
 import { readdirSync } from "node:fs";
 
 const WEB_URL = new URL("../../web/", import.meta.url);
-const readWeb = (rel) => readFileSync(new URL(rel, WEB_URL), "utf8");
+const readWeb = (rel) => { const s = readFileSync(new URL(rel, WEB_URL), "utf8"); return rel.endsWith(".js") ? blankComments(s) : s; }; // D-45 c6
 
 test("BT_ROSTER mounts: loader pages and button emitters are the same set, and it now includes the registrations list", () => {
   const pages = readdirSync(WEB_URL).filter((f) => f.endsWith(".html"));

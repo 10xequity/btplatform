@@ -289,8 +289,8 @@ test("SG-2 — the count and the cancel notice read ONE status set: rows for cap
 
 test("SG-2 — no second spelling: tournaments.js imports the ONE judgement, never respells the status list", () => {
   const TUPLE = "'pending','email-sent','paid','cash-pending','comped'";
-  const wl = readFileSync(new URL("../src/waitlists.js", import.meta.url), "utf8");
-  const ea = readFileSync(new URL("../src/events_admin.js", import.meta.url), "utf8");
+  const wl = blankComments(readFileSync(new URL("../src/waitlists.js", import.meta.url), "utf8")); // D-45 c6
+  const ea = blankComments(readFileSync(new URL("../src/events_admin.js", import.meta.url), "utf8"));
   const tn = readFileSync(new URL("../src/tournaments.js", import.meta.url), "utf8");
   assert.ok(wl.includes(TUPLE),
     "positive control: the defining spelling left waitlists.js — this guard is searching for nothing");
@@ -320,7 +320,7 @@ test("SG-2 — the bag path carries the threshold: bulk-created rows store it, j
 });
 
 test("SG-2 — the screen: the field, the save payload, and a count line that is QUIET without a threshold", () => {
-  const src = readFileSync(new URL("../../web/assets/admin-event.js", import.meta.url), "utf8");
+  const src = blankComments(readFileSync(new URL("../../web/assets/admin-event.js", import.meta.url), "utf8")); // D-45 c6
   assert.ok(src.includes('id="e_min"'), "the Minimum-to-run field is not on the details card");
   const save = functionBodyAfter(src, "async function save");
   assert.ok(save, "save() went missing — the containment check below would read the whole file instead");
@@ -425,7 +425,7 @@ test("SG-5 — ONE recipient selection: news and cancel reach the SAME people, a
 });
 
 test("SG-5 — the screen: the message card, the POST, and the honest note reaching the operator", () => {
-  const src = readFileSync(new URL("../../web/assets/admin-event.js", import.meta.url), "utf8");
+  const src = blankComments(readFileSync(new URL("../../web/assets/admin-event.js", import.meta.url), "utf8")); // D-45 c6
   assert.ok(src.includes('id="e_msg"'), "the message box is not on the event screen");
   const send = functionBodyAfter(src, "async function sendNews");
   assert.ok(send, "sendNews() went missing — the containment below would read the whole file instead");

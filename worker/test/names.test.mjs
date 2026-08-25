@@ -15,6 +15,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import worker from "../src/index.js";
 import { createD1 } from "../testkit/d1-memory.mjs";
+import { blankComments } from "../testkit/route-extract.mjs";
 import { personName, abbreviate } from "../src/names.js";
 
 const SCHEMA = readFileSync(new URL("../testkit/journey-schema.sql", import.meta.url), "utf8");
@@ -179,11 +180,11 @@ test("there is only ONE name rule in the codebase", () => {
   // Two would be one too many: the day they disagree, a minor's full name is on a wall while every
   // admin screen insists the rule is being followed.
   const src = ["live.js", "brackets.js", "divisions.js"].map((f) =>
-    readFileSync(new URL(`../src/${f}`, import.meta.url), "utf8")).join("\n");
+    blankComments(readFileSync(new URL(`../src/${f}`, import.meta.url), "utf8"))).join("\n"); // D-45 c6
   assert.ok(!/\.split\(" "\)\[0\]|charAt\(0\) \+ "\."/.test(src),
     "a hand-rolled abbreviation has appeared alongside names.js");
   for (const f of ["live.js", "brackets.js", "divisions.js"]) {
-    const one = readFileSync(new URL(`../src/${f}`, import.meta.url), "utf8");
+    const one = blankComments(readFileSync(new URL(`../src/${f}`, import.meta.url), "utf8"));
     assert.match(one, /from "\.\/names\.js"/, `${f} must use the shared name rule`);
   }
 });

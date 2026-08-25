@@ -41,9 +41,9 @@ const NAV_SRC   = readFileSync(new URL("../../web/assets/admin-nav.js", import.m
 const ADMIN_CSS = readFileSync(new URL("../../web/assets/admin.css", import.meta.url), "utf8");
 const APP_CSS   = readFileSync(new URL("../../web/assets/app.css", import.meta.url), "utf8");
 const TOKENS_CSS = readFileSync(new URL("../../web/assets/tokens.css", import.meta.url), "utf8");
-const REGISTER_SRC = readFileSync(new URL("../../web/assets/register.js", import.meta.url), "utf8");
-const SCORE_SRC    = readFileSync(new URL("../../web/assets/score.js", import.meta.url), "utf8");
-const INBOX_SRC    = readFileSync(new URL("../../web/assets/member-inbox.js", import.meta.url), "utf8");
+const REGISTER_SRC = blankComments(readFileSync(new URL("../../web/assets/register.js", import.meta.url), "utf8")); // D-45 c6
+const SCORE_SRC    = blankComments(readFileSync(new URL("../../web/assets/score.js", import.meta.url), "utf8"));
+const INBOX_SRC    = blankComments(readFileSync(new URL("../../web/assets/member-inbox.js", import.meta.url), "utf8"));
 
 /* ---------------------------------------------------------------- section 1: double submit */
 
