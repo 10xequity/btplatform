@@ -352,6 +352,19 @@ async function createListing(request, env, ctx, contact) {
   const norm = normalizeListing(b || {});
   if (!norm.ok) return json({ error: norm.error }, 400);
   const L = norm.listing;
+  /* RF-23 (v0.197.0): a fast double press put the same post on the board twice. An OPEN listing
+     identical in kind, name, note and play time from the same author within 30 seconds is the
+     same click — hand the first one back. A genuinely different second post still lands
+     (double_press.test.mjs pins that exit). */
+  const dup = await env.DB.prepare(
+    `SELECT id FROM lfg_listings
+      WHERE org_id=?1 AND created_by_contact_id=?2 AND status='open' AND deleted_at IS NULL
+        AND created_at > datetime('now','-30 seconds')
+        AND kind=?3 AND COALESCE(team_name,'')=COALESCE(?4,'')
+        AND COALESCE(note,'')=COALESCE(?5,'') AND COALESCE(play_at,'')=COALESCE(?6,'')`
+  ).bind(ctx.orgId, contact.id, L.kind, L.team_name, L.note, L.play_at).first();
+  if (dup) return json({ ok: true, id: dup.id, already: true,
+    teams_count: await teamsCount(env, ctx.orgId, contact.id) });
   const ins = await env.DB.prepare(
     `INSERT INTO lfg_listings (org_id, kind, forming, created_by_contact_id, team_name, skill_level,
        gender_requirement, game_type, positions, spots, play_at, location_note, note)

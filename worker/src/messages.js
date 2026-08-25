@@ -243,6 +243,18 @@ async function startThread(request, env, ctx) {
   const floodErr = await messageFlood(env, ctx.orgId, me.id);
   if (floodErr) return floodErr;
 
+  /* RF-23 (v0.197.0): a fast double press minted TWO threads, each carrying the message and
+     each notifying the recipient. A thread I created within the last 30 seconds, to the same
+     person, opening with the same words, IS this click — hand it back instead of minting. */
+  const dup = await env.DB.prepare(
+    `SELECT t.id FROM message_threads t
+       JOIN thread_participants tp ON tp.thread_id=t.id AND tp.contact_id=?3
+       JOIN messages m ON m.thread_id=t.id AND m.sender_contact_id=?2 AND m.body=?4 AND m.deleted_at IS NULL
+      WHERE t.org_id=?1 AND t.created_by_contact_id=?2 AND t.deleted_at IS NULL
+        AND t.created_at > datetime('now','-30 seconds') LIMIT 1`
+  ).bind(ctx.orgId, me.id, toId, body).first();
+  if (dup) return H.json({ ok: true, thread_id: dup.id, already: true, mode: "duplicate" });
+
   const th = await env.DB.prepare(
     "INSERT INTO message_threads (org_id, kind, subject, created_by_contact_id, last_message_at) VALUES (?1,'dm',?2,?3,datetime('now'))"
   ).bind(ctx.orgId, subject, me.id).run();
@@ -284,6 +296,16 @@ async function reply(request, env, ctx) {
   }
   const floodErr = await messageFlood(env, ctx.orgId, me.id);
   if (floodErr) return floodErr;
+
+  /* RF-23 (v0.197.0): the same words from the same sender within 15 seconds is the double
+     press, not a deliberate repeat — the first send already landed and notified. A deliberate
+     repeat differs in body ("On my way!" vs "On my way") and still sends
+     (double_press.test.mjs pins that exit). */
+  const dup = await env.DB.prepare(
+    `SELECT id FROM messages WHERE org_id=?1 AND thread_id=?2 AND sender_contact_id=?3
+       AND body=?4 AND deleted_at IS NULL AND created_at > datetime('now','-15 seconds')`
+  ).bind(ctx.orgId, threadId, me.id, body).first();
+  if (dup) return H.json({ ok: true, already: true, mode: "duplicate" });
 
   await env.DB.prepare(
     "INSERT INTO messages (org_id, thread_id, sender_contact_id, body) VALUES (?1,?2,?3,?4)"

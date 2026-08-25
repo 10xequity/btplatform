@@ -275,6 +275,21 @@ export async function subsRoutes(request, env, url, ctx) {
       if (!ev) return json({ error: "That event isn't available." }, 404); // org-scoped: a foreign event id fails closed
       eventName = ev.name;
     }
+    /* RF-23 (v0.197.0): a fast double press posted twice — and NOTIFIED every matching sub
+       twice. An OPEN request identical in every field from the same requester within the last
+       30 seconds is the same click, not a second need; hand the first one back. Two genuinely
+       separate subs for one night differ somewhere (note, event, time) or arrive later — both
+       still post (double_press.test.mjs pins that exit). */
+    const dup = await env.DB.prepare(
+      `SELECT id FROM sub_requests
+        WHERE org_id=?1 AND requested_by_contact_id=?2 AND status='open' AND deleted_at IS NULL
+          AND created_at > datetime('now','-30 seconds')
+          AND COALESCE(event_id,-1)=COALESCE(?3,-1) AND COALESCE(needed_at,'')=COALESCE(?4,'')
+          AND skill_level=?5 AND gender_requirement=?6 AND game_type=?7
+          AND COALESCE(note,'')=COALESCE(?8,'')`
+    ).bind(ctx.orgId, me.id, v.event_id, v.needed_at, v.skill_level, v.gender_requirement, v.game_type, v.note).first();
+    if (dup) return json({ ok: true, request_id: dup.id, already: true, notified: 0,
+      message: "That request is already posted." });
     const ins = await env.DB.prepare(
       `INSERT INTO sub_requests (org_id, event_id, requested_by_contact_id, needed_at, skill_level, gender_requirement, game_type, note)
        VALUES (?1,?2,?3,?4,?5,?6,?7,?8)`
