@@ -71,7 +71,12 @@ async function staff(env) {
   return v.data.token;
 }
 
-const tableOf = (sql) => sql.match(/^\s*DELETE\s+FROM\s+([A-Za-z_][A-Za-z0-9_]*)/i)[1];
+/* v1.1: the list carries exactly ONE non-DELETE — the cycle breaker (families ↔ contacts is a
+   real FK cycle, so no delete order alone can satisfy it; an UPDATE nulls contacts.family_id
+   into wiped families first). tableOf returns null for it; order/completeness skip nulls, and
+   the cycle edge it breaks is exempted ONLY while the UPDATE is present (NC below). */
+const CYCLE_BREAKER = /^\s*UPDATE\s+contacts\s+SET\s+family_id\s*=\s*NULL/i;
+const tableOf = (sql) => (sql.match(/^\s*DELETE\s+FROM\s+([A-Za-z_][A-Za-z0-9_]*)/i) || [])[1] || null;
 
 /** The foreign-key graph, read from the schema itself: child → Set(parent tables). */
 function fkGraph() {
@@ -92,10 +97,15 @@ function fkGraph() {
 /** Every (parent-deleted-before-child) violation in a delete order. */
 function orderViolations(list) {
   const graph = fkGraph();
+  // The contacts→families edge is satisfiable ONLY by the cycle-breaking UPDATE (a genuine FK
+  // cycle has no valid delete order); the edge is exempt exactly while that UPDATE is present.
+  if (list.some((s) => CYCLE_BREAKER.test(s))) graph.get("contacts")?.delete("families");
   const tables = list.map(tableOf);
   const bad = [];
   for (let i = 0; i < tables.length; i++) {
+    if (!tables[i]) continue;
     for (let j = i + 1; j < tables.length; j++) {
+      if (!tables[j]) continue;
       // tables[j] is deleted later; if it REFERENCES tables[i], we deleted the parent first.
       if (graph.get(tables[j])?.has(tables[i])) {
         bad.push(`${tables[i]} (position ${i}) is deleted before its child ${tables[j]} (position ${j})`);
@@ -132,11 +142,26 @@ test("NEGATIVE CONTROL: the shipped-broken order is reported as invalid", () => 
   );
 });
 
-test("every WIPE_SQL statement is a DELETE scoped to the 90000–90999 test range", () => {
+test("every WIPE_SQL statement is a range-scoped DELETE — or the ONE named cycle breaker", () => {
+  let breakers = 0;
   for (const sql of WIPE_SQL) {
-    assert.match(sql, /^\s*DELETE\s+FROM\s/i, `not a DELETE: ${sql.slice(0, 60)}`);
+    if (CYCLE_BREAKER.test(sql)) { breakers++; }
+    else assert.match(sql, /^\s*DELETE\s+FROM\s/i, `not a DELETE: ${sql.slice(0, 60)}`);
     assert.match(sql, /BETWEEN 90000 AND 90999/,
-      `unscoped delete would touch real data: ${sql.slice(0, 90)}`);
+      `unscoped statement would touch real data: ${sql.slice(0, 90)}`);
+  }
+  assert.equal(breakers, 1, "exactly one cycle-breaking UPDATE — a second non-DELETE is drift");
+});
+
+test("NC: without the cycle breaker, the contacts↔families cycle is flagged again", () => {
+  const withoutBreaker = WIPE_SQL.filter((s) => !CYCLE_BREAKER.test(s));
+  if (withoutBreaker.length !== WIPE_SQL.length) {
+    const bad = orderViolations(withoutBreaker);
+    assert.ok(bad.some((b) => /families|contacts/.test(b)),
+      `dropping the UPDATE must expose the cycle. got:\n  ${bad.join("\n  ")}`);
+  } else {
+    // Pre-fix: no breaker in the list yet — the order test above is the red.
+    assert.ok(!WIPE_SQL.some((s) => CYCLE_BREAKER.test(s)));
   }
 });
 
@@ -234,4 +259,48 @@ test("the D1 shim can enforce foreign keys, and does not by default", () => {
   assert.equal(off.one("PRAGMA foreign_keys").foreign_keys, 0);
   assert.equal(on.one("PRAGMA foreign_keys").foreign_keys, 1);
   off.close(); on.close();
+});
+
+/* ─────────────── 4. COMPLETENESS — v1.1 (2026-08-25, live wipe 500) ───────────────
+   The order guard above judges only the tables IN the list — a referencing table absent from
+   the list is invisible to it. That blind spot fired on live 2026-08-25: `booking_spaces`
+   (33 rows, written by the FACILITY module against seeded events — not by the seeder, which is
+   why the double-press test above never sees them) references `space_bookings`, so the wipe's
+   batch failed `FOREIGN KEY constraint failed` and every generate/wipe press 500'd. The rule:
+   any table that references a wiped table — TRANSITIVELY, since listing a new child gives that
+   child's own children the same power — must itself be in WIPE_SQL, where the order guard then
+   places it. */
+
+test("COMPLETENESS: every table that (transitively) references a wiped table is itself wiped", () => {
+  const graph = fkGraph();
+  const listed = new Set(WIPE_SQL.map(tableOf));
+  const missing = new Set();
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const [child, parents] of graph) {
+      if (listed.has(child) || missing.has(child)) continue;
+      for (const p of parents) {
+        if (listed.has(p) || missing.has(p)) { missing.add(child); grew = true; break; }
+      }
+    }
+  }
+  assert.deepEqual([...missing].sort(), [],
+    "these tables reference wiped tables but are never wiped — one row in any of them 500s the reseed");
+});
+
+test("NC: a list without booking_spaces is caught by the completeness check", () => {
+  const shorter = WIPE_SQL.filter((s) => tableOf(s) !== "booking_spaces");
+  if (shorter.length !== WIPE_SQL.length) {
+    const graph = fkGraph();
+    const listed = new Set(shorter.map(tableOf));
+    const missing = [];
+    for (const [child, parents] of graph) {
+      if (!listed.has(child) && [...parents].some((p) => listed.has(p))) missing.push(child);
+    }
+    assert.ok(missing.includes("booking_spaces"), "removing booking_spaces must redden completeness");
+  } else {
+    // Pre-fix: booking_spaces is not in the list yet — the completeness test above is the red.
+    assert.ok(!WIPE_SQL.some((s) => tableOf(s) === "booking_spaces"));
+  }
 });

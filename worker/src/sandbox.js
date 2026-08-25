@@ -285,6 +285,30 @@ const ids = (start, n) => Array.from({ length: n }, (_, i) => start + i);
  * statement that cannot be scoped does not belong here.
  */
 export const WIPE_SQL = [
+  /* ---- v2.3 (2026-08-25): TABLES THE SEEDER NEVER WRITES, BUT OTHER MODULES DO. The live
+     wipe 500'd on `booking_spaces` — 33 rows written by the FACILITY module against seeded
+     events. The double-press guard could not see it (the fixture never writes these tables);
+     wipe_order v1.1's COMPLETENESS check now walks the whole FK graph, so a module that grows
+     a new reference to a wiped table reddens the suite instead of the live button. Children
+     first within this block too (pass_redemptions → passes → sales; grants → subscriptions). ---- */
+  `DELETE FROM pass_redemptions WHERE contact_id BETWEEN ${LO} AND ${HI} OR event_id BETWEEN ${LO} AND ${HI} OR pass_id IN (SELECT id FROM passes WHERE contact_id BETWEEN ${LO} AND ${HI}) OR attendance_id IN (SELECT id FROM attendance WHERE event_id BETWEEN ${LO} AND ${HI})`,
+  `DELETE FROM membership_grants WHERE contact_id BETWEEN ${LO} AND ${HI} OR subscription_id IN (SELECT id FROM subscriptions WHERE contact_id BETWEEN ${LO} AND ${HI})`,
+  `DELETE FROM passes         WHERE contact_id BETWEEN ${LO} AND ${HI}`,
+  `DELETE FROM sale_items     WHERE sale_id IN (SELECT id FROM sales WHERE contact_id BETWEEN ${LO} AND ${HI})`,
+  `DELETE FROM sales          WHERE contact_id BETWEEN ${LO} AND ${HI}`,
+  `DELETE FROM subscriptions  WHERE contact_id BETWEEN ${LO} AND ${HI}`,
+  `DELETE FROM booking_spaces  WHERE booking_id IN (SELECT id FROM space_bookings WHERE event_id BETWEEN ${LO} AND ${HI})`,
+  `DELETE FROM rental_requests WHERE booking_id IN (SELECT id FROM space_bookings WHERE event_id BETWEEN ${LO} AND ${HI})`,
+  `DELETE FROM form_responses WHERE registration_id BETWEEN ${LO} AND ${HI} OR field_id IN (SELECT id FROM form_fields WHERE event_id BETWEEN ${LO} AND ${HI})`,
+  `DELETE FROM media_consents WHERE contact_id BETWEEN ${LO} AND ${HI}`,
+  `DELETE FROM announcement_mutes WHERE contact_id BETWEEN ${LO} AND ${HI}`,
+  `DELETE FROM campaign_sends WHERE contact_id BETWEEN ${LO} AND ${HI}`,
+  `DELETE FROM lfg_bans       WHERE contact_id BETWEEN ${LO} AND ${HI}`,
+  `DELETE FROM member_field_values WHERE contact_id BETWEEN ${LO} AND ${HI}`,
+  `DELETE FROM staff_rates    WHERE contact_id BETWEEN ${LO} AND ${HI}`,
+  `DELETE FROM sms_log        WHERE contact_id BETWEEN ${LO} AND ${HI}`,
+  `DELETE FROM uploads        WHERE uploaded_by_contact_id BETWEEN ${LO} AND ${HI}`,
+
   /* ---- deepest children: rows that reference team_members / rounds / squads ---- */
   `DELETE FROM attendance     WHERE event_id BETWEEN ${LO} AND ${HI}`,
   `DELETE FROM checkins       WHERE event_id BETWEEN ${LO} AND ${HI}`,
@@ -342,6 +366,12 @@ export const WIPE_SQL = [
   // events carries staff_contact_id, so it goes before contacts.
   `DELETE FROM events         WHERE id BETWEEN ${LO} AND ${HI}`,
   `DELETE FROM waivers        WHERE id BETWEEN ${LO} AND ${HI}`,
+  // families <-> contacts is a genuine FK CYCLE (families.primary_contact_id -> contacts,
+  // contacts.family_id -> families) — no delete order alone can satisfy it. The ONE update in
+  // this list breaks the cycle: any contact pointing at a family being wiped loses only that
+  // pointer (the family is deleted next), then families go before contacts as child-first asks.
+  `UPDATE contacts SET family_id = NULL WHERE family_id IN (SELECT id FROM families WHERE primary_contact_id BETWEEN ${LO} AND ${HI})`,
+  `DELETE FROM families       WHERE primary_contact_id BETWEEN ${LO} AND ${HI}`,
   `DELETE FROM contacts       WHERE id BETWEEN ${LO} AND ${HI}`,
 ];
 
