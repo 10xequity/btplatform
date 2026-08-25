@@ -24,9 +24,16 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { blankComments } from "../testkit/route-extract.mjs";
 
 const WEB = new URL("../../web/", import.meta.url);
-const read = (p) => readFileSync(new URL(p, WEB), "utf8");
+/* D-45 cluster 3 (v0.195.0): .js reads are comment-blanked at the door — this file's presence
+   checks (rail entries, ids, params.get) were satisfiable by a commented-out line (measured by
+   raw-source-sweep: 4 raw pairs). HTML reads stay raw; blankComments is a JS lexer. */
+const read = (p) => {
+  const s = readFileSync(new URL(p, WEB), "utf8");
+  return p.endsWith(".js") ? blankComments(s) : s;
+};
 
 const ENTRIES = ["admin-manage.html#tournaments", "admin-manage.html#leagues"];
 
@@ -118,13 +125,13 @@ test("D-53: every writer on the owner's path carries ends_at — or every real e
   const events = read("assets/admin-events.js");
   assert.ok(/ends_at:/.test(events), "the event modal's bag() no longer sends ends_at");
   assert.ok(events.includes('id="m_endTime"'), "the modal lost its end-time input — nothing for bag() to read");
-  const t = readFileSync(new URL("../src/tournaments.js", import.meta.url), "utf8");
+  const t = blankComments(readFileSync(new URL("../src/tournaments.js", import.meta.url), "utf8"));
   const allowed = t.match(/const allowed = \[[^\]]+\]/);
   assert.ok(allowed && allowed[0].includes('"ends_at"'),
     "patchEvent's allowed list dropped ends_at — the modal sends it, the route discards it, the notice says Saved (D-34's class)");
   const ins = t.match(/INSERT INTO events \(([^)]+)\)/);
   assert.ok(ins && ins[1].includes("ends_at"), "createEvent's INSERT no longer names ends_at");
-  const ea = readFileSync(new URL("../src/events_admin.js", import.meta.url), "utf8");
+  const ea = blankComments(readFileSync(new URL("../src/events_admin.js", import.meta.url), "utf8"));
   const fields = ea.match(/const EVENT_FIELDS = \[[^\]]+\]/);
   assert.ok(fields && fields[0].includes('"ends_at"'),
     "EVENT_FIELDS strips ends_at, so insertEvent's bag.ends_at bind is dead code and bulk/recurring writes NULL");

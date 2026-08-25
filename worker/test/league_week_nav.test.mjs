@@ -1,6 +1,7 @@
 /**
  * Boomtown Platform — §-1r RF-2 Unit A: navigating a long league season
- * File: worker/test/league_week_nav.test.mjs · Version: v1.0 · Date: 2026-08-24 · Ships in: v0.190.0
+ * File: worker/test/league_week_nav.test.mjs · Version: v1.1 · Date: 2026-08-25 · Ships in: v0.195.0
+ * v1.1: + the RF-3 recency-note guards (metBefore, the advisory board chip, the live modal note).
  *
  * RF-2 measured as two units. Unit A is client-only and is what this pins: a season of many weeks
  * scrolled forever with no way around. Each week card now carries an id (#wk-N); the toolbar has a
@@ -49,6 +50,44 @@ test("RF-2A — a collapsed week still prints in full (the sheet is the whole se
   const printBlock = HTML.slice(HTML.indexOf("@media print"));
   assert.match(printBlock, /\.wk-body \{ display: block !important; \}/,
     "print does not force .wk-body open — a week collapsed on screen would print empty");
+});
+
+/* ═══ v1.1 — the RF-3 remnant (owner 2026-08-24, point 3): the recency note ═══
+   His words: "add a note that this team has played together prior (last week recency bias) and
+   denote not to do that but can be ignored if necessary." ADVISORY, never blocking — the note
+   names the most recent prior week and nothing refuses the pairing. Computed client-side from
+   data.weeks (the board payload already carries every match), so there is no payload change:
+   a pair has met when an EARLIER match (lower round, or same round with a lower game number —
+   a same-night rotation is the maximum recency) holds the same two teams, in either order. */
+
+test("RF-3 recency — metBefore judges earlier matches, either team order", () => {
+  assert.match(JS, /function metBefore\(/, "the recency judge is gone");
+  assert.match(JS, /x\.round < round \|\| \(x\.round === round && \(x\.game_number \|\| 1\) < \(game \|\| 1\)\)/,
+    "metBefore no longer judges EARLIER (round, then same-night game order) — a later match would count as prior history");
+  assert.match(JS, /\(x\.team_a_id === bId && x\.team_b_id === aId\)/,
+    "the reversed team order is not matched — half of all rematches would go unnoticed");
+});
+
+test("RF-3 recency — the board row carries the note ONLY unscored, and it is advisory", () => {
+  assert.match(JS, /const met = !scored && m\.team_a_id && m\.team_b_id \? metBefore\(/,
+    "the note is not computed, or computes for scored rows too (history needs no warning)");
+  assert.match(JS, /Played together · wk \$\{met\}/, "the visible note lost its week number");
+  assert.match(JS, /keep it if you need to/, "the note stopped saying it can be ignored — his words make it advisory");
+  assert.ok(!/mt-met[^>]*disabled/.test(JS), "the note must never disable anything — advisory, not a gate");
+});
+
+test("RF-3 recency — the edit modal warns live as teams are picked", () => {
+  assert.match(JS, /id="muMet"/, "the modal has no live note element");
+  assert.match(JS, /muSync/, "nothing recomputes the note when a select changes");
+  assert.match(JS, /back\.querySelector\("#muA"\)\.onchange = muSync/, "team A changes do not refresh the note");
+  assert.match(JS, /back\.querySelector\("#muB"\)\.onchange = muSync/, "team B changes do not refresh the note");
+});
+
+test("RF-3 NC — stripping the reversed-order arm is caught", () => {
+  const mutated = JS.replace("(x.team_a_id === bId && x.team_b_id === aId)", "false");
+  assert.notEqual(mutated, JS, "mutation did not land — NC is vacuous");
+  assert.ok(!/\(x\.team_a_id === bId && x\.team_b_id === aId\)/.test(mutated),
+    "the reversed-order arm survived the mutation — this check is spelling-blind");
 });
 
 test("RF-2A NC — removing the week-card id is caught (jump/top would have no target)", () => {

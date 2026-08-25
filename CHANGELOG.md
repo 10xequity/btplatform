@@ -1,5 +1,15 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.195.0 — 2026-08-25
+
+**The copy sweep, the league recency note, and two D-45 clusters (§-1r RF-20 web half + the RF-3 remnant + §-1c D-45).**
+
+- **RF-20, the web half — em dashes out of everything a member or admin can see.** His words: *"Review all the formatting and text to be consistent, remove any AI patterns such as em dashes."* Measured first: 61 page-title separators, 6 aria-labels, and 346 prose sites across 92 web files (plus 43 lone-dash placeholders — the "—" an empty score cell renders — which are typography, not prose, and stay as the one named exemption). Every title now separates with "·", aria-labels with commas, and each prose sentence was rewritten by hand to read plainly. A new guard (`copy_style.test.mjs`) derives the corpus from the shipped files, strips what a member cannot see (comments at every grain), and holds the class dead — a new page joins the rule by existing. One real find on the way: rewording kotc-live's "session link" note collided with the credential-scan guard, which is exactly the kind of thing the guards are for. The worker's 234 member-facing sentences (error messages) are the recorded next sweep; docs and code comments stay out permanently.
+- **The RF-3 remnant — the "played together" note.** His words: *"add a note that this team has played together prior (last week recency bias) and denote not to do that but can be ignored if necessary."* The League Manager board now marks any unscored matchup whose teams already met — a quiet chip naming the most recent prior week — and the edit-matchup modal recomputes the same note live as teams are picked. Advisory only: nothing blocks, exactly as he said. Computed from the board data already on the page, so no route changed. Guards: `league_week_nav` v1.1 (+4, watched red).
+- **D-45 clusters 3 and 4** — `admin_manage` and `org_contact` now comment-blank every `.js` source they read (raw-source-sweep re-measured both: 4 → 0 raw pairs each), so a commented-out line can no longer satisfy their presence checks.
+
+Suite 2255 → **2265** · test files 150 → **151** (`copy_style` new) · no migration · Gemini: both checkpoints and the close 429'd on the 20/day free cap (spent before this loop began); the RF-19 carry stands.
+
 ## v0.194.0 — 2026-08-24
 
 **The owner's 2026-08-24 design batch, second half — the profile-icon menu, the schedule measured and repaired, the theme picker from the button (§-1r RF-16 + RF-14 + RF-15).**

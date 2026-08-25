@@ -58,14 +58,20 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
-import { scriptsOf } from "../testkit/route-extract.mjs";
+import { scriptsOf, blankComments } from "../testkit/route-extract.mjs";
 import worker from "../src/index.js";              // D-30: the behavioral half drives real routes
 import { createD1 } from "../testkit/d1-memory.mjs";
 
 const WEB = new URL("../../web/", import.meta.url);
 const SRC = new URL("../src/", import.meta.url);
-const read = (rel) => readFileSync(new URL(rel, WEB), "utf8");
-const readSrc = (rel) => readFileSync(new URL(rel, SRC), "utf8");
+/* D-45 cluster 4 (v0.195.0): .js reads are comment-blanked at the door — raw-source-sweep
+   measured 4 pairs here that a commented-out line could satisfy. HTML reads stay raw
+   (blankComments is a JS lexer); the .sql schema read below is untouched. */
+const read = (rel) => {
+  const s = readFileSync(new URL(rel, WEB), "utf8");
+  return rel.endsWith(".js") ? blankComments(s) : s;
+};
+const readSrc = (rel) => blankComments(readFileSync(new URL(rel, SRC), "utf8"));
 const htmlFiles = () => readdirSync(WEB).filter((f) => f.endsWith(".html"));
 
 /* Spelled exactly as header_actions.test.mjs spells it — the same 17-page set, same ratchet. */

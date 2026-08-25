@@ -198,15 +198,38 @@
     });
   }
 
+  /* RF-3 remnant (v0.195.0, owner 2026-08-24 point 3): "add a note that this team has played
+     together prior (last week recency bias) and denote not to do that but can be ignored if
+     necessary." ADVISORY, never blocking — the note names the most recent prior week and nothing
+     refuses the pairing. Computed HERE from data.weeks (the board payload already carries every
+     match), so there is no payload change. A pair has met when an EARLIER match — a lower round,
+     or the same round with a lower game number (a same-night rotation is the maximum recency) —
+     holds the same two teams, in either order. Returns the most recent prior week, 0 for never.
+     Guards: league_week_nav.test.mjs v1.1. */
+  function metBefore(aId, bId, round, game) {
+    let last = 0;
+    for (const w of data.weeks || []) for (const x of w.matches) {
+      if (!x.team_a_id || !x.team_b_id) continue;
+      if (!(x.round < round || (x.round === round && (x.game_number || 1) < (game || 1)))) continue;
+      const same = (x.team_a_id === aId && x.team_b_id === bId) ||
+                   (x.team_a_id === bId && x.team_b_id === aId);
+      if (same && x.round > last) last = x.round;
+    }
+    return last;
+  }
+
   /* RF-2B: `structured` is true when the WEEK carries game numbers past 1 (a multi-rotation or
      two-game night) — only then does the row show its play order, so a plain week stays clean. */
   function matchRow(m, structured) {
     const scored = m.score_a != null;
     const aWin = scored && m.score_a > m.score_b;
+    // RF-3: the recency note rides UNSCORED rows only — a finished game is history, not a plan.
+    const met = !scored && m.team_a_id && m.team_b_id ? metBefore(m.team_a_id, m.team_b_id, m.round, m.game_number) : 0;
     return `<div class="mt-row">
       <span class="court">Court ${m.court}${structured ? ` · Game ${m.game_number || 1}` : ""}</span>
       <span class="vs"><b class="${aWin ? "win" : ""}">${esc(m.team_a || "TBD")}</b> vs
         <b class="${scored && !aWin ? "win" : ""}">${esc(m.team_b || "TBD")}</b></span>
+      ${met ? `<span class="mt-met no-print" title="These teams already played each other in week ${met}. Avoid a rematch if you can; keep it if you need to.">Played together · wk ${met}</span>` : ""}
       ${scored
         ? `<span class="score">${m.score_a}–${m.score_b}${m.forfeit_by ? " · forfeit" : ""}</span>`
         : `<button class="btn ghost no-print" data-edit="${m.id}" aria-label="Change who plays this game">Edit</button>
@@ -229,8 +252,21 @@
         <div class="field"><label>Team A</label><select id="muA">${opts(m.team_a_id)}</select></div>
         <div class="field"><label>Team B</label><select id="muB">${opts(m.team_b_id)}</select></div>
       </div>
+      <p class="help-text" id="muMet" role="status" aria-live="polite" style="margin:8px 0 0"></p>
       <div class="actions"><button class="btn ghost" id="muCancel">Cancel</button>
         <button class="btn" id="muGo">Save matchup</button></div>`);
+    /* RF-3 (v0.195.0): the live recency note — recomputed as either select changes, advisory
+       only (his "can be ignored if necessary"): the Save button never gates on it. */
+    const muSync = () => {
+      const a = +back.querySelector("#muA").value, b = +back.querySelector("#muB").value;
+      const met = a && b && a !== b ? metBefore(a, b, m.round, m.game_number) : 0;
+      back.querySelector("#muMet").textContent = met
+        ? `These teams already played each other in week ${met}. Avoid a rematch if you can; keep it if you need to.`
+        : "";
+    };
+    muSync();
+    back.querySelector("#muA").onchange = muSync;
+    back.querySelector("#muB").onchange = muSync;
     back.querySelector("#muCancel").onclick = closeModal;
     back.querySelector("#muGo").onclick = async () => {
       const r = await api(`/api/admin/events/${leagueId}/schedule/teams`, { method: "POST", body: JSON.stringify({
