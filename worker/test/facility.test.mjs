@@ -68,3 +68,27 @@ test("CSV parser: quotes, commas, CRLF", () => {
   const rows = parseCsv('a,"b,1",c\r\nd,"e ""q""",f\n');
   assert.deepEqual(rows, [["a","b,1","c"],["d",'e "q"',"f"]]);
 });
+
+/* v1.2 (2026-08-25): "VB 1" must book EXACTLY court 1 even though the preset name
+   "Full Hardwood (VB 1–8)" contains that substring — the preset used to win and silently
+   book eight courts for a one-court row (found by facility_overnight's link count: 24
+   one-court rows landed 192 links). Ranges and exact atoms now resolve before presets. */
+const FIXTURE_SPACES = Array.from({ length: 13 }, (_, i) => ({ id: i + 1, name: `VB ${i + 1}` }));
+const FIXTURE_PRESETS = [{ id: 2, name: "Full Hardwood (VB 1–8)", space_ids: [1, 2, 3, 4, 5, 6, 7, 8] }];
+
+test("an exact atom beats a preset whose NAME merely contains it", () => {
+  assert.deepEqual(parseSpacesText("VB 1", FIXTURE_PRESETS, FIXTURE_SPACES), [1]);
+  assert.deepEqual(parseSpacesText("VB 1, VB 3", FIXTURE_PRESETS, FIXTURE_SPACES), [1, 3]);
+  assert.deepEqual(parseSpacesText("VB 2-4", FIXTURE_PRESETS, FIXTURE_SPACES), [2, 3, 4]);
+  // and a real preset ask still resolves through the preset
+  assert.deepEqual(parseSpacesText("Full Hardwood", FIXTURE_PRESETS, FIXTURE_SPACES), [1, 2, 3, 4, 5, 6, 7, 8]);
+});
+
+test("NC: the old preset-first order really did book eight courts for 'VB 1'", () => {
+  // The defect, re-run on the fixture: the substring matches the preset name both ways.
+  const t = "vb 1";
+  const preset = FIXTURE_PRESETS.find(p => p.name.toLowerCase().includes(t)
+    || t.includes(p.name.toLowerCase().replace(/\s*\(.*\)$/, "").trim()));
+  assert.ok(preset, "the mutation did not land — the substring no longer matches; update this NC");
+  assert.equal(preset.space_ids.length, 8, "that is the over-booking the reorder kills");
+});

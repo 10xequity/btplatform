@@ -100,17 +100,39 @@ async function listBookings(env, url) {
 }
 
 /** Overlap classifier. Returns { conflicts:[…], warnings:[…] } against live bookings. */
-async function findConflicts(env, { date, start_min, end_min, space_ids, is_closure, share_ok, ignore_ids = [] }) {
+/* D-57 (owner 2026-08-25: "Go with midnight after with your recommendation"): a slot that
+   crosses midnight becomes a LINKED PAIR split at 24:00/00:00. end_min < start_min means
+   overnight (the operator typed the real end time); end_min === 0 means "ends exactly at
+   midnight" and needs no second half. The pair shares a series_id at the call sites, so
+   scope:"series" edit/delete already treats it as one booking. Exported for its own tests. */
+export function splitOvernight({ date, start_min, end_min }) {
+  if (end_min > start_min) return [{ date, start_min, end_min }];
+  const next = new Date(date + "T00:00:00Z");
+  next.setUTCDate(next.getUTCDate() + 1);
+  const halves = [{ date, start_min, end_min: 1440 }];
+  if (end_min > 0) halves.push({ date: next.toISOString().slice(0, 10), start_min: 0, end_min });
+  return halves;
+}
+
+/* v1.2 (D-58): `preloaded` lets the CSV importer judge a whole file against ONE window read —
+   an array of { id, title, date, start_min, end_min, share_ok, is_closure, operator,
+   space_ids:Set } rows. The JUDGEMENT below is the single copy either way; only the data
+   source changes. Without `preloaded` the behavior is byte-for-byte the old one. */
+async function findConflicts(env, { date, start_min, end_min, space_ids, is_closure, share_ok, ignore_ids = [] }, preloaded = null) {
   if (!space_ids.length) return { conflicts: [], warnings: [] };
-  const rows = (await env.DB.prepare(
-    `SELECT DISTINCT b.id, b.title, b.start_min, b.end_min, b.share_ok, b.is_closure, b.series_id, o.name AS operator
-     FROM space_bookings b
-     JOIN booking_spaces bs ON bs.booking_id = b.id
-     JOIN orgs o ON o.id = b.org_id
-     WHERE b.date = ?1 AND b.deleted_at IS NULL
-       AND NOT (b.end_min <= ?2 OR b.start_min >= ?3)
-       AND bs.space_id IN (${space_ids.map(() => "?").join(",")})`
-  ).bind(date, start_min, end_min, ...space_ids).all()).results;
+  const rows = preloaded
+    ? preloaded.filter((b) => b.date === date
+        && !(b.end_min <= start_min || b.start_min >= end_min)
+        && space_ids.some((s) => b.space_ids.has(s)))
+    : (await env.DB.prepare(
+        `SELECT DISTINCT b.id, b.title, b.start_min, b.end_min, b.share_ok, b.is_closure, b.series_id, o.name AS operator
+         FROM space_bookings b
+         JOIN booking_spaces bs ON bs.booking_id = b.id
+         JOIN orgs o ON o.id = b.org_id
+         WHERE b.date = ?1 AND b.deleted_at IS NULL
+           AND NOT (b.end_min <= ?2 OR b.start_min >= ?3)
+           AND bs.space_id IN (${space_ids.map(() => "?").join(",")})`
+      ).bind(date, start_min, end_min, ...space_ids).all()).results;
   const conflicts = [], warnings = [];
   for (const r of rows) {
     if (ignore_ids.includes(r.id)) continue;
@@ -129,8 +151,15 @@ async function checkOnly(request, env) {
   const v = validateSlot(b); if (v) return json({ error: v }, 400);
   const space_ids = await resolveSpaces(env, b);
   if (!space_ids.length) return json({ error: "Pick at least one court or room (or a preset)." }, 400);
-  const res = await findConflicts(env, { ...slot(b), space_ids, ignore_ids: b.ignore_id ? [Number(b.ignore_id)] : [] });
-  return json({ ok: true, ...res });
+  // D-57: an overnight check judges both halves and merges what it finds.
+  const ignore_ids = b.ignore_id ? [Number(b.ignore_id)] : [];
+  const merged = { conflicts: [], warnings: [] };
+  for (const half of splitOvernight({ date: b.date, ...slot(b) })) {
+    const res = await findConflicts(env, { ...half, is_closure: slot(b).is_closure, share_ok: slot(b).share_ok, space_ids, ignore_ids });
+    merged.conflicts.push(...res.conflicts);
+    merged.warnings.push(...res.warnings);
+  }
+  return json({ ok: true, ...merged });
 }
 
 async function createBooking(request, env, ctx) {
@@ -156,12 +185,18 @@ async function createBooking(request, env, ctx) {
     }
   }
 
-  // Conflict check every date first — never half-write a series.
+  /* D-57: each date expands to its overnight halves. A split pair is LINKED by series_id —
+     the mechanism scope:"series" already understands — so a lone overnight booking mints one. */
+  const slots = dates.flatMap((date) => splitOvernight({ date, ...slot(b) }));
+  const isSplit = slots.length > dates.length;
+  if (isSplit && !series_id) series_id = crypto.randomUUID();
+
+  // Conflict check every slot first — never half-write a series OR a midnight pair.
   const problems = [];
-  for (const date of dates) {
-    const { conflicts, warnings } = await findConflicts(env, { ...slot(b), date, space_ids });
-    if (conflicts.length) problems.push({ date, conflicts, hard: true });
-    else if (warnings.length && !b.force) problems.push({ date, warnings, hard: false });
+  for (const s of slots) {
+    const { conflicts, warnings } = await findConflicts(env, { ...s, is_closure: slot(b).is_closure, share_ok: slot(b).share_ok, space_ids });
+    if (conflicts.length) problems.push({ date: s.date, conflicts, hard: true });
+    else if (warnings.length && !b.force) problems.push({ date: s.date, warnings, hard: false });
   }
   if (problems.length) {
     const anyHard = problems.some(p => p.hard);
@@ -173,15 +208,15 @@ async function createBooking(request, env, ctx) {
   }
 
   const created = [];
-  for (const date of dates) {
+  for (const s of slots) {
     const ins = await env.DB.prepare(
       `INSERT INTO space_bookings (org_id, event_id, title, date, start_min, end_min, preset_id, share_ok,
         is_closure, staffing_json, catering, door_charge_cents, poc_name, poc_email, poc_phone,
         est_attendees, series_id, notes)
        VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18)`
     ).bind(
-      org_id, b.event_id ? Number(b.event_id) : null, String(b.title).trim(), date,
-      slot(b).start_min, slot(b).end_min, b.preset_id ? Number(b.preset_id) : null,
+      org_id, b.event_id ? Number(b.event_id) : null, String(b.title).trim(), s.date,
+      s.start_min, s.end_min, b.preset_id ? Number(b.preset_id) : null,
       b.share_ok ? 1 : 0, b.is_closure ? 1 : 0,
       JSON.stringify(b.staffing || {}), b.catering || null,
       b.door_charge_cents != null && b.door_charge_cents !== "" ? Number(b.door_charge_cents) : null,
@@ -192,11 +227,14 @@ async function createBooking(request, env, ctx) {
     for (const sid of space_ids) {
       await env.DB.prepare("INSERT INTO booking_spaces (booking_id, space_id) VALUES (?1, ?2)").bind(id, sid).run();
     }
-    created.push({ id, date });
+    created.push({ id, date: s.date });
   }
   await audit(env, ctx, "facility.book", "space_bookings", created[0].id,
-    { title: b.title, dates: dates.length, spaces: space_ids.length, series_id });
-  return json({ ok: true, created, series_id });
+    { title: b.title, dates: dates.length, spaces: space_ids.length, series_id, split: isSplit });
+  return json({
+    ok: true, created, series_id, split: isSplit,
+    ...(isSplit ? { message: "This booking runs past midnight, so it was saved as a linked pair: one row to midnight and one from midnight on the next date. Editing or deleting either with the series option covers both." } : {}),
+  });
 }
 
 async function updateBooking(request, env, ctx, id) {
@@ -214,7 +252,9 @@ async function updateBooking(request, env, ctx, id) {
   // Merge changes over existing values (date changes apply to 'one' scope only).
   const start_min = b.start != null || b.start_min != null ? slot(b, row).start_min : row.start_min;
   const end_min = b.end != null || b.end_min != null ? slot(b, row).end_min : row.end_min;
-  if (end_min <= start_min) return json({ error: "End time must be after start time." }, 400);
+  /* D-57: edits do NOT re-split — the halves of an overnight pair are edited as the two rows
+     they are. Making an existing booking cross midnight goes through create, which splits. */
+  if (end_min <= start_min) return json({ error: "End time must be after start time. To make a booking cross midnight, delete it and re-create it; it books as a linked pair." }, 400);
   const share_ok = b.share_ok != null ? (b.share_ok ? 1 : 0) : row.share_ok;
   const is_closure = b.is_closure != null ? (b.is_closure ? 1 : 0) : row.is_closure;
   const space_ids = (b.space_ids || b.preset_id) ? await resolveSpaces(env, b)
@@ -321,7 +361,23 @@ async function importCsv(request, env, ctx) {
   const spaces = (await env.DB.prepare("SELECT id, name FROM spaces WHERE deleted_at IS NULL").all()).results;
   const orgs = (await env.DB.prepare("SELECT id, name, slug FROM orgs WHERE deleted_at IS NULL").all()).results;
 
+  /* ── v1.2 (D-58, 2026-08-25): THE WRITE IS ONE ATOMIC BATCH, THE READS ARE ONE WINDOW.
+     The old tail issued one INSERT per booking plus one per court link plus a conflict SELECT
+     per row — the owner's 272-row operations sheet needed ~2,800 statements and the route
+     500'd MID-FILE at D1's 1,000-queries-per-invocation cap, leaving a partial import the dry
+     run could never predict (it never writes). Now: every existing booking overlapping the
+     file's date span is read ONCE and findConflicts judges in memory (same judgement, injected
+     data); accepted rows join that window as they pass, so an intra-file duplicate still
+     conflict-skips exactly as before; ids are computed from MAX(id) and every INSERT goes in
+     ONE env.DB.batch of chunked multi-row VALUES — atomic, and a handful of statements for any
+     file size. The MAX(id)-then-batch window is stated: a concurrent insert between the two
+     would collide on the primary key and roll the WHOLE batch back (a clean 500, never a
+     corrupt import) — imports are a lone-admin action, and safe beats invisible.
+     D-57 rides here too: an end at-or-before the start is an OVERNIGHT row and books as the
+     linked pair splitOvernight defines; only a missing/unparseable time is still an error. */
+
   const results = { imported: 0, skipped: [], errors: [] };
+  const accepted = []; // { line, r, org, space_ids, share_ok, is_closure, halves, series_id }
   for (let i = 1; i < rows.length; i++) {
     const line = i + 1;
     const r = {};
@@ -331,7 +387,7 @@ async function importCsv(request, env, ctx) {
     const date = parseDate(r.date);
     const start_min = parseTime(r.start), end_min = parseTime(r.end);
     if (!date) { results.errors.push({ line, error: `Unreadable date "${r.date}".` }); continue; }
-    if (start_min == null || end_min == null || end_min <= start_min) {
+    if (start_min == null || end_min == null || end_min === start_min) {
       results.errors.push({ line, error: `Bad time range "${r.start}"–"${r.end}".` }); continue;
     }
     if (!r.title) { results.errors.push({ line, error: "Missing title." }); continue; }
@@ -344,25 +400,84 @@ async function importCsv(request, env, ctx) {
 
     const share_ok = /^(y|yes|1|true|share)/i.test(r.share || "") ? 1 : 0;
     const is_closure = /^(y|yes|1|true)/i.test(r.closure || "") ? 1 : 0;
-    const { conflicts, warnings } = await findConflicts(env, { date, start_min, end_min, space_ids, is_closure, share_ok });
-    if (conflicts.length) { results.skipped.push({ line, reason: "Hard conflict", with: conflicts.map(c => c.title) }); continue; }
+    const halves = splitOvernight({ date, start_min, end_min });
+    accepted.push({ line, r, org, space_ids, share_ok, is_closure, halves,
+      series_id: halves.length > 1 ? crypto.randomUUID() : null });
+  }
 
-    if (!b.dry_run) {
-      const ins = await env.DB.prepare(
-        `INSERT INTO space_bookings (org_id, title, date, start_min, end_min, share_ok, is_closure,
-          staffing_json, catering, door_charge_cents, poc_name, poc_email, poc_phone, est_attendees, notes)
-         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15)`
-      ).bind(org.id, r.title, date, start_min, end_min, share_ok, is_closure,
-        JSON.stringify({ facility: num(r.staff), bar: num(r.bar) }),
-        r.catering || null, r.door ? Math.round(parseFloat(String(r.door).replace(/[$,]/g, "")) * 100) || null : null,
-        r.poc_name || null, r.poc_email || null, r.poc_phone || null,
-        num(r.attendees), r.notes || null).run();
-      for (const sid of space_ids) {
-        await env.DB.prepare("INSERT INTO booking_spaces (booking_id, space_id) VALUES (?1, ?2)").bind(ins.meta.last_row_id, sid).run();
-      }
+  // ONE window read: every live booking overlapping the file's date span, with its spaces.
+  let windowRows = [];
+  if (accepted.length) {
+    const allDates = accepted.flatMap((a) => a.halves.map((h) => h.date));
+    const lo = allDates.reduce((a, c) => (c < a ? c : a));
+    const hi = allDates.reduce((a, c) => (c > a ? c : a));
+    const found = (await env.DB.prepare(
+      `SELECT b.id, b.title, b.date, b.start_min, b.end_min, b.share_ok, b.is_closure,
+              o.name AS operator, bs.space_id
+       FROM space_bookings b
+       JOIN booking_spaces bs ON bs.booking_id = b.id
+       JOIN orgs o ON o.id = b.org_id
+       WHERE b.date >= ?1 AND b.date <= ?2 AND b.deleted_at IS NULL`
+    ).bind(lo, hi).all()).results;
+    const byId = new Map();
+    for (const f of found) {
+      if (!byId.has(f.id)) byId.set(f.id, { ...f, space_ids: new Set() });
+      byId.get(f.id).space_ids.add(f.space_id);
+    }
+    windowRows = [...byId.values()];
+  }
+
+  // Judge every row against the window; accepted halves JOIN the window (intra-file conflicts).
+  const toWrite = [];
+  for (const a of accepted) {
+    let hard = null; const warns = [];
+    for (const h of a.halves) {
+      const { conflicts, warnings } = await findConflicts(env,
+        { ...h, space_ids: a.space_ids, is_closure: a.is_closure, share_ok: a.share_ok }, windowRows);
+      if (conflicts.length) { hard = conflicts; break; }
+      warns.push(...warnings);
+    }
+    if (hard) { results.skipped.push({ line: a.line, reason: "Hard conflict", with: hard.map(c => c.title) }); continue; }
+    toWrite.push(a);
+    for (const h of a.halves) {
+      windowRows.push({ id: -a.line, title: a.r.title, date: h.date, start_min: h.start_min,
+        end_min: h.end_min, share_ok: a.share_ok, is_closure: a.is_closure,
+        operator: a.org.name, space_ids: new Set(a.space_ids) });
     }
     results.imported++;
-    if (warnings.length) results.skipped.push({ line, reason: "Imported as shared time", with: warnings.map(w => w.title) });
+    if (warns.length) results.skipped.push({ line: a.line, reason: "Imported as shared time", with: warns.map(w => w.title) });
+  }
+
+  if (!b.dry_run && toWrite.length) {
+    const base = (await env.DB.prepare("SELECT COALESCE(MAX(id), 0) AS m FROM space_bookings").first()).m;
+    let nextId = base;
+    const bookingRows = [], linkRows = []; // arrays of bound-value arrays — nothing hand-escaped
+    for (const a of toWrite) {
+      for (const h of a.halves) {
+        const id = ++nextId;
+        const door = a.r.door ? Math.round(parseFloat(String(a.r.door).replace(/[$,]/g, "")) * 100) || null : null;
+        bookingRows.push([id, a.org.id, a.r.title, h.date, h.start_min, h.end_min, a.share_ok, a.is_closure,
+          JSON.stringify({ facility: num(a.r.staff), bar: num(a.r.bar) }), a.r.catering || null, door,
+          a.r.poc_name || null, a.r.poc_email || null, a.r.poc_phone || null, num(a.r.attendees),
+          a.series_id, a.r.notes || null]);
+        for (const sid of a.space_ids) linkRows.push([id, sid]);
+      }
+    }
+    // Chunk sizes keep bound-parameter counts under SQLite's per-statement limit (999):
+    // 50 bookings × 17 params = 850; 400 links × 2 = 800.
+    const chunk = (arr, n) => Array.from({ length: Math.ceil(arr.length / n) }, (_, i) => arr.slice(i * n, i * n + n));
+    const multiInsert = (sql, cols, rows) => env.DB.prepare(
+      `${sql} VALUES ${rows.map(() => `(${Array.from({ length: cols }, () => "?").join(",")})`).join(",")}`
+    ).bind(...rows.flat());
+    const stmts = [
+      ...chunk(bookingRows, 50).map((c) => multiInsert(
+        `INSERT INTO space_bookings (id, org_id, title, date, start_min, end_min, share_ok, is_closure,
+          staffing_json, catering, door_charge_cents, poc_name, poc_email, poc_phone, est_attendees, series_id, notes)`,
+        17, c)),
+      ...chunk(linkRows, 400).map((c) => multiInsert(
+        "INSERT INTO booking_spaces (booking_id, space_id)", 2, c)),
+    ];
+    await env.DB.batch(stmts);
   }
   if (!b.dry_run) await audit(env, ctx, "facility.import", "space_bookings", null,
     { imported: results.imported, errors: results.errors.length });
@@ -393,7 +508,11 @@ function validateSlot(b) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(b.date || "")) return "Date must be YYYY-MM-DD.";
   const s = slot(b);
   if (s.start_min == null || s.end_min == null) return "Provide start and end times.";
-  if (s.end_min <= s.start_min) return "End time must be after start time.";
+  /* D-57: end BEFORE start now means the booking runs past midnight and splitOvernight books
+     it as a linked pair. Only end EQUAL to start stays a refusal (zero-length or ambiguous). */
+  if (s.end_min === s.start_min) {
+    return "End time must be different from the start. A booking that runs past midnight is fine: enter its real end time and it books as a linked pair.";
+  }
   return null;
 }
 
@@ -432,14 +551,16 @@ function parseDate(d) {
   return null;
 }
 
-/** "Full Hardwood", "VB 1-8", "VB 1, VB 3", "Yoga-Den" → atom ids. */
+/** "Full Hardwood", "VB 1-8", "VB 1, VB 3", "Yoga-Den" → atom ids.
+    v1.2 (2026-08-25): RANGES AND EXACT ATOMS RESOLVE BEFORE PRESETS. The preset match is a
+    substring both ways, so "VB 1" used to match INSIDE the preset name "Full Hardwood (VB 1–8)"
+    and silently book EIGHT courts for a one-court row — the ambiguous-anchor class, caught by
+    facility_overnight's link count (24 one-court rows landed 192 links). A preset now wins only
+    when the text names nothing more specific. */
 function parseSpacesText(text, presets, spaces) {
   const out = new Set();
   const t = text.trim();
   if (!t) return [];
-  const preset = presets.find(p => p.name.toLowerCase().includes(t.toLowerCase())
-    || t.toLowerCase().includes(p.name.toLowerCase().replace(/\s*\(.*\)$/, "").trim()));
-  if (preset) { preset.space_ids.forEach(id => out.add(id)); return [...out]; }
   const range = t.match(/vb\s*(\d{1,2})\s*[-–]\s*(?:vb\s*)?(\d{1,2})/i);
   if (range) {
     for (let n = Number(range[1]); n <= Number(range[2]); n++) {
@@ -452,6 +573,10 @@ function parseSpacesText(text, presets, spaces) {
     const sp = spaces.find(s => s.name.toLowerCase() === clean || s.name.toLowerCase() === clean.replace(/^court\s*/, "vb "));
     if (sp) out.add(sp.id);
   }
+  if (out.size) return [...out];
+  const preset = presets.find(p => p.name.toLowerCase().includes(t.toLowerCase())
+    || t.toLowerCase().includes(p.name.toLowerCase().replace(/\s*\(.*\)$/, "").trim()));
+  if (preset) preset.space_ids.forEach(id => out.add(id));
   return [...out];
 }
 
