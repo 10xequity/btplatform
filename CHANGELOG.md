@@ -1,5 +1,9 @@
 # Boomtown Platform — CHANGELOG
 
+## v0.198.0 — 2026-08-25
+
+The owner's 2026-08-25 look-and-feel report, all six defects measured live and fixed. (1) Visited link-buttons painted blank: `a:visited` outranks every single-class component, so a visited `<a class="btn">` drew gold text on the gold fill (navy on navy in light) — and browsers report the unvisited style to scripts, so no computed check could see it. Links are now styled at zero specificity (`:where`), and `.btn` drops the UA underline. (2) The header now fits a phone: below 560px the brand drops its second word — the theme picker and account menu sat past a 390px viewport's edge, which read as "there is no color choose for the theme". (3) Pressed buttons stop jittering: five rules flipped font-weight on the active state, re-widthing the label and shifting its siblings on every press; weight moved to each base rule and a corpus guard (press_stability, file 153) bans the flip. (4) The member shell goes full-bleed like the admin shell — the rail hugs the left edge instead of floating in a centered box. (5) D-56: a league now paints on EVERY one of its weekly nights in both month grids through `BT_CAL.paintsOn` (one judgement, both readers) — September stops rendering as an empty month while a league runs every week of it; a derived night tile in the admin grid is deliberately not draggable. (6) One title scale: `--fs-h1/h2/h3` in tokens.css, 59 heading sites swept across 35 files (h1 had shipped at 20/22/24/28; card h2s sat below the body size), deliberate miniatures named and kept; type_scale (file 154) pins the hierarchy relationship and every reader.
+
 ## v0.197.0 — 2026-08-25
 
 **The repeated-press audit and the load/speed baseline (§-1r RF-23 + RF-21).**

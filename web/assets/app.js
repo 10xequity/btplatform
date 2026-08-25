@@ -170,7 +170,7 @@
     if (nameEl) nameEl.textContent = brand.display_name;
     const img = document.getElementById("loginBrandLogo");
     if (img && brand.logo_url) {
-      img.onerror = () => { img.src = "assets/logo-boom-icon-512.png?v=0.197.0"; }; // fail closed on 404
+      img.onerror = () => { img.src = "assets/logo-boom-icon-512.png?v=0.198.0"; }; // fail closed on 404
       img.src = brand.logo_url;
     }
   }
@@ -186,7 +186,7 @@
     /* RF-8(a): the lockup ships UNCONDITIONALLY with the Boomtown default, so an arrival with no
        ?org hint gets a branded card instead of a bare one. applyLoginBrand(org) swaps in an org's
        own name/logo when one resolves; with no org it is a no-op and this default stands. */
-    const brandSlot = `<div class="login-brand"><img id="loginBrandLogo" src="assets/logo-boom-icon-512.png?v=0.197.0" alt="" width="36" height="36" /><span id="loginBrandName">Boomtown Athletics</span></div>`;
+    const brandSlot = `<div class="login-brand"><img id="loginBrandLogo" src="assets/logo-boom-icon-512.png?v=0.198.0" alt="" width="36" height="36" /><span id="loginBrandName">Boomtown Athletics</span></div>`;
     render(`
       <div class="login-wrap">
         <div class="card login-card reveal">
