@@ -210,7 +210,7 @@ test("NC — the descendant exemption is real, not a blanket pass", () => {
   const uploadsCss = styleBlocks(readFileSync(join(WEB, "admin-uploads.html"), "utf8"));
   assert.ok(isColouredForTest(["danger"], uploadsCss),
     "admin-uploads.html must still colour .danger through a descendant rule");
-  const src = readFileSync(join(ASSETS, "admin-uploads.js"), "utf8");
+  const src = blankComments(readFileSync(join(ASSETS, "admin-uploads.js"), "utf8")); // D-45
   assert.ok(/class="danger"/.test(src), "the fixture for this control moved — admin-uploads.js no longer has it");
   assert.equal(unstyledModifierUses(src, uploadsCss, mods).length, 0);
 

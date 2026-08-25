@@ -65,7 +65,7 @@ function brandCorpus() {
     corpus.set("web/" + f, blankComments(readFileSync(new URL(f, WEB_DIR), "utf8"))); // D-45: line comments too
   }
   for (const f of readdirSync(ASSETS_DIR).filter((f) => f.endsWith(".js"))) {
-    corpus.set("web/assets/" + f, stripJsBlockComments(readFileSync(new URL(f, ASSETS_DIR), "utf8")));
+    corpus.set("web/assets/" + f, blankComments(readFileSync(new URL(f, ASSETS_DIR), "utf8"))); // D-45: line comments too
   }
   for (const f of ["index.html", "404.html"]) {
     corpus.set(f, stripHtmlComments(readFileSync(new URL(f, ROOT_DIR), "utf8")));
@@ -99,7 +99,7 @@ test("brand: the PWA manifest names Boomtown Athletics", () => {
 });
 
 test("brand: the sw.js push fallback title is Boomtown Athletics", () => {
-  const sw = readFileSync(new URL("sw.js", WEB_DIR), "utf8");
+  const sw = blankComments(readFileSync(new URL("sw.js", WEB_DIR), "utf8")); // D-45
   assert.match(sw, /data\.title \|\| "Boomtown Athletics"/,
     "push notifications with no title must fall back to the app brand");
 });
