@@ -344,7 +344,7 @@ test("the bye count is reported in words the director can act on", async () => {
   const env = boot(6);
   const token = await staff(env);
   const r = await call(env, "POST", "/api/admin/events/1/brackets", { token });
-  assert.match(r.data.summary[0], /2 byes to the top seeds — no play-in games/);
+  assert.match(r.data.summary[0], /2 byes to the top seeds, no play-in games/); // RF-20 spelling
   env.DB.close();
 });
 

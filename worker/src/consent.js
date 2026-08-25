@@ -259,7 +259,7 @@ async function postSign(request, env, rawToken) {
   }
   if (dobCheck.minor) {
     return json({
-      error: "This player is under 18, so they can't sign for themselves. A parent or guardian has to sign in to their own account and add this player to their family — then the guardian signs the waiver.",
+      error: "This player is under 18, so they can't sign for themselves. A parent or guardian has to sign in to their own account and add this player to their family; then the guardian signs the waiver.",
       minor: true, guardian_required: true,
     }, 409);
   }
@@ -335,7 +335,7 @@ async function mintWaiverLink(env, ctx, tmId) {
 
   const live = await liveWaiverForEmail(env, tm.org_id, email);
   if (live) return json({ ok: true, already_signed: true, expires_at: live.expires_at,
-                          message: "They already have a current waiver — nothing to send." });
+                          message: "They already have a current waiver; nothing to send." });
 
   // One live link per roster row. Minting again rotates rather than accumulating, so a
   // forwarded old link stops working the moment a new one is issued.
@@ -424,7 +424,7 @@ async function recordOptOut(request, env, ctx) {
   // Deliberately required. Waiver §6 makes a WRITTEN request the only decline path, so a
   // record with no pointer to the writing is a record that cannot be defended later.
   const ref = String(b.reference || "").trim();
-  if (ref.length < 3) return json({ error: "Note where the written request came from — the sender's address, or a message reference." }, 400);
+  if (ref.length < 3) return json({ error: "Note where the written request came from: the sender's address, or a message reference." }, 400);
 
   const already = await env.DB.prepare(
     "SELECT id FROM media_consents WHERE org_id=?1 AND contact_id=?2 AND status='opted_out' AND deleted_at IS NULL"

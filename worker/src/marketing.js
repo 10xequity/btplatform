@@ -501,7 +501,7 @@ async function testCampaign(request, env, ctx, id) {
   if (!cp) return H.json({ error: "Campaign not found." }, 404);
   if (cp.channel === "sms") {
     if (!smsConfigured(env)) return H.json({ error: SMS_OFF }, 503);
-    return H.json({ error: "Text campaigns don't have a test send yet — the reach preview shows exactly who gets it." }, 400);
+    return H.json({ error: "Text campaigns don't have a test send yet; the reach preview shows exactly who gets it." }, 400);
   }
   const { email } = await request.json().catch(() => ({}));
   if (!email) return H.json({ error: "Enter an email for the test send." }, 400);
@@ -511,10 +511,10 @@ async function testCampaign(request, env, ctx, id) {
   const html = mergeVars(cp.html_body, fake) +
     complianceFooter(org.name, org.mailing_address || "(mailing address not set yet)", `${origin}/api/unsubscribe?c=0&t=test`);
   if (!env.BREVO_API_KEY) {
-    return H.json({ ok: true, mode: "sandbox", preview_html: html, message: "Sandbox: no email sent — preview below." });
+    return H.json({ ok: true, mode: "sandbox", preview_html: html, message: "Sandbox: no email sent; preview below." });
   }
   const sent = await sendEmail(env, email, `[TEST] ${cp.subject || cp.name}`, html);
-  return H.json({ ok: sent, mode: "email", message: sent ? `Test sent to ${email}.` : "Send failed — check the Brevo key." });
+  return H.json({ ok: sent, mode: "email", message: sent ? `Test sent to ${email}.` : "Send failed. Check the Brevo key." });
 }
 
 async function sendCampaign(env, ctx, id) {
@@ -529,7 +529,7 @@ async function sendCampaign(env, ctx, id) {
 
   const org = await env.DB.prepare("SELECT mailing_address FROM orgs WHERE id=?1").bind(ctx.orgId).first();
   if (!org.mailing_address) {
-    return H.json({ error: "Set the physical mailing address first (Marketing → Settings) — it's required by email law." }, 400);
+    return H.json({ error: "Set the physical mailing address first (Marketing → Settings); it's required by email law." }, 400);
   }
 
   const seg = await env.DB.prepare(
@@ -559,7 +559,7 @@ async function sendCampaign(env, ctx, id) {
   return H.json({ ok: true, queued: recipients.length, ...first,
     message: env.BREVO_API_KEY
       ? `Sending to ${recipients.length} contacts in batches of ${BATCH_SIZE}. The daily job finishes any remainder, or click "Send next batch".`
-      : `Sandbox: recorded ${recipients.length} sends — no real emails without the Brevo key.` });
+      : `Sandbox: recorded ${recipients.length} sends; no real emails without the Brevo key.` });
 }
 
 async function processCampaign(env, orgId, id, ctx) {
@@ -592,7 +592,7 @@ async function sendSmsCampaign(env, ctx, cp) {
   const body = String(cp.sms_body || "").trim();
   if (!body) return H.json({ error: "Write the text message first." }, 400);
   if (body.length > SMS_MAX) {
-    return H.json({ error: `Keep it under ${SMS_MAX} characters — that's three text segments.` }, 400);
+    return H.json({ error: `Keep it under ${SMS_MAX} characters; that's three text segments.` }, 400);
   }
   if (quietHoursBlocked(new Date())) {
     return H.json({ error: "It's outside texting hours (8am–9pm Mountain). Try again in the morning." }, 400);
@@ -614,7 +614,7 @@ async function sendSmsCampaign(env, ctx, cp) {
   }
   const allowance = await smsDailyAllowance(env, ctx.orgId);
   if (recipients.length > allowance) {
-    return H.json({ error: `That's ${recipients.length} texts but only ${allowance} remain in today's limit — it was not sent.` }, 429);
+    return H.json({ error: `That's ${recipients.length} texts but only ${allowance} remain in today's limit, so it was not sent.` }, 429);
   }
 
   for (const r of recipients) {
@@ -756,7 +756,7 @@ async function publicSignup(request, env) {
   const recent = await env.DB.prepare(
     "SELECT COUNT(*) AS n FROM contacts WHERE consent_source='signup-widget' AND created_at >= datetime('now','-10 minutes')"
   ).first();
-  if (recent.n >= 30) return H.json({ error: "Too many signups right now — try again in a few minutes." }, 429);
+  if (recent.n >= 30) return H.json({ error: "Too many signups right now. Try again in a few minutes." }, 429);
 
   const existing = await env.DB.prepare(
     "SELECT id, tags_json FROM contacts WHERE org_id=?1 AND email=?2 AND deleted_at IS NULL"

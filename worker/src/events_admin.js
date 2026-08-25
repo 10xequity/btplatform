@@ -59,7 +59,7 @@ export async function notifyEventCancelled(env, ctx, eventIds, orgId = ctx.orgId
       `INSERT INTO notifications (org_id, kind, target, contact_id, title, body, link, payload_json, sent_at)
        VALUES (?1,'event_cancelled','member',?2,?3,?4,'home.html',?5,datetime('now'))`
     ).bind(orgId, r.contact_id, `Cancelled: ${r.event_name}`,
-      `${r.event_name} has been cancelled. Sorry for the change of plans — any follow-up from the organizers will land here.`,
+      `${r.event_name} has been cancelled. Sorry for the change of plans; any follow-up from the organizers will land here.`,
       JSON.stringify({ event_id: r.event_id })).run();
     out.notified++;
     if (r.email) {
@@ -105,8 +105,8 @@ function emailHonestyNote(env, out) {
   return env.BREVO_API_KEY
     ? `Emailed ${out.emailed} of ${out.with_email} member(s) with an address.`
     : (out.with_email
-      ? `${out.with_email} member(s) have an email address, but no mail key is set — nothing was emailed. Everyone still sees this in their member inbox.`
-      : "No email addresses on file — members will see this in their member inbox.");
+      ? `${out.with_email} member(s) have an email address, but no mail key is set, so nothing was emailed. Everyone still sees this in their member inbox.`
+      : "No email addresses on file; members will see this in their member inbox.");
 }
 
 /**
@@ -137,7 +137,7 @@ export async function notifyEventParticipants(env, ctx, eventId, message, orgId 
       if (env.BREVO_API_KEY) {
         const first = String(r.full_name || "").split(/\s+/)[0] || "there";
         const ok = await sendEmail(env, r.email, `Update: ${r.event_name}`,
-          `<p>Hi ${escapeHtml(first)},</p><p>${escapeHtml(message)}</p><p>— about ${escapeHtml(r.event_name)}</p>`,
+          `<p>Hi ${escapeHtml(first)},</p><p>${escapeHtml(message)}</p><p>About ${escapeHtml(r.event_name)}.</p>`,
           orgId);
         if (ok) out.emailed++;
       }
@@ -194,8 +194,8 @@ async function notifyParticipants(request, env, ctx, eventId) {
   if (deny) return deny;
   const b = await request.json().catch(() => ({}));
   const message = String(b.message || "").trim();
-  if (!message) return json({ error: "Write the message first — nothing was sent." }, 400);
-  if (message.length > 2000) return json({ error: "Keep the message under 2,000 characters — nothing was sent." }, 400);
+  if (!message) return json({ error: "Write the message first; nothing was sent." }, 400);
+  if (message.length > 2000) return json({ error: "Keep the message under 2,000 characters; nothing was sent." }, 400);
   const out = await notifyEventParticipants(env, ctx, eventId, message, ev.org_id);
   return json({ ok: true, ...out });
 }
@@ -230,7 +230,7 @@ export function cleanPriceCapacity(bag) {
   if ("price_cents" in bag) {
     if (bag.price_cents === null || bag.price_cents === "") bag.price_cents = 0;
     const p = Number(bag.price_cents);
-    if (!Number.isFinite(p) || p < 0) return "Price must be zero or more dollars — nothing was saved.";
+    if (!Number.isFinite(p) || p < 0) return "Price must be zero or more dollars; nothing was saved.";
     bag.price_cents = Math.round(p);
   }
   if ("capacity" in bag) {
@@ -239,7 +239,7 @@ export function cleanPriceCapacity(bag) {
     } else {
       const c = Number(bag.capacity);
       if (!Number.isFinite(c) || Math.round(c) < 1) {
-        return "Capacity must be a whole number of one or more — leave it empty for unlimited.";
+        return "Capacity must be a whole number of one or more; leave it empty for unlimited.";
       }
       bag.capacity = Math.round(c);
     }
@@ -273,7 +273,7 @@ export function externalPriceConflict(next) {
   const url = String((next && next.external_url) == null ? "" : next.external_url).trim();
   const price = Number((next && next.price_cents) || 0);
   if (url && price > 0) {
-    return "An event can have a price or an outside registration link, not both — we cannot take "
+    return "An event can have a price or an outside registration link, not both; we cannot take "
       + "a payment for a sign-up that happens somewhere else. Clear one before setting the other.";
   }
   return null;
@@ -411,7 +411,7 @@ async function createRecurring(request, env, ctx) {
   const rule = b.rule || {};
   if (!["weekly", "biweekly", "monthly"].includes(rule.freq)) return json({ error: "Repeat must be weekly, biweekly, or monthly." }, 400);
   const dates = expandRule(b.base && b.base.starts_at, rule);
-  if (!dates.length) return json({ error: "Couldn't build any dates from that rule — check the start date." }, 400);
+  if (!dates.length) return json({ error: "Couldn't build any dates from that rule. Check the start date." }, 400);
   const seriesId = crypto.randomUUID();
   /* v0.174.0 (§-1c D-53): each instance's ends_at derives from its OWN date + the base's end
      TIME-OF-DAY. The base's ends_at verbatim would stamp instance 1's end on every instance —
@@ -471,7 +471,7 @@ async function editSeries(request, env, ctx, seriesId) {
   if ("ends_at" in bag) {
     const endTime = String(bag.ends_at ?? "").slice(11, 16);
     if (bag.ends_at !== null && !/^\d\d:\d\d$/.test(endTime)) {
-      return json({ error: "To change when series nights end, send a full date-and-time — its time of day is applied to each night's own date." }, 400);
+      return json({ error: "To change when series nights end, send a full date-and-time; its time of day is applied to each night's own date." }, 400);
     }
     delete bag.ends_at;
     if (endTime) { vals.push(endTime); sets.push(`ends_at = date(starts_at) || ' ' || ?${vals.length}`); }

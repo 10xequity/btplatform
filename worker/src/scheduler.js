@@ -43,7 +43,7 @@ function feasibility({ teams, courts, gamesPerTeam, pointsTo = 21, budgetMinutes
 
   let totalGames = (n * g) / 2;
   if (!Number.isInteger(totalGames)) {
-    warnings.push(`${n} teams × ${g} games is odd — one team will play ${g - 1} games.`);
+    warnings.push(`${n} teams × ${g} games is odd; one team will play ${g - 1} games.`);
     totalGames = Math.floor(totalGames);
   }
   const perRound = Math.min(courts, Math.floor(n / 2));

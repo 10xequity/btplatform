@@ -90,7 +90,7 @@ export function coerceOptions(raw) {
 export function normalizeFieldInput(body, { existingKey = null } = {}) {
   const label = String(body?.label ?? "").trim();
   if (!label) return { ok: false, error: "Give the field a name." };
-  if (label.length > 120) return { ok: false, error: "That name is too long — keep it under 120 characters." };
+  if (label.length > 120) return { ok: false, error: "That name is too long; keep it under 120 characters." };
 
   const field_type = String(body?.field_type ?? "text");
   if (!FIELD_TYPES.includes(field_type)) {
@@ -149,7 +149,7 @@ export function validateValue(field, raw) {
     return { ok: true, value: null };
   }
   if (s.length > MAX_VALUE_LEN) {
-    return { ok: false, error: `${label} is too long — keep it under ${MAX_VALUE_LEN} characters.` };
+    return { ok: false, error: `${label} is too long; keep it under ${MAX_VALUE_LEN} characters.` };
   }
 
   if (type === "email" && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(s)) {

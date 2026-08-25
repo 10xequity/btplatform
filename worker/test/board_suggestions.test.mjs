@@ -462,7 +462,7 @@ test("the strength signal compares divisions, states the gap in divisions, and l
   const r = await call(env, "GET", "/api/admin/events/1/board", { token });
   const s = oneOf(r.data, "spread_strength");
   assert.ok(s, `spread_strength did not fire: ${JSON.stringify(r.data.suggestions, null, 2)}`);
-  assert.match(s.text, /^A —/, "it must name the division it is talking about");
+  assert.match(s.text, /^A:/, "it must name the division it is talking about"); // RF-20 separator
   assert.match(s.text, /divisions?' worth/, "the gap is stated in divisions, which a director already understands");
   // The internal score is a unit nobody has been taught. It must not appear on screen.
   assert.ok(!/\b[2-9]\d\d\b/.test(s.text), `a raw strength number leaked into the copy: ${s.text}`);

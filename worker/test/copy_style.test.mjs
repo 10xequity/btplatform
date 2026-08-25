@@ -17,9 +17,10 @@
  * DERIVED (every web/*.html + web/assets/*.js + the repo-root pages), so a new page joins by
  * existing.
  *
- * BOUNDARY, stated: worker/src error sentences (234 sites) also reach member screens and are
- * the recorded NEXT sweep unit (roadmap RF-20) — this guard widens to that corpus when they are
- * swept, not before. Docs and code comments are not member-facing and stay out permanently.
+ * v1.1 (same release cycle, iteration 136): the WORKER corpus joins — the 234 lines the v1.0
+ * boundary named (error sentences, email subjects and bodies, Square link labels, the sandbox
+ * seed strings members see when sample data is generated) are swept and the third test below
+ * holds them. Docs and code comments stay out permanently.
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -80,6 +81,18 @@ test("RF-20: no em dash in any asset script's strings (placeholder blanks exempt
   for (const f of scripts) offenders.push(...offendersIn(visibleJs(read(WEB, "assets/" + f)), "assets/" + f));
   assert.deepEqual(offenders, [],
     `em dashes in script copy:\n  ${offenders.slice(0, 40).join("\n  ")}${offenders.length > 40 ? `\n  …and ${offenders.length - 40} more` : ""}`);
+});
+
+test("RF-20: no em dash in any worker module's strings — the sentences members read (v1.1)", () => {
+  const SRC = new URL("../src/", import.meta.url);
+  const files = readdirSync(SRC).filter((f) => f.endsWith(".js"));
+  assert.ok(files.length >= 45, `worker corpus shrank: ${files.length}`);
+  const offenders = [];
+  for (const f of files) {
+    offenders.push(...offendersIn(visibleJs(readFileSync(new URL(f, SRC), "utf8")), "worker/src/" + f));
+  }
+  assert.deepEqual(offenders, [],
+    `em dashes in worker strings (error sentences and email copy reach member screens):\n  ${offenders.slice(0, 40).join("\n  ")}${offenders.length > 40 ? `\n  …and ${offenders.length - 40} more` : ""}`);
 });
 
 /* ── controls: the strippers and the exemption, each proven both ways ── */

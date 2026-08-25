@@ -102,7 +102,7 @@ export const gamesPerNet = (size) => rotation(size).length;
 export function netPlan(playerCount, opts = {}) {
   const n = Number(playerCount);
   if (!Number.isInteger(n) || n < 4) {
-    return { ok: false, error: "King of the Court needs at least four players — one net." };
+    return { ok: false, error: "King of the Court needs at least four players (one net)." };
   }
   const per = opts.playersPerNet ?? 4;
   if (per !== 4) {
@@ -339,7 +339,7 @@ export function nextRound(previous, standings, opts = {}) {
   const before = nets.map((n) => n.seats.length).join(",");
   const after = out.map((n) => n.seats.length).join(",");
   if (before !== after) {
-    return { ok: false, error: `Movement changed the nets from ${before} to ${after} — refusing to write a round that loses a player.` };
+    return { ok: false, error: `Movement changed the nets from ${before} to ${after}; refusing to write a round that loses a player.` };
   }
 
   const moved = [...going.entries()].filter(([id, to]) => {
@@ -463,7 +463,7 @@ export function marginsFromTotals(seats, totals, opts = {}) {
   }
   const num = [A + B - C - D, A + C - B - D, A + D - B - C];
   if (num.some((n) => n % 2 !== 0)) {
-    return { ok: false, error: "Those four totals cannot all be right — one of them is out by an odd number. Check the sheet." };
+    return { ok: false, error: "Those four totals cannot all be right; one of them is out by an odd number. Check the sheet." };
   }
   const sum = A + B + C + D;
   if (sum % 2 !== 0) {
@@ -607,7 +607,7 @@ export function solveNet(games, totals = {}, opts = {}) {
   if (!solutions.length) {
     return {
       ok: false,
-      contradiction: "What has been entered cannot all be right — no set of real scores fits it. Check the sheet.",
+      contradiction: "What has been entered cannot all be right; no set of real scores fits it. Check the sheet.",
       games, unresolved: games.map((g) => g.game_no), solved: 0, from: "search",
     };
   }
@@ -646,7 +646,7 @@ export function solveNet(games, totals = {}, opts = {}) {
       ? `${unresolved.length} game${unresolved.length === 1 ? "" : "s"} still could have finished more than one way. Type in one more score and the rest follow.`
       : out.some((g) => g.derived)
         ? `Worked out ${out.filter((g) => g.derived).length} missing score${out.filter((g) => g.derived).length === 1 ? "" : "s"} from what was entered.`
-        : "Everything was already entered — nothing to work out.",
+        : "Everything was already entered; nothing to work out.",
   };
 }
 
@@ -692,7 +692,7 @@ export function reconcile(reports) {
   return {
     agreed, disputes, totals,
     note: disputes.length
-      ? `Game ${disputes.map((d) => d.game_no).join(", ")} came back differently from different people — somebody needs to say which is right.`
+      ? `Game ${disputes.map((d) => d.game_no).join(", ")} came back differently from different people; somebody needs to say which is right.`
       : null,
   };
 }

@@ -126,7 +126,7 @@ export function vapidClaims(audienceOrigin, subject, nowMs = Date.now()) {
 async function vapidAuthHeader(env, endpointOrigin) {
   const pub = b64uToBytes(env.VAPID_PUBLIC_KEY);
   const d = env.VAPID_PRIVATE_KEY;
-  if (pub.length !== 65 || !d) throw new Error("VAPID keys missing/malformed — set Worker secrets.");
+  if (pub.length !== 65 || !d) throw new Error("VAPID keys missing/malformed; set Worker secrets.");
   const jwk = {
     kty: "EC", crv: "P-256", d,
     x: bytesToB64u(pub.slice(1, 33)),

@@ -408,15 +408,15 @@ async function generate(env, ctx) {
 
     /* --- events --- */
     `INSERT INTO events (id, org_id, type, name, starts_at, ends_at, location, capacity, court_count, format_template, status, price_cents) VALUES
-     (90001,1,'tournament','TEST Spring Slam — finished (sample data)',datetime('now','-14 days','start of day','+9 hours'),datetime('now','-14 days','start of day','+16 hours'),'Boomtown Courts',8,2,'4-on-2','completed',4500)`,
+     (90001,1,'tournament','TEST Spring Slam · finished (sample data)',datetime('now','-14 days','start of day','+9 hours'),datetime('now','-14 days','start of day','+16 hours'),'Boomtown Courts',8,2,'4-on-2','completed',4500)`,
     `INSERT INTO events (id, org_id, type, name, starts_at, ends_at, location, capacity, court_count, status, price_cents, cash_option_enabled) VALUES
-     (90002,1,'tournament','TEST Summer Open — 12 teams, no schedule yet (sample data)',datetime('now','+10 days','start of day','+9 hours'),datetime('now','+10 days','start of day','+16 hours'),'Boomtown Courts',12,5,'published',6000,1)`,
+     (90002,1,'tournament','TEST Summer Open · 12 teams, no schedule yet (sample data)',datetime('now','+10 days','start of day','+9 hours'),datetime('now','+10 days','start of day','+16 hours'),'Boomtown Courts',12,5,'published',6000,1)`,
     `INSERT INTO events (id, org_id, type, name, starts_at, ends_at, location, capacity, status, price_cents) VALUES
      (90003,1,'league','TEST Thursday Coed 4s League (sample data)',datetime('now','+7 days','start of day','+18 hours'),datetime('now','+63 days','start of day','+21 hours'),'Boomtown Courts',10,'published',12000)`,
     `INSERT INTO events (id, org_id, type, name, starts_at, ends_at, location, capacity, court_count, status, price_cents) VALUES
-     (90004,1,'tournament','TEST Fall Classic — pools done, ready to bracket (sample data)',datetime('now','+3 days','start of day','+9 hours'),datetime('now','+3 days','start of day','+17 hours'),'Boomtown Courts',8,3,'in_progress',5500)`,
+     (90004,1,'tournament','TEST Fall Classic · pools done, ready to bracket (sample data)',datetime('now','+3 days','start of day','+9 hours'),datetime('now','+3 days','start of day','+17 hours'),'Boomtown Courts',8,3,'in_progress',5500)`,
     `INSERT INTO events (id, org_id, type, name, starts_at, ends_at, location, capacity, court_count, status, price_cents) VALUES
-     (90005,1,'tournament','TEST Winter Jam — bracket drawn, try auto-advance (sample data)',datetime('now','+1 days','start of day','+9 hours'),datetime('now','+1 days','start of day','+17 hours'),'Boomtown Courts',8,3,'in_progress',5500)`,
+     (90005,1,'tournament','TEST Winter Jam · bracket drawn, try auto-advance (sample data)',datetime('now','+1 days','start of day','+9 hours'),datetime('now','+1 days','start of day','+17 hours'),'Boomtown Courts',8,3,'in_progress',5500)`,
 
     /* --- 90001: the original completed event, kept as history --- */
     `INSERT INTO teams (id, org_id, event_id, name, level, gender_division, captain_contact_id, seed, score_token) VALUES
@@ -530,7 +530,7 @@ async function generate(env, ctx) {
 
     /* --- 90006: twelve courts, three divisions of eight, every pool game played --- */
     `INSERT INTO events (id, org_id, type, name, starts_at, ends_at, location, capacity, court_count, status, price_cents) VALUES
-     (90006,1,'tournament','TEST 12-Court Classic — 3 divisions, ready to balance (sample data)',datetime('now','+5 days','start of day','+8 hours'),datetime('now','+5 days','start of day','+18 hours'),'Boomtown Courts',30,12,'in_progress',6500)`,
+     (90006,1,'tournament','TEST 12-Court Classic · 3 divisions, ready to balance (sample data)',datetime('now','+5 days','start of day','+8 hours'),datetime('now','+5 days','start of day','+18 hours'),'Boomtown Courts',30,12,'in_progress',6500)`,
     `INSERT INTO divisions (id, org_id, event_id, name, rank, court_from, court_to) VALUES
      (90001,1,90006,'Open',1,1,4),
      (90002,1,90006,'A',2,5,8),
@@ -594,7 +594,7 @@ async function generate(env, ctx) {
        with its entry list in, round 1 NOT drawn (the real engine draws it when the director
        starts the night; hand-written engine output is the only kind of fixture that lies). --- */
     `INSERT INTO kotc_sessions (id, org_id, event_id, name, players_per_net, move_up, points_to, status) VALUES
-     (90001,1,90003,'TEST Kings Court — Thursday league night',4,1,21,'draft')`,
+     (90001,1,90003,'TEST Kings Court · Thursday league night',4,1,21,'draft')`,
     `INSERT INTO kotc_players (org_id, session_id, contact_id, score_token, seed) VALUES
      (1,90001,90001,'c0ffee0000090001',1),
      (1,90001,90002,'c0ffee0000090002',2),
@@ -617,37 +617,37 @@ async function generate(env, ctx) {
        row passes silently). Contact 90048 is the deliberate no-email person and sits on no
        board that would try to email them. --- */
     `INSERT INTO member_profiles (org_id, contact_id, visibility, positions, skill_level, gender_division, bio, sub_opt_in, date_of_birth) VALUES
-     (1,90001,'public','setter','a','mens','TEST — runs a tight 5-1, plays Tuesday and Thursday.',1,date('now','-29 years')),
-     (1,90002,'public','outside','bb','womens','TEST — outside who covers deep. Looking for coed 6s.',1,date('now','-24 years')),
-     (1,90003,'members','middle','a','mens','TEST — middle, big block, can ref.',0,date('now','-31 years')),
-     (1,90004,'members','libero','aa','womens','TEST — libero, fast first touch.',1,date('now','-26 years')),
-     (1,90005,'members','opposite','b','coed','TEST — lefty opposite, new to the area.',0,date('now','-22 years')),
-     (1,90006,'members','setter,outside','bb','coed','TEST — plays both ways, prefers 4s.',1,date('now','-35 years')),
-     (1,90007,'members','outside','a','mens','TEST — weekend tournaments only.',0,date('now','-28 years')),
-     (1,90008,'members','middle','bb','womens','TEST — middle learning to slide.',0,date('now','-21 years')),
-     (1,90009,'members','libero','b','coed','TEST — steady passer, happy to sub.',1,date('now','-40 years')),
-     (1,90010,'members','opposite','aa','mens','TEST — six years of club.',0,date('now','-27 years')),
-     (1,90011,'members','setter','bb','womens','TEST — setter who calls a loud game.',0,date('now','-33 years')),
-     (1,90012,'members','outside,libero','a','coed','TEST — plays anywhere back row.',1,date('now','-25 years')),
-     (1,90015,'public','outside','bb','mens','TEST MINOR — must never appear below staff tier.',0,date('now','-16 years'))`,
+     (1,90001,'public','setter','a','mens','TEST: runs a tight 5-1, plays Tuesday and Thursday.',1,date('now','-29 years')),
+     (1,90002,'public','outside','bb','womens','TEST: outside who covers deep. Looking for coed 6s.',1,date('now','-24 years')),
+     (1,90003,'members','middle','a','mens','TEST: middle, big block, can ref.',0,date('now','-31 years')),
+     (1,90004,'members','libero','aa','womens','TEST: libero, fast first touch.',1,date('now','-26 years')),
+     (1,90005,'members','opposite','b','coed','TEST: lefty opposite, new to the area.',0,date('now','-22 years')),
+     (1,90006,'members','setter,outside','bb','coed','TEST: plays both ways, prefers 4s.',1,date('now','-35 years')),
+     (1,90007,'members','outside','a','mens','TEST: weekend tournaments only.',0,date('now','-28 years')),
+     (1,90008,'members','middle','bb','womens','TEST: middle learning to slide.',0,date('now','-21 years')),
+     (1,90009,'members','libero','b','coed','TEST: steady passer, happy to sub.',1,date('now','-40 years')),
+     (1,90010,'members','opposite','aa','mens','TEST: six years of club.',0,date('now','-27 years')),
+     (1,90011,'members','setter','bb','womens','TEST: setter who calls a loud game.',0,date('now','-33 years')),
+     (1,90012,'members','outside,libero','a','coed','TEST: plays anywhere back row.',1,date('now','-25 years')),
+     (1,90015,'public','outside','bb','mens','TEST MINOR: must never appear below staff tier.',0,date('now','-16 years'))`,
     `INSERT INTO sub_signups (org_id, contact_id, skill_levels, genders, game_types, note) VALUES
-     (1,90002,'bb,a','coed,womens','6s','TEST — weeknights after 6.'),
-     (1,90005,'b,bb','coed','4s,6s','TEST — short notice is fine.'),
-     (1,90007,'a,aa','mens','6s','TEST — tournaments preferred.'),
-     (1,90009,'any','any','any','TEST — call whenever a spot opens.'),
-     (1,90012,'a','coed','2s,4s','TEST — beach or grass in summer.')`,
+     (1,90002,'bb,a','coed,womens','6s','TEST: weeknights after 6.'),
+     (1,90005,'b,bb','coed','4s,6s','TEST: short notice is fine.'),
+     (1,90007,'a,aa','mens','6s','TEST: tournaments preferred.'),
+     (1,90009,'any','any','any','TEST: call whenever a spot opens.'),
+     (1,90012,'a','coed','2s,4s','TEST: beach or grass in summer.')`,
     `INSERT INTO sub_requests (org_id, event_id, requested_by_contact_id, needed_at, skill_level, gender_requirement, game_type, note) VALUES
-     (1,90003,90001,datetime('now','+2 days'),'bb','coed','6s','TEST — our middle is travelling, need one for Thursday.'),
-     (1,90003,90013,datetime('now','+9 days'),'a','coed','6s','TEST — playoffs week, want a strong outside.'),
-     (1,NULL,90006,datetime('now','+4 days'),'any','womens','4s','TEST — casual fours at the park, one more needed.'),
-     (1,NULL,90010,datetime('now','+1 day'),'b','any','2s','TEST — doubles partner for tomorrow evening.')`,
+     (1,90003,90001,datetime('now','+2 days'),'bb','coed','6s','TEST: our middle is travelling, need one for Thursday.'),
+     (1,90003,90013,datetime('now','+9 days'),'a','coed','6s','TEST: playoffs week, want a strong outside.'),
+     (1,NULL,90006,datetime('now','+4 days'),'any','womens','4s','TEST: casual fours at the park, one more needed.'),
+     (1,NULL,90010,datetime('now','+1 day'),'b','any','2s','TEST: doubles partner for tomorrow evening.')`,
     `INSERT INTO lfg_listings (org_id, kind, created_by_contact_id, team_name, skill_level, gender_requirement, game_type, spots, play_at, location_note, note) VALUES
-     (1,'team_need',90003,'TEST Net Assets','bb','coed','6s',2,NULL,NULL,'TEST — two spots for the fall season, back row preferred.'),
-     (1,'team_need',90011,'TEST Block Party','a','womens','6s',1,NULL,NULL,'TEST — need one middle to complete the roster.'),
-     (1,'player_avail',90005,NULL,'b','coed','any',NULL,NULL,NULL,'TEST — new in town, can play any night.'),
-     (1,'player_avail',90008,NULL,'bb','womens','6s',NULL,NULL,NULL,'TEST — middle looking for a Tuesday team.'),
-     (1,'casual',90006,NULL,'any','coed','4s',NULL,datetime('now','+3 days'),'TEST Riverside Park, north courts','TEST — bring a light and a dark shirt.'),
-     (1,'casual',90014,NULL,'any','any','2s',NULL,datetime('now','+6 days'),'TEST Fieldhouse court 2','TEST — winner stays on, all levels.')`,
+     (1,'team_need',90003,'TEST Net Assets','bb','coed','6s',2,NULL,NULL,'TEST: two spots for the fall season, back row preferred.'),
+     (1,'team_need',90011,'TEST Block Party','a','womens','6s',1,NULL,NULL,'TEST: need one middle to complete the roster.'),
+     (1,'player_avail',90005,NULL,'b','coed','any',NULL,NULL,NULL,'TEST: new in town, can play any night.'),
+     (1,'player_avail',90008,NULL,'bb','womens','6s',NULL,NULL,NULL,'TEST: middle looking for a Tuesday team.'),
+     (1,'casual',90006,NULL,'any','coed','4s',NULL,datetime('now','+3 days'),'TEST Riverside Park, north courts','TEST: bring a light and a dark shirt.'),
+     (1,'casual',90014,NULL,'any','any','2s',NULL,datetime('now','+6 days'),'TEST Fieldhouse court 2','TEST: winner stays on, all levels.')`,
     `INSERT INTO lfg_members (org_id, listing_id, contact_id)
      SELECT 1, id, 90004 FROM lfg_listings WHERE created_by_contact_id=90003 AND deleted_at IS NULL`,
     `INSERT INTO lfg_members (org_id, listing_id, contact_id)
@@ -680,10 +680,10 @@ async function generate(env, ctx) {
     message:
       (replaced ? "Test data replaced. " : "Test data created. ") +
       "Four tournaments, each parked where you can try something: " +
-      "Summer Open (12 teams, 5 courts, no schedule — generate pools, then drag them); " +
-      "Fall Classic (8 teams, pools scored — generate a bracket); " +
-      "Winter Jam (8 teams, " + bracketNote + " — enter a quarter-final score and watch it advance). " +
-      "12-Court Classic (30 teams, 3 divisions of 10 on 4 courts each, all pools played — run the " +
+      "Summer Open (12 teams, 5 courts, no schedule; generate pools, then drag them); " +
+      "Fall Classic (8 teams, pools scored; generate a bracket); " +
+      "Winter Jam (8 teams, " + bracketNote + "; enter a quarter-final score and watch it advance). " +
+      "12-Court Classic (30 teams, 3 divisions of 10 on 4 courts each, all pools played; run the " +
       "balancer: Open trims to 8, A has 2 teams to move down, BB has 2 with nowhere to go). " +
       "Plus a finished tournament and a league. Every team has a scoring link token. " +
       "Everything is marked TEST and uses @example.com emails.",

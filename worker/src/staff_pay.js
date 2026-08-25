@@ -91,7 +91,7 @@ export function computePay(shift) {
   const hours = hoursBetween(shift?.starts_at, shift?.ends_at);
   if (!Number.isFinite(hours)) return { ok: false, error: "This shift's start or end time isn't readable." };
   if (hours <= 0) return { ok: false, error: "This shift ends before it starts." };
-  if (hours > 24) return { ok: false, error: "That shift is longer than a day — check the dates." };
+  if (hours > 24) return { ok: false, error: "That shift is longer than a day. Check the dates." };
   return { ok: true, units: hours, amount_cents: Math.round(rate * hours) };
 }
 

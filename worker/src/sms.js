@@ -175,7 +175,7 @@ function splitReach(rows) {
 
 /* ============================ routes ============================ */
 
-export const SMS_OFF = "Texting isn't switched on yet — Twilio A2P registration is still pending.";
+export const SMS_OFF = "Texting isn't switched on yet; Twilio A2P registration is still pending.";
 const OFF = SMS_OFF;
 
 export async function smsRoutes(request, env, url, ctx) {
@@ -259,7 +259,7 @@ export async function smsRoutes(request, env, url, ctx) {
       return json({ error: "Pick an event or a member first." }, 400);
     }
     if (!body) return json({ error: "Write the message first." }, 400);
-    if (body.length > SMS_MAX) return json({ error: `Keep it under ${SMS_MAX} characters — that's three text segments.` }, 400);
+    if (body.length > SMS_MAX) return json({ error: `Keep it under ${SMS_MAX} characters; that's three text segments.` }, 400);
     if (quietHoursBlocked(new Date())) {
       return json({ error: "It's outside texting hours (8am–9pm Mountain). Try again in the morning." }, 400);
     }
@@ -268,14 +268,14 @@ export async function smsRoutes(request, env, url, ctx) {
        WHERE org_id=?1 AND direction='out' AND created_at >= datetime('now','-1 day')`
     ).bind(ctx.orgId).first();
     if (sentToday.n >= ORG_SENDS_PER_DAY) {
-      return json({ error: "Daily texting limit reached for this organization — try again tomorrow." }, 429);
+      return json({ error: "Daily texting limit reached for this organization. Try again tomorrow." }, 429);
     }
     const reach = splitReach(await resolveRecipients(env, ctx, { type, id }));
     if (reach.eligible.length === 0) {
       return json({ error: "Nobody in that group has opted in with a textable number yet." }, 400);
     }
     if (sentToday.n + reach.eligible.length > ORG_SENDS_PER_DAY) {
-      return json({ error: "That send would pass today's texting limit — it was not sent." }, 429);
+      return json({ error: "That send would pass today's texting limit, so it was not sent." }, 429);
     }
     let sent = 0, failed = 0;
     for (const rcpt of reach.eligible) {

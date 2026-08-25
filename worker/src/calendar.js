@@ -213,7 +213,7 @@ export function buildIcs(events, opts = {}) {
     // TZID form, not Z — see the toIcsLocal comment. These are wall-clock, not instants.
     lines.push(`DTSTART;TZID=${tzid}:${dtStart}`);
     if (dtEnd) lines.push(`DTEND;TZID=${tzid}:${dtEnd}`);
-    lines.push(`SUMMARY:${escapeIcsText((cancelled ? "CANCELLED — " : "") + (e.name || "Boomtown event"))}`);
+    lines.push(`SUMMARY:${escapeIcsText((cancelled ? "CANCELLED: " : "") + (e.name || "Boomtown event"))}`);
     if (e.location) lines.push(`LOCATION:${escapeIcsText(e.location)}`);
     const bits = [];
     if (e.type) bits.push(`Type: ${e.type}`);
@@ -392,7 +392,7 @@ export async function icsFeed(env, url, request) {
     }
 
     const body = buildIcs(rows, {
-      calName: tok.kind === "calendar_public" ? "Boomtown Athletics — Events" : "Boomtown Athletics — My Schedule",
+      calName: tok.kind === "calendar_public" ? "Boomtown Athletics · Events" : "Boomtown Athletics · My Schedule",
       host: url.hostname,
       appUrl: env.APP_URL || "",
       tzid: await orgTimezone(env, tok.org_id),
@@ -423,7 +423,7 @@ export async function calendarRoutes(request, env, url, ctx) {
         last_used_at: t ? t.last_used_at : null,
         // The raw token is unrecoverable by design — GET can never rebuild the URL.
         url: null,
-        note: t ? "Your link exists. If you've lost it, create a new one — the old one stops working." : null,
+        note: t ? "Your link exists. If you've lost it, create a new one; the old one stops working." : null,
       });
     }
     if (request.method === "POST") {

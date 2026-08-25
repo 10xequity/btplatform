@@ -122,7 +122,7 @@ export function normalizeListing(b) {
   let playAt = clip(b.play_at, 40);
   if (playAt && Number.isNaN(ms(playAt))) playAt = null; // free text dates stay in location_note
   const teamName = kind === "team_need" ? clip(b.team_name, 80) : null;
-  if (kind === "team_need" && !teamName) return { ok: false, error: "Give the team a name — even a working one. It becomes the team when it fills." };
+  if (kind === "team_need" && !teamName) return { ok: false, error: "Give the team a name, even a working one. It becomes the team when it fills." };
   return {
     ok: true,
     listing: {
@@ -147,7 +147,7 @@ export function normalizeListing(b) {
 async function memberGate(env, ctx, contact) {
   const withDob = await contactWithDob(env, ctx.orgId, contact.id);
   if (isMinor(withDob && withDob.date_of_birth)) {
-    return json({ error: "Community play is 18+ for now. Add your date of birth on your profile if it's missing — accounts without one can't join." }, 403);
+    return json({ error: "Community play is 18+ for now. Add your date of birth on your profile if it's missing; accounts without one can't join." }, 403);
   }
   const bans = await env.DB.prepare(
     "SELECT ends_at, lifted_at, deleted_at FROM lfg_bans WHERE org_id=?1 AND contact_id=?2 AND deleted_at IS NULL"
@@ -390,7 +390,7 @@ async function joinListing(env, ctx, contact, id) {
   }
   await audit(env, ctx, "lfg.join", "lfg_listing", id, null);
   const n = await teamsCount(env, ctx.orgId, contact.id);
-  return json({ ok: true, teams_count: n, teams_note: n > 0 ? `Heads up — you're already on ${n} team${n === 1 ? "" : "s"}.` : null });
+  return json({ ok: true, teams_count: n, teams_note: n > 0 ? `Heads up: you're already on ${n} team${n === 1 ? "" : "s"}.` : null });
 }
 
 async function withdrawListing(env, ctx, contact, id) {

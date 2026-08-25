@@ -161,7 +161,7 @@ async function notifyMatches(env, orgId, req, requesterName, eventName) {
   const when = req.needed_at ? ` on ${req.needed_at}` : "";
   const where = eventName ? ` for ${eventName}` : "";
   const title = "Sub opportunity";
-  const body = `${requesterName} needs a sub${where}${when}${bits ? ` — ${bits}` : ""}. Open the Leagues page to claim it.`;
+  const body = `${requesterName} needs a sub${where}${when}${bits ? ` (${bits})` : ""}. Open the Leagues page to claim it.`;
 
   let notified = 0;
   for (const s of signups) {
@@ -174,7 +174,7 @@ async function notifyMatches(env, orgId, req, requesterName, eventName) {
     if (s.email) {
       // Copy contains no org email literal (standards §8 / F-40) and no other member's address.
       await sendEmail(env, s.email,
-        "Sub opportunity — someone needs a player",
+        "Sub opportunity: someone needs a player",
         `<p>Hi ${escapeHtml(displayName(s.full_name))},</p><p>${escapeHtml(body)}</p><p>First to claim it gets the spot.</p>`,
         orgId);
     }
@@ -283,7 +283,7 @@ export async function subsRoutes(request, env, url, ctx) {
     const notified = await notifyMatches(env, ctx.orgId, reqRow, displayName(me.full_name), eventName);
     await audit(env, ctx, "subs.request.create", "sub_requests", reqRow.id, { ...v, notified });
     return json({ ok: true, request_id: reqRow.id, notified,
-      message: notified ? `Posted — ${notified} matching sub${notified === 1 ? "" : "s"} notified.` : "Posted. No matching subs are signed up yet; it stays visible on the sub board." });
+      message: notified ? `Posted. ${notified} matching sub${notified === 1 ? "" : "s"} notified.` : "Posted. No matching subs are signed up yet; it stays visible on the sub board." });
   }
 
   /* ---------------- member: claim / cancel ---------------- */
@@ -317,7 +317,7 @@ export async function subsRoutes(request, env, url, ctx) {
           `<p>Hi ${escapeHtml(displayName(row.requester_full))},</p><p>${escapeHtml(subName)} is covering your spot. See you on the court.</p>`, ctx.orgId);
       }
       await audit(env, ctx, "subs.request.fill", "sub_requests", id, { by: me.id });
-      return json({ ok: true, message: "You're in — the requester has been notified. Thanks for stepping up." });
+      return json({ ok: true, message: "You're in! The requester has been notified. Thanks for stepping up." });
     }
 
     // cancel: requester or staff only

@@ -71,7 +71,7 @@ test("normalizePassInput rejects the shapes that would create an un-reconcilable
 
 test("guest-pass grant naming is stable, so a second grant in the same month is detectable", () => {
   assert.equal(monthKey("2026-08-03T12:00:00Z"), "2026-08");
-  assert.equal(guestPassName("Gold", "2026-08"), "Gold guest passes — 2026-08");
+  assert.equal(guestPassName("Gold", "2026-08"), "Gold guest passes · 2026-08");
   assert.equal(guestPassName("Gold", monthKey(NOW)), guestPassName("Gold", monthKey(NOW)));
 });
 

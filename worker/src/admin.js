@@ -142,7 +142,7 @@ async function addUser(request, env, ctx) {
   }
   await upsertRole(env, user.id, orgId, role);
   await audit(env, ctx, "user.role_set", "user", user.id, { org_id: orgId, role, email });
-  return json({ ok: true, user_id: user.id, note: "They sign in with the normal magic-link — no password to set up." });
+  return json({ ok: true, user_id: user.id, note: "They sign in with the normal magic-link; no password to set up." });
 }
 
 async function setRole(request, env, ctx, userId) {
@@ -156,7 +156,7 @@ async function setRole(request, env, ctx, userId) {
     const others = await env.DB.prepare(
       "SELECT COUNT(*) AS n FROM user_org_roles WHERE org_id=?1 AND role='admin' AND user_id<>?2 AND deleted_at IS NULL"
     ).bind(orgId, userId).first();
-    if (!others.n) return json({ error: "You're the only admin of this org — assign another admin first." }, 400);
+    if (!others.n) return json({ error: "You're the only admin of this org. Assign another admin first." }, 400);
   }
   await upsertRole(env, userId, orgId, role);
   await audit(env, ctx, "user.role_set", "user", userId, { org_id: orgId, role });
@@ -171,7 +171,7 @@ async function revokeRole(env, ctx, userId, url) {
     const others = await env.DB.prepare(
       "SELECT COUNT(*) AS n FROM user_org_roles WHERE org_id=?1 AND role='admin' AND user_id<>?2 AND deleted_at IS NULL"
     ).bind(orgId, userId).first();
-    if (!others.n) return json({ error: "You're the only admin of this org — assign another admin first." }, 400);
+    if (!others.n) return json({ error: "You're the only admin of this org. Assign another admin first." }, 400);
   }
   await env.DB.prepare(
     "UPDATE user_org_roles SET deleted_at=datetime('now'), updated_at=datetime('now') WHERE user_id=?1 AND org_id=?2"

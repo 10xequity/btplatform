@@ -108,7 +108,7 @@ export function waiverAdvisory(waiverOk) {
       detail: null, blocks: false };
   }
   return { compliant: false, level: "warn", label: "No waiver on file",
-    detail: "They can play today. Ask them to sign when there's a moment — " +
+    detail: "They can play today. Ask them to sign when there's a moment. " +
             "it takes about a minute on their phone.",
     blocks: false };
 }
@@ -298,7 +298,7 @@ async function selfCheckin(request, env, token) {
       const dup = await env.DB.prepare(
         "SELECT id FROM attendance WHERE event_id=?1 AND team_member_id=?2 AND deleted_at IS NULL"
       ).bind(ev.id, tm.id).first();
-      if (dup) return json({ ok: true, already: true, message: `You're already checked in — see you on the court!` });
+      if (dup) return json({ ok: true, already: true, message: `You're already checked in. See you on the court!` });
 
       // v1.3 (D-MIN-8): checked in either way. If a waiver is missing the member gets a
       // nudge and a link, not a closed door.
@@ -308,7 +308,7 @@ async function selfCheckin(request, env, token) {
          VALUES (?1,?2,?3,?4,?5,'self')`
       ).bind(ev.org_id, ev.id, tm.contact_id || null, tm.id, tm.member_name).run();
       return json({ ok: true,
-        message: `Checked in — welcome, ${tm.member_name}! 🏐`,
+        message: `Checked in. Welcome, ${tm.member_name}! 🏐`,
         waiver: okW ? waiverAdvisory(true) : {
           ...waiverAdvisory(false),
           label: "We don't have your waiver yet",
@@ -322,7 +322,7 @@ async function selfCheckin(request, env, token) {
     `INSERT INTO attendance (org_id, event_id, name_snapshot, method) VALUES (?1,?2,?3,'self')`
   ).bind(ev.org_id, ev.id, name || email).run();
   return json({ ok: true, unmatched: true,
-    message: "Checked in. We couldn't find you on a roster — please stop by the desk so staff can sort you in." });
+    message: "Checked in. We couldn't find you on a roster; please stop by the desk so staff can sort you in." });
 }
 
 /* ---------------- member: my attendance ---------------- */

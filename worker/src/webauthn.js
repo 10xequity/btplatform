@@ -101,7 +101,7 @@ async function register(request, env, ctx) {
   // S-4a: a new passkey must prove it can verify its user. The options above demand it, but an
   // option is a hint — this flag check is the enforcement.
   if (!parsed.userVerified) {
-    return H.json({ error: "Your device needs to confirm it's you — with your face, fingerprint, or PIN. Try again and approve that check." }, 400);
+    return H.json({ error: "Your device needs to confirm it's you, with your face, fingerprint, or PIN. Try again and approve that check." }, 400);
   }
   if (!parsed.credentialId || !parsed.cosePublicKey) return H.json({ error: "Malformed credential." }, 400);
 
@@ -159,7 +159,7 @@ async function login(request, env) {
   // the shape of a cloned key, not a settings change. Credentials that have never verified are
   // untouched; that restraint is what makes this lockout-free for the pre-S-4a credential.
   if (cred.uv_required && !parsed.userVerified) {
-    return H.json({ error: "This passkey usually confirms it's you with your face, fingerprint, or PIN — that check didn't happen. Try again and approve it, or use the email link." }, 401);
+    return H.json({ error: "This passkey usually confirms it's you with your face, fingerprint, or PIN, and that check didn't happen. Try again and approve it, or use the email link." }, 401);
   }
 
   const clientHash = new Uint8Array(await crypto.subtle.digest("SHA-256", b64urlDecode(resp.clientDataJSON)));
@@ -211,7 +211,7 @@ async function remove(request, env, ctx) {
      HAPPENED. A security log exists to be believed; one that records events which did not occur is
      worse than no log, because it is trusted. The audit now follows the row count, not the request. */
   if (!done.meta.changes) {
-    return H.json({ error: "That passkey is not on this account — nothing was removed." }, 404);
+    return H.json({ error: "That passkey is not on this account; nothing was removed." }, 404);
   }
   await H.audit(env, ctx, "passkey.remove", "webauthn_credentials", (credential_id || "").slice(0, 12), {});
   return H.json({ ok: true, removed: done.meta.changes });

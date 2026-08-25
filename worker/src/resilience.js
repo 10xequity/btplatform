@@ -108,5 +108,5 @@ export function degradedNote(missing) {
   const named = missing.map((m) => nice[m] || m);
   const list = named.length === 1 ? named[0]
     : `${named.slice(0, -1).join(", ")} and ${named[named.length - 1]}`;
-  return `Showing what we can — ${list} could not be loaded just now. This page refreshes on its own.`;
+  return `Showing what we can; ${list} could not be loaded just now. This page refreshes on its own.`;
 }

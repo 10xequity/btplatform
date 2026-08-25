@@ -538,7 +538,7 @@ export async function releaseAutoClaims(env, eventId, date = null) {
 export async function autoClaimForEvent(env, ctx, ev, opts = {}) {
   const weekRound = opts.weekRound || null;
   const win = eventWindow(ev.starts_at, opts.budgetMinutes, weekRound);
-  if (!win) return { skipped: "Event has no start date — no courts claimed. Book manually on the Facility calendar." };
+  if (!win) return { skipped: "Event has no start date, so no courts were claimed. Book manually on the Facility calendar." };
   const wanted = Math.max(1, Number(opts.courts) || ev.court_count || 4);
 
   await releaseAutoClaims(env, ev.id, weekRound ? win.date : null);
@@ -555,10 +555,10 @@ export async function autoClaimForEvent(env, ctx, ev, opts = {}) {
 
   const { chosen, moved, shortfall } = chooseCourts(wanted, all.map((a) => a.id), busy);
   if (!chosen.length) {
-    return { skipped: `No courts open ${win.date} ${fmtMin(win.start_min)}–${fmtMin(win.end_min)} — nothing claimed. Book manually on the Facility calendar.` };
+    return { skipped: `No courts open ${win.date} ${fmtMin(win.start_min)}–${fmtMin(win.end_min)}, so nothing was claimed. Book manually on the Facility calendar.` };
   }
 
-  const title = weekRound ? `${ev.name} — Week ${weekRound}` : ev.name;
+  const title = weekRound ? `${ev.name} · Week ${weekRound}` : ev.name;
   const ins = await env.DB.prepare(
     `INSERT INTO space_bookings (org_id, event_id, title, date, start_min, end_min, share_ok, is_closure, source)
      VALUES (?1,?2,?3,?4,?5,?6,0,0,'auto')`
@@ -578,9 +578,9 @@ export async function autoClaimForEvent(env, ctx, ev, opts = {}) {
     moved: moved.map((id) => nameOf[id]),
     shortfall,
     note: shortfall
-      ? `Only ${chosen.length} of ${wanted} courts were open — adjust on the Facility calendar.`
+      ? `Only ${chosen.length} of ${wanted} courts were open; adjust on the Facility calendar.`
       : moved.length
-        ? "Some default courts were busy — claimed open courts instead (drag to move on the Facility calendar)."
+        ? "Some default courts were busy; claimed open courts instead (drag to move on the Facility calendar)."
         : null,
   };
 }
@@ -601,7 +601,7 @@ async function createRentalRequest(request, env, ctx) {
          b.date, s.start_min, s.end_min, b.spaces_text || null,
          b.est_attendees ? Number(b.est_attendees) : null, b.notes || null).run();
   await audit(env, ctx, "rental.request", "rental_requests", ins.meta.last_row_id, { date: b.date });
-  return json({ ok: true, id: ins.meta.last_row_id, message: "Request received — we'll confirm by email." });
+  return json({ ok: true, id: ins.meta.last_row_id, message: "Request received. We'll confirm by email." });
 }
 
 async function listRequests(env, url) {
@@ -653,7 +653,7 @@ async function decideRequest(request, env, ctx, id, action) {
     `INSERT INTO space_bookings (org_id, title, date, start_min, end_min, preset_id, share_ok, is_closure,
        poc_name, poc_email, poc_phone, est_attendees, notes, source)
      VALUES (10,?1,?2,?3,?4,?5,?6,0,?7,?8,?9,?10,?11,'rental')`
-  ).bind(`Rental — ${req.requester_name}`, req.date, req.start_min, req.end_min,
+  ).bind(`Rental · ${req.requester_name}`, req.date, req.start_min, req.end_min,
          b.preset_id ? Number(b.preset_id) : null, share_ok,
          req.requester_name, req.requester_email, req.requester_phone,
          req.est_attendees, req.notes).run();

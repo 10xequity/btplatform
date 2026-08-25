@@ -107,10 +107,10 @@ export function curatePoolOptions(options) {
   return (options || []).map((o) => {
     const g = o.gamesPerTeam;
     if (g > MAX_GAMES_PER_TEAM) {
-      return { ...o, recommended: false, why: `${g} games each is past ${MAX_GAMES_PER_TEAM} — physically unplayable in a day.` };
+      return { ...o, recommended: false, why: `${g} games each is past ${MAX_GAMES_PER_TEAM}, physically unplayable in a day.` };
     }
     if (g < MIN_GAMES_PER_TEAM) {
-      return { ...o, recommended: false, why: `${g} games each is under the ${MIN_GAMES_PER_TEAM}-game floor — pool play never offers less.` };
+      return { ...o, recommended: false, why: `${g} games each is under the ${MIN_GAMES_PER_TEAM}-game floor; pool play never offers less.` };
     }
     if (g > RECOMMENDED_MAX_POOL_GAMES) {
       return { ...o, recommended: false, why: `${g} pool games is playable, but leaves no room for a bracket under ${MAX_GAMES_PER_TEAM} total.` };
@@ -122,7 +122,7 @@ export function curatePoolOptions(options) {
 export function chooseRounds(teams, courts, targetGames, opts = {}) {
   const minGames = Number(opts.minGames) > 0 ? Number(opts.minGames) : MIN_GAMES_PER_TEAM;
   const all = equalGameOptions(teams, courts);
-  if (!all.length) return { ok: false, error: `${teams} teams on ${courts} courts never leaves anyone waiting — every team plays every round.` };
+  if (!all.length) return { ok: false, error: `${teams} teams on ${courts} courts never leaves anyone waiting; every team plays every round.` };
 
   const asked = Number(targetGames) || minGames;
   const wanted = Math.max(asked, minGames);
@@ -135,7 +135,7 @@ export function chooseRounds(teams, courts, targetGames, opts = {}) {
     const top = all[all.length - 1];
     return {
       ok: true, ...top, exact: false, belowFloor: true,
-      note: `${teams} teams on ${courts} courts cannot give everyone ${minGames} games with an equal count — the most is ${top.gamesPerTeam}. Add a court, add teams, or run the pool twice.`,
+      note: `${teams} teams on ${courts} courts cannot give everyone ${minGames} games with an equal count; the most is ${top.gamesPerTeam}. Add a court, add teams, or run the pool twice.`,
     };
   }
 
@@ -152,7 +152,7 @@ export function chooseRounds(teams, courts, targetGames, opts = {}) {
     Math.abs(o.gamesPerTeam - wanted) < Math.abs(best.gamesPerTeam - wanted) ? o : best);
   return {
     ok: true, ...near, exact: false, raisedToFloor: wanted > asked,
-    note: `${wanted} games each is not possible with ${teams} teams on ${courts} courts — an equal count is only available at ${eligible.map((o) => o.gamesPerTeam).join(", ")}. Closest is ${near.gamesPerTeam}.${raised}`,
+    note: `${wanted} games each is not possible with ${teams} teams on ${courts} courts; an equal count is only available at ${eligible.map((o) => o.gamesPerTeam).join(", ")}. Closest is ${near.gamesPerTeam}.${raised}`,
   };
 }
 
@@ -393,7 +393,7 @@ export function poolReport(plan, { teams, pointsTo = 21, minutesPerGame = 22 }) 
     checkRow.push(sum);
     const expected = (N * (N + 1)) / 2;
     if (seen.size !== N || sum !== expected) {
-      problems.push(`Round ${ri + 1}: check row is ${sum}, expected ${expected} — a team is missing or duplicated.`);
+      problems.push(`Round ${ri + 1}: check row is ${sum}, expected ${expected}; a team is missing or duplicated.`);
     }
   });
 
@@ -464,17 +464,17 @@ export function reportLines(report, { teams, targetGames, targetPoints, targetHo
     : `${report.opponents.repeatedPairs} match-up(s) repeat: ${report.opponents.repeats.slice(0, 6).join(", ")}.`);
   L.push(report.waiting.backToBackByes === 0
     ? `Nobody sits out twice in a row (closest gap ${report.waiting.smallestGapBetweenByes ?? "n/a"} rounds).`
-    : `${report.waiting.backToBackByes} team(s) sit out two rounds running — worth a second look.`);
+    : `${report.waiting.backToBackByes} team(s) sit out two rounds running; worth a second look.`);
   L.push(`About ${report.budget.estimatedHours} hours, ~${report.budget.pointsPerTeam} points per team. ${report.budget.note}`);
 
   if (targetGames && report.gamesPerTeam.min !== targetGames) {
     L.push(`⚠ You asked for ${targetGames} games each; this gives ${report.gamesPerTeam.min}.`);
   }
   if (targetPoints && report.budget.pointsPerTeam < targetPoints) {
-    L.push(`⚠ ${report.budget.pointsPerTeam} points is under your ${targetPoints} target — raise the points per game or add rounds.`);
+    L.push(`⚠ ${report.budget.pointsPerTeam} points is under your ${targetPoints} target; raise the points per game or add rounds.`);
   }
   if (targetHours && report.budget.estimatedHours > targetHours) {
-    L.push(`⚠ ${report.budget.estimatedHours} hours is over your ${targetHours}-hour window — add a court or shorten the games.`);
+    L.push(`⚠ ${report.budget.estimatedHours} hours is over your ${targetHours}-hour window; add a court or shorten the games.`);
   }
   if (!report.valid) L.push(`✖ This schedule is not usable: ${report.problems[0]}`);
   return L;
@@ -708,10 +708,10 @@ export async function formatsRoutes(request, env, url, ctx) {
       recommended_count: recommendedCount,
       band: { floor: MIN_GAMES_PER_TEAM, aim_max: RECOMMENDED_MAX_POOL_GAMES, ceiling: MAX_GAMES_PER_TEAM },
       note: !options.length
-        ? `${teams} teams on ${courts} courts doesn't leave anyone waiting — every team plays every round.`
+        ? `${teams} teams on ${courts} courts doesn't leave anyone waiting; every team plays every round.`
         : recommendedCount
           ? "Only these round counts give every team the same number of games."
-          : `${teams} teams on ${courts} courts cannot reach the ${MIN_GAMES_PER_TEAM}-game floor with an equal count — the most is ${options[options.length - 1].gamesPerTeam} games each. Add a court, split the field, or pick a count below and run the pool twice.`,
+          : `${teams} teams on ${courts} courts cannot reach the ${MIN_GAMES_PER_TEAM}-game floor with an equal count; the most is ${options[options.length - 1].gamesPerTeam} games each. Add a court, split the field, or pick a count below and run the pool twice.`,
     });
   }
 
@@ -769,7 +769,7 @@ export async function formatsRoutes(request, env, url, ctx) {
       `SELECT id, name FROM teams WHERE org_id=?1 AND event_id=?2 AND deleted_at IS NULL
         ORDER BY COALESCE(seed, 9999), id`
     ).bind(ctx.orgId, eventId).all()).results || [];
-    if (teamRows.length < 2) return json({ error: "Add the teams first — there is nothing to schedule yet." }, 409);
+    if (teamRows.length < 2) return json({ error: "Add the teams first; there is nothing to schedule yet." }, 409);
 
     const courts = Number(b.courts);
     const rounds = Number(b.rounds);
@@ -921,7 +921,7 @@ export async function formatsRoutes(request, env, url, ctx) {
     const b = await request.json().catch(() => ({}));
     const parsed = parsePositions(b);
     if (parsed.error) return json({ error: parsed.error }, 400);
-    if (!parsed.positions.length) return json({ error: "Nothing to save — no positions were sent." }, 400);
+    if (!parsed.positions.length) return json({ error: "Nothing to save; no positions were sent." }, 400);
     const owned = await ownedMatches(env, ctx, eventId, parsed.positions.map((p2) => p2.id));
     if (parsed.positions.some((p2) => !owned.has(p2.id))) {
       return json({ error: "A match in that arrangement isn't part of this event." }, 404);
@@ -1035,7 +1035,7 @@ export async function formatsRoutes(request, env, url, ctx) {
       "SELECT COUNT(*) AS n FROM matches WHERE org_id=?1 AND event_id=?2 AND (team_a_id=?3 OR team_b_id=?3) AND deleted_at IS NULL"
     ).bind(ctx.orgId, eventId, teamId).first();
     if (games.n > 0) {
-      return json({ error: `${team.name} still has ${games.n} game${games.n === 1 ? "" : "s"} on this event's schedule. Edit those matchups or remove the unscored week first — moving the team now would strand its opponents.` }, 409);
+      return json({ error: `${team.name} still has ${games.n} game${games.n === 1 ? "" : "s"} on this event's schedule. Edit those matchups or remove the unscored week first; moving the team now would strand its opponents.` }, 409);
     }
 
     await env.DB.prepare(
@@ -1048,7 +1048,7 @@ export async function formatsRoutes(request, env, url, ctx) {
     await audit(env, ctx, "team.move_event", "teams", teamId, { from: eventId, to: toId });
 
     return json({ ok: true, moved: team.name, to: target.name,
-      note: "Registrations stay on the original event — they record what was bought." });
+      note: "Registrations stay on the original event; they record what was bought." });
   }
 
   return null;

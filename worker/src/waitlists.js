@@ -115,7 +115,7 @@ export async function waitlistGate(env, ev, email, token) {
     }
     if (offerExpired(new Date().toISOString(), w.offer_expires_at)) {
       await env.DB.prepare("UPDATE waitlists SET status='expired', updated_at=datetime('now') WHERE id=?1").bind(w.id).run();
-      return { allowed: false, error: "This waitlist offer has expired — the spot went to the next team. You can rejoin the waitlist." };
+      return { allowed: false, error: "This waitlist offer has expired; the spot went to the next team. You can rejoin the waitlist." };
     }
     return { allowed: true, waitlistId: w.id };
   }
@@ -148,7 +148,7 @@ export async function offerNext(env, eventId, opts = {}) {
 
   if (!opts.rowId) {
     const count = await activeRegistrationCount(env, eventId);
-    if (computeIsFull(ev.capacity, count)) return { offered: false, reason: "Event is still full — no open spot to offer." };
+    if (computeIsFull(ev.capacity, count)) return { offered: false, reason: "Event is still full; no open spot to offer." };
   }
 
   for (let guard = 0; guard < 25; guard++) { // bounded loop over skippable entries
@@ -161,7 +161,7 @@ export async function offerNext(env, eventId, opts = {}) {
         ).bind(eventId).first();
     if (!w) return { offered: false, reason: opts.rowId ? "Waitlist entry not found." : "Waitlist is empty." };
     if (opts.rowId && !["queued", "offered", "expired"].includes(w.status)) {
-      return { offered: false, reason: `Entry is ${w.status} — only queued, offered, or expired entries can be (re)offered.` };
+      return { offered: false, reason: `Entry is ${w.status}; only queued, offered, or expired entries can be (re)offered.` };
     }
 
     // Skip anyone who already registered by other means.
@@ -171,7 +171,7 @@ export async function offerNext(env, eventId, opts = {}) {
     ).bind(eventId, w.email).first();
     if (already) {
       await env.DB.prepare("UPDATE waitlists SET status='removed', updated_at=datetime('now') WHERE id=?1").bind(w.id).run();
-      if (opts.rowId) return { offered: false, reason: "That team already has an active registration — entry removed." };
+      if (opts.rowId) return { offered: false, reason: "That team already has an active registration; entry removed." };
       continue;
     }
 
@@ -187,7 +187,7 @@ export async function offerNext(env, eventId, opts = {}) {
     // that fallback's shape, which disagreed with consent.js's and messages.js's.
     const link = `${env.APP_URL}/register.html?event=${eventId}&wtoken=${token}`;
     try {
-      await sendEmail(env, w.email, `A spot opened up — ${ev.name}`,
+      await sendEmail(env, w.email, `A spot opened up · ${ev.name}`,
         `<p>Hi ${escapeHtml(w.name)},</p>
          <p>A spot just opened in <strong>${escapeHtml(ev.name)}</strong> and your team is next on the waitlist.</p>
          <p><a href="${link}">Claim your spot →</a></p>
@@ -202,7 +202,7 @@ export async function offerNext(env, eventId, opts = {}) {
     } catch (e) { console.error("waitlist offer push failed", e); }
     return { offered: true, waitlist_id: w.id, email: w.email, name: w.name, expires_at: expires };
   }
-  return { offered: false, reason: "Too many skippable entries in a row — check the queue." };
+  return { offered: false, reason: "Too many skippable entries in a row. Check the queue." };
 }
 
 /** Cron: expire stale offers, then auto-offer the next team for each affected event. */
@@ -258,7 +258,7 @@ async function joinWaitlist(request, env, eventId) {
   // The waitlist is only for full events — otherwise point them at normal registration.
   const count = await activeRegistrationCount(env, eventId);
   if (!computeIsFull(ev.capacity, count)) {
-    return json({ error: "Good news — this event has open spots. Register normally instead.", open_spots: true }, 409);
+    return json({ error: "Good news: this event has open spots. Register normally instead.", open_spots: true }, 409);
   }
 
   // Dedupe: an existing live entry returns its position instead of double-queueing.
@@ -344,7 +344,7 @@ async function adminRemove(env, ctx, rowId) {
   const deny = await requireStaff(env, ctx); if (deny) return deny;
   const w = await env.DB.prepare("SELECT id, event_id, status FROM waitlists WHERE id=?1 AND deleted_at IS NULL").bind(rowId).first();
   if (!w) return json({ error: "Waitlist entry not found." }, 404);
-  if (w.status === "claimed") return json({ error: "This entry already claimed a spot — manage it from Registrations." }, 409);
+  if (w.status === "claimed") return json({ error: "This entry already claimed a spot; manage it from Registrations." }, 409);
   await env.DB.prepare("UPDATE waitlists SET status='removed', updated_at=datetime('now') WHERE id=?1").bind(rowId).run();
   await audit(env, ctx, "waitlist.remove", "waitlists", rowId, { event: w.event_id });
   return json({ ok: true });

@@ -129,7 +129,7 @@ export function normalizePassInput(body) {
   } else {
     total = Number(total);
     if (!Number.isInteger(total) || total < 1) {
-      return { ok: false, error: "Sessions must be a whole number of 1 or more — leave it blank for unlimited." };
+      return { ok: false, error: "Sessions must be a whole number of 1 or more; leave it blank for unlimited." };
     }
     if (total > MAX_SESSIONS) return { ok: false, error: `That's more than ${MAX_SESSIONS} sessions. Split it into separate passes.` };
   }
@@ -169,7 +169,7 @@ export function monthKey(nowIso = new Date().toISOString()) {
 
 /** Stable, human name for an auto-granted allowance, so a second grant is detectable. */
 export function guestPassName(tierName, month) {
-  return `${tierName} guest passes — ${month}`;
+  return `${tierName} guest passes · ${month}`;
 }
 
 /* ============================ shared queries ============================ */

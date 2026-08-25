@@ -160,7 +160,7 @@ export function planDivisions(divisions, opts = {}) {
         const place = ranked.indexOf(t) + 1;
         if ((t.gamesPlayed ?? 0) >= sufficientGames) {
           propose(t, "drop_from_bracket", null,
-            `Finished ${place}${ordinal(place)} in ${div.name} and has played ${t.gamesPlayed} games — a full day. Dropping them keeps the top bracket at ${TOP_DIVISION_TARGET}.`);
+            `Finished ${place}${ordinal(place)} in ${div.name} and has played ${t.gamesPlayed} games, a full day. Dropping them keeps the top bracket at ${TOP_DIVISION_TARGET}.`);
         } else if (below) {
           propose(t, "move_down", below,
             `Finished ${place}${ordinal(place)} in ${div.name} but has only played ${t.gamesPlayed ?? 0} games. Moving them to ${below.name} keeps the top bracket at ${TOP_DIVISION_TARGET} and still gives them bracket play.`);
@@ -205,7 +205,7 @@ function buildBrackets(div, playing, isTop, proposals, ordered, gapWins) {
   const base = { id: div.id, name: div.name, rank: div.rank, count: playing.length };
   if (!playing.length) return { ...base, brackets: [], note: "No teams left to bracket." };
   if (playing.length === 1) {
-    return { ...base, brackets: [], note: `${playing[0].name} is on their own — no bracket possible.` };
+    return { ...base, brackets: [], note: `${playing[0].name} is on their own; no bracket possible.` };
   }
 
   let sizes;
@@ -232,7 +232,7 @@ function buildBrackets(div, playing, isTop, proposals, ordered, gapWins) {
           from_division_id: div.id, from_division: div.name,
           to_division_id: bottom && bottom.id !== div.id ? bottom.id : null,
           to_division: bottom && bottom.id !== div.id ? bottom.name : null,
-          reason: `Adrift even of the bottom bracket in ${div.name} — ${t.wins ?? 0} win${(t.wins ?? 0) === 1 ? "" : "s"} where the rest of that group sits at ${median(tail.map((x) => x.wins ?? 0))}.`,
+          reason: `Adrift even of the bottom bracket in ${div.name}: ${t.wins ?? 0} win${(t.wins ?? 0) === 1 ? "" : "s"} where the rest of that group sits at ${median(tail.map((x) => x.wins ?? 0))}.`,
           wins: t.wins ?? 0, losses: t.losses ?? 0, games_played: t.gamesPlayed ?? 0,
           division_median_wins: median(tail.map((x) => x.wins ?? 0)),
         });
@@ -441,7 +441,7 @@ export async function divisionRoutes(request, env, url, ctx) {
           ? `${d.name}: ${d.brackets.map((br) => `${br.label} (${br.size})`).join(", ")}`
           : `${d.name}: ${d.note || "nothing to bracket"}`),
       note: plan.proposals.length
-        ? `${plan.proposals.length} team${plan.proposals.length === 1 ? "" : "s"} look misplaced. Nothing has moved — accept the ones you agree with.`
+        ? `${plan.proposals.length} team${plan.proposals.length === 1 ? "" : "s"} look misplaced. Nothing has moved; accept the ones you agree with.`
         : "Every team looks well placed. Nothing to move.",
     });
   }

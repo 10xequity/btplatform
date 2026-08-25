@@ -199,7 +199,7 @@ async function scan(request, env, token) {
 
   return json({
     status: "ok", already: !!d.already, member,
-    message: d.already ? "You're already checked in. Have a great game!" : "You're checked in — have a great game!",
+    message: d.already ? "You're already checked in. Have a great game!" : "You're checked in. Have a great game!",
   });
 }
 

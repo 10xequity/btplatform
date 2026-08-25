@@ -137,7 +137,7 @@ export function tokenFailureMessage(res) {
     parts.push(`Unknown token${res.unknown.length === 1 ? "" : "s"} ${res.unknown.map((t) => `{{${t}}}`).join(", ")}. Valid tokens: ${TOKEN_NAMES.map((t) => `{{${t}}}`).join(", ")}.`);
   }
   if (res.empty.length) {
-    parts.push(`This organisation has no value for ${res.empty.map((t) => `{{${t}}}`).join(", ")}. Fill it in under Organisation settings first — publishing would leave the placeholder in the signed text.`);
+    parts.push(`This organisation has no value for ${res.empty.map((t) => `{{${t}}}`).join(", ")}. Fill it in under Organisation settings first; publishing would leave the placeholder in the signed text.`);
   }
   return parts.join(" ");
 }

@@ -279,7 +279,7 @@ async function generateWeek(request, env, ctx, id) {
   try {
     facility_claim = await autoClaimForEvent(env, ctx, ev,
       { courts, budgetMinutes: Number(b.weekMinutes) || cfg.weekMinutes || 180 * roundsPerNight, weekRound: round });
-  } catch (e) { console.error("autoclaim failed", e); facility_claim = { skipped: "Court claim failed — book manually on the Facility calendar." }; }
+  } catch (e) { console.error("autoclaim failed", e); facility_claim = { skipped: "Court claim failed; book manually on the Facility calendar." }; }
 
   return json({ ok: true, round, matches: inserted, byes, warnings,
     rounds_per_night: roundsPerNight, games_per_match: gamesPerMatch, facility_claim });

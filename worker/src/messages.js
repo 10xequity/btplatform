@@ -113,7 +113,7 @@ export function relayEmailHtml(senderName, bodyText, inboxUrl, orgName = null) {
   return `<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;color:#111">
     <p><strong>${name}</strong> sent you a message${org ? " on " + org : ""}:</p>
     <blockquote style="margin:12px 0;padding:12px 16px;border-left:3px solid #E4B33C;background:#f6f6f4">${text}</blockquote>
-    <p><a href="${inboxUrl}" style="color:#8a6d1a">Open your inbox to reply</a> — replies stay inside
+    <p><a href="${inboxUrl}" style="color:#8a6d1a">Open your inbox to reply</a>; replies stay inside
     the platform, so your email address is never shared.</p>
   </div>`;
 }
@@ -215,7 +215,7 @@ async function startThread(request, env, ctx) {
   const subject = String(b.subject || "").trim().slice(0, SUBJECT_MAX) || null;
   if (!toId) return H.json({ error: "Pick a player to message." }, 400);
   if (!body) return H.json({ error: "Write a message first." }, 400);
-  if (toId === me.id) return H.json({ error: "That's you — pick another player." }, 400);
+  if (toId === me.id) return H.json({ error: "That's you. Pick another player." }, 400);
 
   const to = await env.DB.prepare(
     `SELECT c.id, c.email, c.full_name, p.visibility, ${LIBRARY_ADULT_PREDICATE} AS adult_ok
@@ -238,7 +238,7 @@ async function startThread(request, env, ctx) {
     "SELECT COUNT(*) AS n FROM message_threads WHERE org_id=?1 AND created_by_contact_id=?2 AND created_at >= datetime('now','-1 day') AND deleted_at IS NULL"
   ).bind(ctx.orgId, me.id).first();
   if (overFlood(started.n, THREADS_PER_DAY)) {
-    return H.json({ error: "You've started a lot of conversations today — try again tomorrow." }, 429);
+    return H.json({ error: "You've started a lot of conversations today. Try again tomorrow." }, 429);
   }
   const floodErr = await messageFlood(env, ctx.orgId, me.id);
   if (floodErr) return floodErr;
@@ -397,7 +397,7 @@ async function hideThread(request, env, ctx) {
   await env.DB.prepare(
     "UPDATE thread_participants SET deleted_at=datetime('now') WHERE thread_id=?1 AND contact_id=?2 AND org_id=?3"
   ).bind(Number(b.thread_id), me.me.id, ctx.orgId).run();
-  return H.json({ ok: true, message: "Hidden. It comes back if they message you again — use Block to stop that." });
+  return H.json({ ok: true, message: "Hidden. It comes back if they message you again; use Block to stop that." });
 }
 
 async function reportMessage(request, env, ctx) {
@@ -575,7 +575,7 @@ async function messageFlood(env, orgId, contactId) {
     "SELECT COUNT(*) AS n FROM messages WHERE org_id=?1 AND sender_contact_id=?2 AND created_at >= datetime('now','-1 day')"
   ).bind(orgId, contactId).first();
   if (overFlood(sent.n, MESSAGES_PER_DAY)) {
-    return H.json({ error: "Daily message limit reached — try again tomorrow." }, 429);
+    return H.json({ error: "Daily message limit reached. Try again tomorrow." }, 429);
   }
   return null;
 }

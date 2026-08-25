@@ -284,7 +284,7 @@ async function submitRegistration(request, env, eventId) {
       return json({
         error: gate.reason === "guardian_is_minor"
           ? gate.error
-          : "This participant is under 18, so a parent or guardian has to complete their own account first. Send them the link below — registration finishes once they confirm.",
+          : "This participant is under 18, so a parent or guardian has to complete their own account first. Send them the link below; registration finishes once they confirm.",
         guardian_required: true,
         reason: gate.reason,
         age: dobCheck.age,
@@ -336,7 +336,7 @@ async function submitRegistration(request, env, eventId) {
     const done = existing.status === "paid" || existing.status === "comped";
     return json({ ok: true, duplicate: true, registration_id: existing.id, status: existing.status,
       checkout_url: existing.checkout_url || null,
-      message: done ? "You're already registered for this event — see you there!"
+      message: done ? "You're already registered for this event. See you there!"
                     : "You already have a registration in progress for this event." });
   }
 
@@ -450,17 +450,17 @@ async function submitRegistration(request, env, eventId) {
       "INSERT INTO notifications (org_id, kind, target, payload_json) VALUES (?1,'cash_pending','admin',?2)"
     ).bind(ev.org_id, JSON.stringify({ registration_id: regId, team: b.team_name, event: ev.name })).run();
     return json({ ok: true, registration_id: regId, status,
-      message: "Registered with cash payment. Please bring payment to check-in — an organizer has been notified." });
+      message: "Registered with cash payment. Please bring payment to check-in; an organizer has been notified." });
   }
   if (status === "comped") {
-    return json({ ok: true, registration_id: regId, status, message: "Registered — this event is free. See you there!" });
+    return json({ ok: true, registration_id: regId, status, message: "Registered! This event is free. See you there!" });
   }
 
-  const link = await createSquareLink(env, ev, `${ev.name} — ${b.team_name}`, price, regId);
+  const link = await createSquareLink(env, ev, `${ev.name} · ${b.team_name}`, price, regId);
   if (link.error) {
     // Square not configured or call failed — registration is saved; payment happens via reminder later.
     return json({ ok: true, registration_id: regId, status: "pending", mode: "sandbox",
-      message: "Registered! Online payment isn't connected yet — the organizer will send a payment link.", detail: link.error });
+      message: "Registered! Online payment isn't connected yet; the organizer will send a payment link.", detail: link.error });
   }
   await env.DB.prepare(
     "UPDATE registrations SET square_order_id=?1, checkout_url=?2, updated_at=datetime('now') WHERE id=?3"
@@ -610,14 +610,14 @@ async function sheetSignup(request, env, ctx, eventId) {
   }
   const bodyName = String(b.name || "").trim().slice(0, 120);
   if (!sessionUser && !bodyName) {
-    return json({ error: "Your name is required — it's how the organizer knows who's coming." }, 400);
+    return json({ error: "Your name is required; it's how the organizer knows who's coming." }, 400);
   }
 
   // Flood band (publicSignup idiom): cap sign-ups per event per window, before any write.
   const recent = await env.DB.prepare(
     "SELECT COUNT(*) AS n FROM registrations WHERE event_id=?1 AND created_at >= datetime('now','-10 minutes')"
   ).bind(eventId).first();
-  if (recent.n >= 30) return json({ error: "Too many sign-ups right now — try again in a few minutes." }, 429);
+  if (recent.n >= 30) return json({ error: "Too many sign-ups right now. Try again in a few minutes." }, 429);
 
   // Duplicate BEFORE capacity: a double tap on a full sheet means "you're on it", not "it's full".
   const existing = await env.DB.prepare(
@@ -628,8 +628,8 @@ async function sheetSignup(request, env, ctx, eventId) {
     return json({ ok: true, duplicate: true, registration_id: existing.id, status: existing.status,
       checkout_url: existing.checkout_url || null,
       message: existing.checkout_url && canRemind(existing.status)
-        ? "You're already signed up — finish payment with your link."
-        : "You're already on this sheet — see you there!" });
+        ? "You're already signed up. Finish payment with your link."
+        : "You're already on this sheet. See you there!" });
   }
 
   let contact = await env.DB.prepare(
@@ -682,13 +682,13 @@ async function sheetSignup(request, env, ctx, eventId) {
   if (status === "comped") {
     return json({ ok: true, registration_id: regId, status,
       message: listPrice === 0
-        ? "You're on the list — this session is free. See you on the court!"
-        : "You're on the list — your membership covers this one. See you on the court!" });
+        ? "You're on the list! This session is free. See you on the court!"
+        : "You're on the list! Your membership covers this one. See you on the court!" });
   }
-  const link = await createSquareLink(env, ev, `${ev.name} — ${name}`, price, regId);
+  const link = await createSquareLink(env, ev, `${ev.name} · ${name}`, price, regId);
   if (link.error) {
     return json({ ok: true, registration_id: regId, status: "pending", mode: "sandbox",
-      message: "You're signed up! Online payment isn't connected yet — the organizer will send a payment link.",
+      message: "You're signed up! Online payment isn't connected yet; the organizer will send a payment link.",
       detail: link.error });
   }
   await env.DB.prepare(
@@ -923,7 +923,7 @@ async function remind(env, ctx, regId) {
       body: JSON.stringify({
         sender: mailFrom,
         to: [{ email: reg.email }],
-        subject: `Payment reminder — ${reg.event_name}`,
+        subject: `Payment reminder · ${reg.event_name}`,
         htmlContent: `<p>Hi! Your team <strong>${reg.team_name}</strong> is registered for <strong>${reg.event_name}</strong>, but payment hasn't come through yet.</p><p><a href="${reg.checkout_url}">Complete your payment here</a> to lock in your spot.</p>`,
       }),
     });
@@ -978,7 +978,7 @@ async function importRows(request, env, ctx, eventId) {
   const b = await request.json().catch(() => ({}));
   const rows = Array.isArray(b.rows) ? b.rows : [];
   if (!rows.length) return json({ error: "No rows to import." }, 400);
-  if (rows.length > 500) return json({ error: "Max 500 rows per import — split the file." }, 400);
+  if (rows.length > 500) return json({ error: "Max 500 rows per import. Split the file." }, 400);
 
   let imported = 0; const skipped = [];
   for (let i = 0; i < rows.length; i++) {
@@ -1221,9 +1221,9 @@ async function sendWaiverReminders(env, rows) {
   let sent = 0;
   for (const r of rows) {
     const when = (r.starts_at || "").replace("T", " ").slice(0, 16);
-    const ok = await sendEmail(env, r.email, "One thing before you play — sign your waiver",
-      `<p>Hi ${escapeHtml(r.name || "there")} — you're on a roster for <strong>${escapeHtml(r.event_name)}</strong> (${when}), but we don't have a signed waiver for you yet.</p>` +
-      `<p><a href="${env.APP_URL}/">Sign in with this email</a> to take care of it, or sign at check-in — it takes a minute either way.</p>`);
+    const ok = await sendEmail(env, r.email, "One thing before you play: sign your waiver",
+      `<p>Hi ${escapeHtml(r.name || "there")}, you're on a roster for <strong>${escapeHtml(r.event_name)}</strong> (${when}), but we don't have a signed waiver for you yet.</p>` +
+      `<p><a href="${env.APP_URL}/">Sign in with this email</a> to take care of it, or sign at check-in; it takes a minute either way.</p>`);
     await env.DB.prepare(
       "INSERT INTO notifications (org_id, kind, target, contact_id, title, body, payload_json, sent_at) VALUES (?1,'waiver_reminder',?2,?3,?4,?5,?6,datetime('now'))"
     ).bind(r.org_id, r.contact_id ? "member" : "log", r.contact_id || null,
@@ -1267,9 +1267,9 @@ async function sendEventWaiverReminders(env, ctx, eventId) {
   bits.push(due.length
     ? `Reminded ${due.length} ${due.length === 1 ? "person" : "people"} in their member inbox.`
     : "Nobody new to remind.");
-  if (sent === 0 && due.length > 0) bits.push("No mail key is set, so nothing was emailed — they'll see it when they sign in.");
+  if (sent === 0 && due.length > 0) bits.push("No mail key is set, so nothing was emailed; they'll see it when they sign in.");
   if (already.length) bits.push(`${already.length} ${already.length === 1 ? "was" : "were"} already reminded in the last two days and not nagged again.`);
-  if (noEmail.length) bits.push(`${noEmail.length} ${noEmail.length === 1 ? "has" : "have"} no email address on the roster — catch them at check-in.`);
+  if (noEmail.length) bits.push(`${noEmail.length} ${noEmail.length === 1 ? "has" : "have"} no email address on the roster; catch them at check-in.`);
   return json({ ok: true, missing: gaps.length, notified: due.length, emailed: sent,
     no_email: noEmail.length, recently_reminded: already.length, note: bits.join(" ") });
 }
@@ -1312,9 +1312,9 @@ export async function waiverExpirySweep(env) {
   for (const r of rows) {
     const on = String(r.expires_at || "").replace("T", " ").slice(0, 10);
     const ok = await sendEmail(env, r.email, "Your waiver expires soon",
-      `<p>Hi ${escapeHtml(r.name || "there")} — your signed waiver expires on <strong>${escapeHtml(on)}</strong>.</p>` +
+      `<p>Hi ${escapeHtml(r.name || "there")}, your signed waiver expires on <strong>${escapeHtml(on)}</strong>.</p>` +
       `<p>Waivers run for one year and don't renew automatically. After that date you won't be able to register for or play until you sign a new one.</p>` +
-      `<p><a href="${env.APP_URL}/profile.html">Sign in and re-sign now</a> — it takes about a minute.</p>`);
+      `<p><a href="${env.APP_URL}/profile.html">Sign in and re-sign now</a>; it takes about a minute.</p>`);
     await env.DB.prepare(
       "INSERT INTO notifications (org_id, kind, target, contact_id, title, body, payload_json, sent_at) VALUES (?1,'waiver_expiring',?2,?3,?4,?5,?6,datetime('now'))"
     ).bind(r.org_id, r.contact_id ? "member" : "log", r.contact_id || null,
@@ -1346,7 +1346,7 @@ async function retryPayment(env, ctx, regId) {
   if (!canRemind(reg.status)) {
     return json({ error: `Can't rerun a registration with status '${reg.status}'.` }, 400);
   }
-  if (!(reg.price_cents > 0)) return json({ error: "This event is free — nothing to charge." }, 400);
+  if (!(reg.price_cents > 0)) return json({ error: "This event is free; nothing to charge." }, 400);
 
   // square_location_id comes from the event's org row (same lookup remind/submit use)
   const orgLoc = await env.DB.prepare(
@@ -1354,25 +1354,25 @@ async function retryPayment(env, ctx, regId) {
   ).bind(reg.event_id).first();
   const evLike = { id: reg.event_id, square_location_id: orgLoc && orgLoc.square_location_id };
 
-  const link = await createSquareLink(env, evLike, `${reg.event_name} — ${reg.team_name || "registration"}`,
+  const link = await createSquareLink(env, evLike, `${reg.event_name} · ${reg.team_name || "registration"}`,
     reg.price_cents, regId, `bt-reg-${regId}-r${Date.now()}`);
   if (link.error) {
     return json({ ok: true, mode: "sandbox",
-      message: "Square isn't connected yet (sandbox) — no new link was created.", detail: link.error });
+      message: "Square isn't connected yet (sandbox), so no new link was created.", detail: link.error });
   }
   await env.DB.prepare(
     "UPDATE registrations SET square_order_id=?1, checkout_url=?2, updated_at=datetime('now') WHERE id=?3"
   ).bind(link.order_id, link.url, regId).run();
   await audit(env, ctx, "registration.retry-payment", "registrations", regId, {});
 
-  if (reg.email && await sendEmail(env, reg.email, `New payment link — ${reg.event_name}`,
-      `<p>Here's a fresh payment link for <strong>${escapeHtml(reg.team_name || "your registration")}</strong> — <a href="${link.url}">complete your payment</a> to lock in your spot.</p>`)) {
+  if (reg.email && await sendEmail(env, reg.email, `New payment link · ${reg.event_name}`,
+      `<p>Here's a fresh payment link for <strong>${escapeHtml(reg.team_name || "your registration")}</strong>: <a href="${link.url}">complete your payment</a> to lock in your spot.</p>`)) {
     await env.DB.prepare("UPDATE registrations SET status='email-sent', last_reminded_at=datetime('now') WHERE id=?1").bind(regId).run();
     return json({ ok: true, mode: "email", emailed: true, checkout_url: link.url,
       message: `New link created and emailed to ${reg.email}.` });
   }
   return json({ ok: true, mode: "sandbox", checkout_url: link.url,
-    message: "New link created. Email isn't connected yet — copy it and send it yourself." });
+    message: "New link created. Email isn't connected yet. Copy it and send it yourself." });
 }
 
 /* ---------- teammate connect / invite (lost v0.7.0 feature, rebuilt) ---------- */
@@ -1461,12 +1461,12 @@ async function inviteTeammate(env, ctx, tmId) {
   if (!staff && (!me || me.id !== tm.captain_contact_id)) {
     return json({ error: "Only the team captain (or staff) can send invites." }, 403);
   }
-  if (tm.contact_id) return json({ ok: true, message: "They already have a profile — nothing to send." });
+  if (tm.contact_id) return json({ ok: true, message: "They already have a profile; nothing to send." });
   if (!tm.member_email) return json({ error: "No email on file for this teammate. Ask them to register or give you their email." }, 400);
 
   const col = tm.invited_at ? "reminded_at" : "invited_at";
   const ok = await sendEmail(env, tm.member_email, `You're on ${tm.team_name}`,
-    `<p>Hi ${escapeHtml(tm.member_name || "there")} — you're on the roster for <strong>${escapeHtml(tm.team_name)}</strong> (${escapeHtml(tm.event_name)}).</p>` +
+    `<p>Hi ${escapeHtml(tm.member_name || "there")}, you're on the roster for <strong>${escapeHtml(tm.team_name)}</strong> (${escapeHtml(tm.event_name)}).</p>` +
     `<p><a href="${env.APP_URL}/">Sign in with this email</a> to see your schedule, results, and reminders.</p>`);
   await env.DB.prepare(
     `UPDATE team_members SET ${col}=datetime('now'), updated_at=datetime('now') WHERE id=?1`
@@ -1474,7 +1474,7 @@ async function inviteTeammate(env, ctx, tmId) {
   await audit(env, { orgId: tm.org_id, userId: ctx.userId }, "teammate.invite", "team_members", tmId, { mode: ok ? "email" : "sandbox" });
   return ok
     ? json({ ok: true, mode: "email", message: `Invite sent to ${tm.member_email}.` })
-    : json({ ok: true, mode: "sandbox", message: "Email isn't connected yet (sandbox) — marked as invited, but no email went out." });
+    : json({ ok: true, mode: "sandbox", message: "Email isn't connected yet (sandbox); marked as invited, but no email went out." });
 }
 
 /* RF-13 score-entry, the EMAIL channel (owner req 2026-08-23: score entry "presented in email").
@@ -1499,7 +1499,7 @@ async function emailScoreLink(env, ctx, teamId) {
     return json({ error: "Only the team captain (or staff) can email the scoring link." }, 403);
   }
   if (!scoringOpen(team.starts_at, team.status)) {
-    return json({ error: "Scoring isn't open for this event yet — the link appears once play starts." }, 409);
+    return json({ error: "Scoring isn't open for this event yet; the link appears once play starts." }, 409);
   }
   const roster = (await env.DB.prepare(
     `SELECT member_name, member_email FROM team_members
@@ -1510,9 +1510,9 @@ async function emailScoreLink(env, ctx, teamId) {
   const url = `${env.APP_URL}/score.html?t=${await ensureScoreToken(env, team)}`;
   let sent = 0;
   for (const r of roster) {
-    const ok = await sendEmail(env, r.member_email, `Score your games — ${team.name}`,
-      `<p>Hi ${escapeHtml(r.member_name || "there")} — here is your scoring link for <strong>${escapeHtml(team.name)}</strong> (${escapeHtml(team.event_name)}).</p>` +
-      `<p><a href="${escapeHtml(url)}">Enter your team's scores</a> — tap the winner, then the point margin. No sign-in needed; keep this link to your team.</p>`,
+    const ok = await sendEmail(env, r.member_email, `Score your games · ${team.name}`,
+      `<p>Hi ${escapeHtml(r.member_name || "there")}, here is your scoring link for <strong>${escapeHtml(team.name)}</strong> (${escapeHtml(team.event_name)}).</p>` +
+      `<p><a href="${escapeHtml(url)}">Enter your team's scores</a>: tap the winner, then the point margin. No sign-in needed; keep this link to your team.</p>`,
       team.org_id);
     if (ok) sent++;
   }
@@ -1520,5 +1520,5 @@ async function emailScoreLink(env, ctx, teamId) {
     { recipients: roster.length, mode: sent ? "email" : "sandbox" });
   return sent
     ? json({ ok: true, mode: "email", message: `Scoring link sent to ${sent} teammate${sent === 1 ? "" : "s"}.` })
-    : json({ ok: true, mode: "sandbox", message: "Email isn't connected yet (sandbox) — nothing was sent, but the link is ready on this page." });
+    : json({ ok: true, mode: "sandbox", message: "Email isn't connected yet (sandbox); nothing was sent, but the link is ready on this page." });
 }

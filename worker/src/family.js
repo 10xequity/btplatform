@@ -138,7 +138,7 @@ export function validateBirthdate(dateOfBirth, now = new Date()) {
   if (Number.isNaN(b)) return { ok: false, error: "Enter a date of birth as YYYY-MM-DD." };
   const age = ageOn(dateOfBirth, now);
   if (age == null) return { ok: false, error: "That date of birth is in the future." };
-  if (age > 120) return { ok: false, error: "Check the date of birth — that's over 120 years old." };
+  if (age > 120) return { ok: false, error: "Check the date of birth; that's over 120 years old." };
   return { ok: true, age, minor: age < AGE_OF_MAJORITY };
 }
 
@@ -447,7 +447,7 @@ export async function familyRoutes(request, env, url, ctx) {
       minor: check.minor, age: check.age,
       guardian_required: check.minor,
       message: check.minor
-        ? "Under 18 — a parent or guardian signs and the profile is created under their family account."
+        ? "Under 18: a parent or guardian signs and the profile is created under their family account."
         : null,
     });
   }
@@ -539,7 +539,7 @@ export async function familyRoutes(request, env, url, ctx) {
 
       targetEmail = v.email || (contact.email || "").trim().toLowerCase() || null;
       if (!targetEmail) {
-        return json({ error: "Enter their email address — it's how they'll sign in." }, 400);
+        return json({ error: "Enter their email address; it's how they'll sign in." }, 400);
       }
       if (targetEmail !== (contact.email || "").trim().toLowerCase()) {
         const clash = await env.DB.prepare(

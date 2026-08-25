@@ -267,7 +267,7 @@ export function buildTree(n) {
     // Standard seeding pairs (i, size+1-i) with i <= size/2 < n, so the low seed of a pair is
     // always a real team and both sides can never be absent. Assert it rather than assume it.
     if (!aIn && !bIn) {
-      return { ok: false, error: "Bracket seeding produced an empty match — refusing to generate." };
+      return { ok: false, error: "Bracket seeding produced an empty match; refusing to generate." };
     }
     const through = aIn ? sa : sb;
     const to = feedsInto(depth, slot);
@@ -498,7 +498,7 @@ async function seedOrder(env, ctx, eventId, explicit) {
     }
     if (twice.length) {
       const who = twice.map((id) => known.get(id).name).join(", ");
-      return { error: `${who} ${twice.length === 1 ? "is" : "are"} in that list more than once — a team can only hold one seed.` };
+      return { error: `${who} ${twice.length === 1 ? "is" : "are"} in that list more than once; a team can only hold one seed.` };
     }
     // A hand-picked order is a decision already made — never rearranged.
     return { source: "chosen by hand", ids: picked, names: known };
@@ -538,7 +538,7 @@ async function planFor(env, ctx, ev, b) {
   const seeds = await seedOrder(env, ctx, ev.id, b.seeds);
   if (seeds.error) return { ok: false, error: seeds.error, status: 400 };
   if (seeds.ids.length < 2) {
-    return { ok: false, error: "Add the teams first — there is nothing to bracket yet.", status: 409 };
+    return { ok: false, error: "Add the teams first; there is nothing to bracket yet.", status: 409 };
   }
 
   // "Top X into A, everyone else into BB." Splitting is what keeps a 16-team day meaningful for
@@ -702,26 +702,26 @@ function gamesSuggestion(out, slotMinutes) {
      unplayable." Telling a director their field is one game short while the winner is on for
      eighteen would be advice that makes the day worse — so this is checked before the floor. */
   if (out.over_ceiling) {
-    return `The team that wins would play about ${out.max_games} games — past the ${out.max_games_ceiling} that is physically playable. Cut a round of pool play, or make the semi and final single games.`;
+    return `The team that wins would play about ${out.max_games} games, past the ${out.max_games_ceiling} that is physically playable. Cut a round of pool play, or make the semi and final single games.`;
   }
   if (!out.meets_minimum) {
     const have = `${out.pool_games_per_team.min} pool game${out.pool_games_per_team.min === 1 ? "" : "s"} each`;
     if (!out.everyone_breaks) {
       const left = out.teams - out.teams_in_bracket;
-      return `${have}, and ${left} team${left === 1 ? " is" : "s are"} not in the draw — break everyone (all ${out.teams}) and the first bracket game takes them to ${guaranteedGames(out.pool_games_per_team.min, true, out.bracket_best_of)}.`;
+      return `${have}, and ${left} team${left === 1 ? " is" : "s are"} not in the draw; break everyone (all ${out.teams}) and the first bracket game takes them to ${guaranteedGames(out.pool_games_per_team.min, true, out.bracket_best_of)}.`;
     }
     if (out.bracket_best_of !== 3) {
       const bo3 = guaranteedGames(out.pool_games_per_team.min, true, 3);
-      return `${have} plus one bracket game is ${out.guaranteed_games} — short of ${out.target_games}. Run the first round best of 3 (counts ${BEST_OF_3_GAMES}) and everyone reaches ${bo3}.`;
+      return `${have} plus one bracket game is ${out.guaranteed_games}, short of ${out.target_games}. Run the first round best of 3 (counts ${BEST_OF_3_GAMES}) and everyone reaches ${bo3}.`;
     }
-    return `${have} plus a best-of-3 first round is ${out.guaranteed_games} — still ${out.games_short} short of ${out.target_games}. Another round of pool play is the only thing that closes it.`;
+    return `${have} plus a best-of-3 first round is ${out.guaranteed_games}, still ${out.games_short} short of ${out.target_games}. Another round of pool play is the only thing that closes it.`;
   }
 
-  const met = `Everyone gets ${out.guaranteed_games} games — the floor is ${out.target_games}.`;
+  const met = `Everyone gets ${out.guaranteed_games} games; the floor is ${out.target_games}.`;
   // Spare clock buys MORE POOL PLAY, which is where the games are. Only when a whole wave fits.
   if (out.fits && slotMinutes && out.spare_minutes >= slotMinutes) {
     const extra = Math.floor(out.spare_minutes / slotMinutes);
-    return `${met} About ${out.spare_minutes} spare minutes — room for roughly ${extra} more round${extra === 1 ? "" : "s"} of pool play.`;
+    return `${met} About ${out.spare_minutes} spare minutes: room for roughly ${extra} more round${extra === 1 ? "" : "s"} of pool play.`;
   }
   if (out.fits === false) {
     return `${met} It runs about ${out.needs_minutes - out.minutes_available} minutes past the window, so start earlier or shorten the games.`;
@@ -1007,7 +1007,7 @@ export async function bracketRoutes(request, env, url, ctx) {
       waves: g.waves,
       summary: built.map((x2) =>
         `${x2.name}: ${x2.teams} team${x2.teams === 1 ? "" : "s"}, ${x2.matches} game${x2.matches === 1 ? "" : "s"}` +
-        (x2.byes ? `, ${x2.byes} bye${x2.byes === 1 ? "" : "s"} to the top seed${x2.byes === 1 ? "" : "s"} — no play-in games` : ", no byes")),
+        (x2.byes ? `, ${x2.byes} bye${x2.byes === 1 ? "" : "s"} to the top seed${x2.byes === 1 ? "" : "s"}, no play-in games` : ", no byes")),
     });
   }
 
@@ -1041,7 +1041,7 @@ export async function bracketRoutes(request, env, url, ctx) {
     // move and a human is holding it" are different facts, and the second is a decision the director
     // made and may want to undo. Silence would make them identical (v0.78.0, migration 0041).
     const heldNote = r.held
-      ? ` ${r.held} slot${r.held === 1 ? " is" : "s are"} held by hand and ${r.held === 1 ? "was" : "were"} left alone — send release: true on the slot to hand ${r.held === 1 ? "it" : "them"} back.`
+      ? ` ${r.held} slot${r.held === 1 ? " is" : "s are"} held by hand and ${r.held === 1 ? "was" : "were"} left alone; send release: true on the slot to hand ${r.held === 1 ? "it" : "them"} back.`
       : "";
     return json({
       ok: true,
@@ -1049,9 +1049,9 @@ export async function bracketRoutes(request, env, url, ctx) {
       disturbed: r.disturbed,
       held: r.held || 0,
       note: (r.advanced === 0
-        ? "Nothing to move — every finished game already points at the right next game."
+        ? "Nothing to move; every finished game already points at the right next game."
         : `Moved ${r.advanced} winner${r.advanced === 1 ? "" : "s"} forward.` +
-          (r.disturbed ? ` ${r.disturbed} later game${r.disturbed === 1 ? " already had a score and its teams changed" : "s already had scores and their teams changed"} — check those.` : "")) + heldNote,
+          (r.disturbed ? ` ${r.disturbed} later game${r.disturbed === 1 ? " already had a score and its teams changed" : "s already had scores and their teams changed"}. Check those.` : "")) + heldNote,
       ...loaded,
     });
   }
@@ -1151,7 +1151,7 @@ export async function bracketRoutes(request, env, url, ctx) {
       ok: true,
       note: teamId
         ? (release
-          ? "Placed, and this slot follows the scores again — the next result that feeds it will take it over."
+          ? "Placed, and this slot follows the scores again; the next result that feeds it will take it over."
           : `Placed and held. ${feederName ? feederName.replace(/^Winner of /, "") : "The feeding game"} will not take this slot back, whatever it finishes. Send release: true to hand it back to the bracket.`)
         : "Slot cleared, and it follows the scores again.",
       // Held, so no longer a risk — but the page still needs to know which state it is in.
@@ -1216,7 +1216,7 @@ export async function bracketRoutes(request, env, url, ctx) {
       court, starts_at: startsAt,
       conflicts: clash,
       note: clash.length
-        ? `Moved to court ${court}. Careful — game ${clash[0].match_ids.filter((i2) => i2 !== matchId).join(", ")} ${clash[0].match_ids.length > 2 ? "are" : "is"} also on court ${court} at the same time.`
+        ? `Moved to court ${court}. Careful: game ${clash[0].match_ids.filter((i2) => i2 !== matchId).join(", ")} ${clash[0].match_ids.length > 2 ? "are" : "is"} also on court ${court} at the same time.`
         : `Moved to court ${court}.`,
     });
   }

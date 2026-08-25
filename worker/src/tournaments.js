@@ -246,7 +246,7 @@ async function generateSchedule(request, env, ctx, eventId) {
   try {
     facility_claim = await autoClaimForEvent(env, ctx, { ...ev, court_count: params.courts },
       { courts: params.courts, budgetMinutes: params.budgetMinutes });
-  } catch (e) { console.error("autoclaim failed", e); facility_claim = { skipped: "Court claim failed — book manually on the Facility calendar." }; }
+  } catch (e) { console.error("autoclaim failed", e); facility_claim = { skipped: "Court claim failed; book manually on the Facility calendar." }; }
 
   return json({ generated: true, feasibility: feas, rounds: sched.rounds.length, byeSpread: sched.spread, facility_claim });
 }
@@ -331,7 +331,7 @@ async function scoreMatch(request, env, ctx, matchId) {
   // points_to-0 for the opponent; the FLAG carries the one-point differential rule downstream.
   if (body.forfeit_by !== undefined) {
     if (!["a", "b"].includes(body.forfeit_by)) {
-      return json({ error: "Send forfeit_by as 'a' or 'b' — the team that didn't play." }, 400);
+      return json({ error: "Send forfeit_by as 'a' or 'b': the team that didn't play." }, 400);
     }
     const [fa, fb] = body.forfeit_by === "a" ? [0, mt.points_to] : [mt.points_to, 0];
     const wasScored = mt.score_a !== null && mt.score_b !== null;
@@ -358,7 +358,7 @@ async function scoreMatch(request, env, ctx, matchId) {
       // A tie is not a result anywhere else here — `winnerOf` returns null and a bracket refuses to
       // advance on one — so accepting it would write a row every other module reads as UNPLAYED, and
       // the game would sit there looking un-entered while the sheet says it was played.
-      return json({ error: "A tied score can't be recorded — volleyball is won by two. Check the sheet." }, 400);
+      return json({ error: "A tied score can't be recorded; volleyball is won by two. Check the sheet." }, 400);
     }
   } else {
     if (!["a", "b"].includes(winner) || !(diff >= 1)) {

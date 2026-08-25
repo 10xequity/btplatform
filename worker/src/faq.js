@@ -79,7 +79,7 @@ export function normalizeFaq(body, { partial = false } = {}) {
   }
   if (body?.answer !== undefined || !partial) {
     const a = String(body?.answer || "").trim();
-    if (!a) return { error: "Write the answer — plain text, line breaks are fine." };
+    if (!a) return { error: "Write the answer: plain text, line breaks are fine." };
     if (a.length > A_MAX) return { error: `Keep the answer under ${A_MAX} characters.` };
     out.answer = a;
   }

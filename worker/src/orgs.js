@@ -192,7 +192,7 @@ export function buildPatch(body, current) {
     if (v && rule.email && !isEmail(v)) { errors.push(`${key} does not look like an email address.`); continue; }
     if (v && rule.url && !isHttpUrl(v)) { errors.push(`${key} must start with http:// or https://.`); continue; }
     if (v && rule.token && !/^[A-Za-z0-9_-]+$/.test(v)) {
-      errors.push(`${key} should be the short ID from Square's Locations page — letters, digits, dashes and underscores only.`);
+      errors.push(`${key} should be the short ID from Square's Locations page: letters, digits, dashes and underscores only.`);
       continue;
     }
 
@@ -408,7 +408,7 @@ export async function orgRoutes(request, env, url, ctx) {
     const verified = b?.verified ? 1 : 0;
     const source = String(b?.source ?? "").trim();
     if (verified && source.length < 10) {
-      return H.json({ error: "Say where you checked, in at least 10 characters — for example \"Colorado SOS search 2026-07-26\"." }, 400);
+      return H.json({ error: "Say where you checked, in at least 10 characters. For example \"Colorado SOS search 2026-07-26\"." }, 400);
     }
     const before = await orgRow(env, ctx.orgId);
     if (!before) return H.json({ error: "Organization not found." }, 404);

@@ -113,7 +113,7 @@ export function validateBulk(body) {
   const ids = [...new Set(raw.map(Number).filter((n) => Number.isFinite(n) && n > 0))];
   if (!ids.length) return { ok: false, error: "Select at least one member." };
   if (ids.length > BULK_MAX) {
-    return { ok: false, error: `That's ${ids.length} members. ${BULK_MAX} is the most one action can cover — narrow the selection or run it in batches.` };
+    return { ok: false, error: `That's ${ids.length} members. ${BULK_MAX} is the most one action can cover; narrow the selection or run it in batches.` };
   }
   if ((action === "add_tag" || action === "remove_tag")) {
     const tag = String(body.tag || "").trim();
@@ -336,7 +336,7 @@ export async function tiersRoutes(request, env, url, ctx) {
       ).bind(id).first();
       if (holders && holders.n > 0) {
         return json({
-          error: `${holders.n} member${holders.n === 1 ? "" : "s"} still hold this tier. Move them first, or set the tier inactive instead — deleting it would strip their entitlements silently.`,
+          error: `${holders.n} member${holders.n === 1 ? "" : "s"} still hold this tier. Move them first, or set the tier inactive instead; deleting it would strip their entitlements silently.`,
           holders: holders.n,
         }, 409);
       }

@@ -113,7 +113,7 @@ test("a soft-deleted event is emitted CANCELLED, not dropped", () => {
   const ics = buildIcs([{ ...EV, deleted_at: "2026-07-20 00:00:00" }], { now: "2026-07-26T00:00:00Z" });
   assert.ok(ics.includes("STATUS:CANCELLED"), "cancelled events must still appear");
   assert.ok(ics.includes("SEQUENCE:1"), "SEQUENCE must bump or clients keep the cached copy");
-  assert.ok(ics.includes("CANCELLED — Summer Slam"));
+  assert.ok(ics.includes("CANCELLED: Summer Slam")); // RF-20 spelling
 });
 
 test("status='cancelled' is treated the same as a soft delete", () => {

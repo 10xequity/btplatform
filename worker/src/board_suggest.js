@@ -300,7 +300,7 @@ function spreadWinners(spreadable, byPool, history) {
       id: `w:p${most.p.id}`,
       kind: "spread_winners",
       weight: 1000 + gap,
-      text: `${d.name} — ${most.p.name} has ${most.teams.length === total ? `all ${total}` : `${most.teams.length} of the ${total}`} `
+      text: `${d.name}: ${most.p.name} has ${most.teams.length === total ? `all ${total}` : `${most.teams.length} of the ${total}`} `
         + `team${total === 1 ? "" : "s"} who have won a division before, and ${least.p.name} has none. `
         + `Moving ${mover.name} to ${least.p.name} would spread them out.`,
       team_ids: [...most.teams.map((t) => t.id)],
@@ -340,7 +340,7 @@ function spreadStrength(spreadable, byPool, history) {
       id: `s:p${hi.p.id}`,
       kind: "spread_strength",
       weight: 900 + Math.round(gap / 10),
-      text: `${d.name} — ${hi.p.name}'s teams finished higher at past events than ${lo.p.name}'s, by ${worth}. `
+      text: `${d.name}: ${hi.p.name}'s teams finished higher at past events than ${lo.p.name}'s, by ${worth}. `
         + `Moving ${best.name} to ${lo.p.name} would even the two out.`,
       team_ids: hi.all.filter((t) => history.perTeam.get(t.id)?.strength != null).map((t) => t.id),
     });
@@ -381,7 +381,7 @@ function splitRepeat(byPool, poolOf, history) {
           id: `f:${Math.min(a.id, b.id)}-${Math.max(a.id, b.id)}`,   // unordered: no mirrored twin
           kind: "split_repeat",
           weight: 500 + shared,
-          text: `${pool.name} — ${a.name} and ${b.name} have players who have been on the same team `
+          text: `${pool.name}: ${a.name} and ${b.name} have players who have been on the same team `
             + `${shared === 2 ? "twice" : `${shared} times`} before. Splitting them across two pools `
             + `would give everyone new opponents.`,
           team_ids: [a.id, b.id],
@@ -438,7 +438,7 @@ async function spreadArea(env, orgId, eventId, spreadable, byPool) {
       id: `a:p${most.p.id}:${city.replace(/[^a-z0-9]+/g, "-")}`,
       kind: "spread_area",
       weight: 700 + most.teams.length,
-      text: `${d.name} — ${most.teams.length} of the ${n} teams from ${cityLabel(city)} are in `
+      text: `${d.name}: ${most.teams.length} of the ${n} teams from ${cityLabel(city)} are in `
         + `${most.p.name}, and ${empty.p.name} has none. Moving ${mover.name} to ${empty.p.name} `
         + `would mix up who plays whom.`,
       team_ids: most.teams.map((t) => t.id),

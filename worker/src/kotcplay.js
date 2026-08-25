@@ -159,7 +159,7 @@ async function repairUnplayed(env, orgId, roundId, netNos) {
 
   /** The sentence a short net needs, so both callers say the same thing about the same state. */
   const shortNote = short.length
-    ? `Net ${short.map((s) => s.net_no).join(", ")} now has an odd number of players — its games still show the old pairings until it is back to four or five.`
+    ? `Net ${short.map((s) => s.net_no).join(", ")} now has an odd number of players; its games still show the old pairings until it is back to four or five.`
     : "";
 
   return { short, repaired, kept, shortNote };
@@ -210,7 +210,7 @@ export async function kotcRoutes(request, env, url, ctx) {
           you: personName(player.full_name, { full: true }),
           on_a_net: false,
           withdrawn: true,
-          prompt: "You've been marked as finished for the night. Thanks for playing — your scores still count.",
+          prompt: "You've been marked as finished for the night. Thanks for playing; your scores still count.",
         }, 200, { "Cache-Control": "no-store" });
       }
       return json({ error: "You've been marked as finished for the night." }, 409);
@@ -248,7 +248,7 @@ export async function kotcRoutes(request, env, url, ctx) {
         const after = await loadRound(env, player.org_id, round.id);
         return json({
           ok: true, confirmed: true,
-          note: "Thanks — you've confirmed net " + mine.net_no + ".",
+          note: "Thanks. You've confirmed net " + mine.net_no + ".",
           ...playerView(player, round, after.slots, after.games, after.slots.find((s) => s.contact_id === player.contact_id)),
         }, 200, { "Cache-Control": "no-store" });
       }
@@ -583,7 +583,7 @@ export async function kotcRoutes(request, env, url, ctx) {
           WHERE org_id=?1 AND session_id=?2 AND contact_id=?3 AND deleted_at IS NULL`
       ).bind(ctx.orgId, sessionId, contactId).first();
       if (!entered) {
-        return json({ error: "They're not on the entry list for this session. Add them to it first — that's what mints their link." }, 400);
+        return json({ error: "They're not on the entry list for this session. Add them to it first; that's what mints their link." }, 400);
       }
     }
 
@@ -656,7 +656,7 @@ export async function kotcRoutes(request, env, url, ctx) {
         swappedWith ? `Swapped with ${who(swappedWith)}.`
           : benched ? `${who(benched)} came off net ${netNo}.`
           : `Moved to net ${netNo}.`,
-        kept ? `${kept} game${kept === 1 ? "" : "s"} already scored — left exactly as played.` : "",
+        kept ? `${kept} game${kept === 1 ? "" : "s"} already scored, left exactly as played.` : "",
         repaired ? "The remaining games were re-paired, so everyone on those nets has been asked to check again." : "",
         shortNote,
       ].filter(Boolean).join(" "),
@@ -720,7 +720,7 @@ export async function kotcRoutes(request, env, url, ctx) {
     // Not on the list at all: the same sentence the drag gives, for the same reason — the entry list is
     // what mints their link, so this is an entry problem, not a withdrawal problem.
     if (!entry) {
-      return json({ error: "They're not on the entry list for this session. Add them to it first — that's what mints their link." }, 400);
+      return json({ error: "They're not on the entry list for this session. Add them to it first; that's what mints their link." }, 400);
     }
 
     const who = personName(entry.full_name, { full: true });
@@ -785,11 +785,11 @@ export async function kotcRoutes(request, env, url, ctx) {
             `${who} is finished for the night.`,
             freed ? `Seat ${freed.seat + 1} on net ${freed.net_no} is free.` : "",
             "Their scores so far still count.",
-            kept ? `${kept} game${kept === 1 ? "" : "s"} already scored — left exactly as played.` : "",
+            kept ? `${kept} game${kept === 1 ? "" : "s"} already scored, left exactly as played.` : "",
             repaired ? "The remaining games were re-paired, so everyone on that net has been asked to check again." : "",
             shortNote,
           ].filter(Boolean).join(" ")
-        : `${who} is back in — drag them onto a net when you're ready.`,
+        : `${who} is back in. Drag them onto a net when you're ready.`,
     });
   }
 
@@ -1018,10 +1018,10 @@ function playerView(player, round, slots, games, mine) {
        the prompt instead of the outcome. Two tests caught it at once. Distinct names make that
        collision impossible rather than merely unlikely. */
     prompt: mine.confirmed === "confirmed" && complete
-      ? "All done here — nothing else needed from you."
+      ? "All done here; nothing else needed from you."
       : entered.length
         ? `${entered[0].entered_by_contact_id ? personName(nameOf(slots, entered[0].entered_by_contact_id), {}) + " entered" : "Someone entered"} these. Do they look right?`
-        : "Nothing entered for this net yet. Type in what you can — you can do the whole net.",
+        : "Nothing entered for this net yet. Type in what you can; you can do the whole net.",
   };
 }
 

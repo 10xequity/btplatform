@@ -291,7 +291,7 @@ export async function announcementsRoutes(request, env, url, ctx) {
       } else {
         const r = await env.DB.prepare(
           `INSERT INTO lfg_listings (org_id, kind, created_by_contact_id, skill_level, note, status)
-           VALUES (?1, 'player_avail', ?2, ?3, 'Available to sub — posted from my dashboard', 'open')`
+           VALUES (?1, 'player_avail', ?2, ?3, 'Available to sub, posted from my dashboard', 'open')`
         ).bind(ctx.orgId, me.id, norm.level).run();
         listingId = r.meta.last_row_id;
       }

@@ -147,13 +147,13 @@ export function resolveDocTokens(body, org) {
 export function tokenRefusal(res) {
   const parts = [];
   if (res.badPlaceholder) {
-    parts.push(`Found the placeholder ${res.badPlaceholder}. Only {{TOKEN}} placeholders are recognised — bracketed text would be published verbatim into the signed document.`);
+    parts.push(`Found the placeholder ${res.badPlaceholder}. Only {{TOKEN}} placeholders are recognised; bracketed text would be published verbatim into the signed document.`);
   }
   if (res.unknown?.length) {
     parts.push(`Unknown token${res.unknown.length === 1 ? "" : "s"} ${res.unknown.map((t) => `{{${t}}}`).join(", ")}. Valid: ${DOC_TOKEN_NAMES.map((t) => `{{${t}}}`).join(", ")}.`);
   }
   if (res.empty?.length) {
-    parts.push(`This organisation has no value for ${res.empty.map((t) => `{{${t}}}`).join(", ")}. Set it under Organisation settings first — publishing would leave the placeholder in signed text.`);
+    parts.push(`This organisation has no value for ${res.empty.map((t) => `{{${t}}}`).join(", ")}. Set it under Organisation settings first; publishing would leave the placeholder in signed text.`);
   }
   return parts.join(" ");
 }

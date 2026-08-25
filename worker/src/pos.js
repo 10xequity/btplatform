@@ -144,7 +144,7 @@ async function createSale(request, env, ctx) {
       const prod = await env.DB.prepare(
         "SELECT id, name, price_cents, tax_rate_bp, stock FROM products WHERE id=?1 AND org_id=?2 AND deleted_at IS NULL"
       ).bind(+it.product_id, ctx.orgId).first();
-      if (!prod) return json({ error: "One of the products no longer exists — refresh and try again." }, 400);
+      if (!prod) return json({ error: "One of the products no longer exists. Refresh and try again." }, 400);
       items.push({ product_id: prod.id, label: prod.name, qty, unit_price_cents: prod.price_cents,
                    tax_rate_bp: prod.tax_rate_bp, stock: prod.stock });
     } else {

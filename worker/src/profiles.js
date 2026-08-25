@@ -244,7 +244,7 @@ async function avatarUpload(request, env, url, ctx) {
   // D-30: an unbound AVATARS binding is a PLATFORM fault — the org admin cannot fix it, so
   // naming the org's address would send a member to someone powerless, and naming the
   // platform's is the banned literal. No address; just the honest state.
-  if (!env.AVATARS) return H.json({ error: "Photo uploads aren't set up yet — check back soon." }, 503);
+  if (!env.AVATARS) return H.json({ error: "Photo uploads aren't set up yet. Check back soon." }, 503);
 
   const { self, ids } = await managedContactIds(env, ctx);
   const targetId = Number(url.searchParams.get("contact_id")) || self.id;
@@ -538,7 +538,7 @@ async function addChild(request, env, ctx) {
   if (!dob || !/^\d{4}-\d{2}-\d{2}$/.test(dob)) return H.json({ error: "Enter their date of birth." }, 400);
   const age = ageOn(dob); // F-38
   if (age === null || age < 0 || age > 25) return H.json({ error: "That date of birth doesn't look right." }, 400);
-  if (age >= 18) return H.json({ error: "They're 18 or older — they can create their own account with their email instead." }, 400);
+  if (age >= 18) return H.json({ error: "They're 18 or older; they can create their own account with their email instead." }, 400);
 
   const self = await ownContact(env, ctx);
 

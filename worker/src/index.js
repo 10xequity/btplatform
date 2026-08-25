@@ -694,7 +694,7 @@ async function eventReminderSweep(env) {
   for (const r of rows) {
     const when = (r.starts_at || "").replace("T", " ").slice(0, 16);
     const ok = await sendEmail(env, r.email, `Tomorrow: ${r.event_name}`,
-      `<p>Hi ${escapeHtml(r.full_name || "there")} — reminder that <strong>${escapeHtml(r.event_name)}</strong> starts ${when}${r.location ? " at " + escapeHtml(r.location) : ""}.</p><p>See you on the court!</p>`);
+      `<p>Hi ${escapeHtml(r.full_name || "there")}, a reminder that <strong>${escapeHtml(r.event_name)}</strong> starts ${when}${r.location ? " at " + escapeHtml(r.location) : ""}.</p><p>See you on the court!</p>`);
     await env.DB.prepare(
       "INSERT INTO notifications (org_id, kind, target, contact_id, title, body, payload_json, sent_at) VALUES (?1,'event_reminder','member',?2,?3,?4,?5,datetime('now'))"
     ).bind(r.org_id, r.contact_id, `Tomorrow: ${r.event_name}`,
@@ -729,7 +729,7 @@ async function sendLoginLink(env, email, from) {
     "SELECT COUNT(*) AS n FROM magic_links WHERE email = ?1 AND created_at >= datetime('now','-1 day')"
   ).bind(addr).first();
   if (overFlood(recent.n, LINKS_PER_WINDOW) || overFlood(today.n, LINKS_PER_DAY)) {
-    return json({ error: "Several sign-in links were just requested for this address. Wait a few minutes and use the newest link you have — it still works." }, 429);
+    return json({ error: "Several sign-in links were just requested for this address. Wait a few minutes and use the newest link you have; it still works." }, 429);
   }
 
   const token = randomToken();

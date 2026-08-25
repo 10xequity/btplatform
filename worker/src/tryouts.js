@@ -92,7 +92,7 @@ export function normalizeCard(body) {
   const height = body?.height_cm === "" || body?.height_cm === null || body?.height_cm === undefined
     ? null : Number(body.height_cm);
   if (height !== null && (!Number.isFinite(height) || height < 90 || height > 250)) {
-    return { ok: false, error: "That height doesn't look right — enter it in centimetres, between 90 and 250." };
+    return { ok: false, error: "That height doesn't look right. Enter it in centimetres, between 90 and 250." };
   }
   return {
     ok: true,

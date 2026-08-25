@@ -185,10 +185,10 @@ export async function ensureEventSquareItem(env, eventId) {
   if (!locationId) {
     return { warning: "The event saved, but no Square location is linked for this organization, so no catalog item was created." };
   }
-  const name = ev.starts_at ? `${ev.name} — ${String(ev.starts_at).slice(0, 10)}` : ev.name;
+  const name = ev.starts_at ? `${ev.name} · ${String(ev.starts_at).slice(0, 10)}` : ev.name;
   const s = await createSquareItemObjects(env, name, Number(ev.price_cents), locationId);
   if (s.error) {
-    return { warning: "The event saved, but its Square catalog item didn't get created — re-save the price to retry." };
+    return { warning: "The event saved, but its Square catalog item didn't get created. Re-save the price to retry." };
   }
   await env.DB.prepare(
     "UPDATE events SET square_item_id=?1, square_variation_id=?2, updated_at=datetime('now') WHERE id=?3"
@@ -222,7 +222,7 @@ async function subscribe(env, ctx, planId) {
 
   if (!env.SQUARE_ACCESS_TOKEN || !plan.square_variation_id || !env.SQUARE_LOCATION_ID) {
     return json({ ok: true, sandbox: true,
-      message: "Billing isn't switched on yet (Square keys not set). Your interest is noted — check back soon." });
+      message: "Billing isn't switched on yet (Square keys not set). Your interest is noted. Check back soon." });
   }
 
   const user = await env.DB.prepare("SELECT email FROM users WHERE id=?1").bind(ctx.userId).first();
@@ -247,7 +247,7 @@ async function subscribe(env, ctx, planId) {
   ).bind(ctx.orgId, ctx.userId, plan.id).run();
   await audit(env, ctx, "subscription.checkout", "subscriptions", null, { plan_id: plan.id });
   return json({ ok: true, checkout_url: link.data.payment_link.url,
-    message: "Complete payment on the Square page — your card is stored securely by Square for renewals." });
+    message: "Complete payment on the Square page; your card is stored securely by Square for renewals." });
 }
 
 async function mySubscription(env, ctx) {
@@ -305,7 +305,7 @@ async function createPlan(request, env, ctx) {
   let squarePlanId = null, squareVariationId = null, warning = null;
   if (env.SQUARE_ACCESS_TOKEN) {
     const s = await createSquarePlanObjects(env, name, price, interval);
-    if (s.error) warning = "Saved locally, but Square plan creation failed — members can't subscribe until it's retried (edit + save the plan to retry).";
+    if (s.error) warning = "Saved locally, but Square plan creation failed; members can't subscribe until it's retried (edit + save the plan to retry).";
     else { squarePlanId = s.planId; squareVariationId = s.variationId; }
   } else {
     warning = "Saved locally. Square keys aren't set, so members can't subscribe yet.";
@@ -340,11 +340,11 @@ async function updatePlan(request, env, ctx, planId) {
   if (env.SQUARE_ACCESS_TOKEN && (priceChanged || !variationId)) {
     if (!squarePlanId) {
       const s = await createSquarePlanObjects(env, name, price, interval);
-      if (s.error) warning = "Saved locally, but Square is still not linked — subscribing stays off for this plan.";
+      if (s.error) warning = "Saved locally, but Square is still not linked; subscribing stays off for this plan.";
       else { squarePlanId = s.planId; variationId = s.variationId; }
     } else {
       const v = await createSquareVariation(env, squarePlanId, name, price, interval);
-      if (v.error) warning = "Saved locally, but the new price didn't reach Square — new subscribers would still pay the old price, so subscribing uses the previous variation.";
+      if (v.error) warning = "Saved locally, but the new price didn't reach Square; new subscribers would still pay the old price, so subscribing uses the previous variation.";
       else variationId = v.variationId; // NEW variation: existing subscribers keep the price they signed up at.
     }
   }

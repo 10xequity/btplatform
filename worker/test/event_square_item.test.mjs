@@ -132,7 +132,7 @@ test("K-15 — bulk-pricing a free event creates ONE catalog ITEM: event-named +
     assert.ok(c.url.startsWith("https://connect.squareupsandbox.com/v2/catalog/object"),
       `SANDBOX host, standing rule 1 — got ${c.url}`);
     assert.equal(c.body.object.type, "ITEM");
-    assert.equal(c.body.object.item_data.name, "Free Jam — 2026-09-08", "named from the event, dated");
+    assert.equal(c.body.object.item_data.name, "Free Jam · 2026-09-08", "named from the event, dated");
     assert.deepEqual(c.body.object.present_at_location_ids, ["LOC_ORG_1"],
       "the ORG's location wins over the platform fallback — the 'appropriate organization' half");
     const v = c.body.object.item_data.variations[0];
@@ -236,7 +236,7 @@ test("K-15 — duplicating a priced event creates an item for the COPY, named as
     const r = await call(env, "POST", "/api/events/1/duplicate", { token, body: {} });
     assert.equal(r.data.ok, true);
     assert.equal(sq.calls.length, 1);
-    assert.equal(sq.calls[0].body.object.item_data.name, "Paid Open (copy) — 2026-09-01");
+    assert.equal(sq.calls[0].body.object.item_data.name, "Paid Open (copy) · 2026-09-01");
     const row = env.DB.one(`SELECT square_item_id AS i FROM events WHERE id=${r.data.id}`);
     assert.equal(row.i, "SQ_ITEM_1");
   } finally { sq.restore(); }
@@ -255,7 +255,7 @@ test("K-15 — a priced recurring series creates one item per session, and the D
     assert.equal(r.data.count, 3);
     assert.equal(sq.calls.length, 3, "one item per session");
     const names = sq.calls.map((c) => c.body.object.item_data.name);
-    for (const n of names) assert.match(n, /^Tuesday League — 2026-09-\d\d$/, `dated name, got ${n}`);
+    for (const n of names) assert.match(n, /^Tuesday League · 2026-09-\d\d$/, `dated name, got ${n}`);
     assert.equal(new Set(names).size, 3, "three sessions, three distinct names — same-named items would be indistinguishable in the catalog");
     assert.match(String(r.data.square_note || ""), /created 3 catalog items/i);
   } finally { sq.restore(); }

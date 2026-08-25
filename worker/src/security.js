@@ -125,6 +125,6 @@ async function rescueLink(request, env, ctx) {
   if (!res.ok) return H.json(data, res.status);
   await H.audit(env, ctx, "security.rescue_link", "users", user.id, { email });
   return H.json({ ok: true, ...data, note: data.dev_link
-    ? "Sandbox mode — hand this one-time link to the member (expires in 15 minutes)."
+    ? "Sandbox mode: hand this one-time link to the member (expires in 15 minutes)."
     : "A sign-in link was emailed to the member (expires in 15 minutes)." });
 }
