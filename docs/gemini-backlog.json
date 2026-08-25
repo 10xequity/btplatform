@@ -1,0 +1,870 @@
+[
+ {
+  "file": "worker/src/admin.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "worker/src/announcements.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "worker/src/board_suggest.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "worker/src/brackets.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "worker/src/calendar.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "worker/src/checkin.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "worker/src/consent.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "worker/src/courts.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "worker/src/crypto.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "worker/src/divisions.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "worker/src/documents.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "worker/src/events_admin.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "worker/src/facility.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "worker/src/family.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "worker/src/faq.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "worker/src/formats.js",
+  "status": "pending",
+  "tier": "carry",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "worker/src/index.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "worker/src/kiosk.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "worker/src/kotc.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "worker/src/kotcplay.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "worker/src/leagues_admin.js",
+  "status": "pending",
+  "tier": "carry",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "worker/src/lfg.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "worker/src/live.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "worker/src/marketing.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "worker/src/memberships.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "worker/src/member_fields.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "worker/src/member_portal.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "worker/src/messages.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "worker/src/names.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "worker/src/orgs.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "worker/src/passes.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "worker/src/pos.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "worker/src/profiles.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "worker/src/push.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "worker/src/registrations.js",
+  "status": "reviewed",
+  "tier": "never-reviewed",
+  "last_review": "2026-08-24",
+  "note": "v0.185-0.188 score-entry rounds"
+ },
+ {
+  "file": "worker/src/reports.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "worker/src/resilience.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "worker/src/sandbox.js",
+  "status": "pending",
+  "tier": "carry",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "worker/src/schedule.js",
+  "status": "pending",
+  "tier": "carry",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "worker/src/scheduler.js",
+  "status": "pending",
+  "tier": "carry",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "worker/src/security.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "worker/src/sms.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "worker/src/staff_pay.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "worker/src/subs.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "worker/src/tiers.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "worker/src/tournaments.js",
+  "status": "pending",
+  "tier": "carry",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "worker/src/tryouts.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "worker/src/uploads.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "worker/src/waitlists.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "worker/src/waivers.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "worker/src/webauthn.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/assets/admin-announcements.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/assets/admin-brackets.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/assets/admin-checkin.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/assets/admin-dash.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/assets/admin-divisions.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/assets/admin-documents.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/assets/admin-event.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/assets/admin-events.js",
+  "status": "pending",
+  "tier": "carry",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/assets/admin-facility.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/assets/admin-faq.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/assets/admin-kotc.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/assets/admin-league.js",
+  "status": "pending",
+  "tier": "carry",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/assets/admin-manage.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/assets/admin-manager.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/assets/admin-marketing.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/assets/admin-member-fields.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/assets/admin-messages.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/assets/admin-nav.js",
+  "status": "pending",
+  "tier": "carry",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/assets/admin-org-settings.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/assets/admin-passes.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/assets/admin-plans.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/assets/admin-pool-board.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/assets/admin-pos.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/assets/admin-registrations.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/assets/admin-reports.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/assets/admin-schedule-editor.js",
+  "status": "pending",
+  "tier": "carry",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/assets/admin-score-links.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/assets/admin-security.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/assets/admin-sms.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/assets/admin-squads.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/assets/admin-staff-pay.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/assets/admin-tryouts.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/assets/admin-uploads.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/assets/admin-users.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/assets/admin-waitlists.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/assets/admin-waivers.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/assets/admin.css",
+  "status": "pending",
+  "tier": "carry",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/assets/admin.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/assets/app.css",
+  "status": "pending",
+  "tier": "carry",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/assets/app.js",
+  "status": "reviewed",
+  "tier": "never-reviewed",
+  "last_review": "2026-08-24",
+  "note": "v0.190 round"
+ },
+ {
+  "file": "web/assets/build-status.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/assets/config.js",
+  "status": "pending",
+  "tier": "carry",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/assets/guardian-complete.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/assets/help.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/assets/kiosk.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/assets/kotc-live.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/assets/kotc.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/assets/leagues.js",
+  "status": "reviewed",
+  "tier": "never-reviewed",
+  "last_review": "2026-08-24",
+  "note": "v0.181-0.188 rounds"
+ },
+ {
+  "file": "web/assets/lfg.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/assets/library.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/assets/live.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/assets/member-inbox.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/assets/membership.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/assets/passkey.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/assets/push.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/assets/qr.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/assets/register.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/assets/schedule.js",
+  "status": "reviewed",
+  "tier": "never-reviewed",
+  "last_review": "2026-08-24",
+  "note": "v0.181-0.183 member-event-view round — RF-14 edit since is on the carry via worker/src/schedule.js pairing"
+ },
+ {
+  "file": "web/assets/score.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/assets/settings.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/assets/sheet.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/assets/signup-widget.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/assets/site-nav.js",
+  "status": "pending",
+  "tier": "carry",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/assets/subs.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/assets/team-roster.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/assets/tokens.css",
+  "status": "pending",
+  "tier": "carry",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/assets/tournament.css",
+  "status": "reviewed",
+  "tier": "never-reviewed",
+  "last_review": "2026-08-24",
+  "note": "v0.193 — both findings folded"
+ },
+ {
+  "file": "web/assets/tournament.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/home.js",
+  "status": "pending",
+  "tier": "carry",
+  "last_review": null,
+  "note": "reviewed v0.185-0.191 era, edited since — carry"
+ },
+ {
+  "file": "web/member.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/profile.js",
+  "status": "pending",
+  "tier": "carry",
+  "last_review": null,
+  "note": "reviewed v0.185-0.191 era, edited since — carry"
+ },
+ {
+  "file": "web/sw.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ },
+ {
+  "file": "web/widget.js",
+  "status": "pending",
+  "tier": "never-reviewed",
+  "last_review": null,
+  "note": null
+ }
+]
