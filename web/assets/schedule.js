@@ -63,7 +63,7 @@
     const nm = e.name ? esc(e.name.trim()) : "";
     // D-55 (Gemini nicety): emit aria-label ONLY when the event is named. A nameless link's visible
     // text ("Pools & bracket") is already its accessible name, so a kind-only aria-label just repeats it.
-    const liveAria = nm ? ` aria-label="${nm} — ${kind}"` : "";
+    const liveAria = nm ? ` aria-label="${nm}, ${kind}"` : "";
     return `<a class="btn ghost sched-cta" href="live.html?event=${encodeURIComponent(e.id)}"${liveAria}>${
       e.type === "tournament" ? "Pools &amp; bracket" : "Standings &amp; scores"}</a>`;
   };
@@ -262,10 +262,10 @@
     if (org) qs.set("org", org);
     let r;
     try { r = await (await fetch(`${API}/api/schedule?${qs}`)).json(); }
-    catch { document.getElementById("schedBody").innerHTML = `<div class="empty">Can't reach the schedule right now — try refreshing.</div>`; return; }
+    catch { document.getElementById("schedBody").innerHTML = `<div class="empty">Can't reach the schedule right now. Try refreshing.</div>`; return; }
     if (r.error) { document.getElementById("schedBody").innerHTML = `<div class="empty">${esc(r.error)}</div>`; return; }
     events = r.events || [];
-    document.getElementById("schedTitle").textContent = r.view && r.view.name !== "Public" ? `Event Schedule — ${r.view.name}` : "Event Schedule";
+    document.getElementById("schedTitle").textContent = r.view && r.view.name !== "Public" ? `Event Schedule · ${r.view.name}` : "Event Schedule";
     const orgSel = document.getElementById("orgFilter");
     const seen = new Map(events.map(e => [e.org_id, e.org_name]));
     if (orgSel.options.length <= 1 && seen.size > 1) {
@@ -293,8 +293,8 @@
       .filter(e => !typeFilter || e.type === typeFilter);
     if (!upcoming.length) {
       el.innerHTML = `<div class="empty">${typeFilter
-        ? `No ${esc(typeLabel(typeFilter).toLowerCase())} scheduled right now — try another tab.`
-        : "Nothing scheduled yet — check back soon."}</div>`;
+        ? `No ${esc(typeLabel(typeFilter).toLowerCase())} scheduled right now. Try another tab.`
+        : "Nothing scheduled yet. Check back soon."}</div>`;
       postHeight(); return;
     }
     if (mode === "list") {
@@ -346,7 +346,7 @@
         html += `<div class="cal-day${d.getMonth() !== mo ? " other" : ""}"><div class="dnum">${d.getDate()}</div>
           ${cap.shown.map(e => ((s) => `<a class="cal-ev" href="${esc(s.href)}"
             ${s.external || embed ? `target="_blank" rel="${esc(s.rel || "noopener")}"` : ""}
-            title="${esc(e.name)}${s.external ? " — registers on another site" : ""}">${esc(e.name)}${s.external ? " ↗" : ""}</a>`)(signup(e))).join("")}${moreBtn}</div>`;
+            title="${esc(e.name)}${s.external ? " · registers on another site" : ""}">${esc(e.name)}${s.external ? " ↗" : ""}</a>`)(signup(e))).join("")}${moreBtn}</div>`;
       }
       el.innerHTML = html + "</div>";
       /* RF-7: the pager REFETCHES — render() alone repainted the same fixed window, so paging

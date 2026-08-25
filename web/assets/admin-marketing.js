@@ -74,13 +74,13 @@
       `<span class="mkt-chip"><b>${o.reachable}</b> reachable contacts</span>` +
       `<span class="mkt-chip">${o.unsubscribed} unsubscribed (never emailed)</span>` +
       (o.email_mode === "sandbox"
-        ? `<span class="mkt-chip warn">SANDBOX — no real emails until the Brevo key is set</span>`
+        ? `<span class="mkt-chip warn">SANDBOX: no real emails until the Brevo key is set</span>`
         : `<span class="mkt-chip">Email: Brevo connected</span>`) +
       (o.address_set ? `<span class="mkt-chip">Address on file ✓</span>`
-                     : `<span class="mkt-chip warn">Mailing address missing — email sending blocked</span>`) +
+                     : `<span class="mkt-chip warn">Mailing address missing: email sending blocked</span>`) +
       (o.sms_mode === "twilio"
         ? `<span class="mkt-chip">Texting: Twilio connected</span>`
-        : `<span class="mkt-chip warn">Texting off — A2P registration pending</span>`);
+        : `<span class="mkt-chip warn">Texting off: A2P registration pending</span>`);
     if (o.mailing_address) $("mailAddr").value = o.mailing_address;
   }
 
@@ -102,12 +102,12 @@
         <div class="grow"><div class="k">${esc(s.name)}</div>
           <div class="v">${esc(describeFilter(s.filter))}</div></div>
         <span class="status-pill"><b>${s.count}</b> people</span>
-        ${s.no_birthdate > 0 ? `<span class="v">${s.no_birthdate} more have no birthdate on file — the age filter can't see them</span>` : ""}
+        ${s.no_birthdate > 0 ? `<span class="v">${s.no_birthdate} more have no birthdate on file; the age filter can't see them</span>` : ""}
         <button class="btn ghost" data-act="preview">Preview</button>
         <button class="btn ghost" data-act="edit">Edit</button>
         <button class="btn ghost" data-act="del">Delete</button>
       </div>`).join("")
-      : `<p class="help-text" style="margin:8px 0 0">No segments yet — create one to choose who gets your first campaign.</p>`;
+      : `<p class="help-text" style="margin:8px 0 0">No segments yet; create one to choose who gets your first campaign.</p>`;
     $("segList").querySelectorAll("button").forEach((b) => {
       const id = Number(b.closest(".mkt-row").dataset.id);
       if (b.dataset.act === "preview") b.onclick = () => previewSegment(id);
@@ -137,7 +137,7 @@
     const f = (seg && seg.filter) || (presetEvent ? { event: presetEvent } : {});
     /* Arriving from an event's registrations, the segment is already named for the thing the
        operator was looking at — they confirm rather than compose. */
-    const presetName = presetEvent ? `${eventName(presetEvent)} — registrants` : "";
+    const presetName = presetEvent ? `${eventName(presetEvent)} · registrants` : "";
     openModal(`
       <h2 style="margin-top:0">${seg ? "Edit segment" : "New segment"}</h2>
       <div class="mkt-form">
@@ -164,7 +164,7 @@
         <input id="mSegAgeMin" type="number" min="0" max="120" value="${Number.isInteger(f.age_min) ? f.age_min : ""}" placeholder="40" />
         <label for="mSegAgeMax">Age at most (optional)</label>
         <input id="mSegAgeMax" type="number" min="0" max="120" value="${Number.isInteger(f.age_max) ? f.age_max : ""}" />
-        <p class="mkt-hint">Ages come from birthdates on member profiles. Anyone without one can't be seen by an age filter — the counts will say how many that is.</p>
+        <p class="mkt-hint">Ages come from birthdates on member profiles. Anyone without one can't be seen by an age filter; the counts will say how many that is.</p>
         <div class="mkt-actions">
           <button class="btn" id="mSegSave">${seg ? "Save changes" : "Create segment"}</button>
           <button class="btn ghost" id="mSegCancel">Cancel</button>
@@ -209,7 +209,7 @@
     openModal(`
       <h2 style="margin-top:0">Who's in this segment</h2>
       <p><b>${r.data.count}</b> reachable people. First ${r.data.sample.length}:</p>
-      ${r.data.no_birthdate > 0 ? `<p class="mkt-hint">${r.data.no_birthdate} more contact${r.data.no_birthdate === 1 ? " has" : "s have"} no birthdate on file — the age filter can't see them. They would otherwise be in this segment.</p>` : ""}
+      ${r.data.no_birthdate > 0 ? `<p class="mkt-hint">${r.data.no_birthdate} more contact${r.data.no_birthdate === 1 ? " has" : "s have"} no birthdate on file; the age filter can't see them. They would otherwise be in this segment.</p>` : ""}
       ${r.data.sample.map((c) => `<div class="mkt-row"><div class="grow"><div class="k">${esc(c.full_name || "(no name)")}</div><div class="v">${esc(c.email)}</div></div></div>`).join("") || "<p>No one matches yet.</p>"}
       <div class="mkt-actions"><button class="btn ghost" id="mPrevClose">Close</button></div>`);
     $("mPrevClose").onclick = closeModal;
@@ -269,7 +269,7 @@
         </select>
         <div id="mCEmailFields">
         <label for="mCSubj">Subject line</label>
-        <input id="mCSubj" value="${esc(c.subject)}" placeholder="Fall leagues open Monday — early-bird pricing" />
+        <input id="mCSubj" value="${esc(c.subject)}" placeholder="Fall leagues open Monday: early-bird pricing" />
         </div>
         <label for="mCSeg">Send to segment</label>
         <select id="mCSeg"><option value="">Choose…</option>
@@ -279,15 +279,15 @@
         <div id="mCBodyEmail">
         <label for="mCBody">Email body (HTML or plain text)</label>
         <textarea id="mCBody" placeholder="Hi {{first_name}}, ...">${esc(c.html_body)}</textarea>
-        <p class="mkt-hint">Personalize with {{first_name}}, {{full_name}}, {{email}}. The legal footer (address + unsubscribe) is added automatically — never write your own.</p>
+        <p class="mkt-hint">Personalize with {{first_name}}, {{full_name}}, {{email}}. The legal footer (address + unsubscribe) is added automatically; never write your own.</p>
         <label for="mCTest">Test address</label>
         <input id="mCTest" type="email" placeholder="you@boomtownvb.com" />
         </div>
         <div id="mCBodySms" hidden>
         <label for="mCSms">Text message (plain text)</label>
-        <textarea id="mCSms" maxlength="480" placeholder="Hi {{first_name}} — fall leagues open Monday. Early-bird pricing this week: boomtownvb.com">${esc(c.sms_body || "")}</textarea>
+        <textarea id="mCSms" maxlength="480" placeholder="Hi {{first_name}}, fall leagues open Monday. Early-bird pricing this week: boomtownvb.com">${esc(c.sms_body || "")}</textarea>
         <p class="mkt-hint" id="mCSmsMeter" aria-live="polite"></p>
-        <p class="mkt-hint">Personalize with {{first_name}}, {{full_name}}. Only people who opted in to texts get it — carriers add STOP/HELP handling automatically.</p>
+        <p class="mkt-hint">Personalize with {{first_name}}, {{full_name}}. Only people who opted in to texts get it; carriers add STOP/HELP handling automatically.</p>
         </div>
         <div class="mkt-actions">
           <button class="btn ghost" id="mCSave">Save draft</button>
@@ -307,7 +307,7 @@
     const paintSegNote = () => {
       const s = SEGMENTS.find((x) => x.id === Number($("mCSeg").value));
       $("mCSegNote").textContent = s && s.no_birthdate > 0
-        ? `${s.no_birthdate} more contact${s.no_birthdate === 1 ? " has" : "s have"} no birthdate on file — the age filter can't see them, so they won't get this.`
+        ? `${s.no_birthdate} more contact${s.no_birthdate === 1 ? " has" : "s have"} no birthdate on file; the age filter can't see them, so they won't get this.`
         : "";
     };
     paintSegNote();

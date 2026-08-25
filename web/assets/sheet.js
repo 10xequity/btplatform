@@ -37,7 +37,7 @@
   }
 
   if (params.get("done")) {
-    card.innerHTML = "<h1>Payment received 🏐</h1><p>You're on the list — check your email for confirmation from Square. See you on the court!</p>";
+    card.innerHTML = "<h1>Payment received 🏐</h1><p>You're on the list. Check your email for confirmation from Square. See you on the court!</p>";
     return;
   }
   if (!eventId) {
@@ -68,7 +68,7 @@
       card.innerHTML = `<h1>${esc((sheet.event && sheet.event.name) || "This session")}</h1>
         <p>Sign-up for this session happens on another site.</p>
         <p><a class="btn" href="${esc(sheet.external_url)}" target="_blank" rel="noopener noreferrer">${label} ↗</a></p>
-        <p class="help-text">You'll finish there — we don't keep the list for this one.</p>`;
+        <p class="help-text">You'll finish there; we don't keep the list for this one.</p>`;
       return;
     }
     render();
@@ -81,7 +81,7 @@
         <a class="btn" href="register.html?event=${encodeURIComponent(eventId)}">Join the waitlist →</a></div>`;
     }
     if (sheet.viewer && sheet.viewer.signed_up) {
-      return `<div class="sheet-form"><p class="msg ok" role="status">You're on the list — see you there! 🏐</p></div>`;
+      return `<div class="sheet-form"><p class="msg ok" role="status">You're on the list. See you there! 🏐</p></div>`;
     }
     const btnLabel = ev.price_cents ? "Sign up & pay" : "Count me in";
     if (sheet.viewer) { // signed in, not yet on the list — one tap
@@ -105,7 +105,7 @@
       : `<span class="n">${ev.spots_taken}</span><span class="cap">signed up</span>`;
     const who = sheet.attendees.length
       ? `<ul class="who">${sheet.attendees.map((n) => `<li>${esc(n)}</li>`).join("")}</ul>`
-      : `<p class="muted">No one yet — be the first.</p>`;
+      : `<p class="muted">No one yet. Be the first.</p>`;
     card.innerHTML = `
       <h1>${esc(ev.name)}</h1>
       <p class="sheet-meta">${esc(ev.org_name)}${ev.starts_at ? " · " + esc(fmtWhen(ev.starts_at)) : ""}${ev.location ? " · " + esc(ev.location) : ""}</p>

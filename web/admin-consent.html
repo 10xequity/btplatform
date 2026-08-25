@@ -8,7 +8,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Media consent — Boomtown Athletics</title>
+  <title>Media consent · Boomtown Athletics</title>
   <script>/* Pre-paint state — collapse + theme (uiux-review §4/§6.4, v0.52.0): read the bt_nav cookie and the saved theme BEFORE the first stylesheet so the rail state AND the theme are right on frame one — no post-paint snap of either. admin-nav.js writes the cookie on rail toggle and bt_theme on theme toggle; the localStorage bt_nav fallback migrates pre-v0.51 sessions. */(function(){try{var m=document.cookie.match(/(?:^|; )bt_nav=([^;]*)/);var v=m?m[1]:((window.localStorage&&localStorage.getItem("bt_nav_collapsed")==="1")?"min":"");if(v==="min")document.documentElement.dataset.nav="min";var t=(window.localStorage&&localStorage.getItem("bt_theme"))||(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.dataset.theme=t;}catch(e){}})();</script>
   <script>try{var btTpl=localStorage.getItem("bt_template");if(btTpl)document.documentElement.dataset.template=btTpl;}catch(e){}</script>
   <link rel="stylesheet" href="assets/tokens.css?v=0.194.0" />
@@ -123,7 +123,7 @@
     <div class="page-head"><h1>Media consent</h1></div>
     <p class="note" style="max-width:70ch;margin:0 0 18px">
       The waiver grants Boomtown a likeness release, and the only way to decline it is a
-      written request. When one arrives, record it here — otherwise the next person picking
+      written request. When one arrives, record it here; otherwise the next person picking
       photos has no way to know. This is a legal record: it keeps history, and withdrawing an
       opt-out does not erase that it existed.
     </p>
@@ -231,7 +231,7 @@
         }),
       }).then(function (r) {
         if (r.ok && r.data.ok) {
-          say(r.data.already ? "Already on file — nothing changed." : "Recorded.", false);
+          say(r.data.already ? "Already on file. Nothing changed." : "Recorded.", false);
           $("ref").value = ""; $("note").value = ""; $("q").value = "";
           $("results").innerHTML = ""; picked = null;
           load();
@@ -246,7 +246,7 @@
         var rows = r.data.opted_out || [];
         $("count").textContent = "(" + rows.length + ")";
         if (!rows.length) {
-          $("list").innerHTML = '<p class="note">Nobody has opted out. That is the expected state — ' +
+          $("list").innerHTML = '<p class="note">Nobody has opted out. That is the expected state; ' +
             "the release is part of the waiver and declining takes a written request.</p>";
           return;
         }

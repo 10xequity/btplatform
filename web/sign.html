@@ -10,7 +10,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="robots" content="noindex, nofollow" />
   <meta name="referrer" content="no-referrer" />
-  <title>Sign your waiver — Boomtown Athletics</title>
+  <title>Sign your waiver · Boomtown Athletics</title>
   <script>try{var btTpl=localStorage.getItem("bt_template");if(btTpl)document.documentElement.dataset.template=btTpl;}catch(e){}</script>
   <script>/* RF-15 pre-paint (v0.194.0): the saved theme + color template, applied before the first stylesheet — without this the page pins dark and any picker choice reverts on reload. */(function(){try{var t=(window.localStorage&&localStorage.getItem("bt_theme"))||(matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.dataset.theme=t;var p=localStorage.getItem("bt_template");if(p)document.documentElement.dataset.template=p;}catch(e){}})();</script>
   <link rel="stylesheet" href="assets/tokens.css?v=0.194.0" />
@@ -103,7 +103,7 @@
         return panel("You're all set",
           "Your waiver is already on file" +
           (d.expires_at ? " and valid until <b>" + esc(String(d.expires_at).slice(0, 10)) + "</b>" : "") +
-          ". Nothing else to do — see you at the gym.");
+          ". Nothing else to do. See you at the gym.");
       }
       if (!d.waiver) {
         return panel("Not ready yet",
@@ -118,7 +118,7 @@
           ".<br>Everyone playing needs a current waiver on file before check-in.</p>" +
         '<div class="sign-card">' +
           '<h2 style="margin:0 0 10px;font-size:18px">Waiver (' + esc(d.waiver.label) + ")</h2>" +
-          '<div class="waiver-box" tabindex="0" role="region" aria-label="Waiver text — scrollable">' +
+          '<div class="waiver-box" tabindex="0" role="region" aria-label="Waiver text, scrollable">' +
             esc(d.waiver.body) +
           "</div>" +
           '<label class="fld" for="dob">Player\'s date of birth</label>' +
@@ -190,7 +190,7 @@
         .then(function (r) { return r.json().then(function (j) { return { s: r.status, j: j }; }); })
         .then(function (res2) {
           if (res2.j && res2.j.ok) {
-            return panel("Signed — thank you",
+            return panel("Signed, thank you",
               "Your waiver is on file" +
               (res2.j.expires_at ? " until <b>" + esc(String(res2.j.expires_at).slice(0, 10)) + "</b>" : "") +
               ". You're clear to check in.");

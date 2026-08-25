@@ -57,7 +57,7 @@
   let bearer = safeSession("bt_token") || null;
   let currentEvent = null, teams = [], teamName = {}, teamCaptain = {}, matches = [], formats = {};
   /** "Net Assets — Ava S." where a captain is known; the bare name otherwise (T2-3). */
-  const teamLabel = (id) => teamName[id] + (teamCaptain[id] ? ` — ${teamCaptain[id]}` : "");
+  const teamLabel = (id) => teamName[id] + (teamCaptain[id] ? ` · ${teamCaptain[id]}` : "");
 
   /* theme + org (same behavior as index) */
   /* v0.52.0: theme is single-source now — pre-paint via the shared <head> snippet, toggle in admin-nav.js v2.19. */
@@ -93,7 +93,7 @@
 
   async function loadEvents() {
     const evs = (await api("/api/events")).data.events || [];
-    $("eventSelect").innerHTML = `<option value="">— choose event —</option>` +
+    $("eventSelect").innerHTML = `<option value="">Choose an event…</option>` +
       evs.map((e) => `<option value="${e.id}">${e.name}${e.starts_at ? " · " + e.starts_at.slice(0, 10) : ""}</option>`).join("");
     $("eventSelect").onchange = () => $("eventSelect").value && openEvent(+$("eventSelect").value);
     // E3 (v0.91.0, audit §6.5): every other module opens on the first real event; this page used
@@ -133,7 +133,7 @@
     $("teamsPanel").hidden = false;
     $("planPanel").hidden = false; // W-C: the planner opens with the event
     if (currentEvent.court_count) $("plCourts").value = currentEvent.court_count;
-    $("printTitle").textContent = `${currentEvent.name} — Pool Play`;
+    $("printTitle").textContent = `${currentEvent.name} · Pool Play`;
     await refreshAll();
   }
 
@@ -206,7 +206,7 @@
       if (!confirm(`${r.data.error} Replace it with this plan?`)) return;
       r = await api(`/api/admin/events/${currentEvent.id}/generate-schedule`, { method: "POST", body: JSON.stringify({ ...body, replace: true }) });
     }
-    $("plMsg").textContent = r.ok ? "Schedule written — it's below." : (r.data.error || "Couldn't write the schedule.");
+    $("plMsg").textContent = r.ok ? "Schedule written. It's below." : (r.data.error || "Couldn't write the schedule.");
     if (r.ok) refreshAll();
   };
 
@@ -261,8 +261,8 @@
     $("warningsBox").innerHTML = warnings.length
       ? `<div class="warn-banner">⚠ ${warnings.map((w) =>
           w.type === "rematch" ? `Rematch: ${w.pair.split("-").map((id) => teamName[id] || id).join(" vs ")}`
-          : `Round ${w.round}: ${teamName[w.team_id] || w.team_id} on two courts`).join(" · ")}
-          — your call stands; this is just a heads-up.</div>`
+          : `Round ${w.round}: ${teamName[w.team_id] || w.team_id} on two courts`).join(" · ")}.
+          Your call stands; this is just a heads-up.</div>`
       : "";
   }
 
@@ -448,7 +448,7 @@
     if (!currentEvent) return;
     const body = [currentEvent.name, "",
       ...sheetRows().map((r) => `Round ${r[0]} · Court ${r[1]}: ${r[2] || "TBD"} vs ${r[3] || "TBD"}${r[4] ? ` (ref ${r[4]})` : ""}`)].join("\n");
-    window.BT_ADMIN.emailDocument(currentEvent.id, `${currentEvent.name} — pool sheet`, body);
+    window.BT_ADMIN.emailDocument(currentEvent.id, `${currentEvent.name} · pool sheet`, body);
   };
 
   /* ---------- the day sheet (§-1n P-E / §-0 B19) ----------
@@ -471,15 +471,15 @@
       api(`/api/admin/events/${currentEvent.id}/board`),
       api(`/api/admin/events/${currentEvent.id}/brackets`),
     ]);
-    const text = [`${currentEvent.name} — day sheet`, ""];
-    let html = `<h3 class="ds-h">${dsEsc(currentEvent.name)} — day sheet</h3>`;
+    const text = [`${currentEvent.name} · day sheet`, ""];
+    let html = `<h3 class="ds-h">${dsEsc(currentEvent.name)} · day sheet</h3>`;
 
     // 1. Schedule — the same rows the CSV and the emailed pool sheet are built from.
     const rows = sheetRows();
     html += `<div class="ds-section"><h4 class="ds-h">Schedule</h4>` + (rows.length
       ? `<table><tr><th>Round</th><th>Court</th><th>Team A</th><th>Team B</th><th>Ref</th><th>Score</th></tr>` +
         rows.map((r) => `<tr><td>${dsEsc(r[0])}</td><td>${dsEsc(r[1])}</td><td>${dsEsc(r[2] || "TBD")}</td><td>${dsEsc(r[3] || "TBD")}</td><td>${dsEsc(r[4])}</td><td>${dsEsc(rowScore(r))}</td></tr>`).join("") + `</table>`
-      : `<p class="ds-note">No pool games yet — generate the schedule first.</p>`) + `</div>`;
+      : `<p class="ds-note">No pool games yet. Generate the schedule first.</p>`) + `</div>`;
     text.push("SCHEDULE", ...(rows.length
       ? rows.map((r) => `Round ${r[0]} · Court ${r[1]}: ${r[2] || "TBD"} vs ${r[3] || "TBD"}${r[4] ? ` (ref ${r[4]})` : ""}`)
       : ["No pool games yet."]), "");
@@ -524,12 +524,12 @@
       const list = br.data.brackets || [];
       text.push("BRACKET");
       if (!list.length) {
-        html += `<p class="ds-note">No bracket yet — it appears here once pool play breaks.</p>`;
+        html += `<p class="ds-note">No bracket yet; it appears here once pool play breaks.</p>`;
         text.push("No bracket yet.");
       } else {
         for (const b of list) {
-          html += `<p class="ds-sub"><b>${dsEsc(b.name)} bracket</b>${b.champion ? ` — 🏆 ${dsEsc(b.champion)}` : ""}</p>`;
-          text.push(`${b.name} bracket${b.champion ? ` — winner: ${b.champion}` : ""}`);
+          html += `<p class="ds-sub"><b>${dsEsc(b.name)} bracket</b>${b.champion ? ` · 🏆 ${dsEsc(b.champion)}` : ""}</p>`;
+          text.push(`${b.name} bracket${b.champion ? ` · winner: ${b.champion}` : ""}`);
           for (const round of b.rounds || []) {
             html += `<p class="ds-sub">${dsEsc(round.label)}</p><table><tr><th>Team A</th><th>Team B</th><th>Score</th></tr>` +
               (round.matches || []).map((mt) => `<tr><td>${dsEsc(mt.team_a || mt.waiting_a || "TBD")}</td><td>${dsEsc(mt.team_b || mt.waiting_b || "TBD")}</td><td>${dsEsc(mtScore(mt))}</td></tr>`).join("") + `</table>`;
@@ -581,7 +581,7 @@
     if (!currentEvent) return;
     return whileBusy($("dayEmailBtn"), async () => {
       const body = await composeDaySheet();
-      window.BT_ADMIN.emailDocument(currentEvent.id, `${currentEvent.name} — day sheet`, body);
+      window.BT_ADMIN.emailDocument(currentEvent.id, `${currentEvent.name} · day sheet`, body);
     });
   };
 })();

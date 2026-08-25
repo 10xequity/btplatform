@@ -72,17 +72,17 @@
     bits.push(`<span class="lfg-chip">Showed ${rel.showed || 0} &middot; Bailed ${rel.bailed || 0}</span>`);
     if (d.teams_count > 0) bits.push(`<span class="lfg-chip">On ${d.teams_count} team${d.teams_count === 1 ? "" : "s"}</span>`);
     if (d.banned_until) bits.push(`<span class="lfg-chip danger">&#9888; Paused until ${esc(String(d.banned_until).slice(0, 10))}</span>`);
-    else if (d.caution === "yellow") bits.push('<span class="lfg-chip warn">&#9888; A no-show was reported — a second pauses community play for 30 days</span>');
+    else if (d.caution === "yellow") bits.push('<span class="lfg-chip warn">&#9888; A no-show was reported; a second pauses community play for 30 days</span>');
     el.innerHTML = bits.join("");
   }
 
   async function load() {
     const r = await api("/api/lfg/listings" + (kind ? "?kind=" + kind : ""));
     const el = $("list");
-    if (!r.ok) { el.innerHTML = `<div class="lfg-empty">${esc(r.data.error || "Couldn't load posts — try again.")}</div>`; return; }
+    if (!r.ok) { el.innerHTML = `<div class="lfg-empty">${esc(r.data.error || "Couldn't load posts. Try again.")}</div>`; return; }
     const rows = r.data.listings || [];
     if (!rows.length) {
-      el.innerHTML = '<div class="lfg-empty">Nothing posted here yet. Be the first — tap "Post something."</div>';
+      el.innerHTML = '<div class="lfg-empty">Nothing posted here yet. Be the first: tap "Post something."</div>';
       return;
     }
     el.innerHTML = rows.map((l, i) => card(l, i)).join("");
@@ -127,14 +127,14 @@
       const when = b.dataset.when && Date.parse(String(b.dataset.when).replace(" ", "T"));
       // 12 here mirrors BAIL_WINDOW_HOURS for the confirm copy only — the server decides what counts.
       if (when && when > Date.now() && when - Date.now() <= 12 * 3600 * 1000 &&
-        !confirm("Game time is inside 12 hours — withdrawing now counts on your reliability record. Withdraw anyway?")) return;
+        !confirm("Game time is inside 12 hours; withdrawing now counts on your reliability record. Withdraw anyway?")) return;
     }
     if (actName === "close" && !confirm("Close this post? People will stop seeing it.")) return;
     if (actName === "noshow") return noShow(Number(id));
     b.disabled = true;
     const r = await api(`/api/lfg/listings/${id}/${actName === "close" ? "close" : actName}`, { method: "POST", body: "{}" });
     b.disabled = false;
-    if (!r.ok) { alert(r.data.error || "That didn't go through — try again."); return; }
+    if (!r.ok) { alert(r.data.error || "That didn't go through. Try again."); return; }
     if (actName === "join" && r.data.teams_note) alert(r.data.teams_note);
     if (actName === "withdraw" && r.data.note) alert(r.data.note);
     await Promise.all([loadMe(), load()]);
@@ -153,8 +153,8 @@
     const res = await api(`/api/lfg/listings/${listingId}/report-no-show`, {
       method: "POST", body: JSON.stringify({ contact_id: others[idx].contact_id }),
     });
-    if (!res.ok) { alert(res.data.error || "That didn't go through — try again."); return; }
-    alert(res.data.banned ? "Reported. That was their second — community play is paused for them for 30 days." : "Reported. A caution now shows by their name.");
+    if (!res.ok) { alert(res.data.error || "That didn't go through. Try again."); return; }
+    alert(res.data.banned ? "Reported. That was their second; community play is paused for them for 30 days." : "Reported. A caution now shows by their name.");
     load();
   }
 
@@ -187,7 +187,7 @@
       wrap.querySelector("#cmpSend").disabled = true;
       const r = await api("/api/messages/start", { method: "POST", body: JSON.stringify({
         to_contact_id: contactId, subject: wrap.querySelector("#cmpSubject").value.trim(), body }) });
-      if (!r.ok) { alert(r.data.error || "Couldn't send — try again."); wrap.querySelector("#cmpSend").disabled = false; return; }
+      if (!r.ok) { alert(r.data.error || "Couldn't send. Try again."); wrap.querySelector("#cmpSend").disabled = false; return; }
       close();
       location.href = "member-inbox.html?thread=" + r.data.thread_id;
     };
@@ -210,7 +210,7 @@
     };
     const r = await api("/api/lfg/listings", { method: "POST", body: JSON.stringify(body) });
     $("fSubmit").disabled = false;
-    if (!r.ok) { alert(r.data.error || "Couldn't post — try again."); return; }
+    if (!r.ok) { alert(r.data.error || "Couldn't post. Try again."); return; }
     $("postForm").reset();
     $("postForm").hidden = true;
     $("postToggle").setAttribute("aria-expanded", "false");

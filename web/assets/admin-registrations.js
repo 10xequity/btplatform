@@ -45,7 +45,7 @@
   async function loadEvents() {
     const r = await api("/api/events");
     const events = r.data.events || [];
-    $("eventSelect").innerHTML = `<option value="">— choose event —</option>` +
+    $("eventSelect").innerHTML = `<option value="">Choose an event…</option>` +
       events.map((e) => `<option value="${e.id}">${esc(e.name)}</option>`).join("");
     $("eventSelect").onchange = () => {
       eventId = $("eventSelect").value || null;
@@ -184,7 +184,7 @@
     const done = signed >= total;
     const noAddr = x.waiver_no_email || 0;
     const title = done ? "Every listed player has a current waiver"
-      : `${signed} of ${total} signed${noAddr ? ` · ${noAddr} unsigned with no email — catch them at check-in` : ""}`;
+      : `${signed} of ${total} signed${noAddr ? ` · ${noAddr} unsigned with no email; catch them at check-in` : ""}`;
     return `<span class="chip ${done ? "paid" : "pending"}" title="${esc(title)}">${signed}/${total} waivers</span>`;
   }
 
@@ -244,7 +244,7 @@
     $("scoreLinksCard").hidden = false;
     $("scoreLinksList").innerHTML = (r.data.links || []).map((l) => `
       <div class="linkrow"><strong>${esc(l.team)}</strong><code>${esc(l.url)}</code>
-        <button class="btn ghost" data-copy="${esc(l.url)}">Copy</button></div>`).join("") || "<p>No teams yet — add teams first.</p>";
+        <button class="btn ghost" data-copy="${esc(l.url)}">Copy</button></div>`).join("") || "<p>No teams yet. Add teams first.</p>";
     document.querySelectorAll("[data-copy]").forEach((b) => {
       b.onclick = () => navigator.clipboard.writeText(b.dataset.copy).then(() => { b.textContent = "Copied ✓"; setTimeout(() => (b.textContent = "Copy"), 1500); });
     });

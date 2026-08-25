@@ -162,7 +162,7 @@ test("the PNG paints its light modules instead of leaving them transparent", () 
 test("the PNG returns null rather than throwing where there is no canvas", () => {
   // qr.js is also loaded by tests and could be loaded by a worker. Neither has a document.
   assert.match(QRJS, /if \(typeof document === "undefined" \|\| !document\.createElement\) return null;/);
-  assert.match(SLJS, /Couldn't make the image here — use Copy link instead/,
+  assert.match(SLJS, /Couldn't make the image here. Use Copy link instead/, // RF-20 spelling
     "and the page must fall back to the link rather than failing silently");
 });
 

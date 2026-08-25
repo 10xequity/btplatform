@@ -217,7 +217,7 @@
     if (!el) return;
     const frozen = allTeams().some((t) => t.team_no != null);
     el.textContent = frozen
-      ? "Team numbers came from your saved arrangement — 1 down each division. Rearranging tiles won't change them until you save again."
+      ? "Team numbers came from your saved arrangement: 1 down each division. Rearranging tiles won't change them until you save again."
       : "Team numbers are in registration order. Save the board and they renumber 1 down each division, from your tile order.";
   }
 
@@ -370,8 +370,8 @@
     // The size warning is advisory, never blocking: the owner's preferred range is 6-11 on grass and
     // indoors is "a lot more limited due to number of courts", so a small pool is often the only
     // option and the board must not nag about it.
-    const size = n < 6 ? `<span class="pb-warn">${n} — under 6</span>`
-      : n > 11 ? `<span class="pb-warn">${n} — over 11</span>`
+    const size = n < 6 ? `<span class="pb-warn">${n} (under 6)</span>`
+      : n > 11 ? `<span class="pb-warn">${n} (over 11)</span>`
       : `<span class="pb-ok">${n}</span>`;
     return `<div class="pb-pool" data-zone="${z.key}">
       <div class="pb-pool-head">
@@ -379,8 +379,8 @@
           aria-label="Pool name" maxlength="60" />
         ${size}
         <button type="button" class="pb-remove" data-empty="${z.key}"
-          title="Remove ${esc(z.name)} — its teams go back to the workspace"
-          aria-label="Remove ${esc(z.name)} — its teams go back to the workspace, and the empty pool disappears when you save">✕</button>
+          title="Remove ${esc(z.name)}: its teams go back to the workspace"
+          aria-label="Remove ${esc(z.name)}: its teams go back to the workspace, and the empty pool disappears when you save">✕</button>
       </div>
       <ul class="pb-list" data-zone="${z.key}">${z.teams.map(tile).join("")}</ul>
     </div>`;
@@ -397,7 +397,7 @@
         <div class="pb-pools">
           ${zones.filter((z) => z.divisionId === d.id).map(zoneHtml).join("")}
           <button class="pb-add" type="button" data-add="${d.id}"
-            aria-label="Add a pool to ${esc(d.name)} — drop a team here or press Enter">+</button>
+            aria-label="Add a pool to ${esc(d.name)}: drop a team here or press Enter">+</button>
         </div>
       </section>`).join("") +
       (zones.some((z) => z.divisionId === null) ? `
@@ -468,7 +468,7 @@
     document.querySelectorAll("[data-add]").forEach((b) => {
       b.addEventListener("click", () => {
         if (carrying == null) {
-          $("pbHint").textContent = "Pick a team up first — focus a tile and press Enter.";
+          $("pbHint").textContent = "Pick a team up first: focus a tile and press Enter.";
           return;
         }
         const id = carrying; carrying = null;
@@ -530,7 +530,7 @@
   async function editNote(teamId) {
     const t = findTeam(teamId);
     if (!t) return;
-    const next = window.prompt(`Note for ${t.name} — shown on the tile:`, t.note || "");
+    const next = window.prompt(`Note for ${t.name} (shown on the tile):`, t.note || "");
     if (next === null) return;                       // cancelled, not cleared
     const r = await api(`/api/admin/events/${eventId}/board/note`, {
       method: "POST", body: JSON.stringify({ team_id: teamId, note: next }),
@@ -548,7 +548,7 @@
     if (!r.ok) return fail("pbBoard", r.data.error || "Couldn't load that board.");
     ingest(r.data);
     if (!(r.data.divisions || []).length) {
-      $("pbHint").textContent = "This event has no divisions yet. Set them up on the event first — pools live inside a division.";
+      $("pbHint").textContent = "This event has no divisions yet. Set them up on the event first; pools live inside a division.";
     }
     render();
   }

@@ -251,7 +251,7 @@
         <div><label for="fDate">Date</label><input id="fDate" type="date" value="${b.date}" /></div>
         <div><label for="fStart">Start</label><input id="fStart" type="time" value="${toHM(b.start_min)}" /></div>
         <div><label for="fEnd">End</label><input id="fEnd" type="time" value="${toHM(b.end_min)}" /></div>
-        <div class="full"><label for="fPreset">Booked as (preset — checks the courts below)</label>
+        <div class="full"><label for="fPreset">Booked as (preset; checks the courts below)</label>
           <select id="fPreset"><option value="">Custom selection</option>${presets.map(p =>
             `<option value="${p.id}" ${p.id === b.preset_id ? "selected" : ""}>${esc(p.name)}</option>`).join("")}</select></div>
         <div class="full"><label>Courts &amp; rooms reserved</label>
@@ -321,7 +321,7 @@
       box.style.display = "block";
       box.className = "fc-conflicts full" + (data.hard ? "" : " warn");
       const items = (data.problems || []).flatMap(p =>
-        (p.conflicts || p.warnings || []).map(c => `${p.date}: ${c.title} (${c.operator}, ${c.time})${c.kind === "closure" ? " — closure" : ""}`));
+        (p.conflicts || p.warnings || []).map(c => `${p.date}: ${c.title} (${c.operator}, ${c.time})${c.kind === "closure" ? " · closure" : ""}`));
       box.innerHTML = `<strong>${esc(data.error)}</strong><ul>${items.map(i => `<li>${esc(i)}</li>`).join("")}</ul>` +
         (data.hard ? `<p style="margin:6px 0 0">Change the time, courts, or Court Share settings.</p>`
           : (canForce ? `<button class="btn" id="fForce" style="margin-top:8px">Book anyway (shared)</button>` : ""));
@@ -419,7 +419,7 @@
       ${reqs.map(r => `<div class="rr-row" data-id="${r.id}">
         <span class="who">${esc(r.requester_name)}</span>
         <span class="meta">${esc(r.date)} · ${esc(r.time)}${r.est_attendees ? ` · ~${r.est_attendees} people` : ""}</span>
-        <span class="meta grow">${esc(r.spaces_text || "")}${r.notes ? ` — ${esc(r.notes)}` : ""}</span>
+        <span class="meta grow">${esc(r.spaces_text || "")}${r.notes ? ` · ${esc(r.notes)}` : ""}</span>
         <select aria-label="Spaces to reserve">${presetOpts}</select>
         <button class="btn" data-act="approve">Approve</button>
         <button class="btn ghost" data-act="decline">Decline</button>

@@ -153,7 +153,7 @@
     const liveOk = e.status === "in_progress" || e.status === "completed" || (d && d <= new Date());
     const nm = e.name ? esc(e.name.trim()) : "";
     // D-55 (Gemini nicety): aria-label only when named — a nameless link's visible "Standings & scores" is already its name.
-    const liveAria = nm ? ` aria-label="${nm} — standings and scores"` : "";
+    const liveAria = nm ? ` aria-label="${nm}, standings and scores"` : "";
     return `<div class="lg-ev">
       <div class="lg-date" aria-hidden="true">
         <div class="d">${d ? d.getDate() : "&#8212;"}</div>

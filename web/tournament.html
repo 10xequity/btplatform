@@ -5,7 +5,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Tournament Ops — Boomtown Athletics</title>
+  <title>Tournament Ops · Boomtown Athletics</title>
   <script>/* Pre-paint state — collapse + theme (uiux-review §4/§6.4, v0.52.0): read the bt_nav cookie and the saved theme BEFORE the first stylesheet so the rail state AND the theme are right on frame one — no post-paint snap of either. admin-nav.js writes the cookie on rail toggle and bt_theme on theme toggle; the localStorage bt_nav fallback migrates pre-v0.51 sessions. */(function(){try{var m=document.cookie.match(/(?:^|; )bt_nav=([^;]*)/);var v=m?m[1]:((window.localStorage&&localStorage.getItem("bt_nav_collapsed")==="1")?"min":"");if(v==="min")document.documentElement.dataset.nav="min";var t=(window.localStorage&&localStorage.getItem("bt_theme"))||(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.dataset.theme=t;}catch(e){}})();</script>
   <script>try{var btTpl=localStorage.getItem("bt_template");if(btTpl)document.documentElement.dataset.template=btTpl;}catch(e){}</script>
   <link rel="stylesheet" href="assets/tokens.css?v=0.194.0" />
@@ -120,7 +120,7 @@
     <section id="teamsPanel" class="card no-print" hidden>
       <h3>Teams <span id="teamCount" class="muted"></span></h3>
       <div class="field">
-        <label for="teamPaste">Add teams — one per line</label>
+        <label for="teamPaste">Add teams: one per line</label>
         <textarea id="teamPaste" rows="3" placeholder="Sets on the Beach&#10;Block Party&#10;Net Gains"></textarea>
       </div>
       <button id="addTeamsBtn" class="btn">Add teams</button>
@@ -130,9 +130,9 @@
 
     <section id="planPanel" class="card no-print" hidden>
       <h3>Plan the day</h3>
-      <p class="muted">Equal games for everyone, never under 8. Pools aim for 6–11 teams — AA and
+      <p class="muted">Equal games for everyone, never under 8. Pools aim for 6–11 teams; AA and
         Open usually run smaller; A and BB mix at pool play and split at the bracket (set that up
-        under Divisions). These are defaults, not rules — change anything.</p>
+        under Divisions). These are defaults, not rules. Change anything.</p>
       <div class="form-row">
         <div class="field"><label for="plTeams">Teams</label><input id="plTeams" type="number" min="2" /></div>
         <div class="field"><label for="plCourts">Courts</label><input id="plCourts" type="number" min="1" /></div>

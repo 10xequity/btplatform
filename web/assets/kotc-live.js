@@ -76,7 +76,7 @@
             // Nothing animates on the first paint. A page that arrives mid-animation looks broken.
             rowHtml(r, !first && was.get(r.contact_id) !== r.place)).join("")}</ul>`
         : `<p class="kl-empty">No scores yet. This fills in as the nets finish their games.</p>`}
-      <p class="kl-foot">Updates on its own — no need to refresh.</p>
+      <p class="kl-foot">Updates on its own. No need to refresh.</p>
     `);
 
     shown = rows.map((r) => ({ contact_id: r.contact_id, place: r.place }));
@@ -102,7 +102,7 @@
 
   document.addEventListener("DOMContentLoaded", () => {
     if (!sessionId) {
-      shell(`<p class="kl-empty">This page needs a session link — the one that ends in <b>?s=</b> and a number. Ask whoever is running the night.</p>`);
+      shell(`<p class="kl-empty">This page needs the session link that ends in <b>?s=</b> and a number. Ask whoever is running the night.</p>`);
       return;
     }
     tick();

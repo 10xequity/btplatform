@@ -39,7 +39,7 @@
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
   if (params.get("done")) {
-    card.innerHTML = "<h1>Payment received 🏐</h1><p>You're all set — check your email for confirmation from Square. See you on the court!</p>";
+    card.innerHTML = "<h1>Payment received 🏐</h1><p>You're all set. Check your email for confirmation from Square. See you on the court!</p>";
     return;
   }
   if (!eventId) {
@@ -79,7 +79,7 @@
       const note = document.createElement("p");
       note.className = "msg ok";
       note.setAttribute("role", "status");
-      note.textContent = "Waitlist claim link detected — this spot is held for the email your offer was sent to. Register below before the link expires.";
+      note.textContent = "Waitlist claim link detected: this spot is held for the email your offer was sent to. Register below before the link expires.";
       card.prepend(note);
     }
   })();
@@ -89,7 +89,7 @@
     const cap = ev.capacity ? ` (${ev.capacity} team cap)` : "";
     card.innerHTML = `
       <h1>${esc(ev.name)}</h1>
-      <p><strong>This event is full${cap}.</strong> Join the waitlist and we'll email you the moment a spot opens — offers come with a claim link that holds the spot for you.</p>
+      <p><strong>This event is full${cap}.</strong> Join the waitlist and we'll email you the moment a spot opens; offers come with a claim link that holds the spot for you.</p>
       <div class="field"><label for="wlName">Captain name</label><input id="wlName" autocomplete="name" /></div>
       <div class="field"><label for="wlEmail">Email</label><input id="wlEmail" type="email" autocomplete="email" /></div>
       <div class="field"><label for="wlTeam">Team name (optional)</label><input id="wlTeam" /></div>
@@ -169,11 +169,11 @@
         <label for="dob">Your date of birth *</label>
         <input id="dob" type="date" autocomplete="bday" required
                aria-describedby="dobHelp" max="${new Date().toISOString().slice(0, 10)}" />
-        <p class="help-text" id="dobHelp">Under 18? A parent or guardian confirms their own account first — we'll give you a link to send them.</p>
+        <p class="help-text" id="dobHelp">Under 18? A parent or guardian confirms their own account first; we'll give you a link to send them.</p>
       </div>
       ${customFields.map(fieldHtml).join("")}
       <h2 style="font-size:1rem">Waiver <span style="opacity:.7;font-weight:400">(${esc(waiver.label)})</span> *</h2>
-      <div class="waiver-box" id="waiverBox" tabindex="0" role="region" aria-label="Waiver text — scroll to read in full">${esc(waiver.body)}</div>
+      <div class="waiver-box" id="waiverBox" tabindex="0" role="region" aria-label="Waiver text, scroll to read in full">${esc(waiver.body)}</div>
       <div class="field check"><input type="checkbox" id="waiverAccept" /><label for="waiverAccept">I have read and agree to the waiver *</label></div>
       <div class="field"><label for="waiverSig">Type your full legal name to sign *</label><input id="waiverSig" autocomplete="name" /></div>
       ${ev.price_cents ? `

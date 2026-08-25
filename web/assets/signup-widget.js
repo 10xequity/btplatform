@@ -18,7 +18,7 @@
   wrap.innerHTML =
     '<form novalidate style="display:flex;flex-wrap:wrap;gap:8px">' +
     '<label style="flex:100%;font-weight:700;font-size:15px">Get event announcements' +
-    '<span style="display:block;font-weight:400;font-size:13px;opacity:.75">Tournaments, leagues, and open play — no spam, unsubscribe anytime.</span></label>' +
+    '<span style="display:block;font-weight:400;font-size:13px;opacity:.75">Tournaments, leagues, and open play. No spam, unsubscribe anytime.</span></label>' +
     '<input type="email" name="email" required placeholder="you@email.com" aria-label="Email address"' +
     ' style="flex:1;min-width:180px;padding:11px 12px;font:inherit;border:1px solid #999;border-radius:8px;min-height:44px;box-sizing:border-box">' +
     '<input type="text" name="company" tabindex="-1" autocomplete="off" aria-hidden="true"' +
@@ -43,9 +43,9 @@
     }).then(function (r) { return r.json().catch(function () { return {}; }); })
       .then(function (d) {
         if (d.ok) { form.email.value = ""; msg.textContent = d.message || "You're on the list!"; }
-        else { msg.textContent = d.error || "Something went wrong — try again."; }
+        else { msg.textContent = d.error || "Something went wrong. Try again."; }
       })
-      .catch(function () { msg.textContent = "Can't reach the signup service — try again in a minute."; })
+      .catch(function () { msg.textContent = "Can't reach the signup service. Try again in a minute."; })
       .finally(function () { btn.disabled = false; btn.style.opacity = "1"; });
   });
 })();

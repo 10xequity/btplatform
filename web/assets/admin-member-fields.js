@@ -86,7 +86,7 @@
     const f = fields.find((x) => x.id === id);
     if (!f) return;
     if (!window.confirm(
-      `Delete "${f.label}"?\n\nIf you only want it off forms and profiles, use Hide instead — that keeps every answer and can be undone.`
+      `Delete "${f.label}"?\n\nIf you only want it off forms and profiles, use Hide instead; that keeps every answer and can be undone.`
     )) return;
     const r = await api(`/api/admin/member-fields/${id}`, { method: "DELETE" });
     if (!r.ok) return fail("fBody", r.data.error || "Couldn't delete that field.");

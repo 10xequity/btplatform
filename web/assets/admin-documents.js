@@ -57,13 +57,13 @@
       g.innerHTML = `<div><b>${esc(r.data.org.name)} is ready to publish.</b>
         <p>Every token that has no fallback resolves.${
           Number(r.data.org.legal_entity_verified) === 1 ? ""
-          : ` The legal entity name has not been confirmed against the Secretary of State — publishing still works, but you'll be warned. <a href="admin-org-settings.html">Confirm it</a>.`
+          : ` The legal entity name has not been confirmed against the Secretary of State; publishing still works, but you'll be warned. <a href="admin-org-settings.html">Confirm it</a>.`
         }</p></div>`;
     } else {
       g.className = "dc-gate";
       g.innerHTML = `<div><b>Publishing will refuse until the organization profile is filled in.</b>
         <p>Missing: ${missing.map((x) => esc(x.label)).join(", ")}.
-        These have no fallback — a default would name the wrong party.
+        These have no fallback; a default would name the wrong party.
         <a href="admin-org-settings.html">Open organization settings</a>.</p></div>`;
     }
   }
@@ -78,8 +78,8 @@
     const orgHtml = (r.data.tokens || []).map((t) => btn(t.name, t.no_fallback, t.sample)).join("");
     const signerHtml = SIGNER_TOKENS.map((n) => btn(n, false, null, true)).join("");
     $("palette").innerHTML =
-      `<div class="dc-palgroup"><div class="t">Organization — filled in when you publish</div>${orgHtml}</div>
-       <div class="dc-palgroup"><div class="t">Signer — filled in when someone signs</div>${signerHtml}</div>`;
+      `<div class="dc-palgroup"><div class="t">Organization: filled in when you publish</div>${orgHtml}</div>
+       <div class="dc-palgroup"><div class="t">Signer: filled in when someone signs</div>${signerHtml}</div>`;
 
     $("palette").addEventListener("click", (e) => {
       const b = e.target.closest("button[data-tok]");
@@ -90,7 +90,7 @@
   function btn(name, noFallback, sample, signer) {
     const help = TOKEN_HELP[name] || "";
     const shown = signer ? "filled in at signing"
-      : (sample && sample.length ? (sample.length > 34 ? sample.slice(0, 34) + "…" : sample) : "— empty —");
+      : (sample && sample.length ? (sample.length > 34 ? sample.slice(0, 34) + "…" : sample) : "(empty)");
     return `<button class="dc-tok${noFallback ? " nofb" : ""}" type="button" data-tok="${esc(name)}">
       {{${esc(name)}}}<span class="d">${esc(help)}${help ? " · " : ""}${esc(shown)}</span></button>`;
   }
@@ -257,7 +257,7 @@
         <h2 style="margin-top:0;font-size:22px;">Publish with a literal name?</h2>
         <p style="color:var(--text-dim, var(--text-muted));font-size:15px;line-height:1.5;max-width:60ch;">
           The text contains ${names.map((n) => `<b>${esc(n)}</b>`).join(", ")} written out in full.
-          Published to another organization, this document would name the wrong party — the release
+          Published to another organization, this document would name the wrong party; the release
           would run to the company in the text, not the one collecting the signature.
           Use <code>{{ENTITY}}</code> instead unless you mean it.
         </p>
@@ -287,7 +287,7 @@
     const back = openModal(`
       <h2 style="margin-top:0;font-size:22px;">Who must sign this?</h2>
       <p style="color:var(--text-dim, var(--text-muted));font-size:15px;">
-        ${esc(currentDoc.name)} — checking who this affects…</p>
+        ${esc(currentDoc.name)}: checking who this affects…</p>
       <div id="asBody"></div>`);
 
     const [fwd, retro] = await Promise.all([

@@ -32,7 +32,7 @@
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
   if (!API || API.includes("PENDING")) {
-    app.innerHTML = "<div class='card'><h1>One moment</h1><p>Settings still loading — pull down to refresh.</p></div>";
+    app.innerHTML = "<div class='card'><h1>One moment</h1><p>Settings still loading. Pull down to refresh.</p></div>";
     return;
   }
   /* theme: the pre-paint snippet applies it, site-nav.js owns the toggle. No per-page copy — a
@@ -53,7 +53,7 @@
       const resp = await fetch(`${API}/api/kotc/${encodeURIComponent(token)}`, Object.assign({}, opts, { headers }));
       return { ok: resp.ok, data: await resp.json().catch(() => ({})) };
     } catch {
-      return { ok: false, data: { error: "Can't reach the server — check your signal and try again." } };
+      return { ok: false, data: { error: "Can't reach the server. Check your signal and try again." } };
     }
   }
 
@@ -178,7 +178,7 @@
         </div>
       </div>
       <div class="kotc-verdict"><button class="btn primary kotc-tap" id="kotcSave" disabled>Save the net</button></div>
-      <p class="kotc-round kotc-note" id="kotcHint">Fill in what you know — you can do the whole net.</p>`;
+      <p class="kotc-round kotc-note" id="kotcHint">Fill in what you know; you can do the whole net.</p>`;
   }
 
   const checkedLine = (v) =>

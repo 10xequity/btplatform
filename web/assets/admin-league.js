@@ -84,7 +84,7 @@
         </select>
         <button class="btn ghost" type="button" data-roster="${t.id}" aria-label="Open the roster for ${esc(t.name)}">Roster</button>
         <button class="btn ghost" type="button" data-move="${t.id}" data-name="${esc(t.name)}" aria-label="Move ${esc(t.name)} to another league">Move</button>
-      </div>`).join("") || `<p class="help-text">No teams yet — teams land here from registrations or Tournament Ops.</p>`;
+      </div>`).join("") || `<p class="help-text">No teams yet; teams land here from registrations or Tournament Ops.</p>`;
     // W-A (v0.92.0): each team opens the roster its registration created — names editable there.
     $("levels").querySelectorAll("[data-roster]").forEach(b => b.addEventListener("click", () =>
       window.BT_ROSTER && window.BT_ROSTER.open(Number(b.dataset.roster))));
@@ -99,10 +99,10 @@
     const opts = [...$("leagueSelect").options]
       .filter(o => o.value && Number(o.value) !== leagueId)
       .map(o => `<option value="${o.value}">${esc(o.textContent)}</option>`).join("");
-    if (!opts) { say("No other league to move to — create one first.", true); return; }
+    if (!opts) { say("No other league to move to. Create one first.", true); return; }
     const back = openModal(`
       <h2>Move ${esc(name)}</h2>
-      <p class="help-text">Registrations stay on the original event — this moves the team's
+      <p class="help-text">Registrations stay on the original event; this moves the team's
         scheduling only. A team with games on this schedule can't move until those matchups
         are cleared.</p>
       <div class="field"><label>To league</label><select id="mvTo">${opts}</select></div>
@@ -259,7 +259,7 @@
      empty score cells — a schedule that hid its unplayed games would be a results sheet. */
   function csvWeeks() {
     const weeks = (data && data.weeks) || [];
-    if (!weeks.length) { say("No weeks yet — generate week 1 first.", true); return; }
+    if (!weeks.length) { say("No weeks yet. Generate week 1 first.", true); return; }
     const rows = [csvRow(["Week", "Game", "Court", "Team A", "Team B", "Score A", "Score B", "Forfeit"])];
     for (const w of weeks) {
       for (const m of w.matches) {
@@ -277,22 +277,22 @@
      composer, with this league's registrants already the target. Nothing is sent from here. */
   function emailWeeks() {
     const weeks = (data && data.weeks) || [];
-    if (!weeks.length) { say("No weeks yet — generate week 1 first.", true); return; }
+    if (!weeks.length) { say("No weeks yet. Generate week 1 first.", true); return; }
     const body = [data.event.name, "", ...weeks.flatMap(w => [...weekLines(w), ""])].join("\n");
-    emailDocument(leagueId, `${data.event.name} — schedule`, body);
+    emailDocument(leagueId, `${data.event.name} · schedule`, body);
   }
 
   async function copyWeek(round, btn) {
     const w = (data.weeks || []).find(x => x.round === round);
     if (!w) return;
-    const lines = [`${data.event.name} — Week ${round}`, ...weekLines(w).slice(1)];
+    const lines = [`${data.event.name} · Week ${round}`, ...weekLines(w).slice(1)];
     try {
       await navigator.clipboard.writeText(lines.join("\n"));
       const was = btn.textContent;
       btn.textContent = "Copied ✓";
       setTimeout(() => { btn.textContent = was; }, 1400);
     } catch {
-      say("Couldn't reach the clipboard — print the schedule instead.", true);
+      say("Couldn't reach the clipboard. Print the schedule instead.", true);
     }
   }
 
@@ -313,7 +313,7 @@
           <input id="diffCustom" type="number" min="1" max="${m.points_to}" placeholder="More" style="width:84px" aria-label="Point difference" />
         </div>
       </div>
-      <p class="help-text" style="margin:12px 0 4px">Or record a forfeit — pick the team that didn't play.
+      <p class="help-text" style="margin:12px 0 4px">Or record a forfeit: pick the team that didn't play.
         It shows as ${m.points_to}–0, but only moves the standings differential by one point.</p>
       <div class="diff-btns">
         <button class="btn ghost" data-ff="a">${esc(m.team_a)} forfeits</button>
@@ -331,7 +331,7 @@
     back.querySelectorAll("[data-ff]").forEach(b => b.onclick = async () => {
       const r = await api(`/api/matches/${matchId}/score`, { method: "POST", body: JSON.stringify({ forfeit_by: b.dataset.ff }) });
       closeModal();
-      say(r.ok ? `Forfeit recorded — ${m.points_to}–0, one point of differential` : r.data.error, !r.ok);
+      say(r.ok ? `Forfeit recorded: ${m.points_to}–0, one point of differential` : r.data.error, !r.ok);
       if (r.ok) load();
     });
     const send = async diff => {
@@ -360,14 +360,14 @@
     const r = await api(`/api/leagues/${leagueId}/week`, { method: "POST", body: JSON.stringify(body) });
     $("genWeek").disabled = false;
     if (!r.ok) { say(r.data.error, true); return; }
-    let note = `Week ${r.data.round} created — ${r.data.matches} game${r.data.matches === 1 ? "" : "s"}`;
+    let note = `Week ${r.data.round} created: ${r.data.matches} game${r.data.matches === 1 ? "" : "s"}`;
     if ((r.data.byes || []).length) note += ` · sitting: ${[...new Set(r.data.byes.map(b => b.name))].join(", ")}`;
     say(note, false);
     if ((r.data.warnings || []).length) {
       $("status").insertAdjacentHTML("beforeend",
         `<p class="warn-note">${r.data.warnings.map(w =>
           w.type === "rematch" ? `${esc(w.teams[0])} vs ${esc(w.teams[1])} is meeting ${w.count === 2 ? "again" : "for time " + w.count}` :
-          `${esc(w.teams[0])} has no opponent within 2 levels — adjust levels or add a team`).join(" · ")}</p>`);
+          `${esc(w.teams[0])} has no opponent within 2 levels; adjust levels or add a team`).join(" · ")}</p>`);
     }
     load();
   }

@@ -44,7 +44,7 @@
       return;
     }
     box.innerHTML = `
-      <h2>Live now — ${esc(displayLabel(cur))}</h2>
+      <h2>Live now: ${esc(displayLabel(cur))}</h2>
       <div class="wv-meta">
         Published ${esc(fmtDT(cur.published_at))} · ${Number(cur.signature_count).toLocaleString()} signature${Number(cur.signature_count) === 1 ? "" : "s"} pinned · ${Number(cur.body_chars).toLocaleString()} characters
       </div>
@@ -115,7 +115,7 @@
       `<p style="margin:0 0 8px">Publishing <strong>${esc(f.label)}</strong>${cur ? ` replaces <strong>${esc(displayLabel(cur))}</strong> as the live waiver` : " as the first live waiver"}.</p>` +
       (f.material === 1
         ? `<p style="margin:0"><strong>${ACTIVE_SIGNERS.toLocaleString()} member${ACTIVE_SIGNERS === 1 ? "" : "s"}</strong> with a current waiver will be prompted to sign again. Nobody's existing signature is altered.</p>`
-        : `<p style="margin:0">Marked as a <strong>minor</strong> edit — nobody will be asked to re-sign.</p>`) +
+        : `<p style="margin:0">Marked as a <strong>minor</strong> edit; nobody will be asked to re-sign.</p>`) +
       `<p style="margin:8px 0 0;color:var(--text-muted);font-size:13px">Published text cannot be edited afterwards. Read it once more:</p>`;
     $("wvConfirmBody").textContent = f.body;
     $("wvConfirmDlg").showModal();
@@ -144,7 +144,7 @@
     const el = $("wvCount");
     el.textContent = `${n.toLocaleString()} characters`;
     el.className = "wv-count" + (n > 0 && n < BODY_MIN ? " warn" : "");
-    if (n > 0 && n < BODY_MIN) el.textContent += ` — too short, paste the full document`;
+    if (n > 0 && n < BODY_MIN) el.textContent += `: too short, paste the full document`;
   }
 
   /* ---------------- wiring ---------------- */

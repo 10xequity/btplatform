@@ -123,7 +123,8 @@ test("printing the day sheet is a body MODE with cleanup — the pool sheet's pr
 });
 
 test("the day-sheet email variant rides the ONE hand-off, with its own document name", () => {
-  assert.match(JS, /emailDocument\(currentEvent\.id, `\$\{currentEvent\.name\} — day sheet`/,
+  // RF-20 (v0.195.0): the document-name separator is · now — em dashes left member-visible copy.
+  assert.match(JS, /emailDocument\(currentEvent\.id, `\$\{currentEvent\.name\} · day sheet`/,
     "the day sheet lost its email variant, or grew a second send stack");
 });
 

@@ -6,7 +6,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Check in — Boomtown Athletics</title>
+  <title>Check in · Boomtown Athletics</title>
   <script>try{var btTpl=localStorage.getItem("bt_template");if(btTpl)document.documentElement.dataset.template=btTpl;}catch(e){}</script>
   <script>/* RF-15 pre-paint (v0.194.0): the saved theme + color template, applied before the first stylesheet — without this the page pins dark and any picker choice reverts on reload. */(function(){try{var t=(window.localStorage&&localStorage.getItem("bt_theme"))||(matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.dataset.theme=t;var p=localStorage.getItem("bt_template");if(p)document.documentElement.dataset.template=p;}catch(e){}})();</script>
   <link rel="stylesheet" href="assets/tokens.css?v=0.194.0" />
@@ -64,13 +64,13 @@
         body: JSON.stringify({ email: email })
       }).then(function (r) { return r.json().then(function (d) {
         btn.disabled = false; btn.textContent = "Check me in";
-        if (!r.ok) { msg.className = "msg err"; msg.textContent = d.error || "That didn't work — try again."; return; }
+        if (!r.ok) { msg.className = "msg err"; msg.textContent = d.error || "That didn't work. Try again."; return; }
         card.innerHTML = "<div class='big-ok'>" + (d.unmatched ? "🙋" : "✅") + "</div>" +
           "<h1>" + (d.unmatched ? "Almost!" : "You're in!") + "</h1>" +
           "<p class='sub'>" + esc(d.message) + "</p>";
       }); }).catch(function () {
         btn.disabled = false; btn.textContent = "Check me in";
-        msg.className = "msg err"; msg.textContent = "No connection — show the desk this screen.";
+        msg.className = "msg err"; msg.textContent = "No connection. Show the desk this screen.";
       });
     }
   })();

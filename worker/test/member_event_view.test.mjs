@@ -106,7 +106,9 @@ test("NC-3: dropping leagues.js's live link fails the wiring check", () => {
 const nameAriaLabel = (src) => {
   const t = blankComments(src);
   return /const nm = e\.name \? esc\(e\.name\.trim\(\)\)/.test(t) &&
-    /const liveAria = nm \? ` aria-label="\$\{nm\} —/.test(t) &&
+    /* RF-20 (v0.195.0): the separator inside the label is a comma now — em dashes left copy,
+       and a comma reads better to a screen reader anyway. The conditional shape is unchanged. */
+    /const liveAria = nm \? ` aria-label="\$\{nm\},/.test(t) &&
     /\$\{liveAria\}>/.test(t) &&               // the whole attribute is interpolated before the >
     !/aria-label="\$\{liveAria\}"/.test(t);    // not the old always-on form
 };
@@ -124,10 +126,11 @@ test("NC-4: dropping the name from the aria-label construction fails the check",
 });
 
 test("NC-5: a nameless event does NOT emit a dangling separator (Gemini 2026-08-24)", () => {
-  // The fallback must be the kind alone, never "${nm} — kind" with an empty nm. Assert both files
-  // carry the `nm ?` conditional so an empty name cannot produce " — standings and scores".
+  // The fallback must be the kind alone, never "${nm}, kind" with an empty nm. Assert both files
+  // carry the `nm ?` conditional so an empty name cannot produce ", standings and scores".
+  // (RF-20 moved the separator from an em dash to a comma; the rule is separator-agnostic.)
   for (const [name, src] of [["schedule.js", SCHED], ["leagues.js", LG]]) {
-    assert.match(blankComments(src), /nm \? ` aria-label="\$\{nm\} —/,
-      `${name}: the name prefix is not conditional — a nameless event renders a dangling " — " (or a redundant kind-only label, D-55)`);
+    assert.match(blankComments(src), /nm \? ` aria-label="\$\{nm\},/,
+      `${name}: the name prefix is not conditional — a nameless event renders a dangling separator (or a redundant kind-only label, D-55)`);
   }
 });

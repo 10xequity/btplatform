@@ -133,7 +133,7 @@
 
   function leaderboardHtml() {
     const rows = (data.leaderboard || []);
-    if (!rows.length) return `<p class="muted">Nothing to rank yet — the first scores will fill this in.</p>`;
+    if (!rows.length) return `<p class="muted">Nothing to rank yet; the first scores will fill this in.</p>`;
     return `<table><thead><tr>
         <th>#</th><th>Player</th><th class="num">Pts</th><th class="num">Diff</th><th class="num">W–L</th><th class="num">Games</th>
       </tr></thead><tbody>${rows.map((r) => `<tr>
@@ -262,7 +262,7 @@
     if (e.key === "Escape" && carrying != null) {
       carrying = null;
       document.querySelectorAll(".carrying").forEach((x) => x.classList.remove("carrying"));
-      $("kbHint").textContent = "Cancelled — nobody moved.";
+      $("kbHint").textContent = "Cancelled. Nobody moved.";
       return;
     }
 
@@ -356,7 +356,7 @@
     if (!r.ok) return fail("kbNets", "Couldn't load your sessions.");
     const list = r.data.sessions || [];
     $("kbSession").innerHTML = list.length
-      ? list.map((s) => `<option value="${s.id}">${esc(s.name)} — ${esc(s.event)} (${s.players} player${s.players === 1 ? "" : "s"})</option>`).join("")
+      ? list.map((s) => `<option value="${s.id}">${esc(s.name)} · ${esc(s.event)} (${s.players} player${s.players === 1 ? "" : "s"})</option>`).join("")
       : `<option value="">No sessions yet</option>`;
     if (!list.length) {
       $("kbNets").innerHTML = `<p class="muted">No King of the Court session has been set up yet. <a href="admin-events.html">Open your event</a>, create the session and entry list from its King of the Court card, then come back here to seat the nets.</p>`;

@@ -11,7 +11,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Calendar feeds — Boomtown Athletics</title>
+  <title>Calendar feeds · Boomtown Athletics</title>
   <script>/* Pre-paint state — collapse + theme (uiux-review §4/§6.4, v0.52.0): read the bt_nav cookie and the saved theme BEFORE the first stylesheet so the rail state AND the theme are right on frame one — no post-paint snap of either. admin-nav.js writes the cookie on rail toggle and bt_theme on theme toggle; the localStorage bt_nav fallback migrates pre-v0.51 sessions. */(function(){try{var m=document.cookie.match(/(?:^|; )bt_nav=([^;]*)/);var v=m?m[1]:((window.localStorage&&localStorage.getItem("bt_nav_collapsed")==="1")?"min":"");if(v==="min")document.documentElement.dataset.nav="min";var t=(window.localStorage&&localStorage.getItem("bt_theme"))||(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.dataset.theme=t;}catch(e){}})();</script>
   <script>try{var btTpl=localStorage.getItem("bt_template");if(btTpl)document.documentElement.dataset.template=btTpl;}catch(e){}</script>
   <link rel="stylesheet" href="assets/tokens.css?v=0.194.0" />
@@ -130,7 +130,7 @@
     <p class="note" style="max-width:72ch;margin:0 0 18px">
       A feed URL is a live subscription: whatever you publish shows up in Google Calendar, Apple
       Calendar or Outlook within the hour, and cancelled events turn into cancellations rather
-      than vanishing. The link is a password — anyone holding it sees the calendar, so treat it
+      than vanishing. The link is a password: anyone holding it sees the calendar, so treat it
       like one and create a new one if it leaks.
     </p>
 
@@ -148,7 +148,7 @@
         </div>
 
         <div class="reveal" id="pubReveal" hidden>
-          <b>Copy this now — it is shown once and cannot be recovered.</b>
+          <b>Copy this now: it is shown once and cannot be recovered.</b>
           <div class="urlbox">
             <input type="text" id="pubUrl" readonly aria-label="Public feed URL" />
             <button class="btn" id="pubCopy" type="button" style="flex:0 0 auto">Copy</button>
@@ -167,7 +167,7 @@
         <h2>Member feeds</h2>
         <p class="note" style="margin:0 0 6px">
           Each member gets their own link covering only what they are rostered on. They create it
-          themselves from their profile — staff cannot retrieve someone else's, by design.
+          themselves from their profile; staff cannot retrieve someone else's, by design.
         </p>
         <div class="status"><span class="dot" id="mineDot"></span><span id="mineState">Checking…</span></div>
         <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
@@ -175,7 +175,7 @@
           <button class="btn danger" id="mineRevoke" type="button" hidden>Replace mine</button>
         </div>
         <div class="reveal" id="mineReveal" hidden>
-          <b>Copy this now — it is shown once and cannot be recovered.</b>
+          <b>Copy this now: it is shown once and cannot be recovered.</b>
           <div class="urlbox">
             <input type="text" id="mineUrl" readonly aria-label="My feed URL" />
             <button class="btn" id="mineCopy" type="button" style="flex:0 0 auto">Copy</button>
@@ -188,17 +188,17 @@
       <div class="card">
         <h2>Time zone</h2>
         <p class="note" style="margin:0">
-          Event times are stored as wall-clock — "6:00 PM" means 6:00 PM at the facility. This tells
+          Event times are stored as wall-clock: "6:00 PM" means 6:00 PM at the facility. This tells
           calendar clients which wall clock that is. Get it wrong and every subscribed event lands
           hours off.
         </p>
         <label class="fld" for="tz">Facility time zone</label>
         <select id="tz">
-          <option value="America/Denver">Mountain — Denver / Aurora (current)</option>
-          <option value="America/Phoenix">Mountain, no DST — Phoenix</option>
-          <option value="America/Los_Angeles">Pacific — Los Angeles</option>
-          <option value="America/Chicago">Central — Chicago</option>
-          <option value="America/New_York">Eastern — New York</option>
+          <option value="America/Denver">Mountain · Denver / Aurora (current)</option>
+          <option value="America/Phoenix">Mountain, no DST · Phoenix</option>
+          <option value="America/Los_Angeles">Pacific · Los Angeles</option>
+          <option value="America/Chicago">Central · Chicago</option>
+          <option value="America/New_York">Eastern · New York</option>
         </select>
         <div style="margin-top:14px"><button class="btn" id="tzSave" type="button">Save time zone</button></div>
         <p class="msg" id="tzMsg" role="alert"></p>
@@ -240,7 +240,7 @@
           $(outId).textContent = "Copied. Paste it into your calendar app now.";
         } catch (e) {
           $(urlId).select();
-          $(outId).textContent = "Press Ctrl+C (or Cmd+C) to copy — the field is selected.";
+          $(outId).textContent = "Press Ctrl+C (or Cmd+C) to copy. The field is selected.";
         }
       };
     }

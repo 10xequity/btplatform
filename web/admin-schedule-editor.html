@@ -9,7 +9,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Schedule editor — Boomtown Athletics</title>
+  <title>Schedule editor · Boomtown Athletics</title>
   <script>/* Pre-paint state — collapse + theme (uiux-review §4/§6.4, v0.52.0): read the bt_nav cookie and the saved theme BEFORE the first stylesheet so the rail state AND the theme are right on frame one — no post-paint snap of either. admin-nav.js writes the cookie on rail toggle and bt_theme on theme toggle; the localStorage bt_nav fallback migrates pre-v0.51 sessions. */(function(){try{var m=document.cookie.match(/(?:^|; )bt_nav=([^;]*)/);var v=m?m[1]:((window.localStorage&&localStorage.getItem("bt_nav_collapsed")==="1")?"min":"");if(v==="min")document.documentElement.dataset.nav="min";var t=(window.localStorage&&localStorage.getItem("bt_theme"))||(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.dataset.theme=t;}catch(e){}})();</script>
   <script>try{var btTpl=localStorage.getItem("bt_template");if(btTpl)document.documentElement.dataset.template=btTpl;}catch(e){}</script>
   <link rel="stylesheet" href="assets/tokens.css?v=0.194.0" />
@@ -163,7 +163,7 @@
       <div class="mf-head">
         <div>
           <h1>Schedule editor</h1>
-          <p class="muted">Drag a match to another round or court. Drop it on an occupied slot and the two swap. Nothing is blocked — the fairness panel just tells you what the move cost.</p>
+          <p class="muted">Drag a match to another round or court. Drop it on an occupied slot and the two swap. Nothing is blocked; the fairness panel just tells you what the move cost.</p>
         </div>
         <div class="mf-row" style="margin:0">
           <label class="mf-inline">Event
@@ -192,7 +192,7 @@
 
       <div class="ed-layout">
         <section class="ed-gridwrap" aria-label="Schedule grid">
-          <p class="mf-note" id="sHint">Tip: click a match, then press an arrow key to move it. Enter picks it up and drops it — no mouse needed.</p>
+          <p class="mf-note" id="sHint">Tip: click a match, then press an arrow key to move it. Enter picks it up and drops it. No mouse needed.</p>
           <div id="sGrid" class="ed-grid-scroll"></div>
           <p class="empty" id="sEmpty" hidden>This event has no schedule yet. Generate one from the tournament page first.</p>
         </section>

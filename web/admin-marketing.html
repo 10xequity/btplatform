@@ -6,7 +6,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Marketing &amp; Email — Boomtown Athletics</title>
+  <title>Marketing &amp; Email · Boomtown Athletics</title>
   <script>/* Pre-paint state — collapse + theme (uiux-review §4/§6.4, v0.52.0): read the bt_nav cookie and the saved theme BEFORE the first stylesheet so the rail state AND the theme are right on frame one — no post-paint snap of either. admin-nav.js writes the cookie on rail toggle and bt_theme on theme toggle; the localStorage bt_nav fallback migrates pre-v0.51 sessions. */(function(){try{var m=document.cookie.match(/(?:^|; )bt_nav=([^;]*)/);var v=m?m[1]:((window.localStorage&&localStorage.getItem("bt_nav_collapsed")==="1")?"min":"");if(v==="min")document.documentElement.dataset.nav="min";var t=(window.localStorage&&localStorage.getItem("bt_theme"))||(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.dataset.theme=t;}catch(e){}})();</script>
   <script>try{var btTpl=localStorage.getItem("bt_template");if(btTpl)document.documentElement.dataset.template=btTpl;}catch(e){}</script>
   <link rel="stylesheet" href="assets/tokens.css?v=0.194.0" />
@@ -124,14 +124,14 @@
     <div class="mkt-grid">
       <section class="mkt-card" aria-label="Segments">
         <h2>Segments</h2>
-        <p class="help-text" style="margin:0 0 8px">Who gets it. Email leaves out the unsubscribed; texts only ever go to people who opted in — no exceptions.</p>
+        <p class="help-text" style="margin:0 0 8px">Who gets it. Email leaves out the unsubscribed; texts only ever go to people who opted in, no exceptions.</p>
         <button class="btn" id="newSegBtn">New segment</button>
         <div id="segList" style="margin-top:8px"><p class="help-text">Loading…</p></div>
       </section>
 
       <section class="mkt-card" aria-label="Campaigns">
         <h2>Campaigns</h2>
-        <p class="help-text" style="margin:0 0 8px">What you send — email or text. Drafts are editable; sent campaigns are a permanent record.</p>
+        <p class="help-text" style="margin:0 0 8px">What you send: email or text. Drafts are editable; sent campaigns are a permanent record.</p>
         <button class="btn" id="newCampBtn">New campaign</button>
         <div id="campList" style="margin-top:8px"><p class="help-text">Loading…</p></div>
       </section>
@@ -139,7 +139,7 @@
       <section class="mkt-card" aria-label="Compliance settings">
         <h2>Settings</h2>
         <div class="mkt-form">
-          <label for="mailAddr">Physical mailing address (required by email law — sending is blocked without it)</label>
+          <label for="mailAddr">Physical mailing address (required by email law; sending is blocked without it)</label>
           <input id="mailAddr" type="text" placeholder="Boomtown Athletics, [STREET ADDRESS], Aurora, CO [ZIP]" />
           <div class="mkt-actions"><button class="btn" id="saveAddrBtn">Save address</button><span id="addrMsg" class="mkt-hint" role="status"></span></div>
         </div>

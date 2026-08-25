@@ -115,7 +115,7 @@
     if (!configured) { $("sResult").className = "sms-result err"; $("sResult").textContent = "Texting isn't switched on yet."; return; }
     armed = true;
     $("sConfirm").hidden = false;
-    $("sSend").textContent = "Wait —";
+    $("sSend").textContent = "Wait…";
     $("sResult").className = "sms-result";
     $("sResult").textContent = "Send to everyone in the reach line?";
   });

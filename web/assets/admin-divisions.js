@@ -107,8 +107,8 @@
     const { clash, claimed } = overlaps();
     const backwards = rows.filter((d) => d.court_from && d.court_to && Number(d.court_to) < Number(d.court_from));
     const problems = [
-      ...clash.map((c) => `Two divisions are given ${c} — give one of them a different court.`),
-      ...backwards.map((d) => `${d.name || "A division"} has its last court before its first — swap the two numbers.`),
+      ...clash.map((c) => `Two divisions are given ${c}; give one of them a different court.`),
+      ...backwards.map((d) => `${d.name || "A division"} has its last court before its first; swap the two numbers.`),
       ...(rows.some((d) => !String(d.name || "").trim()) ? ["Every division needs a name."] : []),
     ];
     $("dvWarn").innerHTML = problems.length
@@ -118,7 +118,7 @@
     $("dvWarn").hidden = !problems.length;
     $("dvCourts").textContent = courtCount
       ? `${claimed} of ${courtCount} courts assigned`
-      : `${claimed} courts assigned — the event has no court count set yet`;
+      : `${claimed} courts assigned; the event has no court count set yet`;
     $("dvSave").disabled = !dirty || problems.length > 0;
     $("dvState").textContent = dirty
       ? (problems.length ? "Save is off until the list above is done" : "Unsaved changes")
@@ -244,7 +244,7 @@
     const ev = await api(`/api/events/${eventId}`);
     courtCount = (ev.ok && ev.data.event && ev.data.event.court_count) || 0;
     $("dvUnassigned").textContent = r.data.unassigned
-      ? `${r.data.unassigned} team${r.data.unassigned === 1 ? "" : "s"} not in a division yet — place them on the Pool Board.`
+      ? `${r.data.unassigned} team${r.data.unassigned === 1 ? "" : "s"} not in a division yet; place them on the Pool Board.`
       : "";
     renderDivisions();
   }

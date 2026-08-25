@@ -64,7 +64,7 @@
 
   function monthBars() {
     const rows = (report.per_month || []).filter(m => m.month !== "undated").slice(-12);
-    if (!rows.length) { $("byMonth").innerHTML = `<p class="help-text">No revenue yet — it shows up here as payments land.</p>`; return; }
+    if (!rows.length) { $("byMonth").innerHTML = `<p class="help-text">No revenue yet; it shows up here as payments land.</p>`; return; }
     const max = Math.max(...rows.map(r => r.total_cents), 1);
     const W = 640, H = 170, padB = 26, padT = 20, step = W / rows.length, bw = Math.min(56, step - 10);
     const bars = rows.map((r, i) => {

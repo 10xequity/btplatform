@@ -369,7 +369,7 @@
     return (opt && opt.textContent) || "schedule";
   }
   function csvSchedule() {
-    if (!data || !data.matches.length) { window.alert("Nothing to export yet — generate a schedule first."); return; }
+    if (!data || !data.matches.length) { window.alert("Nothing to export yet. Generate a schedule first."); return; }
     const label = eventType === "league" ? "Week" : "Round";
     const rows = [csvRow([label, "Court", "Team A", "Team B", "Score A", "Score B"])];
     for (const r of shownRounds()) {
@@ -382,8 +382,8 @@
   }
   function emailSchedule() {
     const lines = scheduleLines();
-    if (!lines) { window.alert("Nothing to email yet — generate a schedule first."); return; }
-    emailDocument(eventId, `${eventLabel()} — schedule`, [eventLabel(), "", ...lines].join("\n"));
+    if (!lines) { window.alert("Nothing to email yet. Generate a schedule first."); return; }
+    emailDocument(eventId, `${eventLabel()} · schedule`, [eventLabel(), "", ...lines].join("\n"));
   }
 
   async function loadEvents() {

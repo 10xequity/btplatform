@@ -40,8 +40,8 @@
     if (!r.ok) return fail(r.data.error || "Could not load products.");
     PRODUCTS = r.data.products;
     $("sellProduct").innerHTML = PRODUCTS.filter((p) => p.active)
-      .map((p) => `<option value="${p.id}">${esc(p.name)} — ${money(p.price_cents)}</option>`).join("")
-      || `<option value="">No products yet — add one on the Products tab</option>`;
+      .map((p) => `<option value="${p.id}">${esc(p.name)} · ${money(p.price_cents)}</option>`).join("")
+      || `<option value="">No products yet; add one on the Products tab</option>`;
     renderProdList();
   }
 
@@ -62,7 +62,7 @@
       `<div class="pos-row"><span class="grow"><span class="k">${esc(i.label)}</span> <span class="v">× ${i.qty} · ${money(i.unit_price_cents)}${i.tax_rate_bp ? " +tax" : ""}</span></span>
        <button class="btn ghost sm" data-less="${n}" aria-label="Remove one ${esc(i.label)}">−</button>
        <button class="btn ghost sm" data-more="${n}" aria-label="Add one ${esc(i.label)}">+</button></div>`).join("")
-      || `<div class="pos-hint">Nothing yet — add a product or a custom line.</div>`;
+      || `<div class="pos-hint">Nothing yet; add a product or a custom line.</div>`;
     $("cartTotal").textContent = money(cartEstimate());
     $("cart").querySelectorAll("[data-more]").forEach((b) => b.onclick = () => { CART[+b.dataset.more].qty++; renderCart(); });
     $("cart").querySelectorAll("[data-less]").forEach((b) => b.onclick = () => {
@@ -90,7 +90,7 @@
     PROMO = null; $("promoState").textContent = "";
     if (!code) { renderCart(); return; }
     const r = await api("/api/admin/pos/promo-check?code=" + encodeURIComponent(code));
-    if (r.ok && r.data.ok) { PROMO = r.data.promo; $("promoState").innerHTML = `<span class="pos-chip ok">✓ ${esc(PROMO.code)} — ${PROMO.kind === "percent" ? PROMO.amount + "% off" : money(PROMO.amount) + " off"}</span>`; }
+    if (r.ok && r.data.ok) { PROMO = r.data.promo; $("promoState").innerHTML = `<span class="pos-chip ok">✓ ${esc(PROMO.code)} · ${PROMO.kind === "percent" ? PROMO.amount + "% off" : money(PROMO.amount) + " off"}</span>`; }
     else $("promoState").innerHTML = `<span class="pos-chip warn">${esc((r.data && (r.data.reason || r.data.error)) || "That code didn't check out.")}</span>`;
     renderCart();
   };
@@ -105,7 +105,7 @@
     }) });
     $("sellGo").disabled = false;
     if (!r.ok) { $("sellMsg").textContent = r.data.error || "Could not record the sale."; return; }
-    $("sellMsg").innerHTML = `Recorded — ${money(r.data.total_cents)}${r.data.sandbox ? ' <span class="pos-chip warn">SANDBOX — no card was charged</span>' : ""}` +
+    $("sellMsg").innerHTML = `Recorded: ${money(r.data.total_cents)}${r.data.sandbox ? ' <span class="pos-chip warn">SANDBOX: no card was charged</span>' : ""}` +
       (r.data.stock_warnings.length ? ` <span class="pos-chip warn">Stock below zero: ${esc(r.data.stock_warnings.join(", "))}</span>` : "");
     $("sellClear").click();
     loadSales(); loadProducts();
@@ -290,7 +290,7 @@
         html += `<div class="lab">${DAYS[d]}</div>`;
         for (let h = H0; h <= H1; h++) {
           const n = grid[d][h], op = max ? (0.12 + 0.88 * n / max) : 0;
-          html += `<div class="cell" title="${DAYS[d]} ${h}:00 — ${n} check-in${n === 1 ? "" : "s"}" style="${n ? `background: var(--primary); opacity:${op.toFixed(2)};` : ""}"></div>`;
+          html += `<div class="cell" title="${DAYS[d]} ${h}:00 · ${n} check-in${n === 1 ? "" : "s"}" style="${n ? `background: var(--primary); opacity:${op.toFixed(2)};` : ""}"></div>`;
         }
       }
       $("heatmap").innerHTML = html;

@@ -61,7 +61,7 @@
           <div class="grow"><div class="k">Name</div><div class="v">${esc(name) || "Not set yet"}</div></div>
           <a class="btn ghost" href="profile.html" style="text-decoration:none">Edit on Profile</a>
         </div>
-        <!-- B2 (v0.130.0): the ACCOUNT display name — what greetings use and what a passkey is
+        <!-- B2 (v0.130.0): the ACCOUNT display name: what greetings use and what a passkey is
              registered under. Distinct from the profile name above on purpose (D-18): this one
              never touches your member profile. Until this row existed, nothing could set it for
              an existing account and greetings fell back to the front of your email. -->
@@ -249,8 +249,8 @@
         return;
       }
       dnSaid.textContent = r.data.display_name
-        ? `Saved — greetings will call you ${r.data.display_name}.`
-        : "Saved — cleared, so greetings use the front of your email.";
+        ? `Saved. Greetings will call you ${r.data.display_name}.`
+        : "Saved. Cleared, so greetings use the front of your email.";
     });
   }
 })();

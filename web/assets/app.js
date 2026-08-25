@@ -193,7 +193,7 @@
           ${brandSlot}
           <h1>Sign in</h1>
           <p id="loginHint">${params.get("expired") === "1"
-            ? `Your session expired — sign in again${returnTo ? " and you’ll land back where you were" : ""}. No password needed.`
+            ? `Your session expired. Sign in again${returnTo ? " and you’ll land back where you were" : ""}. No password needed.`
             : "We’ll email you a one-time sign-in link. No password needed."}</p>
           <div class="field">
             <label for="email">Email</label>

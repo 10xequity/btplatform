@@ -16,7 +16,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Brackets — Boomtown Athletics</title>
+  <title>Brackets · Boomtown Athletics</title>
   <script>/* Pre-paint state — collapse + theme (uiux-review §4/§6.4, v0.52.0): read the bt_nav cookie and the saved theme BEFORE the first stylesheet so the rail state AND the theme are right on frame one — no post-paint snap of either. admin-nav.js writes the cookie on rail toggle and bt_theme on theme toggle; the localStorage bt_nav fallback migrates pre-v0.51 sessions. */(function(){try{var m=document.cookie.match(/(?:^|; )bt_nav=([^;]*)/);var v=m?m[1]:((window.localStorage&&localStorage.getItem("bt_nav_collapsed")==="1")?"min":"");if(v==="min")document.documentElement.dataset.nav="min";var t=(window.localStorage&&localStorage.getItem("bt_theme"))||(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.dataset.theme=t;}catch(e){}})();</script>
   <script>try{var btTpl=localStorage.getItem("bt_template");if(btTpl)document.documentElement.dataset.template=btTpl;}catch(e){}</script>
   <link rel="stylesheet" href="assets/tokens.css?v=0.194.0" />
@@ -225,7 +225,7 @@
       <div class="mf-head">
         <div>
           <h1>Brackets</h1>
-          <p class="muted">Seeded from how teams finished pool play, with byes to the top seeds and no play-in games. <b>Every slot is editable</b> — drag a team from the bench, or click a slot to pick one. Use it when a team goes home, or to pull somebody across from another pool.</p>
+          <p class="muted">Seeded from how teams finished pool play, with byes to the top seeds and no play-in games. <b>Every slot is editable</b>: drag a team from the bench, or click a slot to pick one. Use it when a team goes home, or to pull somebody across from another pool.</p>
         </div>
         <div class="mf-row" style="margin:0">
           <label class="mf-inline">Event
@@ -266,7 +266,7 @@
       <div class="br-layout">
         <div class="br-main">
           <div id="bTrees"></div>
-          <p class="empty" id="bEmpty" hidden>No bracket yet. Set the size above and generate one — you can regenerate any time before the first game is played.</p>
+          <p class="empty" id="bEmpty" hidden>No bracket yet. Set the size above and generate one. You can regenerate any time before the first game is played.</p>
         </div>
 
         <aside class="br-bench" aria-labelledby="brBenchH">

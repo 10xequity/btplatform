@@ -61,7 +61,7 @@
   async function render() {
     const scope = SCOPES[location.hash.replace("#", "")];
     if (!scope) { location.replace("#tournaments"); return; }
-    document.title = scope.title + " — Boomtown Athletics";
+    document.title = scope.title + " · Boomtown Athletics";
     $("mgTitle").textContent = scope.title;
     $("mgSub").textContent = "Pick one of your active " + scope.noun + " to open its manager hub.";
     if (!events) {

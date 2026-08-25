@@ -34,7 +34,7 @@
       back.querySelector("#trTitle").textContent = t.name;
       body.innerHTML = `
         <p class="help-text" style="margin:0 0 10px">
-          ${esc(t.event_name)}${t.level ? ` · ${esc(t.level)}` : ""} —
+          ${esc(t.event_name)}${t.level ? ` · ${esc(t.level)}` : ""} ·
           ${reg
             ? `from registration <span class="chip ${esc(reg.status)}">${esc(reg.status)}</span>`
             : "no registration linked (added by hand or from Tournament Ops)"}

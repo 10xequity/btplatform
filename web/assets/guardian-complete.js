@@ -53,7 +53,7 @@
   }
 
   if (!/^[a-f0-9]{32,64}$/.test(token)) {
-    fail("This link is missing its invitation code. Ask for a fresh link — copy the whole thing, including everything after the #.");
+    fail("This link is missing its invitation code. Ask for a fresh link. Copy the whole thing, including everything after the #.");
     return;
   }
 
@@ -79,13 +79,13 @@
     var p = invite.participant;
     var who =
       '<div class="g-who"><b>' + esc(p.full_name) + "</b>" +
-      '<span>Age ' + esc(String(p.age)) + " — waiting on a parent or guardian</span></div>";
+      '<span>Age ' + esc(String(p.age)) + " · waiting on a parent or guardian</span></div>";
 
     if (!bearer) {
       card.innerHTML =
         who +
         '<p style="font-size:15px;line-height:1.6;margin:0 0 6px">' +
-        "You need your own account before you can confirm this. Sign in or create one — it takes a minute — " +
+        "You need your own account before you can confirm this. Sign in or create one (it takes a minute), " +
         "then open this same link again." +
         "</p>" +
         '<p class="help-text">Keep this page open, or save the link somewhere you can find it.</p>' +

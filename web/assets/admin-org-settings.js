@@ -61,12 +61,12 @@
             clears this automatically.</p>
          <button class="btn-min" type="button" id="unverify">Mark as unconfirmed</button>`
       : `<b>Legal entity not confirmed.</b>
-         <p>Publishing still works — you'll see a warning. Confirming takes about five minutes:
+         <p>Publishing still works; you'll see a warning. Confirming takes about five minutes:
             search the Colorado Secretary of State business database for
             <b>${esc(org.legal_entity || "this entity")}</b> and read the registered name back
             exactly, including whether it uses a comma before LLC.</p>
          <button class="btn-min" type="button" id="doVerify"
-           ${String(org.legal_entity || "").trim() ? "" : "disabled"}>I checked — confirm it</button>
+           ${String(org.legal_entity || "").trim() ? "" : "disabled"}>I checked, confirm it</button>
          ${String(org.legal_entity || "").trim() ? "" :
            `<span style="font-size:13px;color:var(--danger);margin-left:8px;">Enter the entity name first.</span>`}`;
 
@@ -234,7 +234,7 @@
       <h2 style="margin-top:0;font-size:22px;">${verb} ${esc(name)}?</h2>
       <p style="color:var(--text-dim, var(--text-muted));font-size:15px;max-width:60ch;">
         ${to ? "It reappears in the organization switcher for every admin, and its API becomes reachable again."
-             : "It disappears from the switcher and its API stops responding. Nothing is deleted — every record stays linked and it can be brought back here."}
+             : "It disappears from the switcher and its API stops responding. Nothing is deleted; every record stays linked and it can be brought back here."}
       </p>
       <div class="og-field" style="margin:16px 0;">
         <label for="tWhy">Why?</label>
@@ -340,8 +340,8 @@
       paint();
       said.className = "og-said ok";
       said.textContent = current === orgId
-        ? "Saved — this organization opens first for you."
-        : "Saved — your default is cleared.";
+        ? "Saved. This organization opens first for you."
+        : "Saved. Your default is cleared.";
     };
   }
 

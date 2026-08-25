@@ -55,40 +55,40 @@
     "admin.html":               { s: "live" },
     "admin-events.html":        { s: "live" },
     "admin-registrations.html": { s: "live" },
-    "admin-waitlists.html":     { s: "beta", n: "Queue, auto-offer and expiring claim links all work. The offer email will not actually arrive until the Brevo key is set — check the sandbox link in the admin list instead." },
-    "admin-checkin.html":       { s: "beta", n: "Check-in never blocks anyone. A member with no current waiver still checks in — the door just shows a note so staff can follow up (owner decision 2026-07-29, \"no gating\"). Not built yet: the outstanding-balance chip and one-tap resolve." },
+    "admin-waitlists.html":     { s: "beta", n: "Queue, auto-offer and expiring claim links all work. The offer email will not actually arrive until the Brevo key is set; check the sandbox link in the admin list instead." },
+    "admin-checkin.html":       { s: "beta", n: "Check-in never blocks anyone. A member with no current waiver still checks in; the door just shows a note so staff can follow up (owner decision 2026-07-29, \"no gating\"). Not built yet: the outstanding-balance chip and one-tap resolve." },
     "admin-facility.html":      { s: "beta", n: "Calendar, space presets and the conflict engine are finished. Public rental requests stay hidden until RENTALS_ENABLED is switched on." },
     "admin-calendar.html":      { s: "live" },
-    "admin-tryouts.html":       { s: "beta", n: "Evaluate players at a tryout: their registration details, your own notes, a 1-5 rating and offer / no. Your notes are private to you — the director sees everyone’s together. The drag-and-drop team builder that uses this data is the next piece." },
+    "admin-tryouts.html":       { s: "beta", n: "Evaluate players at a tryout: their registration details, your own notes, a 1-5 rating and offer / no. Your notes are private to you; the director sees everyone’s together. The drag-and-drop team builder that uses this data is the next piece." },
     "admin-event.html":         { s: "live" },
-    "admin-manage.html":        { s: "live", n: "Pick an active tournament or league and land in its manager hub. Past events fall off this list automatically (by end date — no status to remember) and stay on Events & Programs to duplicate or review." },
-    "admin-manager.html":       { s: "live", n: "One page per event, with tabs across the top that do not reload: Overview (the event's own page), Registrations with Waitlist, Announce, and — for tournaments and leagues — Divisions & Pools, Scoring Links, Schedule editor, Scoring Edit, the Live board and Bracket. Every page still works on its own from the menu too." },
+    "admin-manage.html":        { s: "live", n: "Pick an active tournament or league and land in its manager hub. Past events fall off this list automatically (by end date, no status to remember) and stay on Events & Programs to duplicate or review." },
+    "admin-manager.html":       { s: "live", n: "One page per event, with tabs across the top that do not reload: Overview (the event's own page), Registrations with Waitlist, Announce, and (for tournaments and leagues) Divisions & Pools, Scoring Links, Schedule editor, Scoring Edit, the Live board and Bracket. Every page still works on its own from the menu too." },
     "tournament.html":          { s: "live" },
     "admin-league.html":        { s: "live" },
-    "admin-schedule-editor.html": { s: "beta", n: "Drag matches between rounds and courts; drop on an occupied slot to swap. It never blocks a move — the panel just tells you what it did to fairness. Moving a match that already has a score asks first." },
-    "admin-brackets.html":      { s: "beta", n: "Single elimination seeded from pool finish. Byes go to the top seeds — no play-in games. Winners move forward by recomputing the tree from the scores, so fixing a result that was typed in backwards also fixes the round above it." },
-    "admin-score-links.html":   { s: "beta", n: "One scoring link per team, with a QR code. Teams record their own results in two taps; the page retires itself once a team has no games left. The QR is generated on the page — no outside service, so it works on venue wifi." },
-    "admin-squads.html":        { s: "beta", n: "Build teams out of a tryout. Pick a player from the unplaced list, then pick the team — two taps, no dragging, so it works one-handed in a gym. Each team says what it still needs by position, and a team is only 'full' when the headcount is met AND nothing is short. Placing a player already on another team moves them." },
+    "admin-schedule-editor.html": { s: "beta", n: "Drag matches between rounds and courts; drop on an occupied slot to swap. It never blocks a move; the panel just tells you what it did to fairness. Moving a match that already has a score asks first." },
+    "admin-brackets.html":      { s: "beta", n: "Single elimination seeded from pool finish. Byes go to the top seeds, no play-in games. Winners move forward by recomputing the tree from the scores, so fixing a result that was typed in backwards also fixes the round above it." },
+    "admin-score-links.html":   { s: "beta", n: "One scoring link per team, with a QR code. Teams record their own results in two taps; the page retires itself once a team has no games left. The QR is generated on the page: no outside service, so it works on venue wifi." },
+    "admin-squads.html":        { s: "beta", n: "Build teams out of a tryout. Pick a player from the unplaced list, then pick the team: two taps, no dragging, so it works one-handed in a gym. Each team says what it still needs by position, and a team is only 'full' when the headcount is met AND nothing is short. Placing a player already on another team moves them." },
     "admin-pool-board.html":    { s: "beta", n: "Drag teams into pools before any schedule exists. Drop on a + to start a pool; an empty one disappears on save. Notes typed on a tile stay with the team wherever it is dragged. Nothing is written until you press Save." },
-    "admin-divisions.html":     { s: "beta", n: "Set up divisions and the courts each one owns — overlapping court ranges are flagged as you type. The placement check reads how teams actually finished and suggests moves with the numbers behind them; nothing moves until you accept, and declining is recorded too." },
+    "admin-divisions.html":     { s: "beta", n: "Set up divisions and the courts each one owns; overlapping court ranges are flagged as you type. The placement check reads how teams actually finished and suggests moves with the numbers behind them; nothing moves until you accept, and declining is recorded too." },
 
     /* --- Money --- */
     "admin-reports.html":       { s: "live" },
     "admin-pos.html":           { s: "beta", n: "Square is in SANDBOX. Sales, line items and reporting are all real; the payment is not. No card is ever charged." },
-    "admin-plans.html":         { s: "beta", n: "Square subscriptions are in SANDBOX. Do not sell a real membership from this screen — nothing will bill." },
-    "admin-staff-pay.html":     { s: "beta", n: "Set what each coach is paid and see what a date range comes to. It works out the money and keeps a record; it does NOT run payroll, file tax or clock anyone in — pay people however you normally do." },
-    "admin-passes.html":        { s: "beta", n: "Issue and spend passes, punch cards and the guest passes a membership includes. Fully working — but it does NOT take a payment: record the price for your own records and collect it however you normally do, until Square is live." },
+    "admin-plans.html":         { s: "beta", n: "Square subscriptions are in SANDBOX. Do not sell a real membership from this screen; nothing will bill." },
+    "admin-staff-pay.html":     { s: "beta", n: "Set what each coach is paid and see what a date range comes to. It works out the money and keeps a record; it does NOT run payroll, file tax or clock anyone in; pay people however you normally do." },
+    "admin-passes.html":        { s: "beta", n: "Issue and spend passes, punch cards and the guest passes a membership includes. Fully working, but it does NOT take a payment: record the price for your own records and collect it however you normally do, until Square is live." },
 
     /* --- Marketing --- */
-    "admin-marketing.html":     { s: "wip",  n: "Sending is deliberately blocked in code until two things are done: the physical mailing address is saved in Settings, and the Brevo API key plus SPF/DKIM/DMARC are verified. You can build contacts, segments and campaigns; you cannot send. This is expected — not a bug." },
+    "admin-marketing.html":     { s: "wip",  n: "Sending is deliberately blocked in code until two things are done: the physical mailing address is saved in Settings, and the Brevo API key plus SPF/DKIM/DMARC are verified. You can build contacts, segments and campaigns; you cannot send. This is expected, not a bug." },
     "admin-messages.html":      { s: "live" },
     "admin-announcements.html": { s: "beta", n: "Writing, scheduling and targeting all work. Anything that goes out by email is still sandboxed until the Brevo key is set." },
-    "admin-sms.html":           { s: "wip",  n: "Texting is switched off at the platform level: Twilio A2P 10DLC registration is frozen by the owner. The screen, the recipient preview and the consent controls are all built and safe to look at, but no message can leave. Expected — not a bug." },
+    "admin-sms.html":           { s: "wip",  n: "Texting is switched off at the platform level: Twilio A2P 10DLC registration is frozen by the owner. The screen, the recipient preview and the consent controls are all built and safe to look at, but no message can leave. Expected, not a bug." },
 
     /* --- People --- */
     "admin-users.html":         { s: "live" },
     "admin-security.html":      { s: "live" },
-    "admin-waivers.html":       { s: "beta", n: "Versioning, publishing and signature pinning are finished and tested. The live text is still the v1 legacy placeholder — waiver v2 is drafted and waiting on one email address before it can be published." },
+    "admin-waivers.html":       { s: "beta", n: "Versioning, publishing and signature pinning are finished and tested. The live text is still the v1 legacy placeholder; waiver v2 is drafted and waiting on one email address before it can be published." },
     "admin-consent.html":       { s: "live" },
     "admin-documents.html":     { s: "live" },
     "admin-uploads.html":       { s: "live" },
@@ -104,20 +104,20 @@
     "index.html":               { s: "live" },
     "home.html":                { s: "live" },
     "schedule.html":            { s: "live" },
-    "live.html":                { s: "beta", n: "The public scoreboard — no sign-in needed, so it works on a TV by the door or a parent phone on venue wifi. Shows which court is on now first, then standings and brackets. Refreshes itself every 25 seconds and tells you when it last did. Team names only; no player details are sent." },
+    "live.html":                { s: "beta", n: "The public scoreboard: no sign-in needed, so it works on a TV by the door or a parent phone on venue wifi. Shows which court is on now first, then standings and brackets. Refreshes itself every 25 seconds and tells you when it last did. Team names only; no player details are sent." },
     "leagues.html":             { s: "live" },
     "subs.html":                { s: "beta", n: "The Sub-Finder module: put yourself on the sub list, post when your team is short a player, and pick up open requests. Reached from the rail and from a top button on the leagues and community pages. The in-app board works fully; getting *notified* when a team needs you rides on push, which is still dormant." },
     "library.html":             { s: "live" },
     "member-inbox.html":        { s: "live" },
     "profile.html":             { s: "live" },
     "membership.html":          { s: "beta", n: "Square is in SANDBOX. You can walk the whole join-a-plan flow; no real card is charged and no real membership starts." },
-    "register.html":            { s: "beta", n: "Registration, teammates, waiver and Square checkout all work (SANDBOX). Promo codes cannot be entered at checkout yet — they are admin-applied only." },
-    "sheet.html":               { s: "beta", n: "The public sign-up sheet for drop-in sessions: live count, who's coming (first name + initial), one-tap sign-up when signed in, name + email for a guest. Free sessions complete instantly; priced ones go to Square (SANDBOX). Cancel-if-under-threshold is not built yet — the sheet shows the count, the organizer makes the call." },
+    "register.html":            { s: "beta", n: "Registration, teammates, waiver and Square checkout all work (SANDBOX). Promo codes cannot be entered at checkout yet; they are admin-applied only." },
+    "sheet.html":               { s: "beta", n: "The public sign-up sheet for drop-in sessions: live count, who's coming (first name + initial), one-tap sign-up when signed in, name + email for a guest. Free sessions complete instantly; priced ones go to Square (SANDBOX). Cancel-if-under-threshold is not built yet; the sheet shows the count, the organizer makes the call." },
     "checkin.html":             { s: "live" },
     "score.html":               { s: "live" },
-    "kotc.html":                { s: "beta", n: "King and Queen of the Court, from a player's own link — no sign-in. Whoever opens it first types the net's scores; anyone opening it after that is shown what was entered and asked yes or no, and \"no\" becomes an edit that asks everyone else to look again. If you only remember your own points for the round, type that one number and we work out the rest of the net where the numbers allow it. The director's board that seats the nets is now built too — see Court board." },
-    "admin-kotc.html":          { s: "beta", n: "The director's board for King and Queen of the Court: nets down the page, a player on each seat, drag somebody to move them. Drop them on another player and the two swap, so the board can never lose a person, and it never refuses a move — you know things the seeding does not. Games that already have a score are left exactly as they were played. Keyboard works throughout: focus a player, Enter to pick up, arrows to choose, Enter to drop. Not built yet: taking somebody off for the night, which still needs the entry list." },
-    "kotc-live.html":           { s: "beta", n: "Public standings for a King and Queen of the Court night — no sign-in, so it works on a TV by the door or a parent's phone. Every player for themselves: wins first, then point difference. Updates itself every 25 seconds and only redraws when a position actually changes. Names are shortened to a first name and an initial, and no scoring links are ever sent to this page. Needs the session link that ends in ?s= and a number." },
+    "kotc.html":                { s: "beta", n: "King and Queen of the Court, from a player's own link, no sign-in. Whoever opens it first types the net's scores; anyone opening it after that is shown what was entered and asked yes or no, and \"no\" becomes an edit that asks everyone else to look again. If you only remember your own points for the round, type that one number and we work out the rest of the net where the numbers allow it. The director's board that seats the nets is now built too; see Court board." },
+    "admin-kotc.html":          { s: "beta", n: "The director's board for King and Queen of the Court: nets down the page, a player on each seat, drag somebody to move them. Drop them on another player and the two swap, so the board can never lose a person, and it never refuses a move; you know things the seeding does not. Games that already have a score are left exactly as they were played. Keyboard works throughout: focus a player, Enter to pick up, arrows to choose, Enter to drop. Not built yet: taking somebody off for the night, which still needs the entry list." },
+    "kotc-live.html":           { s: "beta", n: "Public standings for a King and Queen of the Court night: no sign-in, so it works on a TV by the door or a parent's phone. Every player for themselves: wins first, then point difference. Updates itself every 25 seconds and only redraws when a position actually changes. Names are shortened to a first name and an initial, and no scoring links are ever sent to this page. Needs the session link that ends in ?s= and a number." },
     "member.html":              { s: "live" },
     "lfg.html":                 { s: "beta", n: "The sub board and the free-agent pool are finished. Replying to a roster invitation (RSVP) is the one piece still to come." },
     "sign.html":                { s: "live" },
@@ -131,28 +131,28 @@
      --------------------------------------------------------------------- */
   const FEATURES = [
     { name: "Waiver status at the door",      s: "live", area: "People",
-      n: "Check-in shows whether a member has a current waiver, and never blocks on it. The hard gate that used to refuse entry was REMOVED on the owner's instruction (2026-07-29, \"no gating\"). Someone getting in without a waiver is the intended behaviour — please do not file it." },
+      n: "Check-in shows whether a member has a current waiver, and never blocks on it. The hard gate that used to refuse entry was REMOVED on the owner's instruction (2026-07-29, \"no gating\"). Someone getting in without a waiver is the intended behaviour; please do not file it." },
     { name: "Calendar feeds (.ics)",          s: "beta", area: "Run events",
-      n: "The feed works, and admins can mint and copy a feed URL from the Calendar screen. Members still have no way to get their own feed — that ships with the member subscribe button." },
+      n: "The feed works, and admins can mint and copy a feed URL from the Calendar screen. Members still have no way to get their own feed; that ships with the member subscribe button." },
     { name: "Push notifications",             s: "wip",  area: "Member site",
-      n: "The full PWA and push stack is built, but the three VAPID server secrets have never been set, so the browser cannot subscribe. Every push feature will look broken until that is done. Known — do not file." },
+      n: "The full PWA and push stack is built, but the three VAPID server secrets have never been set, so the browser cannot subscribe. Every push feature will look broken until that is done. Known. Do not file." },
     { name: "Add to Home Screen (PWA)",       s: "live", area: "Member site",
       n: "Works on Android and desktop Chrome. On iOS use Share → Add to Home Screen." },
     { name: "Email delivery (Brevo)",         s: "wip",  area: "Marketing",
-      n: "Every email path in the platform — reminders, waitlist offers, waiver notices, campaigns — is in sandbox mode. Nothing reaches a real inbox yet." },
+      n: "Every email path in the platform (reminders, waitlist offers, waiver notices, campaigns) is in sandbox mode. Nothing reaches a real inbox yet." },
     { name: "Payments (Square)",              s: "beta", area: "Money",
       n: "SANDBOX across the whole platform. Switching to production is the owner's call and is a deliberate, separate step." },
     { name: "SMS",                            s: "wip",  area: "Marketing",
       n: "Built, and deliberately dormant. Sending needs Twilio plus A2P 10DLC registration, which the owner has frozen, and its own opt-in that can never be bundled with the email consent. Every SMS route answers with a plain sentence and touches nothing until then." },
     { name: "Teammate self-sign links",       s: "live", area: "People",
-      n: "Teammates get their own link and sign their own waiver — the captain no longer signs on their behalf." },
+      n: "Teammates get their own link and sign their own waiver; the captain no longer signs on their behalf." },
     { name: "Media-release opt-out record",   s: "live", area: "People",
       n: "A family's media-release choice is recorded against the person, and re-asked when the waiver version changes." },
     { name: "Promo redemption at checkout",   s: "soon", area: "Money",
       n: "Promos exist and work admin-side; the public checkout has no code box yet." },
     { name: "Achievements & public standings",s: "soon", area: "Run events", n: "M17. Spec approved, queued behind the format engine." },
     { name: "Tournament format engine",       s: "soon", area: "Run events", n: "M-TF. Pluggable formats: single/double elim, Swiss, King of the Court, ladder, blind draw." },
-    { name: "Player Exchange (free agents, subs)", s: "beta", area: "People", n: "The sub board and the free-agent pool are live. Roster RSVP — replying yes or no to a team invitation — is the remaining piece." },
+    { name: "Player Exchange (free agents, subs)", s: "beta", area: "People", n: "The sub board and the free-agent pool are live. Roster RSVP (replying yes or no to a team invitation) is the remaining piece." },
     { name: "Lessons, clinics & camps",       s: "soon", area: "Money", n: "M20. Multi-coach booking and lesson packs." },
     { name: "Auto-scheduler v1",              s: "soon", area: "Run events", n: "M21." },
   ];
@@ -244,8 +244,8 @@
       a.insertAdjacentHTML("beforeend", chip(rec.s));
       // Screen readers get the state as words, appended to the existing link text.
       const words = a.textContent.replace(META[rec.s].label, "").trim();
-      a.setAttribute("aria-label", `${words} — ${META[rec.s].full}`);
-      a.title = `${words} — ${META[rec.s].full}${rec.n ? ": " + rec.n : ""}`;
+      a.setAttribute("aria-label", `${words}, ${META[rec.s].full}`);
+      a.title = `${words} · ${META[rec.s].full}${rec.n ? ": " + rec.n : ""}`;
       if (rec.s === "wip") {
         a.classList.add("bt-wip");
         a.addEventListener("click", (e) => {
@@ -274,7 +274,7 @@
     el.className = `bt-banner bt-banner--${rec.s}`;
     el.setAttribute("role", "status");
     el.innerHTML =
-      `<div style="flex:1"><b>${rec.s === "wip" ? "Under construction" : "Beta — read this first"}</b>
+      `<div style="flex:1"><b>${rec.s === "wip" ? "Under construction" : "Beta: read this first"}</b>
        <p>${rec.n}</p></div>
        <button type="button" aria-label="Dismiss this notice">&times;</button>`;
     el.querySelector("button").addEventListener("click", () => {
@@ -303,8 +303,8 @@
     mount.innerHTML = `
       <div class="bt-legend">
         <span><b style="color:var(--text)">${count("live")}</b> finished</span>
-        <span>${chip("beta").replace(" aria-hidden=\"true\"", "")} <b>${count("beta")}</b> work with a caveat — safe to test</span>
-        <span>${chip("wip").replace(" aria-hidden=\"true\"", "")} <b>${count("wip")}</b> under construction — don't file bugs</span>
+        <span>${chip("beta").replace(" aria-hidden=\"true\"", "")} <b>${count("beta")}</b> work with a caveat, safe to test</span>
+        <span>${chip("wip").replace(" aria-hidden=\"true\"", "")} <b>${count("wip")}</b> under construction, don't file bugs</span>
         <span>${chip("soon").replace(" aria-hidden=\"true\"", "")} <b>${count("soon")}</b> not built yet</span>
       </div>
       <table class="bt-status-table">

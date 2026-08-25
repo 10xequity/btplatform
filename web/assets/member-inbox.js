@@ -43,7 +43,7 @@
     if (!th.length) {
       $("box").innerHTML = `<p><b>No conversations yet.</b></p>
         <p class="help-text" style="margin-top:6px">Find teammates and subs in the
-        <a href="library.html">Player Library</a> — hit Message on anyone listed.</p>`;
+        <a href="library.html">Player Library</a>; hit Message on anyone listed.</p>`;
       return;
     }
     $("box").innerHTML = th.map((t) => `
@@ -110,7 +110,7 @@
       $("replySend").disabled = true;
       const r2 = await api("/api/messages/reply", { method: "POST", body: JSON.stringify({ thread_id: id, body }) });
       $("replySend").disabled = false;
-      if (!r2.ok) return alert(r2.data.error || "Couldn't send — try again.");
+      if (!r2.ok) return alert(r2.data.error || "Couldn't send. Try again.");
       openThread(id);
     };
   }

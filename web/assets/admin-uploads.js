@@ -119,7 +119,7 @@
         row.classList.add("done");
         bar.style.width = "100%";
         meta.textContent = d.duplicate_of
-          ? `Uploaded — identical to "${d.duplicate_of.filename}" already on file`
+          ? `Uploaded: identical to "${d.duplicate_of.filename}" already on file`
           : `Uploaded · ${bytesHuman(d.upload.bytes)} · ${VIS_LABELS[d.upload.visibility]}`;
         load();
       } else {
@@ -213,7 +213,7 @@
     if (what === "del") {
       // Soft delete, so the confirmation says so. A confirmation that overstates the consequence
       // trains people to click through it.
-      if (!confirm(`Remove "${name}" from the list?\n\nThe file is kept and can be restored — switch "Show" to "Include removed".`)) return;
+      if (!confirm(`Remove "${name}" from the list?\n\nThe file is kept and can be restored; switch "Show" to "Include removed".`)) return;
       const r = await api(`/api/uploads/${id}`, { method: "DELETE" });
       if (!r.ok) return fail(r.data.error || "Could not remove that file.");
       return load();

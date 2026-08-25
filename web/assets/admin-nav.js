@@ -408,11 +408,11 @@
       const c = (st.ok && st.data.counts) || {};
       const back = openModal(`
         <h2 style="margin:0 0 8px">Test data <span style="font-size:12px;color:var(--warning,#e6a23c);font-weight:700">SANDBOX</span></h2>
-        <p class="help-text">Sample events, teams, games, and registrations — all marked TEST, all in the 90000+ ID range, all removable with one click. Real data can't be touched.</p>
+        <p class="help-text">Sample events, teams, games, and registrations: all marked TEST, all in the 90000+ ID range, all removable with one click. Real data can't be touched.</p>
         <p style="font-size:14px">${seeded
           ? `Currently seeded: ${c.events || 0} events · ${c.teams || 0} teams · ${c.matches || 0} games · ${c.registrations || 0} registrations · ${c.contacts || 0} contacts`
           : "No test data at the moment."}</p>
-        ${seeded ? `<p class="help-text">Regenerating replaces what's there with a fresh set. Use it if the sample data looks wrong or out of date — you can't get two copies.</p>` : ""}
+        ${seeded ? `<p class="help-text">Regenerating replaces what's there with a fresh set. Use it if the sample data looks wrong or out of date; you can't get two copies.</p>` : ""}
         <div style="display:flex;gap:10px;margin-top:12px">
           <button class="btn" id="tdGen">${seeded ? "Regenerate test data" : "Generate test data"}</button>
           <button class="btn ghost" id="tdWipe" ${seeded ? "" : "disabled"}>Wipe test data</button>
@@ -525,7 +525,7 @@
          a cert, a dead deploy) just as easily as the user's connection. The old text blamed the
          user's wifi unconditionally and sent the one person who could report a real bug looking
          in the wrong place (the v0.115.0 CORS outage read as "check your connection" for a day). */
-      return { ok: false, status: 0, data: { error: "Couldn't reach the server. It may be a problem on our side — try again in a moment; if it keeps happening, hard-refresh (Ctrl+F5) and check your connection." } };
+      return { ok: false, status: 0, data: { error: "Couldn't reach the server. It may be a problem on our side. Try again in a moment; if it keeps happening, hard-refresh (Ctrl+F5) and check your connection." } };
     }
   }
 
@@ -577,7 +577,7 @@
       const r = await api("/api/admin/messages/flags/count");
       if (r.ok) open = Number(r.data && r.data.open) || 0;
     } catch (e) { /* offline, or a worker older than v0.56.0: no badge, no noise */ }
-    a.setAttribute("aria-label", open ? "Message reports — " + open + " waiting" : "Message reports");
+    a.setAttribute("aria-label", open ? "Message reports, " + open + " waiting" : "Message reports");
     let badge = a.querySelector(".badge");
     if (open) {
       a.style.position = "relative";
@@ -621,7 +621,7 @@
       const hit = (ctx.all || []).find((o) => Number(o.id) === id);
       const org = hit ? hit.name : "this organization";
       el.innerHTML = `<div class="bt-fail"><b>You don't have access to ${esc(org)}.</b>
-        <p class="help-text" style="margin:6px 0 0">Your account has no staff role there — the ${esc(what || "page")} itself is fine. Switch to one of your organizations to keep working.</p>
+        <p class="help-text" style="margin:6px 0 0">Your account has no staff role there; the ${esc(what || "page")} itself is fine. Switch to one of your organizations to keep working.</p>
         <div class="bt-fail-actions"></div></div>`;
       orgSwitchActions(el.querySelector(".bt-fail-actions"), ctx);
       return;

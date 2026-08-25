@@ -47,15 +47,15 @@
      and it carries exactly what the printed card carries, no more. Neither export mints:
      Get links is a POST, and an export that quietly writes is the rule this page already keeps. */
   function csvCards() {
-    if (!links.length) { $("lNote").textContent = "Press Get links first — nothing has been minted for this event yet."; return; }
+    if (!links.length) { $("lNote").textContent = "Press Get links first; nothing has been minted for this event yet."; return; }
     const rows = [csvRow(["Team", "Scoring link"]), ...links.map((l) => csvRow([l.team, l.url]))];
     downloadText(`${new Date().toISOString().slice(0, 10)}_scoring-links.csv`, rows.join("\r\n"));
     $("lNote").textContent = `Downloaded ${links.length} link${links.length === 1 ? "" : "s"}.`;
   }
 
   function emailCards() {
-    if (!links.length) { $("lNote").textContent = "Press Get links first — nothing has been minted for this event yet."; return; }
-    const body = ["Your scoring link — two taps to record a result, and it stops asking once your team is finished.", "",
+    if (!links.length) { $("lNote").textContent = "Press Get links first; nothing has been minted for this event yet."; return; }
+    const body = ["Your scoring link: two taps to record a result, and it stops asking once your team is finished.", "",
       ...links.map((l) => `${l.team}: ${l.url}`)].join("\n");
     emailDocument(eventId, "Your scoring link", body);
   }
@@ -69,7 +69,7 @@
     $("lEmpty").hidden = links.length > 0;
     $("lCards").innerHTML = links.map(card).join("");
     $("lNote").textContent = links.length
-      ? `${links.length} team${links.length === 1 ? "" : "s"}. A link keeps working all event — the page just stops asking once that team has no games left.`
+      ? `${links.length} team${links.length === 1 ? "" : "s"}. A link keeps working all event; the page just stops asking once that team has no games left.`
       : "No teams on this event yet.";
 
     $("lCards").querySelectorAll(".sl-copy").forEach((b) => {
@@ -82,7 +82,7 @@
         } catch {
           // Clipboard access is refused often enough — on http, or without a user gesture the
           // browser trusts — that failing silently would look like a broken button.
-          $("lNote").textContent = "Couldn't reach the clipboard — select the link and copy it.";
+          $("lNote").textContent = "Couldn't reach the clipboard. Select the link and copy it.";
         }
       });
     });
@@ -93,8 +93,8 @@
       b.addEventListener("click", () => {
         const ok = window.BTQR && window.BTQR.download(b.dataset.url, `scoring-${b.dataset.team}`, { scale: 10 });
         $("lNote").textContent = ok
-          ? `Saved a PNG for ${b.dataset.team}. Attach it to a text or an email — the link inside it is the same one.`
-          : "Couldn't make the image here — use Copy link instead.";
+          ? `Saved a PNG for ${b.dataset.team}. Attach it to a text or an email; the link inside it is the same one.`
+          : "Couldn't make the image here. Use Copy link instead.";
       });
     });
   }

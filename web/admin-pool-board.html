@@ -10,7 +10,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Pool board — Boomtown Athletics</title>
+  <title>Pool board · Boomtown Athletics</title>
   <script>/* Pre-paint state — collapse + theme (uiux-review §4/§6.4, v0.52.0): read the bt_nav cookie and the saved theme BEFORE the first stylesheet so the rail state AND the theme are right on frame one — no post-paint snap of either. admin-nav.js writes the cookie on rail toggle and bt_theme on theme toggle; the localStorage bt_nav fallback migrates pre-v0.51 sessions. */(function(){try{var m=document.cookie.match(/(?:^|; )bt_nav=([^;]*)/);var v=m?m[1]:((window.localStorage&&localStorage.getItem("bt_nav_collapsed")==="1")?"min":"");if(v==="min")document.documentElement.dataset.nav="min";var t=(window.localStorage&&localStorage.getItem("bt_theme"))||(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.dataset.theme=t;}catch(e){}})();</script>
   <script>try{var btTpl=localStorage.getItem("bt_template");if(btTpl)document.documentElement.dataset.template=btTpl;}catch(e){}</script>
   <link rel="stylesheet" href="assets/tokens.css?v=0.194.0" />
@@ -327,10 +327,10 @@
         </div>
       </div>
 
-      <p class="mf-note" id="pbHint" role="status" aria-live="polite">Tip: click a tile and press Enter to pick it up, then use the arrow keys — no mouse needed.</p>
+      <p class="mf-note" id="pbHint" role="status" aria-live="polite">Tip: click a tile and press Enter to pick it up, then use the arrow keys. No mouse needed.</p>
       <!-- RF-5 (v0.178.0): the auto-delete law, said out loud. The ✕ on a pool presses the
            capability that has existed since v0.70.0 — it never adds one. -->
-      <p class="mf-note">Removing a pool (✕) sends its teams back to the workspace — an empty pool disappears when you save.</p>
+      <p class="mf-note">Removing a pool (✕) sends its teams back to the workspace; an empty pool disappears when you save.</p>
       <!-- K-1 tier 2 (§-0 B5, v0.146.0): the board SAYS where its team numbers come from. K-1's
            spec asks for exactly this — "the board reads 'Numbers set when you saved' rather than
            silently renumbering" — because the same badge means the admin's own arrangement on a
@@ -363,7 +363,7 @@
                until the server sends something — an empty suggestions panel is worse than none. -->
           <section id="pbSug" class="pb-sug" hidden aria-labelledby="pbSugH">
             <h2 class="pb-div-h pb-sug-h" id="pbSugH">Suggestions</h2>
-            <p class="pb-sug-lead">Ideas from past results. Nothing here changes the board — move a team yourself, or dismiss the idea.</p>
+            <p class="pb-sug-lead">Ideas from past results. Nothing here changes the board: move a team yourself, or dismiss the idea.</p>
             <ul id="pbSugList" class="pb-sug-list"></ul>
           </section>
         </div>

@@ -34,7 +34,7 @@
   function renderIdle(prefill) {
     clearTimeout(resetTimer); state = "idle";
     card.innerHTML = "<h1>" + esc(eventName) + "</h1>" +
-      "<p class='sub'>Scan your pass — or type your code.</p>" +
+      "<p class='sub'>Scan your pass, or type your code.</p>" +
       "<div class='field' style='text-align:left'><label for='code'>Your check-in code</label>" +
       "<input id='code' autocomplete='off' autocapitalize='characters' spellcheck='false' inputmode='text' /></div>" +
       "<button class='btn kk-btn' id='go'>Check in</button>" +
@@ -66,7 +66,7 @@
     }).then(function (r) { return r.json().then(function (d) { renderResult(r, d); }); })
       .catch(function () {
         state = "idle"; btn.disabled = false; btn.textContent = "Check in";
-        msg.className = "kk-msg err"; msg.textContent = "No connection — try again, or see the desk.";
+        msg.className = "kk-msg err"; msg.textContent = "No connection. Try again, or see the desk.";
       });
   }
 
@@ -93,7 +93,7 @@
       scheduleReset(8000);
     } else {
       html = "<div class='kk-glyph'>🤔</div>" +
-        "<p class='kk-msg warn'>" + esc(d.message || d.error || "That didn't work — try again, or see the desk.") + "</p>";
+        "<p class='kk-msg warn'>" + esc(d.message || d.error || "That didn't work. Try again, or see the desk.") + "</p>";
       scheduleReset(6000);
     }
     card.innerHTML = html + "<button class='btn secondary kk-btn' id='next'>Next person</button>";

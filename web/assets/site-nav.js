@@ -372,7 +372,7 @@
       if ((role === "admin" || role === "staff") && demoMember) {
         const pill = document.createElement("button");
         pill.type = "button";
-        pill.textContent = "Viewing as member — Exit";
+        pill.textContent = "Viewing as member · Exit";
         pill.setAttribute("style",
           "position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:60;" +
           "min-height:44px;padding:10px 18px;border-radius:999px;border:1px solid var(--warning,#e6a23c);" +
@@ -457,7 +457,7 @@
   function profileNotifFill(unread) {
     const pb = document.getElementById("btHdrProfile");
     if (pb) {
-      pb.setAttribute("aria-label", unread ? "Account menu — " + unread + " unread notifications" : "Account menu");
+      pb.setAttribute("aria-label", unread ? "Account menu, " + unread + " unread notifications" : "Account menu");
       let badge = pb.querySelector(".badge");
       if (unread) {
         pb.style.position = "relative";
@@ -499,7 +499,7 @@
   function headerMailFill(inboxUnread) {
     const a = document.getElementById("btHdrMail");
     if (!a) return;
-    a.setAttribute("aria-label", inboxUnread ? "Messages — " + inboxUnread + " unread" : "Messages");
+    a.setAttribute("aria-label", inboxUnread ? "Messages, " + inboxUnread + " unread" : "Messages");
     let badge = a.querySelector(".badge");
     if (inboxUnread) {
       a.style.position = "relative";

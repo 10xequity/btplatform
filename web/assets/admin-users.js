@@ -31,7 +31,7 @@
     if (!r.ok) { wrap.innerHTML = `<div class="empty">${esc(r.data.error || "Couldn't load members.")}</div>`; return; }
     const rows = r.data.members || [];
     document.getElementById("memberCount").textContent = `${r.data.total} member${r.data.total === 1 ? "" : "s"} in ${esc(orgName(currentOrg))}`;
-    if (!rows.length) { wrap.innerHTML = `<div class="empty">No members yet — every registration adds one automatically.</div>`; return; }
+    if (!rows.length) { wrap.innerHTML = `<div class="empty">No members yet; every registration adds one automatically.</div>`; return; }
     // v0.26.0 (R-11) — selection column + bulk bar. Segments existed in Marketing but never
     // reached this list, so tagging forty people meant forty modals.
     wrap.innerHTML = `<table class="tbl"><thead><tr>
@@ -243,9 +243,9 @@
       <div class="field"><label>Organization</label><select id="rm_org">
         ${orgs.map(o => `<option value="${o.id}" ${o.id === currentOrg ? "selected" : ""}>${esc(o.name)}</option>`).join("")}</select></div>
       <div class="field"><label>Role</label><select id="rm_role">
-        <option value="admin">Admin — everything, incl. people &amp; money</option>
-        <option value="staff">Staff — run events, no user management or exports</option>
-        <option value="member">Member — own profile only</option>
+        <option value="admin">Admin: everything, incl. people &amp; money</option>
+        <option value="staff">Staff: run events, no user management or exports</option>
+        <option value="member">Member: own profile only</option>
         <option value="none">Remove role in this org</option></select></div>
       <div class="actions"><button class="btn ghost" id="rm_cancel">Cancel</button><button class="btn" id="rm_save">Apply</button></div>`);
     back.querySelector("#rm_cancel").addEventListener("click", closeModal);
@@ -263,7 +263,7 @@
   function addUserModal() {
     const back = openModal(`
       <h2>Add admin or staff</h2>
-      <p class="help-text">They'll sign in with the normal email link — nothing to set up on their end.</p>
+      <p class="help-text">They'll sign in with the normal email link; nothing to set up on their end.</p>
       <div class="field"><label>Email</label><input id="au_email" type="email" placeholder="person@example.com" /></div>
       <div class="field"><label>Name (optional)</label><input id="au_name" /></div>
       <div class="row2">

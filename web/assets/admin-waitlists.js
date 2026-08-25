@@ -29,10 +29,10 @@
     if (!r.ok) return fail(r.data.error || "Could not load the waitlist.");
     const { event, spots_taken, is_full, waitlist } = r.data;
     const capTxt = event.capacity ? `${spots_taken}/${event.capacity} spots taken` : `${spots_taken} registered (no cap)`;
-    $("wlCap").textContent = capTxt + (is_full ? " — FULL" : "");
+    $("wlCap").textContent = capTxt + (is_full ? " · FULL" : "");
     $("wlCap").className = "wl-cap" + (is_full ? " full" : "");
     $("wlOfferNext").disabled = is_full || !waitlist.some((w) => w.status === "queued");
-    $("wlOfferNext").title = is_full ? "Event is still full — cancel a registration to open a spot first" : "";
+    $("wlOfferNext").title = is_full ? "Event is still full; cancel a registration to open a spot first" : "";
 
     let live = 0;
     $("wlBody").innerHTML = waitlist.map((w) => {

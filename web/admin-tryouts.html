@@ -9,7 +9,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Tryout evaluations — Boomtown Athletics</title>
+  <title>Tryout evaluations · Boomtown Athletics</title>
   <script>/* Pre-paint state — collapse + theme (uiux-review §4/§6.4, v0.52.0): read the bt_nav cookie and the saved theme BEFORE the first stylesheet so the rail state AND the theme are right on frame one — no post-paint snap of either. admin-nav.js writes the cookie on rail toggle and bt_theme on theme toggle; the localStorage bt_nav fallback migrates pre-v0.51 sessions. */(function(){try{var m=document.cookie.match(/(?:^|; )bt_nav=([^;]*)/);var v=m?m[1]:((window.localStorage&&localStorage.getItem("bt_nav_collapsed")==="1")?"min":"");if(v==="min")document.documentElement.dataset.nav="min";var t=(window.localStorage&&localStorage.getItem("bt_theme"))||(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.dataset.theme=t;}catch(e){}})();</script>
   <script>try{var btTpl=localStorage.getItem("bt_template");if(btTpl)document.documentElement.dataset.template=btTpl;}catch(e){}</script>
   <link rel="stylesheet" href="assets/tokens.css?v=0.194.0" />
@@ -172,7 +172,7 @@
       <div class="mf-head">
         <div>
           <h1>Tryout evaluations</h1>
-          <p class="muted">Everyone registered for this tryout, with what they told us when they signed up. Write your own notes and mark offer or no. <strong>Other coaches cannot see your notes, and you cannot see theirs</strong> — the director sees all of them together afterwards.</p>
+          <p class="muted">Everyone registered for this tryout, with what they told us when they signed up. Write your own notes and mark offer or no. <strong>Other coaches cannot see your notes, and you cannot see theirs</strong>; the director sees all of them together afterwards.</p>
         </div>
         <div class="mf-row" style="margin:0">
           <label class="mf-inline">Tryout
@@ -216,7 +216,7 @@
            cards above deliberately show one coach their own work only. -->
       <section id="tRollup" class="roll" hidden aria-labelledby="tRollH">
         <h2 id="tRollH">Everyone, with every coach's verdict</h2>
-        <p class="mf-note" id="tRollLead">Ratings are shown as the <b>range</b> coaches gave, never an average — two coaches at 2 and 5 is the case worth looking at, and a single number hides it. Sort by any column.</p>
+        <p class="mf-note" id="tRollLead">Ratings are shown as the <b>range</b> coaches gave, never an average: two coaches at 2 and 5 is the case worth looking at, and a single number hides it. Sort by any column.</p>
         <div class="roll-scroll">
           <table class="tbl" id="tRollTable">
             <thead>

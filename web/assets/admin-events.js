@@ -89,7 +89,7 @@
     return `<div class="cal-day${classes}" data-date="${ds}">
         <div class="dnum">${dayNum}</div>
         ${shown.map(e => `<a class="cal-ev ${e.status}" draggable="true" data-ev="${e.id}"
-            href="admin-event.html?id=${e.id}" title="${esc(e.name)} — click to manage, drag to reschedule">${esc(e.name)}</a>`).join("")}
+            href="admin-event.html?id=${e.id}" title="${esc(e.name)}: click to manage, drag to reschedule">${esc(e.name)}</a>`).join("")}
         ${hidden > 0 ? `<button type="button" class="cal-more" data-more="${ds}" aria-label="Show all ${dayEvents.length} events on this day">+${hidden} more</button>` : ""}
       </div>`;
   }
@@ -232,7 +232,7 @@
   document.getElementById("newRecurringBtn").addEventListener("click", () => {
     const back = openModal(`
       <h2>Recurring event series</h2>
-      <p class="help-text">Creates one event per date — you can edit or cancel “this and future” later from any instance.</p>
+      <p class="help-text">Creates one event per date; you can edit or cancel “this and future” later from any instance.</p>
       <div class="field"><label>Name</label><input id="r_name" placeholder="e.g. Tuesday League Night" /></div>
       <div class="row2">
         <div class="field"><label>Type</label><select id="r_type">${TYPES.map(t => `<option>${t}</option>`).join("")}</select></div>
@@ -265,7 +265,7 @@
         rule: { freq: back.querySelector("#r_freq").value, count: Number(back.querySelector("#r_count").value) || 8 },
       })});
       if (!r.ok) return alert(r.data.error || "Couldn't create the series.");
-      alert(`Created ${r.data.count} events. They're drafts — publish from the list when ready.`
+      alert(`Created ${r.data.count} events. They're drafts; publish from the list when ready.`
         + (r.data.square_note ? `\n\n${r.data.square_note}` : ""));
       closeModal(); loadAll();
     });
@@ -288,7 +288,7 @@
     });
     back.querySelector("#b_go").addEventListener("click", async () => {
       const rows = parseCsv(back.querySelector("#b_text").value);
-      if (!rows.length) return alert("No rows found — check the header line.");
+      if (!rows.length) return alert("No rows found. Check the header line.");
       const mapped = rows.map(r => ({
         name: r.name, type: r.type || "event",
         starts_at: r.date ? `${r.date} ${r.time || "09:00"}` : null,
@@ -365,7 +365,7 @@
     const back = openModal(`
       <h2>Bulk edit ${selected.size} events</h2>
       <p class="help-text">Only the fields you fill in are changed.</p>
-      <div class="field"><label>Status</label><select id="be_status"><option value="">— leave as is —</option>
+      <div class="field"><label>Status</label><select id="be_status"><option value="">Leave as is</option>
         <option>draft</option><option>published</option><option>completed</option><option>cancelled</option></select></div>
       <div class="row2">
         <div class="field"><label>Price (USD)</label><input id="be_price" type="number" min="0" step="0.01" placeholder="leave blank" /></div>

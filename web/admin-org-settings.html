@@ -20,7 +20,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Organization settings — Boomtown Platform</title>
+  <title>Organization settings · Boomtown Platform</title>
   <script>document.documentElement.dataset.theme = localStorage.getItem("bt_theme") || "dark";</script>
   <script>/* Pre-paint state — collapse + theme (uiux-review §4/§6.4, v0.52.0): read the bt_nav cookie and the saved theme BEFORE the first stylesheet so the rail state AND the theme are right on frame one — no post-paint snap of either. admin-nav.js writes the cookie on rail toggle and bt_theme on theme toggle; the localStorage bt_nav fallback migrates pre-v0.51 sessions. */(function(){try{var m=document.cookie.match(/(?:^|; )bt_nav=([^;]*)/);var v=m?m[1]:((window.localStorage&&localStorage.getItem("bt_nav_collapsed")==="1")?"min":"");if(v==="min")document.documentElement.dataset.nav="min";var t=(window.localStorage&&localStorage.getItem("bt_theme"))||(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.dataset.theme=t;}catch(e){}})();</script>
   <script>try{var btTpl=localStorage.getItem("bt_template");if(btTpl)document.documentElement.dataset.template=btTpl;}catch(e){}</script>
@@ -177,7 +177,7 @@
         <h2 id="legalH">Legal identity</h2>
         <p class="why">
           Five of these have no fallback. If one is empty, publishing a document refuses rather
-          than guessing — a guessed party name in a signed release names the wrong company.
+          than guessing: a guessed party name in a signed release names the wrong company.
         </p>
         <div class="og-ready" id="ready"></div>
         <div class="og-grid">
@@ -272,7 +272,7 @@
            only caller would have orphaned the route (route_reachability's ratchet). -->
       <section class="og-card" aria-labelledby="pushH">
         <h2 id="pushH">Push notifications</h2>
-        <p class="why">Sends a test notification to every device where you turned push on —
+        <p class="why">Sends a test notification to every device where you turned push on;
           your own devices only, so you can check delivery without messaging anyone else.</p>
         <button id="pushTestBtn" class="btn ghost" type="button">Send test</button>
       </section>
@@ -282,9 +282,9 @@
       <section class="og-card" aria-labelledby="sqH">
         <h2 id="sqH">Payments (Square)</h2>
         <p class="why">Where this organization's catalog items and payments land in Square.
-          Find the ID under Square Dashboard → Account &amp; Settings → Locations — it is the
+          Find the ID under Square Dashboard → Account &amp; Settings → Locations; it is the
           short code, not the location's name. <strong>Leave it empty to use the platform's
-          default location.</strong> A mistyped ID won't be caught here — Square refuses it when
+          default location.</strong> A mistyped ID won't be caught here; Square refuses it when
           the first item or payment is created.</p>
         <div class="og-grid">
           <div class="og-field">
@@ -330,7 +330,7 @@
           <div class="og-field wide">
             <label for="f_logo_url">Logo URL</label>
             <input id="f_logo_url" data-f="logo_url" type="url" maxlength="500" placeholder="https://" />
-            <span class="tok">Uploading fills this in for you — or paste a hosted image URL.</span>
+            <span class="tok">Uploading fills this in for you, or paste a hosted image URL.</span>
             <span class="err" data-e="logo_url"></span>
           </div>
         </div>
@@ -350,7 +350,7 @@
       <section class="og-card" aria-labelledby="modulesH">
         <h2 id="modulesH">Modules on the admin menu</h2>
         <p class="why">Untick what this organization doesn't use and its admin menu stops offering
-          it — a smaller menu, not a smaller system. Nothing is deleted, no access changes, and
+          it: a smaller menu, not a smaller system. Nothing is deleted, no access changes, and
           this page always stays reachable to switch things back on.</p>
         <div class="og-modules" id="modulesGrid" role="group" aria-labelledby="modulesH"></div>
         <div class="og-logo-actions" style="margin-top:10px">
@@ -362,7 +362,7 @@
       <section class="og-card" id="allOrgsCard" hidden aria-labelledby="allH">
         <h2 id="allH">All organizations</h2>
         <p class="why">
-          Deactivated organizations are hidden from the switcher but never deleted — their records
+          Deactivated organizations are hidden from the switcher but never deleted; their records
           stay linked. This is the only way to bring one back.
         </p>
         <div id="allOrgs"></div>
@@ -370,7 +370,7 @@
 
       <section class="og-card" aria-labelledby="defOrgH">
         <h2 id="defOrgH">Your default organization</h2>
-        <p class="why">A setting for <b>your own account</b> — it is not part of this organization's
+        <p class="why">A setting for <b>your own account</b>; it is not part of this organization's
           profile, it is not saved by the Save changes button below, and it changes nothing for
           anyone else. When set, this organization opens first on a new browser or after a sign-in
           with no organization remembered. The organization you last switched to still wins on a

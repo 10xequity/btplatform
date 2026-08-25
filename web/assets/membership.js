@@ -19,7 +19,7 @@
     try {
       const resp = await fetch(API + path, Object.assign({}, opts, { headers: headers(), credentials: "include" }));
       return { ok: resp.ok, status: resp.status, data: await resp.json().catch(() => ({})) };
-    } catch (e) { return { ok: false, status: 0, data: { error: "Network problem — check your connection." } }; }
+    } catch (e) { return { ok: false, status: 0, data: { error: "Network problem. Check your connection." } }; }
   }
   const money = c => "$" + (c / 100).toFixed(2);
   const say = (msg, isErr) => { $("status").innerHTML = msg ? `<p class="help-text" style="${isErr ? "color:var(--danger,#e5484d)" : ""}">${esc(msg)}</p>` : ""; };
@@ -29,7 +29,7 @@
   boot();
   async function boot() {
     if (new URLSearchParams(location.search).get("done")) {
-      say("Payment received — your membership activates as soon as Square confirms (usually under a minute). Refresh to see it.");
+      say("Payment received. Your membership activates as soon as Square confirms (usually under a minute). Refresh to see it.");
     }
     const me = await api("/api/me");
     const signedIn = me.ok && me.data && me.data.user;
@@ -47,7 +47,7 @@
     sub = r.ok ? r.data.subscription : null;
     if (!sub || sub.status === "canceled" || sub.status === "deactivated") {
       $("current").innerHTML = sub && sub.status === "canceled" && sub.current_period_end
-        ? `<div class="ms-banner">Your <b>${esc(sub.plan_name)}</b> membership is canceled — benefits run until <b>${esc(sub.current_period_end.slice(0, 10))}</b>.</div>`
+        ? `<div class="ms-banner">Your <b>${esc(sub.plan_name)}</b> membership is canceled; benefits run until <b>${esc(sub.current_period_end.slice(0, 10))}</b>.</div>`
         : "";
       return;
     }
@@ -56,7 +56,7 @@
       $("current").innerHTML = `<div class="ms-banner warn"><b>Payment issue on your ${esc(sub.plan_name)} membership.</b>
         Square retries your card automatically; to update the card, use the link in Square's email receipt or contact the front desk.</div>`;
     } else if (sub.status === "pending") {
-      $("current").innerHTML = `<div class="ms-banner">Checkout started for <b>${esc(sub.plan_name)}</b> — finish payment on the Square page, or pick a plan below to start over.</div>`;
+      $("current").innerHTML = `<div class="ms-banner">Checkout started for <b>${esc(sub.plan_name)}</b>; finish payment on the Square page, or pick a plan below to start over.</div>`;
     } else {
       $("current").innerHTML = `<div class="ms-banner ok"><b>${esc(sub.plan_name)}</b> · ${price} · Active${sub.current_period_end ? ` · renews ${esc(sub.current_period_end.slice(0, 10))}` : ""}
         ${sub.card_last4 ? ` · card ····${esc(sub.card_last4)}` : ""}
@@ -75,7 +75,7 @@
   async function loadPlans(signedIn) {
     const r = await api("/api/plans");
     const plans = (r.ok && r.data.plans) || [];
-    if (!plans.length) { $("plans").innerHTML = `<p class="help-text">No membership plans yet — check back soon.</p>`; return; }
+    if (!plans.length) { $("plans").innerHTML = `<p class="help-text">No membership plans yet. Check back soon.</p>`; return; }
     const hasActive = sub && (sub.status === "active" || sub.status === "past_due");
     $("plans").innerHTML = plans.map(p => `
       <section class="plan">

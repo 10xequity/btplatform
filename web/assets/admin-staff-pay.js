@@ -84,7 +84,7 @@
   }
 
   async function removeRate(id) {
-    if (!window.confirm("Remove this rate?\n\nShifts already approved keep the numbers they were approved at — this only affects shifts assigned from now on.")) return;
+    if (!window.confirm("Remove this rate?\n\nShifts already approved keep the numbers they were approved at; this only affects shifts assigned from now on.")) return;
     const r = await api(`/api/admin/staff-rates/${id}`, { method: "DELETE" });
     if (!r.ok) return fail("rBody", r.data.error || "Couldn't remove that rate.");
     loadRates();

@@ -68,10 +68,10 @@
     if (!ev.min_signups) return "";
     const n = ev.active_signups || 0;
     if (n < ev.min_signups) {
-      return `<span class="notice-err" role="status">${n} of ${ev.min_signups} needed to run — ${ev.min_signups - n} short.
+      return `<span class="notice-err" role="status">${n} of ${ev.min_signups} needed to run; ${ev.min_signups - n} short.
         Cancelling from here tells everyone who signed up.</span>`;
     }
-    return `<span class="notice-ok" role="status">${n} signed up — meets the ${ev.min_signups} needed to run.</span>`;
+    return `<span class="notice-ok" role="status">${n} signed up; meets the ${ev.min_signups} needed to run.</span>`;
   }
 
   function render() {
@@ -118,7 +118,7 @@
           </div>
           <p class="help-text" style="margin:4px 0 8px">Leave the link empty to register people here.
             ${(ev.price_cents || 0) > 0
-              ? "<strong>This event has a price, so it cannot also link out</strong> — set the price to 0 above if it should register elsewhere."
+              ? "<strong>This event has a price, so it cannot also link out</strong>; set the price to 0 above if it should register elsewhere."
               : "An event that links out takes no price, no waiver and no check-in here."}</p>
           <label style="display:flex;gap:8px;align-items:center;font-size:14px;margin:8px 0">
             <input type="checkbox" id="e_cash" ${ev.cash_option_enabled ? "checked" : ""} /> Hidden cash option (admin-only, flags CASH-PENDING)</label>
@@ -130,9 +130,9 @@
       <div class="card" style="padding:16px;margin-bottom:18px">
         <h2 style="font-size:16px;margin:0 0 6px">${(ev.external_url || "").trim() ? "Where this event registers" : "Sign-up &amp; pay link"}</h2>
         <p class="help-text">${(ev.external_url || "").trim()
-          ? "This event registers on another site, so the link below is <strong>theirs, not ours</strong> — sharing it sends people straight there. Nobody can sign up, pay or check in here."
+          ? "This event registers on another site, so the link below is <strong>theirs, not ours</strong>; sharing it sends people straight there. Nobody can sign up, pay or check in here."
           : `Anyone with this link can register${(ev.price_cents || 0) > 0 ? " and pay by card (Square)" : ""}.
-            ${ev.status === "draft" ? "<strong>Publish the event first — drafts aren't open for registration.</strong>" : ""}`}</p>
+            ${ev.status === "draft" ? "<strong>Publish the event first; drafts aren't open for registration.</strong>" : ""}`}</p>
         <code style="user-select:all">${esc(regLink())}</code>
         <button class="btn ghost" id="copyLink" style="margin-left:8px">Copy link</button>
       </div>
@@ -143,7 +143,7 @@
            the report says exactly what did and did not happen. -->
       <div class="card" style="padding:16px;margin-bottom:18px">
         <h2 style="font-size:16px;margin:0 0 6px">Message everyone signed up</h2>
-        <p class="help-text">Sends an in-app note to every active registrant — court changes,
+        <p class="help-text">Sends an in-app note to every active registrant: court changes,
           start times, what to bring. Email goes out too when the mail key is set; otherwise
           members still see it on their home page.</p>
         <div class="field"><label for="e_msg">Message</label>
@@ -252,7 +252,7 @@
     const name = prompt("Template name:", ev.name + " template");
     if (!name) return;
     const r = await api(`/api/events/${id}/save-as-template`, { method: "POST", body: JSON.stringify({ name }) });
-    alert(r.ok ? "Template saved — find it on the Events calendar palette." : (r.data.error || "Failed."));
+    alert(r.ok ? "Template saved. Find it on the Events calendar palette." : (r.data.error || "Failed."));
   }
 
   function seriesEdit() {
@@ -286,7 +286,7 @@
     const wrap = document.getElementById("kotcList");
     if (!wrap) return;
     const r = await api("/api/admin/kotc");
-    if (!r.ok) { wrap.innerHTML = `<span class="help-text">Couldn't load the sessions — reload to try again.</span>`; return; }
+    if (!r.ok) { wrap.innerHTML = `<span class="help-text">Couldn't load the sessions. Reload to try again.</span>`; return; }
     const mine = (r.data.sessions || []).filter((s) => s.event_id === id);
     if (!mine.length) {
       wrap.innerHTML = `<span class="help-text">No sessions on this event yet.</span>`;

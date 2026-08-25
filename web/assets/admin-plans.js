@@ -28,7 +28,7 @@
     if (!pl.ok) { say(pl.data.error || "Couldn't load plans.", true); return; }
 
     $("billingNote").innerHTML = pl.data.billing_configured ? "" :
-      `<div class="card" style="border-color:var(--warning,#e6a23c);margin-bottom:12px"><b>Square keys aren't set</b> —
+      `<div class="card" style="border-color:var(--warning,#e6a23c);margin-bottom:12px"><b>Square keys aren't set</b>;
        plans save locally but members can't subscribe yet. Add SQUARE_ACCESS_TOKEN + SQUARE_LOCATION_ID
        (and the webhook key) as worker secrets, then edit + save each plan once to link it to Square.</div>`;
 
@@ -52,7 +52,7 @@
           <button class="btn ghost" data-edit="${p.id}">Edit</button>
           <button class="btn ghost" data-toggle="${p.id}" data-to="${p.active ? 0 : 1}">${p.active ? "Hide" : "Show"}</button>
         </td>
-      </tr>`).join("") : `<tr><td colspan="7" class="help-text">No plans yet — create the first one above.</td></tr>`;
+      </tr>`).join("") : `<tr><td colspan="7" class="help-text">No plans yet. Create the first one above.</td></tr>`;
     $("planRows").querySelectorAll("[data-edit]").forEach(b => b.onclick = () => startEdit(plans.find(p => p.id == b.dataset.edit)));
     $("planRows").querySelectorAll("[data-toggle]").forEach(b => b.onclick = async () => {
       const r = await api(`/api/admin/plans/${b.dataset.toggle}`, { method: "PUT", body: JSON.stringify({ active: +b.dataset.to }) });

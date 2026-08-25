@@ -106,7 +106,7 @@
           ${url ? `<span><a href="${esc(url)}">${esc(label || "More")}</a></span>` : ""}</div></div></div>`;
     }
     $("prevNote").textContent = kind === "cta"
-      ? "Pinned at the top of every member's home box. Hide controls don't apply — it simply stays."
+      ? "Pinned at the top of every member's home box. Hide controls don't apply. It simply stays."
       : "Appears under News. Members can hide a single post or the whole News section.";
   }
   ["fTitle", "fBody", "fUrl", "fLabel"].forEach((id) => $(id).addEventListener("input", preview));

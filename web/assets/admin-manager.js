@@ -139,7 +139,7 @@
        other (widget.js has filtered by slug since v0.4.0 for exactly this reason). */
     f.src = `${pane.page}?event=${encodeURIComponent(eventId)}&embed=1&slug=${encodeURIComponent(id)}`;
     f.className = "mgr-frame";
-    f.title = `${tab.label} — ${pane.label}`;
+    f.title = `${tab.label} · ${pane.label}`;
     f.setAttribute("loading", "lazy");
     $("mgrPanes").appendChild(f);
     frames[id] = f;
@@ -195,7 +195,7 @@
     for (const b of $("mgrTabs").children) b.onclick = () => { location.hash = b.dataset.tab; };
 
     if (!visibleTabs().length) {
-      $("mgrNote").textContent = `A ${ev.type || "event"} has no manager tabs yet — open it from Events & Programs instead.`;
+      $("mgrNote").textContent = `A ${ev.type || "event"} has no manager tabs yet; open it from Events & Programs instead.`;
       return;
     }
     window.addEventListener("hashchange", route);

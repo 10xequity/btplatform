@@ -385,7 +385,7 @@ const NAVJS = read("assets/site-nav.js");
 const APPJS = read("assets/app.js");
 
 test("RF-11 — the member schedule reads 'Event Schedule' across its four surfaces", () => {
-  assert.match(SHTML, /<title>Event Schedule —/, "the page <title> was not renamed");
+  assert.match(SHTML, /<title>Event Schedule ·/, "the page <title> was not renamed"); // RF-20: · separator
   assert.match(SHTML, /id="schedTitle"[^>]*>Event Schedule</, "the static heading was not renamed");
   assert.match(blankComments(SJS), /"Event Schedule"/, "the runtime heading text was not renamed (schedule.js overwrites the h1)");
   assert.match(blankComments(NAVJS), /text: "Event Schedule"/, "the member nav item was not renamed");

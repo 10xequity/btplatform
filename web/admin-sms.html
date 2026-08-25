@@ -9,7 +9,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Text Messages — Boomtown Athletics</title>
+  <title>Text Messages · Boomtown Athletics</title>
   <script>/* Pre-paint state — collapse + theme (uiux-review §4/§6.4, v0.52.0): read the bt_nav cookie and the saved theme BEFORE the first stylesheet so the rail state AND the theme are right on frame one — no post-paint snap of either. admin-nav.js writes the cookie on rail toggle and bt_theme on theme toggle; the localStorage bt_nav fallback migrates pre-v0.51 sessions. */(function(){try{var m=document.cookie.match(/(?:^|; )bt_nav=([^;]*)/);var v=m?m[1]:((window.localStorage&&localStorage.getItem("bt_nav_collapsed")==="1")?"min":"");if(v==="min")document.documentElement.dataset.nav="min";var t=(window.localStorage&&localStorage.getItem("bt_theme"))||(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.dataset.theme=t;}catch(e){}})();</script>
   <script>try{var btTpl=localStorage.getItem("bt_template");if(btTpl)document.documentElement.dataset.template=btTpl;}catch(e){}</script>
   <link rel="stylesheet" href="assets/tokens.css?v=0.194.0" />
@@ -129,11 +129,11 @@
       <div class="sms-head">
         <div>
           <h1>Text Messages</h1>
-          <p class="muted">Court assignments and game-day notices. Only members who opted in ever get a text — the reach line shows who that is before you send.</p>
+          <p class="muted">Court assignments and game-day notices. Only members who opted in ever get a text; the reach line shows who that is before you send.</p>
         </div>
       </div>
       <div class="sms-banner" id="smsBanner" hidden>
-        Texting isn't switched on yet — Twilio A2P registration is pending. You can look
+        Texting isn't switched on yet; Twilio A2P registration is pending. You can look
         around, but nothing sends until the registration clears and the secrets are set.
       </div>
       <form class="sms-form" id="smsForm">
@@ -145,12 +145,12 @@
         <div class="sms-reach" id="sReach"></div>
         <label>Message
           <textarea id="sBody" maxlength="480" required
-            placeholder="Court 4 for your 6:15 match — doors on the north side."></textarea>
+            placeholder="Court 4 for your 6:15 match. Doors on the north side."></textarea>
         </label>
         <div class="sms-count" id="sCount">0 / 480 · 1 text segment ≈ 160 characters</div>
         <div class="sms-row">
           <button class="btn" type="submit" id="sSend">Send text</button>
-          <button class="btn ghost" type="button" id="sConfirm" hidden>Yes — send it</button>
+          <button class="btn ghost" type="button" id="sConfirm" hidden>Yes, send it</button>
           <span class="sms-result" id="sResult" role="status"></span>
         </div>
       </form>

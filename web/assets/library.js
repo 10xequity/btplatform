@@ -34,14 +34,14 @@
     for (const k of ["q", "position", "level", "gender"]) { const v = (f.get(k) || "").trim(); if (v) qs.set(k, v); }
     $("results").innerHTML = '<p class="help-text">Searching…</p>';
     const r = await api("/api/library/search?" + qs.toString());
-    if (!r.ok) { $("results").innerHTML = `<p class="help-text">${esc(r.data.error || "Search failed — try again.")}</p>`; return; }
+    if (!r.ok) { $("results").innerHTML = `<p class="help-text">${esc(r.data.error || "Search failed. Try again.")}</p>`; return; }
     render(r.data.players || []);
   }
 
   function render(players) {
     if (!players.length) {
       $("results").innerHTML = `<div class="pl-card"><div class="who"><b>No players found</b>
-        <p class="pl-bio">Try fewer filters${signedIn ? "" : " — or <a href='index.html'>sign in</a> to see members-only profiles"}.</p></div></div>`;
+        <p class="pl-bio">Try fewer filters${signedIn ? "" : ", or <a href='index.html'>sign in</a> to see members-only profiles"}.</p></div></div>`;
       return;
     }
     $("results").innerHTML = players.map((p) => {
@@ -70,7 +70,7 @@
     wrap.className = "compose-modal";
     wrap.innerHTML = `<div class="box" role="dialog" aria-modal="true" aria-label="Message ${esc(name)}">
       <h2 style="margin:0 0 4px;font-size:17px">Message ${esc(name)}</h2>
-      <p class="help-text" style="margin:0 0 10px">Delivered in-app and by email through Boomtown —
+      <p class="help-text" style="margin:0 0 10px">Delivered in-app and by email through Boomtown;
         your email address stays private.</p>
       <input id="cmpSubject" placeholder="Subject (optional)" maxlength="120">
       <textarea id="cmpBody" placeholder="Write your message…" maxlength="2000" aria-label="Message body"></textarea>
@@ -90,7 +90,7 @@
       wrap.querySelector("#cmpSend").disabled = true;
       const r = await api("/api/messages/start", { method: "POST", body: JSON.stringify({
         to_contact_id: contactId, subject: wrap.querySelector("#cmpSubject").value.trim(), body }) });
-      if (!r.ok) { alert(r.data.error || "Couldn't send — try again."); wrap.querySelector("#cmpSend").disabled = false; return; }
+      if (!r.ok) { alert(r.data.error || "Couldn't send. Try again."); wrap.querySelector("#cmpSend").disabled = false; return; }
       close();
       location.href = "member-inbox.html?thread=" + r.data.thread_id;
     };
@@ -115,7 +115,7 @@
         gender_division: $("mc_gender").value, height_reach: $("mc_height").value,
         visibility: $("mc_visibility").value }) });
       $("mcSave").disabled = false;
-      $("mcStatus").textContent = r2.ok ? "Saved ✓" : (r2.data.error || "Couldn't save — try again.");
+      $("mcStatus").textContent = r2.ok ? "Saved ✓" : (r2.data.error || "Couldn't save. Try again.");
       if (r2.ok) search();
     });
   }

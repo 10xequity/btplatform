@@ -41,7 +41,7 @@
     const fromUrl = Number(new URLSearchParams(location.search).get("event")) || null;
     if (fromUrl) {
       if (evs.some(e => e.id === fromUrl)) { sel.value = fromUrl; eventId = fromUrl; load(); return; }
-      say("This event isn't open for check-in yet — only published or in-progress events have a door roster.", false);
+      say("This event isn't open for check-in yet; only published or in-progress events have a door roster.", false);
       return;
     }
     // Preselect today's event if there's exactly one starting today.
@@ -81,7 +81,7 @@
           <div class="t">${esc(w.method)} · ${esc((w.checked_in_at || "").slice(11, 16))}</div></div>
           <div class="mark">✓</div></div>`).join("");
     }
-    $("roster").innerHTML = html || `<p class="empty">${filter ? "No names match." : "No roster yet — teams appear here after registration."}</p>`;
+    $("roster").innerHTML = html || `<p class="empty">${filter ? "No names match." : "No roster yet; teams appear here after registration."}</p>`;
     $("roster").querySelectorAll("[data-tm]").forEach(b => b.onclick = () => toggle(b));
     $("roster").querySelectorAll("[data-reg]").forEach(b => b.onclick = () => resolveBalance(b));
   }
@@ -94,7 +94,7 @@
     const r = await api(`/api/registrations/${btn.dataset.reg}/mark-paid`, { method: "POST" });
     btn.disabled = false;
     if (!r.ok) { say(r.data.error || "Couldn't mark it paid.", false); return; }
-    say("Paid — balance cleared.", true);
+    say("Paid. Balance cleared.", true);
     load();
   }
 
@@ -145,7 +145,7 @@
     // v0.68.0: was a CDN library that, when it failed, printed "QR library blocked". A QR code
     // is used at the door of a gym — the worst place to need a third-party host reachable.
     $("qr").innerHTML = window.BTQR.svg(url, { size: 168, label: "Self check-in QR code" });
-    if (rotating) say("Code rotated — the old QR/link is dead.", true);
+    if (rotating) say("Code rotated. The old QR/link is dead.", true);
   }
 
   function say(text, ok = true) {

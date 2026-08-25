@@ -8,7 +8,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Passes &amp; credits — Boomtown Athletics</title>
+  <title>Passes &amp; credits · Boomtown Athletics</title>
   <script>/* Pre-paint state — collapse + theme (uiux-review §4/§6.4, v0.52.0): read the bt_nav cookie and the saved theme BEFORE the first stylesheet so the rail state AND the theme are right on frame one — no post-paint snap of either. admin-nav.js writes the cookie on rail toggle and bt_theme on theme toggle; the localStorage bt_nav fallback migrates pre-v0.51 sessions. */(function(){try{var m=document.cookie.match(/(?:^|; )bt_nav=([^;]*)/);var v=m?m[1]:((window.localStorage&&localStorage.getItem("bt_nav_collapsed")==="1")?"min":"");if(v==="min")document.documentElement.dataset.nav="min";var t=(window.localStorage&&localStorage.getItem("bt_theme"))||(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.dataset.theme=t;}catch(e){}})();</script>
   <script>try{var btTpl=localStorage.getItem("bt_template");if(btTpl)document.documentElement.dataset.template=btTpl;}catch(e){}</script>
   <link rel="stylesheet" href="assets/tokens.css?v=0.194.0" />
@@ -137,7 +137,7 @@
       <div class="mf-head">
         <div>
           <h1>Passes &amp; credits</h1>
-          <p class="muted">Punch cards, lesson packs, open-gym passes and the guest passes that come with a membership. A pass is a number of sessions with an end date — the balance counts itself from what has actually been used.</p>
+          <p class="muted">Punch cards, lesson packs, open-gym passes and the guest passes that come with a membership. A pass is a number of sessions with an end date; the balance counts itself from what has actually been used.</p>
         </div>
         <button class="btn" id="pNew">Issue a pass</button>
       </div>
@@ -162,14 +162,14 @@
           </label>
           <label>Sessions
             <input id="pSessions" type="number" inputmode="numeric" min="1" max="500" placeholder="10" />
-            <span class="mf-help">Leave blank for unlimited — an unlimited pass must have an end date.</span>
+            <span class="mf-help">Leave blank for unlimited; an unlimited pass must have an end date.</span>
           </label>
           <label>Ends on
             <input id="pExpires" type="date" />
           </label>
           <label>Price paid
             <input id="pPrice" type="text" inputmode="decimal" placeholder="120.00" />
-            <span class="mf-help">Optional. Just for the record — this does not take a payment.</span>
+            <span class="mf-help">Optional. Just for the record; this does not take a payment.</span>
           </label>
         </div>
         <div class="mf-row">
@@ -181,7 +181,7 @@
 
       <div class="mf-filter">
         <label class="mf-inline">Show passes for
-          <input id="pFilter" placeholder="Everyone — or type a name" autocomplete="off" />
+          <input id="pFilter" placeholder="Everyone, or type a name" autocomplete="off" />
         </label>
         <button class="btn ghost" id="pClear" type="button">Show everyone</button>
       </div>

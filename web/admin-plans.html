@@ -6,7 +6,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Memberships — Boomtown Athletics</title>
+  <title>Memberships · Boomtown Athletics</title>
   <script>/* Pre-paint state — collapse + theme (uiux-review §4/§6.4, v0.52.0): read the bt_nav cookie and the saved theme BEFORE the first stylesheet so the rail state AND the theme are right on frame one — no post-paint snap of either. admin-nav.js writes the cookie on rail toggle and bt_theme on theme toggle; the localStorage bt_nav fallback migrates pre-v0.51 sessions. */(function(){try{var m=document.cookie.match(/(?:^|; )bt_nav=([^;]*)/);var v=m?m[1]:((window.localStorage&&localStorage.getItem("bt_nav_collapsed")==="1")?"min":"");if(v==="min")document.documentElement.dataset.nav="min";var t=(window.localStorage&&localStorage.getItem("bt_theme"))||(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.dataset.theme=t;}catch(e){}})();</script>
   <script>try{var btTpl=localStorage.getItem("bt_template");if(btTpl)document.documentElement.dataset.template=btTpl;}catch(e){}</script>
   <link rel="stylesheet" href="assets/tokens.css?v=0.194.0" />
@@ -123,12 +123,12 @@
           <select id="pInterval"><option value="MONTHLY">Monthly</option><option value="ANNUAL">Annual</option></select></div>
         <div class="full"><label for="pDesc">Short description (shown on the member page)</label>
           <input id="pDesc" maxlength="200" placeholder="Unlimited open gym + member pricing on tournaments" /></div>
-        <div class="full"><label for="pPerks">Perks — one per line (shown as bullets)</label>
+        <div class="full"><label for="pPerks">Perks: one per line (shown as bullets)</label>
           <textarea id="pPerks" placeholder="Unlimited open gym&#10;10% off league registration"></textarea></div>
         <div class="full" style="display:flex;gap:10px;align-items:center">
           <button class="btn" type="submit" id="saveBtn">Create plan</button>
           <button class="btn ghost" type="button" id="cancelEdit" hidden>Cancel edit</button>
-          <span class="help-text" id="priceNote" hidden>Price changes apply to NEW signups — existing subscribers keep the price they signed up at (Square pins them to their original variation).</span>
+          <span class="help-text" id="priceNote" hidden>Price changes apply to NEW signups; existing subscribers keep the price they signed up at (Square pins them to their original variation).</span>
         </div>
       </form>
     </section>

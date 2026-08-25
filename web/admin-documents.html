@@ -31,7 +31,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Documents — Boomtown Platform</title>
+  <title>Documents · Boomtown Platform</title>
   <script>document.documentElement.dataset.theme = localStorage.getItem("bt_theme") || "dark";</script>
   <script>/* Pre-paint state — collapse + theme (uiux-review §4/§6.4, v0.52.0): read the bt_nav cookie and the saved theme BEFORE the first stylesheet so the rail state AND the theme are right on frame one — no post-paint snap of either. admin-nav.js writes the cookie on rail toggle and bt_theme on theme toggle; the localStorage bt_nav fallback migrates pre-v0.51 sessions. */(function(){try{var m=document.cookie.match(/(?:^|; )bt_nav=([^;]*)/);var v=m?m[1]:((window.localStorage&&localStorage.getItem("bt_nav_collapsed")==="1")?"min":"");if(v==="min")document.documentElement.dataset.nav="min";var t=(window.localStorage&&localStorage.getItem("bt_theme"))||(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.dataset.theme=t;}catch(e){}})();</script>
   <script>try{var btTpl=localStorage.getItem("bt_template");if(btTpl)document.documentElement.dataset.template=btTpl;}catch(e){}</script>
@@ -248,7 +248,7 @@
       <h1 class="dc-h1">Documents</h1>
       <p class="dc-sub">
         Waivers, policies and consents, written by you and owned by this organization. Use tokens
-        like <code>{{ENTITY}}</code> so the same text publishes correctly for every company —
+        like <code>{{ENTITY}}</code> so the same text publishes correctly for every company;
         never type a company name into the body.
       </p>
 
@@ -273,8 +273,8 @@
             <div class="dc-field" style="flex:0 0 200px;">
               <label for="material">Change type</label>
               <select id="material">
-                <option value="1" selected>Material — everyone re-signs</option>
-                <option value="0">Minor — existing signatures stand</option>
+                <option value="1" selected>Material: everyone re-signs</option>
+                <option value="0">Minor: existing signatures stand</option>
               </select>
             </div>
             <div class="dc-field">
@@ -313,7 +313,7 @@
           <h2>Insert a token</h2>
           <div id="palette"></div>
           <p style="font-size:12px; color:var(--text-dim, var(--text-muted)); line-height:1.5;">
-            Tokens with a gold edge have no fallback — publishing refuses if the organization
+            Tokens with a gold edge have no fallback: publishing refuses if the organization
             profile leaves them empty.
           </p>
         </aside>

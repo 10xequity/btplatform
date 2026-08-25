@@ -35,12 +35,12 @@
     const list = $("faqList"), count = $("faqCount");
     if (!ALL.length) {
       count.textContent = "";
-      list.innerHTML = `<div class="faq-empty">No help articles yet — check back soon, or reach us from the schedule page.</div>`;
+      list.innerHTML = `<div class="faq-empty">No help articles yet. Check back soon, or reach us from the schedule page.</div>`;
       return;
     }
     if (!rows.length) {
       count.textContent = "";
-      list.innerHTML = `<div class="faq-empty">Nothing matched “${esc(q)}”. Try fewer or different words — “payment”, “schedule”, “sub”.</div>`;
+      list.innerHTML = `<div class="faq-empty">Nothing matched “${esc(q)}”. Try fewer or different words: “payment”, “schedule”, “sub”.</div>`;
       return;
     }
     count.textContent = q ? `${rows.length} match${rows.length === 1 ? "" : "es"}` : `${rows.length} articles`;

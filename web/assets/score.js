@@ -9,7 +9,7 @@
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
   if (!API || API.includes("PENDING")) {
-    app.innerHTML = "<div class='card'><h1>One moment</h1><p>Settings still loading — pull down to refresh.</p></div>";
+    app.innerHTML = "<div class='card'><h1>One moment</h1><p>Settings still loading. Pull down to refresh.</p></div>";
     return;
   }
   /* theme: pre-paint snippet applies it; site-nav.js v2.13 owns the toggle listener
@@ -21,7 +21,7 @@
       const resp = await fetch(API + path, Object.assign({}, opts, { headers }));
       return { ok: resp.ok, data: await resp.json().catch(() => ({})) };
     } catch {
-      return { ok: false, data: { error: "Can't reach the server — check your signal and try again." } };
+      return { ok: false, data: { error: "Can't reach the server. Check your signal and try again." } };
     }
   }
 
@@ -46,7 +46,7 @@
         <h1 style="font-size:1.2rem">${esc(team.name)}</h1>
         <p class="meta">${esc(r.data.event)} · tap who won, then the point margin</p>
       </div>` +
-      (pending.length ? pending.map(matchCard).join("") : "<div class='card'><p>Nothing to score yet — your next game will appear here.</p></div>") +
+      (pending.length ? pending.map(matchCard).join("") : "<div class='card'><p>Nothing to score yet; your next game will appear here.</p></div>") +
       (done.length ? `<div class="card"><h2 style="font-size:1rem">Already scored</h2>${done.map(scoredLine).join("")}</div>` : "");
     pending.forEach(wire);
   }
@@ -54,16 +54,16 @@
   /** The finished state. Their results stay visible; the controls do not. */
   function retire(data, done) {
     app.innerHTML = `<div class="card">
-        <h1 style="font-size:1.2rem">${esc(data.team.name)} — all done</h1>
+        <h1 style="font-size:1.2rem">${esc(data.team.name)} · all done</h1>
         <p class="meta">${esc(data.event)}</p>
-        <p>Every game has a score. Thanks — nothing else to do here.</p>
+        <p>Every game has a score. Thanks. Nothing else to do here.</p>
       </div>
       <div class="card"><h2 style="font-size:1rem">Your results</h2>${done.map(scoredLine).join("")}</div>
       <div class="card"><p class="meta">Something wrong? The tournament desk can fix any score.</p></div>`;
   }
 
   const scoredLine = (m) =>
-    `<p class="meta">${esc(m.stage_label || "Pool")} · vs ${esc(opp(m))} — ${m.score_a}–${m.score_b}</p>`;
+    `<p class="meta">${esc(m.stage_label || "Pool")} · vs ${esc(opp(m))} · ${m.score_a}–${m.score_b}</p>`;
 
   const opp = (m) => (m.team_a === team.name ? m.team_b : m.team_a);
 
@@ -71,7 +71,7 @@
     // The stage matters to the people playing: "Quarter-final" is a different thing to walk onto a
     // court for than "Pool", and until v0.67.0 bracket games were not shown here at all.
     return `<div class="match" id="m${m.id}">
-      <h3>${esc(m.stage_label || "Pool")} — vs ${esc(opp(m))}</h3>
+      <h3>${esc(m.stage_label || "Pool")} · vs ${esc(opp(m))}</h3>
       <div class="meta">Court ${m.court} · game to ${m.points_to}</div>
       <div class="taps">
         <button class="btn" data-win="us">We won</button>
@@ -102,7 +102,7 @@
               return;
             }
             el.classList.add("done");
-            el.innerHTML = `<h3>${esc(m.stage_label || "Pool")} — vs ${esc(opp(m))}</h3><p class="result">Saved: ${r.data.score_a}–${r.data.score_b} ✓</p>`;
+            el.innerHTML = `<h3>${esc(m.stage_label || "Pool")} · vs ${esc(opp(m))}</h3><p class="result">Saved: ${r.data.score_a}–${r.data.score_b} ✓</p>`;
             // That was the team's last game — reload so the page retires itself rather than
             // sitting there looking like it still wants something.
             if (r.data.done) setTimeout(load, 900);

@@ -246,7 +246,7 @@ test("it fetches ONE endpoint, so the board is one consistent moment", () => {
 test("it says when it last updated, and says so louder when it fails", () => {
   // A scoreboard that has silently stopped is worse than one that is visibly stale.
   assert.match(PAGE, /Updated \$\{hh\}:\$\{mm\}:\$\{ss\}/);
-  assert.match(PAGE, /Can't reach the scoreboard — showing the last update/);
+  assert.match(PAGE, /Can't reach the scoreboard; showing the last update/); // RF-20: em dash out of copy
   assert.match(PAGE, /classList\.add\("stale"\)/);
   assert.match(HTML, /id="lvStamp"[^>]*aria-live/);
 });

@@ -245,7 +245,7 @@
     const dg = $("lvDegraded");
     dg.hidden = !d.degraded;
     dg.textContent = d.degraded
-      ? (d.degraded_note || "Showing what we can — part of this board could not be loaded.")
+      ? (d.degraded_note || "Showing what we can; part of this board could not be loaded.")
       : "";
 
     $("lvTitle").textContent = d.event.name;
@@ -315,7 +315,7 @@
     const r = await get(`/api/live/events/${eventId}`);
     if (!r.ok) {
       // Keep the last good board on screen and mark it, rather than replacing scores with an error.
-      $("lvStamp").textContent = "Can't reach the scoreboard — showing the last update";
+      $("lvStamp").textContent = "Can't reach the scoreboard; showing the last update";
       $("lvStamp").classList.add("stale");
       return;
     }

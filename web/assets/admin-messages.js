@@ -21,7 +21,7 @@
     if (!r.ok) return fail(r.data.error || "Could not load message reports.");
     const flags = r.data.flags || [];
     if (!flags.length) {
-      $("flagList").innerHTML = `<p class="help-text">${status === "open" ? "Nothing to review — inbox zero. 🎉" : "None here."}</p>`;
+      $("flagList").innerHTML = `<p class="help-text">${status === "open" ? "Nothing to review. Inbox zero. 🎉" : "None here."}</p>`;
       return;
     }
     $("flagList").innerHTML = flags.map((f) => `

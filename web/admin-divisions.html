@@ -10,7 +10,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Divisions — Boomtown Athletics</title>
+  <title>Divisions · Boomtown Athletics</title>
   <script>/* Pre-paint state — collapse + theme (uiux-review §4/§6.4, v0.52.0): read the bt_nav cookie and the saved theme BEFORE the first stylesheet so the rail state AND the theme are right on frame one — no post-paint snap of either. admin-nav.js writes the cookie on rail toggle and bt_theme on theme toggle; the localStorage bt_nav fallback migrates pre-v0.51 sessions. */(function(){try{var m=document.cookie.match(/(?:^|; )bt_nav=([^;]*)/);var v=m?m[1]:((window.localStorage&&localStorage.getItem("bt_nav_collapsed")==="1")?"min":"");if(v==="min")document.documentElement.dataset.nav="min";var t=(window.localStorage&&localStorage.getItem("bt_theme"))||(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.dataset.theme=t;}catch(e){}})();</script>
   <script>try{var btTpl=localStorage.getItem("bt_template");if(btTpl)document.documentElement.dataset.template=btTpl;}catch(e){}</script>
   <link rel="stylesheet" href="assets/tokens.css?v=0.194.0" />
@@ -151,7 +151,7 @@
       <div class="mf-head">
         <div>
           <h1>Divisions</h1>
-          <p class="muted">A division is a competitive tier that owns a set of courts and produces its own bracket. Give each one a range of courts — twelve courts split three ways is 1–4, 5–8 and 9–12 — then place teams on the Pool Board.</p>
+          <p class="muted">A division is a competitive tier that owns a set of courts and produces its own bracket. Give each one a range of courts (twelve courts split three ways is 1–4, 5–8 and 9–12), then place teams on the Pool Board.</p>
         </div>
         <div class="mf-row" style="margin:0">
           <label class="mf-inline">Event
@@ -200,7 +200,7 @@
           <h2 class="dv-h" id="dvBalH">Is everyone in the right place?</h2>
           <button class="btn ghost" id="dvCheck" type="button">Check placement</button>
         </div>
-        <p class="muted dv-intro">Reads how every team actually finished and suggests moves. Nothing happens until you accept a suggestion — and declining one is recorded too, so there is always an answer to “was this looked at?”.</p>
+        <p class="muted dv-intro">Reads how every team actually finished and suggests moves. Nothing happens until you accept a suggestion, and declining one is recorded too, so there is always an answer to “was this looked at?”.</p>
 
         <h3 class="dv-sub">The day as it stands</h3>
         <ul class="dv-plan" id="dvPlan"></ul>

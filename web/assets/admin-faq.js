@@ -22,7 +22,7 @@
 
   function render() {
     if (!ROWS.length) {
-      $("faqBody").innerHTML = `<tr><td colspan="4" class="muted">No articles yet. “New article” starts the first one — it stays a draft until you publish it.</td></tr>`;
+      $("faqBody").innerHTML = `<tr><td colspan="4" class="muted">No articles yet. “New article” starts the first one; it stays a draft until you publish it.</td></tr>`;
       return;
     }
     $("faqBody").innerHTML = ROWS.map((f, i) => `
@@ -110,7 +110,7 @@
       // Persist both swapped positions; index IS the order.
       const a = await api(`/api/admin/faqs/${ROWS[i].id}`, { method: "PUT", body: JSON.stringify({ sort_order: i }) });
       const b = await api(`/api/admin/faqs/${ROWS[j].id}`, { method: "PUT", body: JSON.stringify({ sort_order: j }) });
-      if (!a.ok || !b.ok) return fail("Reordering did not save — refresh and try again.");
+      if (!a.ok || !b.ok) return fail("Reordering did not save. Refresh and try again.");
       return load();
     }
   });
