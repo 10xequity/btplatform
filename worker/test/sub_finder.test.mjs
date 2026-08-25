@@ -1,12 +1,13 @@
 /**
  * Boomtown Platform — Sub-Finder is ONE module with ONE home (owner req 2026-08-22)
- * File: worker/test/sub_finder.test.mjs · Version: v1.0 · Date: 2026-08-22 · Ships in: v0.180.0
+ * File: worker/test/sub_finder.test.mjs · Version: v1.1 · Date: 2026-08-25 · Ships in: v0.202.0
  *
  * His words: "make it 1 button on the menu called Sub-Finder ... additional links to that menu on
  * the league page and tournament page and community page as well, but it should lead to that
  * module, so buttons along the top." The sub finder used to be a section EMBEDDED in leagues.html
  * (leagues.js v1.1, #subFinder). It is now its own page — web/subs.html + web/assets/subs.js —
- * reached by the rail item and by a top button on the leagues and community (lfg) pages.
+ * reached through the Play frame's Sub-Finder tab (v1.1, §-1g C-2 — the dedicated rail button
+ * collapsed into the frame) and by a top button on the leagues and community (lfg) pages.
  *
  * The failure this guards is a HALF-MOVE: the module ships but the old embed is left behind (two
  * homes, two spellings that drift — the class this repo has paid for repeatedly), or an entry
@@ -94,23 +95,28 @@ test("NC-3: removing the leagues entry link is caught", () => {
   assert.equal(linksToModule(mutated), false, "with the entry link gone the check must fail");
 });
 
-/* ── one rail button, named Sub-Finder, pointing at the module ───────────────────────────── */
+/* ── the menu route to the module: through the Play frame since v0.202.0 ─────────────────── */
 
-test("the rail carries exactly one Sub-Finder button and it leads to the module", () => {
+const playJs = read("assets/play.js");
+const finderPane = (js) => /\{ key: "subs",\s+label: "Sub-Finder",\s+page: "subs\.html"/.test(blankComments(js));
+
+test("the menu's route to the module is the Play frame, whose Sub-Finder tab leads to it", () => {
+  /* v1.1 (v0.202.0, §-1g C-2): the dedicated rail button this test used to pin collapsed into
+     the Play frame with the rest of the Play group — his 2026-08-08 "reducing the options on the
+     left menu" supersedes the rail HALF of his 2026-08-22 "1 button on the menu called
+     Sub-Finder" (the NAME survives as the frame's tab; the entry buttons on the leagues and
+     community pages are untouched and still pinned above). member_frame.test.mjs owns the
+     collapse; this file keeps the MODULE's contract: a menu route to subs.html must exist. */
   const items = signedInRailItems(navJs);
-  /* floor 12 → 9 (v0.194.0, RF-16): the rail deliberately slimmed — Notifications and the four
-     Account items moved into the header's profile menu (member_nav_paint v2.0 owns that
-     contract). 9 is the full signed-in rail now; a collapsed extractor reads far below it. */
-  assert.ok(items.length >= 9, `rail item extraction collapsed: ${items.length}`);
-  const finder = items.filter((i) => i.text === "Sub-Finder");
-  assert.equal(finder.length, 1, `expected exactly one "Sub-Finder" rail item, found ${finder.length}`);
-  assert.equal(finder[0].href, "subs.html", `the Sub-Finder rail item points at ${finder[0].href}, not the module`);
+  /* floor 9 → 5 (v0.202.0, C-2): the full signed-in rail; a collapsed extractor reads below it. */
+  assert.ok(items.length >= 5, `rail item extraction collapsed: ${items.length}`);
+  assert.ok(items.some((i) => i.href === "play.html"),
+    "the rail lost the Play frame item — the module has no menu route at all");
+  assert.ok(finderPane(playJs), 'the Play frame lost its "Sub-Finder" tab pointing at subs.html');
 });
 
-test("NC-4: pointing the rail item away from the module is caught", () => {
-  const mutated = navJs.replace('{ href: "subs.html",     ico: "◈", text: "Sub-Finder" },',
-    '{ href: "leagues.html",  ico: "◈", text: "Sub-Finder" },');
-  assert.notEqual(mutated, navJs, "mutation did not land — NC is vacuous");
-  const finder = signedInRailItems(mutated).filter((i) => i.text === "Sub-Finder");
-  assert.notEqual(finder[0].href, "subs.html", "a mis-pointed rail item must be seen");
+test("NC-4: pointing the frame's Sub-Finder tab away from the module is caught", () => {
+  const mutated = playJs.replace('page: "subs.html"', 'page: "leagues.html"');
+  assert.notEqual(mutated, playJs, "mutation did not land — NC is vacuous");
+  assert.equal(finderPane(mutated), false, "a mis-pointed tab must be seen");
 });

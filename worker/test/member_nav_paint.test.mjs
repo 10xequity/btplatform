@@ -1,6 +1,10 @@
 /**
  * Boomtown Platform — member rail paints before its badge fetches (§-1c D-15)
- * File: worker/test/member_nav_paint.test.mjs · Version: v2.0 · Date: 2026-08-24 · Ships in: v0.194.0
+ * File: worker/test/member_nav_paint.test.mjs · Version: v2.2 · Date: 2026-08-25 · Ships in: v0.202.0
+ *
+ * v2.2 (v0.202.0, §-1g C-2 — owner 2026-08-08): the signed-in Play group is ONE item now (the
+ * Play frame); the three item-count floors moved 9 → 5 / 15 → 13 with the reason at each. The
+ * collapse itself and its exit are member_frame.test.mjs's pins, not this file's.
  *
  * v2.0 (v0.194.0, §-1r RF-16 — owner 2026-08-24): the rail's content contract is REWRITTEN to his
  * new word, which supersedes the 2026-08-18 order v1.1 pinned. His words: "Change Sign Out button
@@ -233,7 +237,10 @@ const deadFragmentsOf = (src) => {
 
 test("RF-16: the signed-in rail leads with HIS order — Home, Inbox, then Explore and Player Library under it", () => {
   const items = signedInItemsOf(readNav());
-  assert.ok(items && items.length >= 9, `signed-in item extraction collapsed: ${items && items.length}`);
+  /* floor 9 → 5 in v0.202.0: §-1g C-2 collapsed the Play group's five items into ONE (the Play
+     frame) — his 2026-08-08 "reducing the options on the left menu". member_frame.test.mjs pins
+     the collapse and its exit; this floor still notices the extractor going blind. */
+  assert.ok(items && items.length >= 5, `signed-in item extraction collapsed: ${items && items.length}`);
   assert.deepEqual(items.slice(0, 4).map((i) => [i.text, i.href]), HIS_ORDER,
     'owner 2026-08-24: "Explore and Player library can go under Inbox" — and Notifications moved to the profile menu');
   /* and You is the FIRST thing a signed-in member sees: the base literal carries no groups,
@@ -259,7 +266,8 @@ test("D-50: every fragment href in the rail points at an id that EXISTS in the t
      fragment item, into the profile menu) — so the extractor-blindness protection lives in
      NC-D50a's mutation, not in a some() precondition the correct rail can no longer satisfy. */
   const all = navItemsOf(blankComments(readNav()));
-  assert.ok(all.length >= 15, `rail item extraction collapsed: ${all.length}`);
+  /* floor 15 → 13 in v0.202.0: C-2's Play collapse (signed-in 5 + signed-out 8). */
+  assert.ok(all.length >= 13, `rail item extraction collapsed: ${all.length}`);
   assert.deepEqual(deadFragmentsOf(readNav()), [],
     "rail items promise page sections that do not exist — the click silently lands at the top (D-50)");
 });
@@ -331,7 +339,8 @@ test("NC-D50b: swapping Explore above Inbox FAILS the order pin", () => {
 
 test("RF-16: Notifications and the Account group are OFF the rail — they live in the profile menu", () => {
   const items = signedInItemsOf(readNav());
-  assert.ok(items && items.length >= 9, `signed-in item extraction collapsed: ${items && items.length}`);
+  /* floor 9 → 5 in v0.202.0 — C-2's Play collapse, same note as the order pin above. */
+  assert.ok(items && items.length >= 5, `signed-in item extraction collapsed: ${items && items.length}`);
   const offenders = items.filter((i) =>
     i.text === "Notifications" || MENU_ONLY_HREFS.includes(i.href.split("#")[0]));
   assert.deepEqual(offenders.map((i) => `${i.text} → ${i.href}`), [],

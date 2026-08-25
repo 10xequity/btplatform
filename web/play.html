@@ -1,30 +1,38 @@
 <!DOCTYPE html>
-<!-- Boomtown Platform — Membership · Version: v1.0 · Date: 2026-07-24 · Ships in: v0.10.0
-     Member-facing memberships: current status banner, plan cards, subscribe via Square
-     payment link (card stored by Square, renews automatically), cancel at period end. -->
+<!-- Boomtown Platform — Play · Version: v1.0 · Date: 2026-08-25 · Ships in: v0.202.0
+     §-1g C-2, the member half of the owner's 2026-08-08 frame sentence: the Play group's five
+     surfaces (Event Schedule · Leagues · Live scores · Community Play · Sub-Finder) as horizontal
+     tabs that do NOT reload — each tab the EXISTING page in a same-origin chromeless iframe,
+     created on first visit and kept (the v0.139.0 manager-hub idiom, reused not reinvented).
+     Generated from the Leagues page's bytes so the member header is byte-identical on its first
+     run (header_shell's ratchet, the intended way). The pane list lives ONLY in assets/play.js —
+     member_frame.test.mjs bans pane filenames from this markup, comments included, so the list
+     cannot grow a second home. -->
 <html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Membership · Boomtown Athletics</title>
+  <title>Play · Boomtown Athletics</title>
   <script>/* Pre-paint theme (v0.53.0): saved bt_theme, else system preference, applied before the first stylesheet — the member header paints the right theme on frame one (admin pre-paint v2 precedent, theme half only; member pages carry no rail-collapse state). site-nav.js v2.12 owns the toggle listener. */(function(){try{var t=(window.localStorage&&localStorage.getItem("bt_theme"))||(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.dataset.theme=t;}catch(e){}})();</script>
   <script>try{var btTpl=localStorage.getItem("bt_template");if(btTpl)document.documentElement.dataset.template=btTpl;}catch(e){}</script>
   <link rel="stylesheet" href="assets/tokens.css?v=0.202.0" />
   <link rel="stylesheet" href="assets/app.css?v=0.202.0" />
   <style>
-    .ms-wrap { max-width: 760px; margin: 0 auto; padding: 16px; }
-    .ms-banner { border: 1px solid var(--border); border-radius: var(--radius-card); padding: 14px 16px; margin-bottom: 16px; background: var(--surface); }
-    .ms-banner.ok { border-color: var(--positive); }
-    .ms-banner.warn { border-color: var(--warning, #e6a23c); }
-    .ms-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
-    .plan { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card); padding: 18px; display: flex; flex-direction: column; }
-    .plan h2 { font-size: var(--fs-h2); margin: 0; }
-    .plan .price { font-size: 26px; font-weight: 800; margin: 8px 0 2px; }
-    .plan .price small { font-size: 13px; font-weight: 600; color: var(--text-muted); }
-    .plan .desc { font-size: 13.5px; color: var(--text-muted); margin: 6px 0 10px; }
-    .plan ul { margin: 0 0 14px; padding-left: 18px; font-size: 13.5px; }
-    .plan ul li { margin: 3px 0; }
-    .plan .btn { margin-top: auto; min-height: 44px; }
+    /* The frame page hosts full pages, so its main is full-width; each framed page centers its own
+       content. Tab chrome is page-local for now: no member page shares a tab component yet, and
+       page-local classes promoted to app.css on their SECOND user is the D-23/D-24 rule, not their
+       first. Weight lives on the BASE tab so the row never reflows under the pointer
+       (press_stability's rule); the active state changes color and border only. */
+    .pf-wrap { padding: 12px 16px; }
+    .pf-tabs { display: flex; gap: 4px; overflow-x: auto; border-bottom: 1px solid var(--border);
+      margin-bottom: 10px; }
+    .pf-tab { min-height: 44px; padding: 8px 14px; border: 0; border-bottom: 2px solid transparent;
+      background: none; color: var(--text-muted); font: inherit; font-weight: 600;
+      cursor: pointer; white-space: nowrap; }
+    .pf-tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+    .pf-tab:hover, .pf-tab:focus-visible { color: var(--text); }
+    .pf-frame { width: 100%; border: 0; display: block; min-height: 420px; background: var(--bg); }
+    .empty { color: var(--text-muted); padding: 24px; text-align: center; }
   </style>
   <script>
     (function () {
@@ -54,15 +62,15 @@
     </div>
   </header>
 
-  <main class="ms-wrap" id="app" aria-live="polite">
-    <h1 style="font-size:var(--fs-h1);margin:8px 0 14px">Membership</h1>
-    <div id="current"></div>
-    <div class="ms-grid" id="plans"><p class="help-text">Loading plans…</p></div>
-    <div id="status" role="status" aria-live="polite" style="margin-top:12px"></div>
+  <main class="pf-wrap" id="app">
+    <h1 style="font-size:var(--fs-h1);margin:0 0 10px">Play</h1>
+    <div class="pf-tabs" role="tablist" id="pfTabs" aria-label="Play sections"></div>
+    <div id="pfPanes"><div class="empty">Loading&#8230;</div></div>
+    <noscript><p class="empty">This page needs JavaScript. The schedule, leagues, live scores, community play and sub finder pages each work on their own address too.</p></noscript>
   </main>
 
-  <script src="assets/config.js?v=0.202.0"></script>
   <script src="assets/site-nav.js?v=0.202.0" defer></script>
-  <script src="assets/membership.js?v=0.202.0" defer></script>
+  <script src="assets/config.js?v=0.202.0"></script>
+  <script src="assets/play.js?v=0.202.0" defer></script>
 </body>
 </html>

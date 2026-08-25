@@ -131,7 +131,9 @@ test("static btHdrMail on admin-nav pages AND the 15 canonical member pages — 
   // 17 → 18 in v0.180.0 (subs.html, the Sub-Finder module — the sub finder moved off leagues.html
   // to its own page, owner req 2026-08-22; generated from leagues.html's bytes, so it arrived
   // carrying the static ✉).
-  assert.equal(memberPages, 18, `guard floor: expected exactly 18 canonical member pages, saw ${memberPages}`);
+  // 18 -> 19 in v0.202.0 (play.html, the member Play frame, §-1g C-2 — generated from
+  // leagues.html's bytes, so it arrived carrying the static ✉).
+  assert.equal(memberPages, 19, `guard floor: expected exactly 19 canonical member pages, saw ${memberPages}`);
   assert.deepEqual(missing, [], `pages missing the static ✉: ${missing.join(", ")}`);
   assert.deepEqual(extras, [], `static ✉ on excluded pages (index/chromeless): ${extras.join(", ")}`);
 });

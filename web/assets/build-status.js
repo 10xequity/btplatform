@@ -103,6 +103,7 @@
     /* --- Member site --- */
     "index.html":               { s: "live" },
     "home.html":                { s: "live" },
+    "play.html":                { s: "beta", n: "The Play frame: the schedule, leagues, live scores, community play and the sub finder as tabs on one screen that switch without reloading. Each tab is the real page, so everything works exactly as it does at its own address." },
     "schedule.html":            { s: "live" },
     "live.html":                { s: "beta", n: "The public scoreboard: no sign-in needed, so it works on a TV by the door or a parent phone on venue wifi. Shows which court is on now first, then standings and brackets. Refreshes itself every 25 seconds and tells you when it last did. Team names only; no player details are sent." },
     "leagues.html":             { s: "live" },

@@ -130,8 +130,10 @@ test("corpus: exactly the 18 canonical member pages, and the same set header_act
   const { pages } = corpus();
   // 17 → 18 in v0.180.0: subs.html, the Sub-Finder module (owner req 2026-08-22) — the sub finder
   // moved off leagues.html to its own page; subs.js joins the member-script corpus with it.
-  assert.equal(pages.size, 18,
-    `expected exactly 18 canonical member pages, saw ${pages.size}: ${[...pages.keys()].join(", ")}`);
+  // 18 -> 19 in v0.202.0: play.html, the member Play frame (§-1g C-2); play.js joins the
+  // member-script corpus with it.
+  assert.equal(pages.size, 19,
+    `expected exactly 19 canonical member pages, saw ${pages.size}: ${[...pages.keys()].join(", ")}`);
   for (const f of ["member.html", "profile.html", "library.html", "member-inbox.html", "settings.html"]) {
     assert.ok(pages.has(f), `${f} — a page that carried a hard-coded address — left the corpus`);
   }

@@ -1,4 +1,11 @@
 /* Boomtown Platform — Site-wide sidebar navigation (shared)
+   v2.26 (v0.202.0, §-1g C-2, owner 2026-08-08): the signed-in Play group collapses to ONE item,
+   the Play frame (play.html) — his words: "reducing the options on the left menu and keep items
+   together that are only applicable to certain modules." The five surfaces it carried are the
+   frame's tabs, same order and names (play.js's PANES list; member_frame.test.mjs pins both
+   halves and the exit). PLAY_PAGES keeps deep links honest: on any of the five pages directly,
+   the Play item is the active one. The signed-out rail is unchanged — the frame is proven on the
+   member rail first (N-4's League-after-tournament precedent).
    v2.24 (v0.194.0, §-1r RF-16, owner 2026-08-24): the header's Sign-out button becomes a profile
    ICON opening a static menu — his words: "Change Sign Out button to profile icon then menu that
    opens that has Account sub choices underneath and remove from left side menu. Add sign out as
@@ -154,6 +161,13 @@
 
   const API = (window.BT_CONFIG && window.BT_CONFIG.apiBase) || "";
   const here = location.pathname.split("/").pop() || "index.html";
+  /* v2.26 (§-1g C-2): these five live behind the Play frame on the signed-in rail, so a deep
+     link to one lights the Play item — plain href matching would show no location at all. */
+  const PLAY_PAGES = ["schedule.html", "leagues.html", "live.html", "lfg.html", "subs.html"];
+  const isActive = (href) => {
+    const page = href.split("#")[0];
+    return page === here || (page === "play.html" && PLAY_PAGES.includes(here));
+  };
   const token = ssGet("bt_token");
 
   /* ---------- styles (tokens only, per design-system v1.0) ---------- */
@@ -332,12 +346,11 @@
         { href: "index.html",    ico: "▦", text: "Explore" },
         { href: "library.html",  ico: "◎", text: "Player Library" },
       ]});
+      /* v2.26 (§-1g C-2): the five Play surfaces are the frame's tabs now — one rail item, no
+         reloads inside. Their pages stay live at their own addresses (deep links, cross-page
+         links, the widget); the rail's route to them is the frame. */
       NAV.push({ label: "Play", items: [
-        { href: "schedule.html", ico: "▣", text: "Event Schedule" },
-        { href: "leagues.html",  ico: "◇", text: "Leagues" },
-        { href: "live.html",     ico: "◉", text: "Live scores" },
-        { href: "lfg.html",      ico: "◆", text: "Community Play" },
-        { href: "subs.html",     ico: "◈", text: "Sub-Finder" },
+        { href: "play.html", ico: "▣", text: "Play" },
       ]});
       const demoMember = ssGet("bt_demo_member") === "1";
       /* RF-16 (v0.194.0, owner 2026-08-24 — AMENDS RF-12(1)'s blanket removal): exactly ONE
@@ -420,9 +433,9 @@
     aside.innerHTML = NAV.map(g => `
       <div class="nav-group" role="group" aria-label="${g.label}">
         <div class="nav-label">${g.label}</div>
-        ${g.items.map(i => `<a class="nav-item${i.href.split("#")[0] === here ? " active" : ""}" href="${i.href}"
+        ${g.items.map(i => `<a class="nav-item${isActive(i.href) ? " active" : ""}" href="${i.href}"
           ${i.key ? `data-nav-key="${i.key}"` : ""}
-          ${i.href.split("#")[0] === here ? 'aria-current="page"' : ""}><span class="ico" aria-hidden="true">${i.ico}</span>${i.text}</a>`).join("")}
+          ${isActive(i.href) ? 'aria-current="page"' : ""}><span class="ico" aria-hidden="true">${i.ico}</span>${i.text}</a>`).join("")}
       </div>`).join("");
     layout.appendChild(aside);
     layout.appendChild(main);
@@ -669,7 +682,7 @@
       if (window.BT_STATUS || document.getElementById("bt-status-js")) return;
       var s = document.createElement("script");
       s.id = "bt-status-js";
-      s.src = "assets/build-status.js?v=0.201.0";
+      s.src = "assets/build-status.js?v=0.202.0";
       s.async = false;
       document.head.appendChild(s);
     } catch (e) { /* indicators are never load-blocking */ }
