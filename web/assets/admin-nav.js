@@ -318,11 +318,14 @@
       { href: "admin-org-settings.html",  ico: "gear",    text: "Organization" },
       { href: "settings.html",            ico: "gear",    text: "Settings" },
     ]},
+    /* v2.27 (§-1d N-5, owner 2026-08-26 "Agreed"): the four outbound member-page links
+       (Home, Schedule Page, Live Scoreboard, Leagues Page) are GONE — each swapped the whole
+       admin shell for the member site (§-1c N-1c) and never lit an active state (those pages
+       carry the MEMBER rail, so this rail was never on screen there). They stay reachable via
+       the header's "Member site" link and Sandbox's "View as member" (both pinned in
+       admin_rail_brevity.test.mjs). What remains are the two ADMIN config pages for public
+       output. Rail 39 → 35 items. */
     { label: "Member site", key: "site", items: [
-      { href: "index.html",               ico: "home",  text: "Home" },
-      { href: "schedule.html",            ico: "sched", text: "Schedule Page" },
-      { href: "live.html",                ico: "ops",   text: "Live Scoreboard" },
-      { href: "leagues.html",             ico: "league", text: "Leagues Page" },
       { href: "admin-events.html#views",  ico: "embed", text: "Views & Embed" },
       { href: "admin-calendar.html",       ico: "sched", text: "Calendar Feeds" },
     ]},
@@ -923,7 +926,7 @@
       if (window.BT_STATUS || document.getElementById("bt-status-js")) return;
       var s = document.createElement("script");
       s.id = "bt-status-js";
-      s.src = "assets/build-status.js?v=0.202.0";
+      s.src = "assets/build-status.js?v=0.203.0";
       s.async = false;
       document.head.appendChild(s);
     } catch (e) { /* indicators are never load-blocking */ }

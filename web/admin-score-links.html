@@ -11,9 +11,9 @@
   <title>Scoring links · Boomtown Athletics</title>
   <script>/* Pre-paint state — collapse + theme (uiux-review §4/§6.4, v0.52.0): read the bt_nav cookie and the saved theme BEFORE the first stylesheet so the rail state AND the theme are right on frame one — no post-paint snap of either. admin-nav.js writes the cookie on rail toggle and bt_theme on theme toggle; the localStorage bt_nav fallback migrates pre-v0.51 sessions. */(function(){try{var m=document.cookie.match(/(?:^|; )bt_nav=([^;]*)/);var v=m?m[1]:((window.localStorage&&localStorage.getItem("bt_nav_collapsed")==="1")?"min":"");if(v==="min")document.documentElement.dataset.nav="min";var t=(window.localStorage&&localStorage.getItem("bt_theme"))||(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.dataset.theme=t;}catch(e){}})();</script>
   <script>try{var btTpl=localStorage.getItem("bt_template");if(btTpl)document.documentElement.dataset.template=btTpl;}catch(e){}</script>
-  <link rel="stylesheet" href="assets/tokens.css?v=0.202.0" />
-  <link rel="stylesheet" href="assets/app.css?v=0.202.0" />
-  <link rel="stylesheet" href="assets/admin.css?v=0.202.0" />
+  <link rel="stylesheet" href="assets/tokens.css?v=0.203.0" />
+  <link rel="stylesheet" href="assets/app.css?v=0.203.0" />
+  <link rel="stylesheet" href="assets/admin.css?v=0.203.0" />
   <style>
     .mf-head { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; margin-bottom: 12px; }
     .mf-head p { max-width: 68ch; }
@@ -45,7 +45,7 @@
 </head>
 <body>
     <header class="header chrome-glass no-print">
-    <a class="wordmark" href="admin.html" style="text-decoration:none;color:inherit"><img class="brand-logo" src="assets/logo-boom-icon-512.png?v=0.202.0" alt="" width="22" height="22" />Boomtown <span>Athletics</span></a>
+    <a class="wordmark" href="admin.html" style="text-decoration:none;color:inherit"><img class="brand-logo" src="assets/logo-boom-icon-512.png?v=0.203.0" alt="" width="22" height="22" />Boomtown <span>Athletics</span></a>
     <div class="spacer"></div>
     <select id="orgSwitcher" class="org-switcher" aria-label="Switch organization"></select>
     <a id="btHdrMail" class="btn ghost hdr-mail" href="admin-messages.html" aria-label="Messages">✉</a>
@@ -104,10 +104,6 @@
       <nav class="nav-group" data-key="site">
         <div class="nav-label" role="button" tabindex="0" aria-expanded="true">Member site<span class="grp-chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></span></div>
         
-          <a class="nav-item" href="index.html" title="Home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M10 21v-6h4v6"/></svg><span class="txt">Home</span></a>
-          <a class="nav-item" href="schedule.html" title="Schedule Page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/><circle cx="19" cy="18" r="2"/></svg><span class="txt">Schedule Page</span></a>
-          <a class="nav-item" href="live.html" title="Live Scoreboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/><circle cx="19" cy="18" r="2"/></svg><span class="txt">Live Scoreboard</span></a>
-          <a class="nav-item" href="leagues.html" title="Leagues Page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 21h8M12 17v4M7 4h10v4a5 5 0 0 1-10 0z"/><path d="M7 6H4a3 3 0 0 0 3 4M17 6h3a3 3 0 0 1-3 4"/></svg><span class="txt">Leagues Page</span></a>
           <a class="nav-item" href="admin-events.html#views" title="Views & Embed"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 8 4 12l4 4M16 8l4 4-4 4"/></svg><span class="txt">Views & Embed</span></a>
           <a class="nav-item" href="admin-calendar.html" title="Calendar Feeds"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/><circle cx="19" cy="18" r="2"/></svg><span class="txt">Calendar Feeds</span></a>
       </nav>
@@ -147,9 +143,9 @@
       </div>
     </main>
   </div>
-  <script src="assets/config.js?v=0.202.0"></script>
-  <script src="assets/admin-nav.js?v=0.202.0"></script>
-  <script src="assets/qr.js?v=0.202.0"></script>
-  <script src="assets/admin-score-links.js?v=0.202.0"></script>
+  <script src="assets/config.js?v=0.203.0"></script>
+  <script src="assets/admin-nav.js?v=0.203.0"></script>
+  <script src="assets/qr.js?v=0.203.0"></script>
+  <script src="assets/admin-score-links.js?v=0.203.0"></script>
 </body>
 </html>
