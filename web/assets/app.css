@@ -57,6 +57,37 @@ html, body {
 .hdr-mail { min-width: 44px; min-height: 44px; display: inline-flex;
   align-items: center; justify-content: center; text-decoration: none; }
 
+/* Header profile menu (v0.205.0, §-1d, owner 2026-08-26). PROMOTED here from site-nav.js's injected
+   <style> so BOTH shells share one definition: the admin header gained this menu (Account settings +
+   Sign out), and app.css is the only stylesheet both shells load. A disclosure anchored to the icon;
+   the markup ships static and hidden, so there is no unstyled flash. The [hidden] overrides are
+   load-bearing — .pm-item sets display and author display beats the UA [hidden] rule (the
+   E1/hidden_overlay class). One home, pinned by profile_menu_css.test.mjs. */
+.hdr-profile-wrap { position: relative; display: inline-flex; }
+.profile-menu { position: absolute; right: 0; top: calc(100% + 8px); min-width: 224px; z-index: 70;
+  background: var(--surface-raised, var(--surface)); border: 1px solid var(--border);
+  border-radius: var(--radius-card, 10px); box-shadow: 0 10px 30px rgba(0,0,0,.28); padding: 6px;
+  transform-origin: top right; }
+.profile-menu[hidden] { display: none; }
+.profile-menu .pm-item { display: flex; align-items: center; gap: 10px; width: 100%;
+  box-sizing: border-box; min-height: 44px; padding: 10px 12px;
+  border-radius: var(--radius-control, 8px); color: var(--text); text-decoration: none;
+  font: inherit; font-size: 15px; font-weight: 600; background: none; border: 0;
+  text-align: left; cursor: pointer; }
+.profile-menu .pm-item[hidden] { display: none; }
+.profile-menu .pm-item:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.profile-menu .pm-sep { height: 1px; background: var(--border); margin: 6px 4px; }
+.profile-menu .badge { margin-left: auto; flex: none; min-width: 20px; height: 20px; padding: 0 6px;
+  border-radius: 999px; background: var(--accent); color: var(--gold-ink); font-size: 12px;
+  font-weight: 800; display: grid; place-items: center; }
+@media (prefers-reduced-motion: no-preference) {
+  .profile-menu:not([hidden]) { animation: btPmIn 120ms cubic-bezier(0.23, 1, 0.32, 1); }
+}
+@keyframes btPmIn { from { opacity: 0; transform: scale(0.97); } }
+@media (hover: hover) and (pointer: fine) {
+  .profile-menu .pm-item:hover { background: var(--surface-2, var(--surface)); }
+}
+
 /* v0.9.0 (owner 2026-08-25) — the header must FIT a phone. At 390px the wordmark + three 44px
    actions need ~444px, so the theme and profile buttons sat past the viewport edge: no theme
    picker, no account menu, and a horizontal scroll on every member page. Below 560px the brand

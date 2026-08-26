@@ -320,7 +320,10 @@
       { href: "admin-faq.html",           ico: "files",   text: "Help & FAQ" },
       { href: "admin-uploads.html",       ico: "files",   text: "Files" },
       { href: "admin-org-settings.html",  ico: "gear",    text: "Organization" },
-      { href: "settings.html",            ico: "gear",    text: "Settings" },
+      /* v2.28 (§-1d, owner 2026-08-26): personal "Settings" (settings.html) left the rail — it is
+         the member account page and is now in the header profile menu as "Account settings". The
+         business/org settings stay here (Organization) per his word. admin_rail_brevity now allows
+         NO member page on the rail. */
     ]},
     /* v2.27 (§-1d N-5, owner 2026-08-26 "Agreed"): the four outbound member-page links
        (Home, Schedule Page, Live Scoreboard, Leagues Page) are GONE — each swapped the whole
@@ -328,8 +331,10 @@
        carry the MEMBER rail, so this rail was never on screen there). They stay reachable via
        the header's "Member site" link and Sandbox's "View as member" (both pinned in
        admin_rail_brevity.test.mjs). What remains are the two ADMIN config pages for public
-       output. Rail 39 → 35 items. */
-    { label: "Member site", key: "site", items: [
+       output. v2.28 (owner 2026-08-26): the group is renamed "Public site" — its two items
+       configure the PUBLIC-facing output (embeds, calendar feeds), not the member site itself.
+       The key stays "site" (the collapse-state cookie bt_navgrp_site must not reset). */
+    { label: "Public site", key: "site", items: [
       { href: "admin-events.html#views",  ico: "embed", text: "Views & Embed" },
       { href: "admin-calendar.html",       ico: "sched", text: "Calendar Feeds" },
     ]},
@@ -883,6 +888,43 @@
     });
   })();
 
+  /* v2.28 (§-1d, owner 2026-08-26 "Do all 3 as recommended"): the admin header's profile menu +
+     sign-out. The admin shell had NEITHER before this — an admin signed out only through the member
+     shell or the rail's Settings link (now gone). Mirrors site-nav.js's contract exactly: reveal
+     from the LOCAL token (a stale token showing the icon is the safe direction — the click clears
+     it), a plain disclosure (click toggles, Escape and outside-click close, aria-expanded mirrors
+     state), and a real logout POST. "Account settings" is a plain link in the static markup.
+     Guards: admin_profile.test.mjs, header_shell v4.3. */
+  (function profileMenu() {
+    const lo = document.getElementById("logoutBtn");
+    if (lo && bearer()) lo.hidden = false;
+    if (lo) lo.addEventListener("click", async () => {
+      try { await fetch(API + "/api/auth/logout", { method: "POST", headers: { "Authorization": "Bearer " + (bearer() || "") }, credentials: "include" }); } catch (e) {}
+      try { sessionStorage.removeItem("bt_token"); sessionStorage.removeItem("bt_demo_member"); } catch (e) {}
+      location.href = "index.html";
+    });
+    const pb = document.getElementById("btHdrProfile");
+    const pm = document.getElementById("btProfileMenu");
+    /* The admin button ships VISIBLE (unlike the member header's, which serves signed-out
+       visitors): every admin page bounces a non-admin via guard() anyway, and shipping it as a
+       plain .btn avoids coupling `hidden` to a page-local .btn rule (admin-league) — the
+       hidden_overlay/shared_buttons tension. The menu and Sign out stay hidden until the token. */
+    if (pb && pm) {
+      const closeMenu = () => { pm.hidden = true; pb.setAttribute("aria-expanded", "false"); };
+      pb.addEventListener("click", () => {
+        const opening = pm.hidden;
+        pm.hidden = !opening;
+        pb.setAttribute("aria-expanded", String(opening));
+      });
+      document.addEventListener("click", (e) => {
+        if (!pm.hidden && !pm.contains(e.target) && !pb.contains(e.target)) closeMenu();
+      });
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && !pm.hidden) { closeMenu(); pb.focus(); }
+      });
+    }
+  })();
+
   /* v2.4: the role gate runs on EVERY admin page load — including pages that never call
      guard() themselves — so members never see admin options.
      v2.20: the ✉ badge fills off the SAME resolved gate. guard() is memoized, so this costs no
@@ -929,7 +971,7 @@
       if (window.BT_STATUS || document.getElementById("bt-status-js")) return;
       var s = document.createElement("script");
       s.id = "bt-status-js";
-      s.src = "assets/build-status.js?v=0.204.0";
+      s.src = "assets/build-status.js?v=0.205.0";
       s.async = false;
       document.head.appendChild(s);
     } catch (e) { /* indicators are never load-blocking */ }

@@ -101,6 +101,10 @@ function headerVerdict(html) {
   if (!/id="btHdrMail"[^>]*href="admin-messages\.html"|href="admin-messages\.html"[^>]*id="btHdrMail"/.test(h)) missing.push("#btHdrMail → admin-messages.html");
   if (!h.includes('id="themeToggle"')) missing.push("#themeToggle");
   if (!h.includes('href="index.html">Member site<')) missing.push("Member site link");
+  // v4.3 (§-1d, owner 2026-08-26): the admin header gained a profile menu — Account settings + Sign
+  // out top-right — so Settings could leave the rail. Required on every admin page, byte-identical.
+  if (!h.includes('id="btHdrProfile"')) missing.push("#btHdrProfile (profile menu button)");
+  if (!h.includes('id="btProfileMenu"')) missing.push("#btProfileMenu (profile menu)");
   if (missing.length) return { applies: true, ok: false, why: "header missing: " + missing.join(", ") };
   return { applies: true, ok: true, header: h };
 }

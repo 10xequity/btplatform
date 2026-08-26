@@ -34,15 +34,13 @@ const NAVJS = blankComments(read("assets/admin-nav.js"));
 const isMemberPage = (page) =>
   existsSync(new URL(page, WEB)) && /<script[^>]+src="assets\/site-nav\.js/.test(read(page));
 
-/* THE ONE SANCTIONED EXCEPTION. `settings.html` is the SHARED personal-account page (theme,
-   notifications, sign-in) that every signed-in user reaches, admins included — and there is no
-   admin-side equivalent (admin-org-settings.html is ORGANIZATION settings, a different surface).
-   The four removed in v0.203.0 were member VIEWS of data managed elsewhere (the schedule, the
-   scoreboard, leagues) plus the member home; Settings is account infrastructure, not a view. It
-   is deliberately kept, and whether it too should leave the admin rail is an OPEN owner question
-   (recorded at the v0.203.0 close). Pinned as the ONLY exception so a sixth member link cannot
-   ride in behind it. */
-const ALLOWED_MEMBER_PAGES = new Set(["settings.html"]);
+/* NO EXCEPTIONS as of v0.205.0. `settings.html` was the one kept exception in v0.203.0 (the shared
+   personal-account page, no admin equivalent) — but the admin header gained a profile menu carrying
+   Account settings + Sign out (owner 2026-08-26, admin_profile.test.mjs), which IS the affordance
+   the rail's Settings link stood in for, so Settings left the rail. The invariant is now clean: the
+   admin rail links at NO member-rail page. If a shared page ever legitimately needs to be on the
+   admin rail again, add it here WITH its reason and pin it — do not weaken the filter. */
+const ALLOWED_MEMBER_PAGES = new Set();
 const forbiddenMemberLinks = (pages) =>
   [...new Set(pages)].filter((p) => isMemberPage(p) && !ALLOWED_MEMBER_PAGES.has(p));
 
@@ -77,16 +75,13 @@ test("no item in admin-nav.js's NAV array points at a member-rail page", () => {
     `admin-nav.js's NAV array still lists member pages: ${offenders.join(", ")}`);
 });
 
-test("settings.html is the SOLE member-rail exception, and it is really there (not a dead allowance)", () => {
-  // The allowance must name something that exists, or it silently permits nothing while reading as
-  // a considered exception. Assert Settings is actually on the rail; if it is ever removed, delete
-  // the allowance in the same change rather than leaving a rule that guards air.
-  assert.ok(partialPages(PARTIAL).includes("settings.html"),
-    "settings.html left the rail — remove it from ALLOWED_MEMBER_PAGES too, or the exception guards nothing");
-  // And the allowance is exactly one: every member page on the rail is the sanctioned one.
+test("the admin rail carries NO member-rail page at all (v0.205.0: Settings left for the profile menu)", () => {
   const memberOnRail = [...new Set(partialPages(PARTIAL))].filter(isMemberPage);
-  assert.deepEqual(memberOnRail, ["settings.html"],
-    `the admin rail carries a member page other than the one sanctioned exception: ${memberOnRail.join(", ")}`);
+  assert.deepEqual(memberOnRail, [],
+    `the admin rail still links a member-rail page: ${memberOnRail.join(", ")} — the profile menu now carries Account settings`);
+  // settings.html specifically must be gone from the rail — the profile menu replaced its purpose.
+  assert.equal(partialPages(PARTIAL).includes("settings.html"), false,
+    "settings.html is still a rail item — remove it; admin_profile.test.mjs pins its replacement (Account settings in the header profile menu)");
 });
 
 test("the surgical removal kept the two public-output config pages on the rail", () => {

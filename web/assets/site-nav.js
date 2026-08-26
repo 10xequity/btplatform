@@ -196,34 +196,13 @@
   .site-nav .nav-brand-name { color: var(--brand-card-ink, #F2F0EA); font-weight: 700; font-size: 15px; line-height: 1.2; }
   .site-nav .nav-brand:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .site-layout > main, .site-layout > .site-content { flex: 1; min-width: 0; }
-  /* RF-16 (v0.194.0): the header profile menu — a disclosure anchored to the icon. Injected here
-     because this file owns header behavior (v2.13); the markup ships static and hidden, so there
-     is no unstyled flash. [hidden] overrides are NOT optional: .pm-item sets display, and author
-     display beats the UA's [hidden] rule (the E1/hidden_overlay class). */
-  .hdr-profile-wrap { position: relative; display: inline-flex; }
-  .profile-menu { position: absolute; right: 0; top: calc(100% + 8px); min-width: 224px; z-index: 70;
-    background: var(--surface-raised, var(--surface)); border: 1px solid var(--border);
-    border-radius: var(--radius-card, 10px); box-shadow: 0 10px 30px rgba(0,0,0,.28); padding: 6px;
-    transform-origin: top right; }
-  .profile-menu[hidden] { display: none; }
-  .profile-menu .pm-item { display: flex; align-items: center; gap: 10px; width: 100%;
-    box-sizing: border-box; min-height: 44px; padding: 10px 12px;
-    border-radius: var(--radius-control, 8px); color: var(--text); text-decoration: none;
-    font: inherit; font-size: 15px; font-weight: 600; background: none; border: 0;
-    text-align: left; cursor: pointer; }
-  .profile-menu .pm-item[hidden] { display: none; }
-  .profile-menu .pm-item:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  .profile-menu .pm-sep { height: 1px; background: var(--border); margin: 6px 4px; }
-  .profile-menu .badge { margin-left: auto; flex: none; min-width: 20px; height: 20px; padding: 0 6px;
-    border-radius: 999px; background: var(--accent); color: var(--gold-ink); font-size: 12px;
-    font-weight: 800; display: grid; place-items: center; }
-  @media (prefers-reduced-motion: no-preference) {
-    .profile-menu:not([hidden]) { animation: btPmIn 120ms cubic-bezier(0.23, 1, 0.32, 1); }
-  }
-  @keyframes btPmIn { from { opacity: 0; transform: scale(0.97); } }
+  /* RF-16 (v0.194.0): the header profile menu — a disclosure anchored to the icon. Its CSS
+     (.hdr-profile-wrap / .profile-menu / .pm-item / .pm-sep + the reduced-motion entrance) was
+     PROMOTED to app.css in v0.205.0 so the admin header could reuse it — app.css is the one
+     stylesheet both shells load. One home, pinned by profile_menu_css.test.mjs. This file keeps
+     only the header BEHAVIOR (toggle + reveal-from-token, below). */
   @media (hover: hover) and (pointer: fine) {
     .site-nav .nav-item:hover { background: var(--surface); }
-    .profile-menu .pm-item:hover { background: var(--surface-2, var(--surface)); }
   }
   @media (max-width: 860px) {
     .site-layout { display: block; }
@@ -682,7 +661,7 @@
       if (window.BT_STATUS || document.getElementById("bt-status-js")) return;
       var s = document.createElement("script");
       s.id = "bt-status-js";
-      s.src = "assets/build-status.js?v=0.204.0";
+      s.src = "assets/build-status.js?v=0.205.0";
       s.async = false;
       document.head.appendChild(s);
     } catch (e) { /* indicators are never load-blocking */ }
