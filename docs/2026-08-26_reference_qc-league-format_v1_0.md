@@ -1,7 +1,11 @@
 # QC Schedule Generator vs. the platform League Manager — comparison & integration assessment
 
-**File:** 2026-08-26_reference_qc-league-format_v1_0.md · **Version:** v1.0 · **Date:** 2026-08-26
-**Status:** Active reference · **Supersedes:** nothing (new)
+**File:** 2026-08-26_reference_qc-league-format_v1_0.md · **Version:** v1.1 · **Date:** 2026-08-26
+**Status:** Active reference · **Supersedes:** v1.0 (same day)
+**v1.1 (2026-08-26): the format is now INTEGRATED (v0.206.0).** The wins-ranked pods-of-4 pairing
+ships as a second `pairingMode` ("wins-pods") on the League Manager — recommendation 1 below, built.
+Added the ease-of-use comparison the owner asked for (§ "Ease of use"). Recommendations 3–4 (the
+league-linked playoff; not porting the QC plumbing) still stand as described.
 **Why this exists:** the owner runs a standalone React app (`qc-schedule-generator_v5.jsx`, "QC Schedule
 Generator", Queens Club preseason) as an alternative league format and asked (2026-08-26) how it
 compares to the platform's League Manager, whether it is more valuable, and whether it can be integrated.
@@ -47,6 +51,24 @@ the tournament side** and would be reused, not rewritten:
   (2026-08-08): a league-linked tournament that draws the league's teams. The QC app is live evidence
   that this linkage is wanted.
 
+## Ease of use — the QC app vs. ours (owner ask, 2026-08-26)
+
+| Task | QC app | Platform (with wins-pods, v0.206.0) |
+|---|---|---|
+| **Set up teams** | Type/paste a list into the browser (device-local) | Teams arrive from registrations, or are added/renamed in place (double-click a name, v0.206.0) |
+| **Generate a night** | One click → pods | One click → pick "Wins pods" in the Format select, Generate |
+| **Enter scores** | Print a QR, players open a Google Form, you copy results back | Captain link / live board / desk — no round-trip; standings update themselves |
+| **See standings** | Re-open the app on the same device | Live, multi-device, on the board and the member site |
+| **Book courts** | Separate/manual | Auto-claimed on the facility calendar |
+| **Share the schedule** | mailto / print | Keyless email to captains + print, from the same page |
+
+**Read:** the QC app is *marginally* simpler for the one narrow task of "make a pod schedule on my
+laptop," because it does nothing else and holds no accounts. The platform asks you to pick a league
+first and think in registrations — but every step *after* generating (scoring, standings, courts,
+sharing) is materially less work because it is integrated, not re-keyed through Google. For a
+one-off preseason on a single laptop the QC app is fine; for anything that touches money, members,
+or more than one device, the platform is easier once the season is running.
+
 ## Assessment — is it valuable? better?
 
 - **Not better as an application.** Its scoring (Google Form + QR), saving (one device), and lack of
@@ -60,12 +82,12 @@ the tournament side** and would be reused, not rewritten:
 
 ## Integration recommendation (for the owner to schedule, not built here)
 
-1. **Add a pairing MODE to the League Manager.** `leagues_admin.js` already parameterises week generation
-   through `config_json` (`roundsPerNight`, `gamesPerMatch`, `pointsTo`, `cap`). Add a `pairingMode`:
-   `level-capped` (today's default) or `wins-pods` (rank the ladder by wins, cut into pods of 4/6, full
-   RR). The pod round-robin is ~15 lines (the QC `POD4`/`POD6` templates, or reuse `scheduler.js`'s
-   circle method). **Estimate: one focused unit**, guarded, no schema change (it reads standings that
-   already exist).
+1. ✅ **DONE v0.206.0 — the pairing MODE shipped.** `leagues_admin.js` now takes a `pairingMode`:
+   `level-capped` (default) or `wins-pods` (rank by wins, rank-adjacent pods of 4 / a 6 for the
+   remainder, partial RR giving every team 3 fresh opponents/night, no level cap). Exported
+   `podSizes`/`pairWinsPods`, unit-tested; generateWeek branches as an early return so the
+   level-capped path is byte-identical; a "Format" select ships on the League toolbar. No schema
+   change (it reads the standings/wins that already exist), exactly as estimated.
 2. **Wins-only standings option.** Our standings rank by point differential; the QC ladder ranks by wins.
    A per-league `rankBy: 'wins' | 'diff'` toggle covers it — small, no schema change.
 3. **The playoff is the N-4a "tournament inside a league" build**, using `scheduler.js` + `divisions.js`.
