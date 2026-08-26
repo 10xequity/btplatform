@@ -20,6 +20,21 @@ textarea { font: inherit; color: var(--text); background: var(--bg); border: 1px
 .row-between { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
 .inline-select { font: inherit; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 6px; }
 
+/* team roster (v0.208.0, owner 2026-08-26): the double-click-editable list in #teamsPanel — the
+   League board's affordance on this page too. Names otherwise appeared only read-only in the grid,
+   standings and byes, so a pasted typo meant delete-and-re-add. The captain (T2-3) shows read-only
+   for identification; it is a contact, not a team field, so it is not edited here. */
+.tm-roster { list-style: none; margin: 10px 0 4px; padding: 0; }
+.tm-team { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--border); }
+.tm-team:last-child { border-bottom: 0; }
+.tm-name { flex: 1; min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tm-name.bt-inline-edit { cursor: text; }
+.tm-name.bt-inline-edit:hover { text-decoration: underline dotted; }
+.tm-name:has(input) { overflow: visible; }
+.tm-cap { flex: none; font-size: 13px; color: var(--text-muted); }
+.tm-team .nm-edit { font: inherit; font-weight: 600; width: 100%; min-width: 120px; padding: 4px 6px; box-sizing: border-box;
+  border: 1px solid var(--accent); border-radius: 6px; background: var(--surface); color: var(--text); }
+
 /* feasibility + warnings */
 .feas { margin-top: 12px; }
 .warn-banner { border-left: 3px solid #C77E00; background: var(--surface-raised); padding: 10px 12px; border-radius: 0 var(--radius-control) var(--radius-control) 0; margin: 10px 0; font-size: 14px; }

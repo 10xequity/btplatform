@@ -146,6 +146,66 @@
     refreshAll();
   };
 
+  /* v0.208.0 (owner 2026-08-26, "add the double click to edit to the tournament page too"): the
+     roster in #teamsPanel lists the event's teams, each name double-click editable — the League
+     board's affordance ported here. Team names otherwise appeared only read-only in the grid,
+     standings and byes, so fixing a pasted typo meant delete-and-re-add. The captain (T2-3) shows
+     read-only beside the name for identification; it is a CONTACT (captain_contact_id), not a team
+     field, so the rename never touches it — patchTeam takes { name } only, exactly as on the League
+     board. A rename refreshAll()s, so the grid/standings/byes pick up the new name. */
+  const sayTeam = (msg) => { const el = $("teamMsg"); if (el) el.textContent = msg || ""; };
+
+  function renderTeamList() {
+    const list = $("teamList");
+    if (!list) return;
+    list.innerHTML = teams.map((t) =>
+      `<li class="tm-team" data-team="${t.id}">` +
+        `<span class="tm-name bt-inline-edit" data-team-name="${t.id}" tabindex="0" role="button" ` +
+          `title="Double-click to rename this team">${dsEsc(t.name)}</span>` +
+        (t.captain ? `<span class="tm-cap">${dsEsc(t.captain)}</span>` : "") +
+      `</li>`).join("");
+    list.querySelectorAll("[data-team-name]").forEach(inlineRename);
+  }
+
+  /* Double-click (or Enter) a static team name -> an input; Enter/blur commits via the EXISTING
+     PATCH /api/admin/teams/:id route, Escape cancels. An empty or unchanged name never hits the
+     server. On cancel/commit/error the focus returns to the cell (role=button, tabindex=0) so a
+     keyboard user keeps their place — the a11y fix v0.207.0 folded into the League field, present
+     here from the start. Ported from admin-league.js inlineRename; consolidating the two copies
+     into one BT_ADMIN.inlineEdit helper is tracked in the roadmap (§-1c). */
+  function inlineRename(span) {
+    const teamId = Number(span.dataset.teamName);
+    const start = () => {
+      if (span.querySelector("input")) return;            // already editing
+      const current = span.textContent;
+      const input = document.createElement("input");
+      input.type = "text";
+      input.value = current;
+      input.className = "nm-edit";
+      input.setAttribute("aria-label", "Team name");
+      span.textContent = "";
+      span.appendChild(input);
+      input.focus(); input.select();
+      sayTeam("");
+      let done = false;
+      const commit = async () => {
+        if (done) return; done = true;
+        const name = input.value.trim();
+        if (!name || name === current) { span.textContent = current; span.focus(); return; }
+        const r = await api(`/api/admin/teams/${teamId}`, { method: "PATCH", body: JSON.stringify({ name }) });
+        if (r.ok) { refreshAll(); }
+        else { span.textContent = current; span.focus(); sayTeam(r.data.error || "Couldn't rename the team."); }
+      };
+      input.addEventListener("blur", commit);
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") { e.preventDefault(); commit(); }
+        else if (e.key === "Escape") { done = true; span.textContent = current; span.focus(); }
+      });
+    };
+    span.addEventListener("dblclick", start);
+    span.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); start(); } });
+  }
+
   /* ---------- W-C (v0.94.0): plan the day — the formats planner finally has a screen ----------
      options → plan (with the owner's pool-split defaults and plain-sentence summary) → commit.
      The three routes existed since the format engine shipped and had no caller (D-4 baseline);
@@ -250,6 +310,7 @@
     // grid cell and put where a director is actually identifying a team under time pressure.
     teamCaptain = Object.fromEntries(teams.map((t) => [t.id, t.captain || ""]));
     $("teamCount").textContent = teams.length ? `(${teams.length})` : "";
+    renderTeamList(); // v0.208.0: the double-click-editable roster (owner 2026-08-26)
     if (teams.length) $("plTeams").value = teams.length; // W-C: the field count is the default, not a retype
     matches = (sched.data.matches || []).filter((m) => m.stage === "pool");
     renderWarnings(sched.data.warnings || []);
