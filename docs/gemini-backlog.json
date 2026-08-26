@@ -480,7 +480,7 @@
   "status": "pending",
   "tier": "carry",
   "last_review": null,
-  "note": null
+  "note": "edited iteration 143 (v0.203.0, N-5 rail brevity); close review 429-blocked, carry first"
  },
  {
   "file": "web/assets/admin-org-settings.js",
