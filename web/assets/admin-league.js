@@ -77,7 +77,7 @@
   function renderLevels() {
     $("levels").innerHTML = data.teams.map(t => `
       <div class="lvl-row" data-team="${t.id}">
-        <span class="nm">${esc(t.name)}</span>
+        <span class="nm bt-inline-edit" data-team-name="${t.id}" tabindex="0" role="button" title="Double-click to rename this team">${esc(t.name)}</span>
         <span class="rec">${t.wins}–${t.losses}</span>
         <select aria-label="Level for ${esc(t.name)}">
           ${[1, 2, 3, 4, 5].map(n => `<option value="${n}"${n === t.level_num ? " selected" : ""}>${n}</option>`).join("")}
@@ -91,6 +91,43 @@
     // T2-1b (v0.193.0): move a team to another league — the server refuses while it has games here.
     $("levels").querySelectorAll("[data-move]").forEach(b => b.addEventListener("click", () =>
       moveModal(Number(b.dataset.move), b.dataset.name)));
+    // v1.6 (owner 2026-08-26): double-click a team name to rename it in place — the QC generator's
+    // EditableField ported to the board (the roster modal's rename still works too).
+    $("levels").querySelectorAll("[data-team-name]").forEach(inlineRename);
+  }
+
+  /* Double-click (or Enter) a static team name → an input; Enter/blur commits via the EXISTING
+     PATCH /api/admin/teams/:id route, Escape cancels. Ported from qc-schedule-generator's
+     EditableField. An empty or unchanged name never hits the server. */
+  function inlineRename(span) {
+    const teamId = Number(span.dataset.teamName);
+    const start = () => {
+      if (span.querySelector("input")) return;         // already editing
+      const current = span.textContent;
+      const input = document.createElement("input");
+      input.type = "text";
+      input.value = current;
+      input.className = "nm-edit";
+      input.setAttribute("aria-label", "Team name");
+      span.textContent = "";
+      span.appendChild(input);
+      input.focus(); input.select();
+      let done = false;
+      const commit = async () => {
+        if (done) return; done = true;
+        const name = input.value.trim();
+        if (!name || name === current) { span.textContent = current; return; }
+        const r = await api(`/api/admin/teams/${teamId}`, { method: "PATCH", body: JSON.stringify({ name }) });
+        if (r.ok) { load(); } else { span.textContent = current; say(r.data.error || "Couldn't rename the team.", true); }
+      };
+      input.addEventListener("blur", commit);
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") { e.preventDefault(); commit(); }
+        else if (e.key === "Escape") { done = true; span.textContent = current; }
+      });
+    };
+    span.addEventListener("dblclick", start);
+    span.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); start(); } });
   }
 
   /* T2-1b: the destination list is the league picker's own, minus this league. Registrations stay
@@ -389,7 +426,11 @@
     $("genWeek").disabled = true;
     // RF-2B: the night's shape rides the press. Missing selects (an old cached shell) fall back
     // to today's single-game night — the server clamps to 1-3 / 1-2 either way.
+    // v1.6 (owner 2026-08-26): pairingMode picks the format — "level-capped" (skill-gapped weekly
+    // pairing, the default) or "wins-pods" (rank by wins, pods of 4, 3 fresh opponents/night). In
+    // wins-pods the server ignores rounds/games (the pod RR defines the night).
     const body = {
+      pairingMode: ($("wkMode") && $("wkMode").value) || "level-capped",
       roundsPerNight: Number($("wkRounds") && $("wkRounds").value) || 1,
       gamesPerMatch: Number($("wkGames") && $("wkGames").value) || 1,
     };

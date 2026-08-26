@@ -370,15 +370,8 @@
       `<button class="bt-edge" type="button" aria-label="Collapse or expand navigation">${ICONS.chevron}</button>`);
     layout.prepend(aside);
     }
-    /* Group collapse state — static markup ships all-open; the persisted state is applied
-       here (idempotent for the JS-built fallback too). Pre-paint application of collapse
-       state is the queued uiux-review §6 step-3 release, not this one. */
-    aside.querySelectorAll(".nav-group").forEach(g => {
-      const closed = safeGet("bt_navgrp_" + g.dataset.key) === "closed";
-      g.classList.toggle("closed", closed);
-      const lbl = g.querySelector(".nav-label");
-      if (lbl) lbl.setAttribute("aria-expanded", String(!closed));
-    });
+    /* Group collapse state is applied AFTER markActive() below (Option A needs the active group),
+       so nothing is toggled here. Static markup ships all-open; the JS-built fallback too. */
     aside.querySelector(".bt-edge").addEventListener("click", () => {
       const min = document.documentElement.dataset.nav === "min";
       if (min) delete document.documentElement.dataset.nav; else document.documentElement.dataset.nav = "min";
@@ -499,6 +492,23 @@
       if (parent) parent.classList.add("active");
     };
     markActive();
+    /* Group collapse — Option A (owner "choose A", 2026-08-26): default every group CLOSED except
+       the one holding the active item, so the rail reads as ~6 headers you expand ("get to ~10,
+       subcategories ok"). Runs AFTER markActive() so the active group is known from the .active
+       item (same source markActive uses — the open group and the highlight cannot disagree). An
+       explicit user toggle always WINS: bt_navgrp_<key> = "open" | "closed" overrides the default
+       either way. The toggle handler above persists the choice. Guards: admin_nav_collapse.test.mjs. */
+    (function applyGroupCollapse() {
+      const activeItem = aside.querySelector(".nav-item.active");
+      const activeKey = activeItem ? (activeItem.closest(".nav-group")?.dataset.key || null) : null;
+      aside.querySelectorAll(".nav-group").forEach(g => {
+        const stored = safeGet("bt_navgrp_" + g.dataset.key);   // "open" | "closed" | null
+        const closed = stored ? (stored === "closed") : g.dataset.key !== activeKey;
+        g.classList.toggle("closed", closed);
+        const lbl = g.querySelector(".nav-label");
+        if (lbl) lbl.setAttribute("aria-expanded", String(!closed));
+      });
+    })();
     window.addEventListener("hashchange", () => {
       aside.querySelectorAll(".nav-item").forEach(a => {
         const [page, hash] = a.getAttribute("href").split("#");
@@ -971,7 +981,7 @@
       if (window.BT_STATUS || document.getElementById("bt-status-js")) return;
       var s = document.createElement("script");
       s.id = "bt-status-js";
-      s.src = "assets/build-status.js?v=0.205.0";
+      s.src = "assets/build-status.js?v=0.206.0";
       s.async = false;
       document.head.appendChild(s);
     } catch (e) { /* indicators are never load-blocking */ }

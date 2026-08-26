@@ -40,6 +40,45 @@ export function wireLeagues(helpers) { ({ json, audit, isStaff, requireStaff } =
 
 const MAX_LEVEL_GAP = 2;
 
+/* ── v1.6 (owner 2026-08-26): the WINS-RANKED PODS format, integrated from the QC Schedule
+   Generator. A second `pairingMode` alongside the level-capped default: rank the ladder by WINS,
+   cut it into rank-adjacent pods of 4 (a 6 absorbs the awkward remainder), and play a partial
+   round-robin so every team gets exactly 3 distinct opponents that night, no repeats. The pod
+   templates give 3 game-slots for BOTH sizes (POD4 is a full RR; POD6 is truncated to 3 rounds so
+   everyone still plays exactly 3, never 5). The level-gap cap does NOT apply here — the pods are by
+   standing, not skill level. Pure functions, exported for league_wins_pods.test.mjs. */
+const POD4 = [[[0, 1], [2, 3]], [[0, 2], [1, 3]], [[0, 3], [1, 2]]];
+const POD6_3RD = [[[0, 5], [1, 4], [2, 3]], [[0, 4], [5, 3], [1, 2]], [[0, 3], [4, 2], [5, 1]]];
+
+export function podSizes(n) {
+  if (n <= 0) return { sizes: [], bye: 0 };
+  const bye = n % 2 === 1 ? 1 : 0;
+  let rem = n - bye;
+  const sizes = [];
+  if (rem % 4 === 2 && rem >= 6) { sizes.push(6); rem -= 6; }
+  while (rem >= 4) { sizes.push(4); rem -= 4; }
+  if (rem === 2) sizes.push(2);
+  return { sizes, bye };
+}
+
+/** `teams` must already be ranked strongest-first. Returns { rounds: [[ [aId,bId], … ] × 3], byes }.
+ *  The odd-count bye is the lowest-ranked team (it sorts last). */
+export function pairWinsPods(teams) {
+  const { sizes, bye } = podSizes(teams.length);
+  const byeTeam = bye ? teams[teams.length - 1] : null;
+  const pool = bye ? teams.slice(0, -1) : teams.slice();
+  const pods = []; let idx = 0;
+  for (const s of sizes) { pods.push(pool.slice(idx, idx + s)); idx += s; }
+  const rounds = [[], [], []];
+  for (const pod of pods) {
+    const tmpl = pod.length === 6 ? POD6_3RD : pod.length === 4 ? POD4 : [[[0, 1]], [], []];
+    for (let r = 0; r < 3; r++) for (const [i, j] of (tmpl[r] || []))
+      if (pod[i] && pod[j]) rounds[r].push([pod[i].id, pod[j].id]);
+  }
+  const byes = byeTeam ? [{ id: byeTeam.id, name: byeTeam.name, reason: "odd count: the lowest-ranked team sits" }] : [];
+  return { rounds, byes };
+}
+
 export async function leagueRoutes(request, env, url, ctx) {
   const p = url.pathname;
   const m = request.method;
@@ -202,9 +241,12 @@ async function generateWeek(request, env, ctx, id) {
 
   const teams = (await env.DB.prepare(
     `SELECT t.id, t.name, COALESCE(t.level_num,3) AS level_num,
+            COALESCE(s.wins,0) AS wins, COALESCE(s.point_diff,0) AS point_diff,
             (SELECT COUNT(*) FROM matches m WHERE (m.team_a_id=t.id OR m.team_b_id=t.id)
               AND m.event_id=?1 AND m.deleted_at IS NULL) AS games
-     FROM teams t WHERE t.event_id=?1 AND t.deleted_at IS NULL`
+     FROM teams t
+     LEFT JOIN standings s ON s.event_id=t.event_id AND s.team_id=t.id AND s.deleted_at IS NULL
+     WHERE t.event_id=?1 AND t.deleted_at IS NULL`
   ).bind(id).all()).results;
   if (teams.length < 2) return json({ error: "Add at least 2 teams before generating a week." }, 400);
 
@@ -218,6 +260,47 @@ async function generateWeek(request, env, ctx, id) {
   }
 
   let cfg = {}; try { cfg = JSON.parse(ev.config_json || "{}") || {}; } catch { cfg = {}; }
+
+  // v1.6 (owner 2026-08-26): the WINS-RANKED PODS format (QC integration). Its own insert path —
+  // game_number carries the pod-RR slot (1-3), the level-gap cap does NOT apply, and cross-week
+  // rematch avoidance is intentionally absent (the format re-ranks by wins each week, so who you
+  // meet follows the ladder). Early return keeps the level-capped path below byte-identical.
+  const pairingMode = (b.pairingMode || cfg.pairingMode) === "wins-pods" ? "wins-pods" : "level-capped";
+  if (pairingMode === "wins-pods") {
+    const ranked = [...teams].sort((a, bb) =>
+      (bb.wins - a.wins) || (bb.point_diff - a.point_diff) || String(a.name).localeCompare(String(bb.name)));
+    const { rounds: podRounds, byes: podByes } = pairWinsPods(ranked);
+    const maxR = await env.DB.prepare(
+      "SELECT COALESCE(MAX(round),0) AS r FROM matches WHERE event_id=?1 AND deleted_at IS NULL"
+    ).bind(id).first();
+    const roundNo = (maxR.r || 0) + 1;
+    const pointsToP = Number(b.pointsTo) || cfg.pointsTo || 21;
+    const capP = Number(b.cap) || cfg.cap || pointsToP + 2;
+    const courtsP = Math.max(1, Number(b.courts) || ev.court_count || 4);
+    let insertedP = 0;
+    for (let r = 0; r < podRounds.length; r++) {
+      let court = 1;
+      for (const [a, bb] of podRounds[r]) {
+        await env.DB.prepare(
+          `INSERT INTO matches (org_id, event_id, stage, round, court, team_a_id, team_b_id, points_to, cap, game_number)
+           VALUES (?1,?2,'pool',?3,?4,?5,?6,?7,?8,?9)`
+        ).bind(ev.org_id, id, roundNo, court, a, bb, pointsToP, capP, r + 1).run();
+        insertedP++;
+        court = court % courtsP + 1;
+      }
+    }
+    if (!insertedP) return json({ error: "Not enough teams for a pod. Add at least 2." }, 422);
+    await audit(env, ctx, "league.week.generate", "events", id,
+      { round: roundNo, matches: insertedP, byes: podByes.length, pairingMode: "wins-pods" });
+    let claim = null;
+    try {
+      claim = await autoClaimForEvent(env, ctx, ev,
+        { courts: courtsP, budgetMinutes: Number(b.weekMinutes) || cfg.weekMinutes || 180, weekRound: roundNo });
+    } catch (e) { console.error("autoclaim failed", e); claim = { skipped: "Court claim failed; book manually on the Facility calendar." }; }
+    return json({ ok: true, round: roundNo, matches: insertedP, byes: podByes, warnings: [],
+      pairing_mode: "wins-pods", facility_claim: claim });
+  }
+
   // RF-2 Unit B (owner rule 2026-08-24): "rotate through all the teams more than once … 3 rounds
   // with 2 games each" — rotations re-pair EVERYBODY, games multiply the rows per pairing.
   const roundsPerNight = Math.min(3, Math.max(1, Number(b.roundsPerNight) || Number(cfg.roundsPerNight) || 1));
