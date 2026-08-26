@@ -141,10 +141,10 @@
  },
  {
   "file": "worker/src/leagues_admin.js",
-  "status": "pending",
+  "status": "kept",
   "tier": "carry",
-  "last_review": null,
-  "note": null
+  "last_review": "2026-08-26",
+  "note": "v0.207.0 (manual Gemini Pro): C4 2-team pod best-of-3 FOLDED; C1 batch() recorded §-1c; C2 (SQL COALESCE) + C3 (court is cycling initial assignment) refuted"
  },
  {
   "file": "worker/src/lfg.js",
@@ -435,10 +435,10 @@
  },
  {
   "file": "web/assets/admin-league.js",
-  "status": "pending",
+  "status": "kept",
   "tier": "carry",
-  "last_review": null,
-  "note": null
+  "last_review": "2026-08-26",
+  "note": "v0.207.0 (manual Gemini Pro): B2 focus-restore-on-cancel FOLDED; B1 (data-team-name holds the id) + B3 (done-latch blocks double PATCH) refuted"
  },
  {
   "file": "web/assets/admin-manage.js",
@@ -477,10 +477,10 @@
  },
  {
   "file": "web/assets/admin-nav.js",
-  "status": "pending",
+  "status": "reviewed",
   "tier": "carry",
-  "last_review": null,
-  "note": "edited iteration 145 (v0.205.0, profile menu); close review 503 overloaded, carry first"
+  "last_review": "2026-08-26",
+  "note": "v0.207.0 (manual Gemini Pro): A1/A2 refuted (scoped local aside, every group has data-key), A3 active-group-collapse a deliberate design choice — surfaced to owner"
  },
  {
   "file": "web/assets/admin-org-settings.js",
