@@ -443,9 +443,9 @@
  {
   "file": "web/assets/admin-manage.js",
   "status": "pending",
-  "tier": "never-reviewed",
+  "tier": "carry",
   "last_review": null,
-  "note": null
+  "note": "edited iteration 144 (v0.204.0, N-4 fold); close review 429-blocked, carry first"
  },
  {
   "file": "web/assets/admin-manager.js",
