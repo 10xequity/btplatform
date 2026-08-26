@@ -123,7 +123,9 @@
       input.addEventListener("blur", commit);
       input.addEventListener("keydown", (e) => {
         if (e.key === "Enter") { e.preventDefault(); commit(); }
-        else if (e.key === "Escape") { done = true; span.textContent = current; }
+        // v0.207.0 (Gemini B2): Escape cancels AND returns focus to the cell (role=button,
+        // tabindex=0), so a keyboard user keeps their place instead of dropping to <body>.
+        else if (e.key === "Escape") { done = true; span.textContent = current; span.focus(); }
       });
     };
     span.addEventListener("dblclick", start);

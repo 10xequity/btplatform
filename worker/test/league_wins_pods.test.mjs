@@ -65,6 +65,19 @@ test("an odd ladder sits the lowest-ranked team (the bye), the rest pod up", () 
   assert.equal(byes[0].id, 9, "the bye is the lowest-ranked team (id 9 has the fewest wins)");
 });
 
+/* v0.207.0 (Gemini review of v0.206.0's build, finding C4): a lone 2-team pod — which only occurs
+   at N=2, or N=3 with the odd bye — must still fill the night. The old template played it ONCE and
+   left both teams idle for game-slots 2 and 3 while every other pod played three. The only opponent
+   is each other, so the degenerate round-robin is best-of-3: both teams play all three slots. */
+test("a 2-team pod plays best-of-3 across the night — neither team sits idle", () => {
+  const { rounds } = pairWinsPods(ranked(2));
+  assert.equal(rounds.length, 3, "a pod night is 3 game-slots");
+  const count = new Map();
+  for (const rd of rounds) for (const [a, b] of rd) { count.set(a, (count.get(a) || 0) + 1); count.set(b, (count.get(b) || 0) + 1); }
+  assert.equal(count.get(1), 3, "team 1 did not play 3 games in a 2-team pod (idle rounds)");
+  assert.equal(count.get(2), 3, "team 2 did not play 3 games in a 2-team pod (idle rounds)");
+});
+
 /* ── the mode is wired into week generation ── */
 import { readFileSync } from "node:fs";
 import { blankComments } from "../testkit/route-extract.mjs";

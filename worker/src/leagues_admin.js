@@ -71,7 +71,10 @@ export function pairWinsPods(teams) {
   for (const s of sizes) { pods.push(pool.slice(idx, idx + s)); idx += s; }
   const rounds = [[], [], []];
   for (const pod of pods) {
-    const tmpl = pod.length === 6 ? POD6_3RD : pod.length === 4 ? POD4 : [[[0, 1]], [], []];
+    // A lone 2-team pod (only at N=2, or N=3 with the odd bye) plays best-of-3 across all three
+    // game-slots — its only opponent is each other, so the degenerate round-robin fills the night
+    // rather than playing once and sitting idle for slots 2-3 (v0.207.0, Gemini C4).
+    const tmpl = pod.length === 6 ? POD6_3RD : pod.length === 4 ? POD4 : [[[0, 1]], [[0, 1]], [[0, 1]]];
     for (let r = 0; r < 3; r++) for (const [i, j] of (tmpl[r] || []))
       if (pod[i] && pod[j]) rounds[r].push([pod[i].id, pod[j].id]);
   }

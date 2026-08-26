@@ -44,3 +44,21 @@ test("NC: dropping the PATCH from the rename path is caught", () => {
   assert.notEqual(stripped, SRC, "the mutation did not land — no PATCH in admin-league.js at all");
   assert.doesNotMatch(stripped, /method:\s*"PATCH"/, "the route detector cannot fail");
 });
+
+/* v0.207.0 (Gemini review of v0.206.0's build, finding B2): the team-name cell is role="button"
+   tabindex="0", so a keyboard user reaches it and opens the editor with Enter. When the edit is
+   CANCELLED (Escape) the input unmounts and focus must return to that trigger, not fall to <body>
+   — otherwise the keyboard user loses their place in the list. Source-level pin: page-harness's
+   querySelectorAll is a stub, so a runtime focus assertion can't reach the per-rendered-node
+   wiring (stated). Gemini's other two B-findings measured FALSE against the real source — the id
+   already lives in data-team-name (not the name), and the `done` latch already blocks a double
+   PATCH — so only the focus-restore was folded. */
+test("cancelling the rename returns focus to the team-name cell (a11y)", () => {
+  assert.match(SRC, /span\.focus\(\)/, "Escape/cancel does not restore focus to the team-name cell");
+});
+
+test("NC: dropping the focus-restore is caught", () => {
+  const stripped = SRC.replace(/span\.focus\(\)/g, "void 0");
+  assert.notEqual(stripped, SRC, "no span.focus() in admin-league.js — the a11y fix did not land");
+  assert.doesNotMatch(stripped, /span\.focus\(\)/, "the focus-restore detector cannot fail");
+});
