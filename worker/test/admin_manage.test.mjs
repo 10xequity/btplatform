@@ -35,35 +35,62 @@ const read = (p) => {
   return p.endsWith(".js") ? blankComments(s) : s;
 };
 
-const ENTRIES = ["admin-manage.html#tournaments", "admin-manage.html#leagues"];
+/* v1.2 (§-1d N-4 "League gets the same treatment", owner "Agreed" 2026-08-26): the two hash-carrying
+   management entries FOLD into ONE hash-less "Event Management" rail item; the tournament/league
+   choice moves ONTO the page as quick-select tabs (the owner's "sub category ... that can quick
+   select those 2 options"). The tabs reuse the shared .tabs/.tab component (N-4's reuse rule) and
+   target the existing #tournaments / #leagues hashes, so the render path is unchanged. */
+const OLD_ENTRIES = ["admin-manage.html#tournaments", "admin-manage.html#leagues"];
+const MG_ENTRY = "admin-manage.html";
 
-test("RF-4: both management entries exist in BOTH rail sources — the parity sync-rail never checks", () => {
+test("N-4 fold: ONE hash-less 'Event Management' entry in BOTH rail sources, and the two hash entries are gone", () => {
   const partial = read("assets/rail.partial.html");
   const nav = read("assets/admin-nav.js");
-  for (const e of ENTRIES) {
-    assert.ok(partial.includes(`href="${e}"`), `rail.partial.html lost ${e}`);
-    assert.ok(nav.includes(`"${e}"`),
-      `admin-nav.js's NAV list lost ${e} — the runtime fallback rail has drifted from the partial`);
+  for (const src of [partial, nav]) {
+    for (const old of OLD_ENTRIES) {
+      assert.ok(!src.includes(`"${old}"`) && !src.includes(`href="${old}"`),
+        `a source still carries the old split entry ${old} — the fold did not land in both places`);
+    }
   }
+  assert.ok(partial.includes(`href="${MG_ENTRY}" title="Event Management"`),
+    "rail.partial.html has no single 'Event Management' entry at admin-manage.html");
+  assert.match(nav, /href: "admin-manage\.html",[^\n]*text: "Event Management"/,
+    "admin-nav.js's NAV list has no single 'Event Management' entry");
 });
 
-test("RF-4: the picker page ships the synced static rail carrying its own two entries", () => {
+test("N-4 fold: the page ships the synced rail carrying the single entry, and loads its module", () => {
   const page = read("admin-manage.html");
   assert.ok(page.includes('data-static="rail"'),
     "admin-manage.html must carry the synced static rail (sync-rail owns the region)");
-  for (const e of ENTRIES) {
-    assert.ok(page.includes(`href="${e}"`), `the synced rail on admin-manage.html is stale: missing ${e}`);
-  }
+  assert.ok(page.includes(`href="${MG_ENTRY}" title="Event Management"`),
+    "the synced rail on admin-manage.html is stale: missing the single Event Management entry");
   assert.match(page, /<script src="assets\/admin-manage\.js\?v=/, "the page no longer loads its module");
 });
 
-test("RF-4: a bare visit gets a default scope — hash entries highlight nothing without one", () => {
-  /* Both rail entries carry hashes, so markActive() on a hash-less deep visit matches nothing and
-     the rail sits dark (the exact defect nav_highlight.test.mjs exists for). The module must set a
-     default hash rather than render un-located. */
+test("N-4 fold: the page carries quick-select tabs for the two types, reusing the shared .tabs component", () => {
+  // The owner's "sub category ... that can quick select those 2 options": on-page tabs, not two rail
+  // items. They must use the shared component (admin.css .tabs/.tab), never a new vocabulary.
+  const page = read("admin-manage.html");
+  assert.match(page, /class="tabs"[^>]*role="tablist"/,
+    "admin-manage.html has no shared .tabs/tablist quick-select row");
+  assert.match(page, /href="#tournaments"[^>]*>\s*Tournaments/,
+    "no 'Tournaments' quick-select tab targeting the #tournaments scope");
+  assert.match(page, /href="#leagues"[^>]*>\s*Leagues/,
+    "no 'Leagues' quick-select tab targeting the #leagues scope");
+});
+
+test("N-4 fold: the module reflects the active tab and still defaults a hash-less visit to a scope", () => {
   const js = read("assets/admin-manage.js");
+  // Content still needs a default TYPE on a hash-less visit (the rail highlight no longer needs it —
+  // the entry is hash-less now — but the page must know which type to render).
   assert.ok(js.includes('location.replace("#tournaments")'),
-    "admin-manage.js no longer defaults a hash-less visit to #tournaments");
+    "admin-manage.js no longer defaults a hash-less visit to a scope — the page renders un-typed");
+  // And it marks the active quick-select tab, or the two tabs give no feedback about where you are.
+  // Pinned as discrete behavioural tokens (never a character-distance window — marker_hygiene's rule):
+  // it reads the tab row and toggles the shared active class by the tab's own scope.
+  assert.match(js, /getElementById\("mgTypeTabs"\)/, "admin-manage.js never reads the quick-select tab row");
+  assert.match(js, /classList\.toggle\("active"/, "admin-manage.js never toggles the active state on a tab");
+  assert.match(js, /dataset\.scope/, "admin-manage.js never keys the active tab off its scope");
 });
 
 /* ── the active/past rule, EXECUTED against the measured trap — never re-implemented ── */

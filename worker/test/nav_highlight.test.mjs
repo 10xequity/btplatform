@@ -1,5 +1,10 @@
 /* Boomtown Platform — rail highlighting guard
-   File: worker/test/nav_highlight.test.mjs · Version: v1.1 · Date: 2026-08-23 · Ships in: v0.184.0
+   File: worker/test/nav_highlight.test.mjs · Version: v1.2 · Date: 2026-08-26 · Ships in: v0.204.0
+
+   v1.2 (§-1d N-4 fold): the two hash-carrying management entries folded into ONE hash-less
+   "Event Management" (admin-manage.html), and the eight collapsed tools' PARENT re-pointed at it.
+   The full-href machinery below is unchanged and still correct; the hash-parent NC INVERTED (the
+   hash-less parent now matches; a stale hashed parent would go dark). See that test.
 
    WHY THIS EXISTS. Owner report, 2026-08-03: "the buttons in tournaments are not correctly
    highlighted." The cause was that `admin-event.html` — the page where a tournament is actually
@@ -148,19 +153,22 @@ test("RF-4: the collapsed event tools are off the rail but still highlight a sec
   }
 });
 
-test("NC: a PARENT that drops its hash is caught — full-href match, runtime semantics", () => {
-  // markActive() matches the WHOLE href. A parent of "admin-manage.html" for a tool whose section is
-  // "admin-manage.html#tournaments" resolves to no rail item at runtime, yet a page-part check would
-  // wave it through. First a POSITIVE CONTROL that the extractor actually sees a hash-carrying parent
-  // (if the regex regressed to plain-only, this would be 0 and fail); then the NC that dropping the
-  // hash reddens.
-  const hashParents = Object.entries(PARENT).filter(([, up]) => up.includes("#"));
-  assert.ok(hashParents.length >= 1,
-    "expected at least one hash-carrying PARENT (the collapsed event tools) — the extractor must read it");
-  const [, up] = hashParents[0];
-  const dropped = up.split("#")[0];                 // admin-manage.html#tournaments → admin-manage.html
-  assert.ok(RAIL_HREFS_FULL.has(up),
-    "the real hash-carrying value must match a full rail href — the collapse's highlight depends on it");
-  assert.ok(!RAIL_HREFS_FULL.has(dropped),
-    "the hash-dropped value must NOT match any full rail href — otherwise this NC proves nothing");
+test("full-href match, runtime semantics: the collapsed tools' PARENT matches the single entry, and the OLD hash would not", () => {
+  // v1.2 (§-1d N-4 fold, v0.204.0): the two hash-carrying management entries folded into ONE
+  // hash-less "admin-manage.html", and the eight tools' PARENT re-pointed at it. So the runtime
+  // semantics INVERT from v1.1: the hash-LESS parent is now the one that matches, and the OLD
+  // hashed value (admin-manage.html#tournaments) matches nothing — the split entry it named is gone.
+  // The full-href machinery still earns its keep: markActive() compares whole strings, so this
+  // proves the fold's parents resolve and a stale hashed parent would go dark.
+  const toolParent = PARENT["tournament.html"];
+  assert.equal(toolParent, "admin-manage.html",
+    "the collapsed tools no longer parent to the single Event Management entry — the fold's remap did not land");
+  assert.ok(RAIL_HREFS_FULL.has("admin-manage.html"),
+    "the single hash-less Event Management entry is not a full rail href — the tools' highlight depends on it");
+  assert.ok(!RAIL_HREFS_FULL.has("admin-manage.html#tournaments"),
+    "the OLD split entry is still a rail href — the fold did not remove it, so this NC proves nothing");
+  // And no PARENT keeps a stale hash after the fold — a leftover #tournaments parent would go dark.
+  const stillHashed = Object.entries(PARENT).filter(([, up]) => up.includes("#"));
+  assert.deepEqual(stillHashed, [],
+    "a PARENT still carries a hash after the fold — it points at a split entry that no longer exists");
 });

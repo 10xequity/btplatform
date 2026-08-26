@@ -64,6 +64,16 @@
     document.title = scope.title + " · Boomtown Athletics";
     $("mgTitle").textContent = scope.title;
     $("mgSub").textContent = "Pick one of your active " + scope.noun + " to open its manager hub.";
+    /* v1.2 (§-1d N-4 fold): reflect the active quick-select tab. The two tabs are anchors to
+       #tournaments / #leagues, so the switch itself rides the hashchange listener already below —
+       this only marks WHICH type you are on (mgTypeTabs; the shared .tab component). */
+    const key = location.hash.replace("#", "");
+    const tabs = document.getElementById("mgTypeTabs");
+    if (tabs) for (const a of tabs.querySelectorAll(".tab")) {
+      const on = a.dataset.scope === key;
+      a.classList.toggle("active", on);
+      a.setAttribute("aria-selected", String(on));
+    }
     if (!events) {
       const r = await api("/api/events");
       if (!r.ok) { $("mgActive").innerHTML = `<p class="mg-empty">Could not load events (${r.status}). Reload to retry.</p>`; return; }

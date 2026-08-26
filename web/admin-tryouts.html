@@ -12,9 +12,9 @@
   <title>Tryout evaluations · Boomtown Athletics</title>
   <script>/* Pre-paint state — collapse + theme (uiux-review §4/§6.4, v0.52.0): read the bt_nav cookie and the saved theme BEFORE the first stylesheet so the rail state AND the theme are right on frame one — no post-paint snap of either. admin-nav.js writes the cookie on rail toggle and bt_theme on theme toggle; the localStorage bt_nav fallback migrates pre-v0.51 sessions. */(function(){try{var m=document.cookie.match(/(?:^|; )bt_nav=([^;]*)/);var v=m?m[1]:((window.localStorage&&localStorage.getItem("bt_nav_collapsed")==="1")?"min":"");if(v==="min")document.documentElement.dataset.nav="min";var t=(window.localStorage&&localStorage.getItem("bt_theme"))||(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.dataset.theme=t;}catch(e){}})();</script>
   <script>try{var btTpl=localStorage.getItem("bt_template");if(btTpl)document.documentElement.dataset.template=btTpl;}catch(e){}</script>
-  <link rel="stylesheet" href="assets/tokens.css?v=0.203.0" />
-  <link rel="stylesheet" href="assets/app.css?v=0.203.0" />
-  <link rel="stylesheet" href="assets/admin.css?v=0.203.0" />
+  <link rel="stylesheet" href="assets/tokens.css?v=0.204.0" />
+  <link rel="stylesheet" href="assets/app.css?v=0.204.0" />
+  <link rel="stylesheet" href="assets/admin.css?v=0.204.0" />
   <style>
     .eval-list { display: grid; gap: 12px; }
     .eval-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card, 10px); padding: 14px; }
@@ -94,7 +94,7 @@
 </head>
 <body>
     <header class="header chrome-glass no-print">
-    <a class="wordmark" href="admin.html" style="text-decoration:none;color:inherit"><img class="brand-logo" src="assets/logo-boom-icon-512.png?v=0.203.0" alt="" width="22" height="22" />Boomtown <span>Athletics</span></a>
+    <a class="wordmark" href="admin.html" style="text-decoration:none;color:inherit"><img class="brand-logo" src="assets/logo-boom-icon-512.png?v=0.204.0" alt="" width="22" height="22" />Boomtown <span>Athletics</span></a>
     <div class="spacer"></div>
     <select id="orgSwitcher" class="org-switcher" aria-label="Switch organization"></select>
     <a id="btHdrMail" class="btn ghost hdr-mail" href="admin-messages.html" aria-label="Messages">✉</a>
@@ -109,8 +109,7 @@
         
           <a class="nav-item" href="admin.html" title="Dashboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="5" rx="1.5"/><rect x="13" y="10" width="8" height="11" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/></svg><span class="txt">Dashboard</span></a>
           <a class="nav-item" href="admin-events.html" title="Events & Programs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span class="txt">Events & Programs</span></a>
-          <a class="nav-item" href="admin-manage.html#tournaments" title="Tournament Management"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 3v3M16 3v3M8 11h8M8 15h5"/></svg><span class="txt">Tournament Management</span></a>
-          <a class="nav-item" href="admin-manage.html#leagues" title="League Management"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 21h8M12 17v4M7 4h10v4a5 5 0 0 1-10 0z"/><path d="M7 6H4a3 3 0 0 0 3 4M17 6h3a3 3 0 0 1-3 4"/></svg><span class="txt">League Management</span></a>
+          <a class="nav-item" href="admin-manage.html" title="Event Management"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 3v3M16 3v3M8 11h8M8 15h5"/></svg><span class="txt">Event Management</span></a>
           <a class="nav-item" href="admin-registrations.html" title="Registrations"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 12l2 2 4-5"/><rect x="4" y="4" width="16" height="16" rx="2"/></svg><span class="txt">Registrations</span></a>
           <a class="nav-item" href="admin-waitlists.html" title="Waitlists"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 12l2 2 4-5"/><rect x="4" y="4" width="16" height="16" rx="2"/></svg><span class="txt">Waitlists</span></a>
           <a class="nav-item" href="admin-checkin.html" title="Check-in"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 3h6v18h-6"/><path d="M13 21H4V3h9"/><circle cx="10.5" cy="12" r="1.2"/></svg><span class="txt">Check-in</span></a>
@@ -232,8 +231,8 @@
       </section>
     </main>
   </div>
-  <script src="assets/config.js?v=0.203.0"></script>
-  <script src="assets/admin-nav.js?v=0.203.0"></script>
-  <script src="assets/admin-tryouts.js?v=0.203.0"></script>
+  <script src="assets/config.js?v=0.204.0"></script>
+  <script src="assets/admin-nav.js?v=0.204.0"></script>
+  <script src="assets/admin-tryouts.js?v=0.204.0"></script>
 </body>
 </html>

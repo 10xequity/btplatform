@@ -276,8 +276,12 @@
     { label: "Run events", key: "run", items: [
       { href: "admin.html",               ico: "dash",   text: "Dashboard" },
       { href: "admin-events.html",        ico: "events", text: "Events & Programs" },
-      { href: "admin-manage.html#tournaments", ico: "ops", text: "Tournament Management" },
-      { href: "admin-manage.html#leagues", ico: "league", text: "League Management" },
+      /* v2.27 (§-1d N-4 "League gets the same treatment", owner "Agreed" 2026-08-26): the two
+         management entries fold into ONE. The tournament/league choice is now a quick-select tab
+         row ON admin-manage.html (the shared .tabs component), his "sub category ... that can quick
+         select those 2 options". The eight collapsed tools' PARENT re-points at this hash-less
+         entry (below). Guards: admin_manage.test.mjs v1.2, nav_highlight v1.2. */
+      { href: "admin-manage.html", ico: "ops", text: "Event Management" },
       { href: "admin-registrations.html", ico: "regs",   text: "Registrations" },
       { href: "admin-waitlists.html",     ico: "regs",   text: "Waitlists" },
       { href: "admin-checkin.html",       ico: "door",   text: "Check-in" },
@@ -461,21 +465,20 @@
       "admin-event.html": "admin-events.html",     // one event → Events & Programs
       "admin-manager.html": "admin-events.html",   // one event's manager hub → Events & Programs (WF-5)
       "admin-consent.html": "admin-waivers.html",  // media consent → Waivers (same family of signed agreements)
-      /* RF-4 (v0.184.0): the collapsed event tools. Values carry the picker's HASH so the highlight
-         resolves — markActive matches the WHOLE href below, and the two management entries in the
-         rail are `admin-manage.html#tournaments` / `#leagues`. The six tournament-family tools and
-         Court Board point at #tournaments; League Manager at #leagues. The Schedule Editor serves
-         BOTH types (owner: "add the rail for scheduler to the tournament page/league page"); it is
-         reachable from both pickers via the hub's Schedule editor tab, and its highlight defaults to
-         #tournaments (its more common use). nav_highlight.test.mjs verifies each against a full-href. */
-      "tournament.html":          "admin-manage.html#tournaments",  // Tournament Ops
-      "admin-brackets.html":      "admin-manage.html#tournaments",  // Brackets
-      "admin-divisions.html":     "admin-manage.html#tournaments",  // Divisions
-      "admin-pool-board.html":    "admin-manage.html#tournaments",  // Pool Board
-      "admin-score-links.html":   "admin-manage.html#tournaments",  // Scoring Links
-      "admin-kotc.html":          "admin-manage.html#tournaments",  // Court Board (KOTC — tournament family)
-      "admin-schedule-editor.html": "admin-manage.html#tournaments", // Schedule Editor (shared; reachable from both)
-      "admin-league.html":        "admin-manage.html#leagues",      // League Manager
+      /* RF-4 (v0.184.0) collapsed these eight tools OFF the rail behind the management picker.
+         v0.204.0 (§-1d N-4 fold): the two split management entries became ONE hash-less
+         "Event Management" (admin-manage.html), so every tool now parents at that single entry —
+         markActive matches the WHOLE href, and the hash-less value is what the rail now carries.
+         The tournament/league split lives on the page as quick-select tabs, not as two parents.
+         nav_highlight.test.mjs v1.2 verifies each against a full-href. */
+      "tournament.html":          "admin-manage.html",  // Tournament Ops
+      "admin-brackets.html":      "admin-manage.html",  // Brackets
+      "admin-divisions.html":     "admin-manage.html",  // Divisions
+      "admin-pool-board.html":    "admin-manage.html",  // Pool Board
+      "admin-score-links.html":   "admin-manage.html",  // Scoring Links
+      "admin-kotc.html":          "admin-manage.html",  // Court Board (KOTC)
+      "admin-schedule-editor.html": "admin-manage.html", // Schedule Editor (shared, both types)
+      "admin-league.html":        "admin-manage.html",  // League Manager
     };
     const markActive = () => {
       const items = [...aside.querySelectorAll(".nav-item")];
@@ -926,7 +929,7 @@
       if (window.BT_STATUS || document.getElementById("bt-status-js")) return;
       var s = document.createElement("script");
       s.id = "bt-status-js";
-      s.src = "assets/build-status.js?v=0.203.0";
+      s.src = "assets/build-status.js?v=0.204.0";
       s.async = false;
       document.head.appendChild(s);
     } catch (e) { /* indicators are never load-blocking */ }
