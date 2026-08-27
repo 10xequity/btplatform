@@ -280,19 +280,24 @@ async function generateWeek(request, env, ctx, id) {
     const pointsToP = Number(b.pointsTo) || cfg.pointsTo || 21;
     const capP = Number(b.cap) || cfg.cap || pointsToP + 2;
     const courtsP = Math.max(1, Number(b.courts) || ev.court_count || 4);
-    let insertedP = 0;
+    // D-59: accumulate the week's inserts and flush them in ONE atomic batch (PROMPT §3, and the
+    // test DB batches atomically too), so a pod night is all-or-nothing rather than a partial week
+    // if a statement fails mid-loop. The court/game_number logic is unchanged — statements are
+    // pushed in the exact order they were previously run.
+    const podStmts = [];
     for (let r = 0; r < podRounds.length; r++) {
       let court = 1;
       for (const [a, bb] of podRounds[r]) {
-        await env.DB.prepare(
+        podStmts.push(env.DB.prepare(
           `INSERT INTO matches (org_id, event_id, stage, round, court, team_a_id, team_b_id, points_to, cap, game_number)
            VALUES (?1,?2,'pool',?3,?4,?5,?6,?7,?8,?9)`
-        ).bind(ev.org_id, id, roundNo, court, a, bb, pointsToP, capP, r + 1).run();
-        insertedP++;
+        ).bind(ev.org_id, id, roundNo, court, a, bb, pointsToP, capP, r + 1));
         court = court % courtsP + 1;
       }
     }
-    if (!insertedP) return json({ error: "Not enough teams for a pod. Add at least 2." }, 422);
+    if (!podStmts.length) return json({ error: "Not enough teams for a pod. Add at least 2." }, 422);
+    await env.DB.batch(podStmts);
+    const insertedP = podStmts.length;
     await audit(env, ctx, "league.week.generate", "events", id,
       { round: roundNo, matches: insertedP, byes: podByes.length, pairingMode: "wins-pods" });
     let claim = null;
@@ -340,22 +345,26 @@ async function generateWeek(request, env, ctx, id) {
   // ONE round for the whole night; play order rides game_number. A pairing's games share a court
   // (played back to back); the court cycles per PAIRING so a team lands wherever the night takes
   // it — different courts across rotations is the owner's stated shape, not a defect.
-  let court = 1, inserted = 0;
+  // D-59: same one-atomic-batch flush as the wins-pods path above (PROMPT §3). Court/game_number
+  // logic unchanged — statements are pushed in the exact order they were previously run.
+  const weekStmts = [];
+  let court = 1;
   for (let rot = 1; rot <= roundsPerNight; rot++) {
     for (const [a, bb] of nights[rot - 1] || []) {
       for (let g = 1; g <= gamesPerMatch; g++) {
         // game_number is NOT NULL DEFAULT 1 on live (measured) — a plain night's single game IS
         // game 1, so the number is always bound; a structured night counts on up from there.
         const gameNo = (rot - 1) * gamesPerMatch + g;
-        await env.DB.prepare(
+        weekStmts.push(env.DB.prepare(
           `INSERT INTO matches (org_id, event_id, stage, round, court, team_a_id, team_b_id, points_to, cap, game_number)
            VALUES (?1,?2,'pool',?3,?4,?5,?6,?7,?8,?9)`
-        ).bind(ev.org_id, id, round, court, a, bb, pointsTo, cap, gameNo).run();
-        inserted++;
+        ).bind(ev.org_id, id, round, court, a, bb, pointsTo, cap, gameNo));
       }
       court = court % courts + 1;
     }
   }
+  if (weekStmts.length) await env.DB.batch(weekStmts);
+  const inserted = weekStmts.length;
   await audit(env, ctx, "league.week.generate", "events", id,
     { round, matches: inserted, byes: byes.length, roundsPerNight, gamesPerMatch });
 
