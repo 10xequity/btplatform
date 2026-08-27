@@ -69,6 +69,19 @@ html, body {
   border-radius: var(--radius-card, 10px); box-shadow: 0 10px 30px rgba(0,0,0,.28); padding: 6px;
   transform-origin: top right; }
 .profile-menu[hidden] { display: none; }
+/* v0.212.0 (owner UX pass): the two header menus POP IN from their trigger corner — both are
+   occasional-frequency popovers (the motion framework's "standard animation" bucket), origin-aware
+   (they anchor to header buttons on the right), and ride the shared motion tokens. Unhiding a
+   display:none element restarts the animation, so the [hidden] toggles both menus already use are
+   the trigger. Inside the positive reduced-motion fence (M-4's rule): with reduced motion the menu
+   simply appears, which is the correct degrade. */
+@media (prefers-reduced-motion: no-preference) {
+  .profile-menu:not([hidden]), .theme-pop:not([hidden]) {
+    animation: bt-menu-pop var(--dur-pop) var(--ease-out);
+    transform-origin: top right;
+  }
+  @keyframes bt-menu-pop { from { opacity: 0; transform: scale(0.98) translateY(-2px); } }
+}
 .profile-menu .pm-item { display: flex; align-items: center; gap: 10px; width: 100%;
   box-sizing: border-box; min-height: 44px; padding: 10px 12px;
   border-radius: var(--radius-control, 8px); color: var(--text); text-decoration: none;
@@ -175,7 +188,9 @@ html, body {
   display: grid;
   place-items: center;
 }
-.login-card { width: min(420px, 92vw); }
+/* v0.212.0 (mobile pass): 100%, not 92vw — vw includes a classic scrollbar's width, so this
+   card bled 4px past the viewport at phone width on desktop. The wrap provides the margins. */
+.login-card { width: min(420px, 100%); }
 .login-card h1 { font-size: var(--fs-h1); margin: 0 0 4px; }
 .login-card p { color: var(--text-muted); margin: 0 0 16px; }
 
@@ -372,7 +387,7 @@ body.embed { overflow-y: hidden; }
    from the button's rect, so it needs no positioning context on any shell. Carries the same
    .tpl-chips the Settings card and the admin Appearance modal mount. The [hidden] override is
    the hidden_overlay rule: nothing here sets display on .theme-pop, but insurance is cheap. */
-.theme-pop { position: fixed; z-index: 80; min-width: 250px; max-width: min(340px, calc(100vw - 16px));
+.theme-pop { position: fixed; z-index: 80; min-width: 250px; max-width: min(340px, calc(100% - 16px)); /* % of the ICB, not vw — scrollbar-safe (v0.212.0) */
   background: var(--surface-raised, var(--surface)); border: 1px solid var(--border);
   border-radius: var(--radius-card, 10px); box-shadow: 0 10px 30px rgba(0,0,0,.28); padding: 10px; }
 .theme-pop[hidden] { display: none; }

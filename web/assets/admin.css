@@ -168,6 +168,13 @@
 .help-text { font-size: 13px; color: var(--text-muted); }
 .notice-ok { color: var(--positive); font-size: 14px; }
 .notice-err { color: var(--danger); font-size: 14px; }
+/* v0.212.0 (owner UX pass): action feedback eases in instead of snapping — say() inserts a fresh
+   element per message, so the animation fires once per notice (the framework's "feedback" purpose).
+   Fenced (M-4's rule); reduced motion sees the message instantly. */
+@media (prefers-reduced-motion: no-preference) {
+  .notice-ok, .notice-err { animation: bt-notice-in var(--dur-pop) var(--ease-out); }
+  @keyframes bt-notice-in { from { opacity: 0; transform: translateY(2px); } }
+}
 .select-col { width: 34px; }
 
 @media (max-width: 860px) {

@@ -208,7 +208,7 @@
     .site-layout { display: block; }
     .site-nav { position: static; width: auto; max-height: none; display: flex; gap: 4px;
       overflow-x: auto; padding: 8px 12px; border-bottom: 1px solid var(--border);
-      -webkit-overflow-scrolling: touch; }
+      -webkit-overflow-scrolling: touch; scrollbar-width: thin; }
     .site-nav .nav-group { display: flex; gap: 4px; }
     .site-nav .nav-label { display: none; }
     .site-nav .nav-brand { display: none; }
@@ -661,7 +661,7 @@
       if (window.BT_STATUS || document.getElementById("bt-status-js")) return;
       var s = document.createElement("script");
       s.id = "bt-status-js";
-      s.src = "assets/build-status.js?v=0.211.0";
+      s.src = "assets/build-status.js?v=0.212.0";
       s.async = false;
       document.head.appendChild(s);
     } catch (e) { /* indicators are never load-blocking */ }

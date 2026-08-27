@@ -176,8 +176,8 @@
     st.id = "bt-status-css";
     st.textContent = `
       .bt-chip { display:inline-flex; align-items:center; gap:3px; flex:none;
-        margin-left:auto; padding:1px 5px; border-radius:999px; font-size:9px;
-        font-weight:700; letter-spacing:.05em; line-height:1.6; text-transform:uppercase;
+        margin-left:auto; padding:1px 5px; border-radius:999px; font-size:10px;
+        font-weight:700; letter-spacing:.05em; line-height:1.5; text-transform:uppercase;
         border:1px solid currentColor; background:transparent; }
       .bt-chip--beta { color: var(--warn); }
       .bt-chip--wip  { color: var(--danger); }

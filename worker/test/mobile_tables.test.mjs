@@ -1,5 +1,5 @@
 /* Boomtown Platform — wide admin tables on a phone (roadmap §-1h M-1)
-   File: worker/test/mobile_tables.test.mjs · Version: v1.0 · Date: 2026-08-09 · Ships in: v0.113.0
+   File: worker/test/mobile_tables.test.mjs · Version: v1.1 · Date: 2026-08-27 · Ships in: v0.113.0 (v1.1 in v0.212.0: the vw-width scrollbar-bleed ratchet)
 
    THE DEFECT. `.tbl` is `width: 100%` (admin.css) and the phone breakpoint sets
    `body { overflow-x: hidden }` with the honest comment "Never let a phone-width layout force a
@@ -110,4 +110,43 @@ test("NC-2: folding .tbl into the thead-hiding selector is caught", () => {
     .filter((sel) => /\.tbl\b/.test(sel) && /thead/.test(sel));
   assert.ok(hidden.length >= 1,
     "the labels-trap detector must fire when .tbl is folded in, or it is decoration");
+});
+
+/* v1.1 (iteration 153, the owner's mobile pass): A WIDTH IN vw UNITS BLEEDS SIDEWAYS in any
+   window with a classic scrollbar — vw includes the scrollbar's width while the content box does
+   not, so `width: min(420px, 92vw)` overflowed index.html by 4px at phone width on desktop
+   (measured live 2026-08-27; .login-card in app.css, .ck-card in checkin.html, .kk-card in
+   kiosk.html all carried the class, every one inside a padded container where `min(Npx, 100%)`
+   is strictly better). Font-size clamp()s in vw are deliberate type scaling and are exempt —
+   this ratchet is about WIDTHS. Corpus: the shared stylesheets plus every page's inline styles. */
+import { readdirSync } from "node:fs";
+
+function widthCorpus() {
+  const out = [["app.css", APP], ["admin.css", ADMIN],
+    ["tokens.css", blankComments(readFileSync(new URL("../../web/assets/tokens.css", import.meta.url), "utf8"))]];
+  const webDir = new URL("../../web/", import.meta.url);
+  for (const f of readdirSync(webDir).filter((f) => f.endsWith(".html"))) {
+    const html = readFileSync(new URL(f, webDir), "utf8");
+    for (const m of html.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)) out.push([f, blankComments(m[1])]);
+  }
+  return out;
+}
+
+test("no width rule in the shipped corpus uses vw units (the scrollbar-bleed class)", () => {
+  const corpus = widthCorpus();
+  assert.ok(corpus.length > 40, `corpus is ${corpus.length} entries — the page glob is broken`);
+  const hits = [];
+  for (const [name, css] of corpus) {
+    for (const m of css.matchAll(/(?:^|[;{])\s*(?:max-|min-)?width\s*:\s*([^;}]*\b\d+(?:\.\d+)?vw\b[^;}]*)/g)) {
+      hits.push(`${name}: ${m[1].trim().slice(0, 48)}`);
+    }
+  }
+  assert.deepEqual(hits, [],
+    "a vw width bleeds under classic scrollbars — size against the padded container (% or px) instead");
+});
+
+test("NC-3: the vw-width detector fires on a planted rule", () => {
+  const planted = ".x { width: min(420px, 92vw); }";
+  const found = [...planted.matchAll(/(?:^|[;{])\s*(?:max-|min-)?width\s*:\s*([^;}]*\b\d+(?:\.\d+)?vw\b[^;}]*)/g)];
+  assert.equal(found.length, 1, "the detector regex cannot see the exact defect it exists for");
 });
