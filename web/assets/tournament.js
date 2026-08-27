@@ -1,5 +1,6 @@
 /* Boomtown Platform — Tournament Ops
-   Version: v0.6.0 · Date: 2026-08-22 · Ships in: v0.175.0
+   Version: v0.6.1 · Date: 2026-08-27 · Ships in: v0.210.0 (v0.6.1: inlineRename mechanics →
+   BT_ADMIN.inlineEdit, §-1c D-60; v0.6.0 shipped in v0.175.0)
    v0.5.0 (owner request + B21): the pool grid defaults to courts down the side / rounds across
    the top with a switch back (shared key bt_grid_axis, cells keep their round/court identity);
    the day-sheet buttons disable while composing, print-day gains one named exit shared by
@@ -168,42 +169,22 @@
   }
 
   /* Double-click (or Enter) a static team name -> an input; Enter/blur commits via the EXISTING
-     PATCH /api/admin/teams/:id route, Escape cancels. An empty or unchanged name never hits the
-     server. On cancel/commit/error the focus returns to the cell (role=button, tabindex=0) so a
-     keyboard user keeps their place — the a11y fix v0.207.0 folded into the League field, present
-     here from the start. Ported from admin-league.js inlineRename; consolidating the two copies
-     into one BT_ADMIN.inlineEdit helper is tracked in the roadmap (§-1c). */
+     PATCH /api/admin/teams/:id route, Escape cancels; focus returns to the cell on cancel, no-op
+     and error alike. An empty or unchanged name never hits the server. v0.6.1 (§-1c D-60,
+     v0.210.0): the DOM/focus/latch mechanics moved to BT_ADMIN.inlineEdit (admin-nav.js loads
+     just above this script in tournament.html) — one owner for this page and the League board.
+     Guard: admin_inline_edit.test.mjs; the PATCH and the captain-is-never-sent pin stay here in
+     tournament_inline_rename.test.mjs. */
   function inlineRename(span) {
     const teamId = Number(span.dataset.teamName);
-    const start = () => {
-      if (span.querySelector("input")) return;            // already editing
-      const current = span.textContent;
-      const input = document.createElement("input");
-      input.type = "text";
-      input.value = current;
-      input.className = "nm-edit";
-      input.setAttribute("aria-label", "Team name");
-      span.textContent = "";
-      span.appendChild(input);
-      input.focus(); input.select();
-      sayTeam("");
-      let done = false;
-      const commit = async () => {
-        if (done) return; done = true;
-        const name = input.value.trim();
-        if (!name || name === current) { span.textContent = current; span.focus(); return; }
+    BT_ADMIN.inlineEdit(span, {
+      onStart: () => sayTeam(""),
+      commit: async (name) => {
         const r = await api(`/api/admin/teams/${teamId}`, { method: "PATCH", body: JSON.stringify({ name }) });
-        if (r.ok) { refreshAll(); }
-        else { span.textContent = current; span.focus(); sayTeam(r.data.error || "Couldn't rename the team."); }
-      };
-      input.addEventListener("blur", commit);
-      input.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") { e.preventDefault(); commit(); }
-        else if (e.key === "Escape") { done = true; span.textContent = current; span.focus(); }
-      });
-    };
-    span.addEventListener("dblclick", start);
-    span.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); start(); } });
+        if (r.ok) { refreshAll(); } else { sayTeam(r.data.error || "Couldn't rename the team."); }
+        return r.ok;
+      },
+    });
   }
 
   /* ---------- W-C (v0.94.0): plan the day — the formats planner finally has a screen ----------

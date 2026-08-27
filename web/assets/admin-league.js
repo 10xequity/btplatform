@@ -1,5 +1,7 @@
 /* Boomtown Platform — League Manager
-   File: web/assets/admin-league.js · Version: v1.5 · Date: 2026-08-24 · Ships in: v0.93.0 (v1.5 in v0.192.0)
+   File: web/assets/admin-league.js · Version: v1.6.1 · Date: 2026-08-27 · Ships in: v0.93.0
+   (v1.6.1 in v0.210.0: inlineRename mechanics → BT_ADMIN.inlineEdit, §-1c D-60; the header had
+   lagged at v1.5 while the body carried the v1.6 rename block)
 
    v1.5 (§-1r RF-2 Unit B + RF-3, owner rules 2026-08-24):
    · The generate press sends roundsPerNight (1-3) and gamesPerMatch (1-2) from the toolbar
@@ -97,39 +99,21 @@
   }
 
   /* Double-click (or Enter) a static team name → an input; Enter/blur commits via the EXISTING
-     PATCH /api/admin/teams/:id route, Escape cancels. Ported from qc-schedule-generator's
-     EditableField. An empty or unchanged name never hits the server. */
+     PATCH /api/admin/teams/:id route, Escape cancels. An empty or unchanged name never hits the
+     server. v1.6.1 (§-1c D-60, v0.210.0): the DOM/focus/latch mechanics moved to
+     BT_ADMIN.inlineEdit — one owner for this board and Tournament Ops. The board thereby GAINS
+     the focus-restore on a failed or no-op commit that v0.207.0 had put on its Escape path only
+     (the drift D-60 recorded). Guard: admin_inline_edit.test.mjs; the PATCH stays pinned here
+     by league_inline_rename.test.mjs. */
   function inlineRename(span) {
     const teamId = Number(span.dataset.teamName);
-    const start = () => {
-      if (span.querySelector("input")) return;         // already editing
-      const current = span.textContent;
-      const input = document.createElement("input");
-      input.type = "text";
-      input.value = current;
-      input.className = "nm-edit";
-      input.setAttribute("aria-label", "Team name");
-      span.textContent = "";
-      span.appendChild(input);
-      input.focus(); input.select();
-      let done = false;
-      const commit = async () => {
-        if (done) return; done = true;
-        const name = input.value.trim();
-        if (!name || name === current) { span.textContent = current; return; }
+    BT_ADMIN.inlineEdit(span, {
+      commit: async (name) => {
         const r = await api(`/api/admin/teams/${teamId}`, { method: "PATCH", body: JSON.stringify({ name }) });
-        if (r.ok) { load(); } else { span.textContent = current; say(r.data.error || "Couldn't rename the team.", true); }
-      };
-      input.addEventListener("blur", commit);
-      input.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") { e.preventDefault(); commit(); }
-        // v0.207.0 (Gemini B2): Escape cancels AND returns focus to the cell (role=button,
-        // tabindex=0), so a keyboard user keeps their place instead of dropping to <body>.
-        else if (e.key === "Escape") { done = true; span.textContent = current; span.focus(); }
-      });
-    };
-    span.addEventListener("dblclick", start);
-    span.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); start(); } });
+        if (r.ok) { load(); } else { say(r.data.error || "Couldn't rename the team.", true); }
+        return r.ok;
+      },
+    });
   }
 
   /* T2-1b: the destination list is the league picker's own, minus this league. Registrations stay

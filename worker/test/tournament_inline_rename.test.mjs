@@ -1,6 +1,6 @@
 /**
  * Boomtown Platform — double-click a team name on the Tournament Ops page to rename it in place
- * File: worker/test/tournament_inline_rename.test.mjs · Version: v1.0 · Date: 2026-08-26 · Ships in: v0.208.0
+ * File: worker/test/tournament_inline_rename.test.mjs · Version: v1.1 · Date: 2026-08-27 · Ships in: v0.208.0 (v1.1 in v0.210.0)
  *
  * Owner (2026-08-26): "Add the double click to edit to the tournament page too." The League board
  * got this in v0.206.0 (league_inline_rename.test.mjs); this is the faithful "too" for Tournament
@@ -20,6 +20,11 @@
  * change. The a11y focus-restore that v0.207.0 folded into the League field (Gemini B2) is present
  * here from the start. Source-pinned like the League guard: the page harness's querySelectorAll is a
  * stub, so the per-node wiring is asserted at the source level, not driven through the DOM.
+ *
+ * v1.1 (§-1c D-60, v0.210.0): the dblclick/Escape/focus/latch MECHANICS moved to
+ * BT_ADMIN.inlineEdit and are pinned once in admin_inline_edit.test.mjs (which also pins that
+ * this page delegates and grows no second copy). This guard keeps what stays PAGE-LOCAL: the
+ * roster render + wiring, the PATCH shape, and the captain-is-never-sent design pin.
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -29,9 +34,9 @@ import { blankComments } from "../testkit/route-extract.mjs";
 const SRC = blankComments(readFileSync(new URL("../../web/assets/tournament.js", import.meta.url), "utf8"));
 const HTML = readFileSync(new URL("../../web/tournament.html", import.meta.url), "utf8");
 
-test("the roster renders a double-click edit affordance per team", () => {
+test("the roster marks each team for rename and the page delegates to the one helper", () => {
   assert.match(SRC, /data-team-name=/, "no per-team hook the rename wiring can find");
-  assert.match(SRC, /dblclick/, "nothing listens for a double-click to start the rename");
+  assert.match(SRC, /BT_ADMIN\.inlineEdit\(/, "the rename does not delegate to BT_ADMIN.inlineEdit");
   // Keyboard reachability, like the League cell (role=button, tabindex=0).
   assert.match(SRC, /role="button"/, "the team-name cell is not keyboard-reachable");
 });
@@ -61,15 +66,8 @@ test("the rename edits the team name ONLY — captain is never sent (it is a con
   assert.match(SRC, /tm-cap/, "the captain is not rendered for identification (T2-3)");
 });
 
-test("the edit cancels on Escape and does not fire an empty or unchanged rename", () => {
-  assert.match(SRC, /"Escape"/, "no Escape-to-cancel");
-  assert.match(SRC, /!name\s*\|\|\s*name\s*===|name\s*===\s*current\s*\|\|\s*!name/,
-    "the commit does not skip an empty or unchanged name — it would fire a pointless PATCH");
-});
-
-test("cancelling the rename returns focus to the team-name cell (a11y — the v0.207.0 League fix, present from the start)", () => {
-  assert.match(SRC, /span\.focus\(\)/, "Escape/cancel does not restore focus to the team-name cell");
-});
+/* v1.1: the Escape-cancel, empty/unchanged skip, and the focus-restore are HELPER mechanics now —
+   asserted against inlineEdit's own body in admin_inline_edit.test.mjs. */
 
 test("NC: dropping the PATCH from the rename path is caught", () => {
   const stripped = SRC.replace(/method:\s*"PATCH"/g, 'method: "GET"');
@@ -77,8 +75,8 @@ test("NC: dropping the PATCH from the rename path is caught", () => {
   assert.doesNotMatch(stripped, /method:\s*"PATCH"/, "the route detector cannot fail");
 });
 
-test("NC: dropping the focus-restore is caught", () => {
-  const stripped = SRC.replace(/span\.focus\(\)/g, "void 0");
-  assert.notEqual(stripped, SRC, "no span.focus() in tournament.js — the a11y fix did not land");
-  assert.doesNotMatch(stripped, /span\.focus\(\)/, "the focus-restore detector cannot fail");
+test("NC: dropping the delegation is caught", () => {
+  const stripped = SRC.replace(/BT_ADMIN\.inlineEdit\(/g, "BT_ADMIN.renamedAway(");
+  assert.notEqual(stripped, SRC, "no BT_ADMIN.inlineEdit call in tournament.js — the mutation cannot land");
+  assert.doesNotMatch(stripped, /BT_ADMIN\.inlineEdit\(/, "the delegation detector cannot fail");
 });

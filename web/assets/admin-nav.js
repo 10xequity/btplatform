@@ -1,5 +1,6 @@
 /* Boomtown Platform — Admin sidebar (shared)
-   Version: v2.24 · Date: 2026-08-24 · Ships in: v0.194.0 (v2.23 v0.160.0)
+   Version: v2.29 · Date: 2026-08-27 · Ships in: v0.210.0 (header had lagged at v2.24 while the
+   body carried v2.27/v2.28 blocks — trued up here)
    v2.23 (§-1j T2-15 / W1): the ◐ toggle's body delegates the flip to the theme service
    (config.js's BT_THEME — the one theme-state writer, both shells; the call literal appears
    ONLY in code so header_shell's verdict cannot be satisfied by this comment — D-33's class),
@@ -729,6 +730,51 @@
     URL.revokeObjectURL(url);
   }
 
+  /* v2.29 (§-1c D-60, v0.210.0) — ONE owner for the double-click-rename mechanics.
+     The League board (v0.206.0) and Tournament Ops (v0.208.0) each shipped a private
+     `inlineRename`, and they had already drifted by one fix: the v0.207.0 focus-restore reached
+     the League copy's Escape path only, while the Tournament copy restored focus on empty or
+     unchanged commits and on errors too. The mechanics live here once, unified on the STRONGER
+     behaviour — focus returns to the cell on Escape, on an empty/unchanged commit, and on a
+     failed commit alike. A page passes only its own commit.
+       span : the static cell (role="button" tabindex="0" belongs in the page's own markup)
+       opts.ariaLabel  : the input's label (default "Team name")
+       opts.onStart()  : optional — runs when the editor opens (e.g. clear a status line)
+       opts.commit(name) : called ONLY for a non-empty, changed value; does the page's server
+         write plus its own reload/error line; resolves truthy when the page re-rendered
+         (nothing left to restore), falsy to have the helper restore the text and focus.
+     Guard: admin_inline_edit.test.mjs (mechanics, both call sites, no second copy). */
+  function inlineEdit(span, opts) {
+    const start = () => {
+      if (span.querySelector("input")) return;            // already editing
+      const current = span.textContent;
+      const input = document.createElement("input");
+      input.type = "text";
+      input.value = current;
+      input.className = "nm-edit";
+      input.setAttribute("aria-label", (opts && opts.ariaLabel) || "Team name");
+      span.textContent = "";
+      span.appendChild(input);
+      input.focus(); input.select();
+      if (opts && opts.onStart) opts.onStart();
+      let done = false;
+      const commit = async () => {
+        if (done) return; done = true;
+        const name = input.value.trim();
+        if (!name || name === current) { span.textContent = current; span.focus(); return; }
+        const ok = await opts.commit(name);
+        if (!ok) { span.textContent = current; span.focus(); }
+      };
+      input.addEventListener("blur", commit);
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") { e.preventDefault(); commit(); }
+        else if (e.key === "Escape") { done = true; span.textContent = current; span.focus(); }
+      });
+    };
+    span.addEventListener("dblclick", start);
+    span.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); start(); } });
+  }
+
   /* v2.21 (v0.138.0, WF-6) — ONE CSV row spelling for every export screen.
      Quoting a cell is a judgement — comma, quote, newline, and the doubled quote Excel wants —
      and it was about to be written a third and a fourth time. Callers pass an array of cells. */
@@ -942,7 +988,7 @@
      about to be bounced. A rejected guard leaves the header exactly as it painted. */
   guard().then((me) => { if (me) mailBadgeFill(); }).catch(() => {});
 
-  window.BT_ADMIN = { api, guard, esc, money, fmtDT, openModal, closeModal, downloadText, csvRow, emailDocument, fail, loadFail, orgEmptyState, orgsReady };
+  window.BT_ADMIN = { api, guard, esc, money, fmtDT, openModal, closeModal, downloadText, csvRow, emailDocument, fail, loadFail, orgEmptyState, orgsReady, inlineEdit };
 
   /* v0.59.0: keep <meta name="theme-color"> in step with the ACTIVE theme.
      It was pinned to #0B0B0D on every page, so a member in light mode saw a near-black status
@@ -981,7 +1027,7 @@
       if (window.BT_STATUS || document.getElementById("bt-status-js")) return;
       var s = document.createElement("script");
       s.id = "bt-status-js";
-      s.src = "assets/build-status.js?v=0.209.0";
+      s.src = "assets/build-status.js?v=0.210.0";
       s.async = false;
       document.head.appendChild(s);
     } catch (e) { /* indicators are never load-blocking */ }
