@@ -1,7 +1,15 @@
 # QC Schedule Generator vs. the platform League Manager — comparison & integration assessment
 
-**File:** 2026-08-26_reference_qc-league-format_v1_0.md · **Version:** v1.1 · **Date:** 2026-08-26
-**Status:** Active reference · **Supersedes:** v1.0 (same day)
+**File:** 2026-08-26_reference_qc-league-format_v1_0.md · **Version:** v1.2 · **Date:** 2026-08-27
+**Status:** Active reference · **Supersedes:** v1.1 (2026-08-26), v1.0 (same day)
+**v1.2 (owner decision 2026-08-27): recommendation 3 is SUPERSEDED for the league finale.** His
+words: *"For league we do placement pool (we call strenght of power games) this may be a match or
+1 set or game depending on time."* The league playoff is NOT the multi-week pools→divisions
+structure below — it is a placement-pods night (the wins-pods pairing seeded by standings) whose
+FIXTURE length varies by available time. Shipped v0.211.0: `gamesPerMatch` 1–3 on the pods path
+(3 = a full match, best of 3, per encounter). Tournaments keep the knockout bracket that already
+exists. The N-4a league-linked tournament (rec 3's machinery) remains available for owner-scheduled
+tournament work, but the league playoff no longer needs it.
 **v1.1 (2026-08-26): the format is now INTEGRATED (v0.206.0).** The wins-ranked pods-of-4 pairing
 ships as a second `pairingMode` ("wins-pods") on the League Manager — recommendation 1 below, built.
 Added the ease-of-use comparison the owner asked for (§ "Ease of use"). Recommendations 3–4 (the

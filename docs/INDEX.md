@@ -44,7 +44,7 @@ was about, which is its own lesson and is in the table below.
 
 | File | Ver | Date | Open it when |
 |---|---|---|---|
-| `2026-08-26_reference_qc-league-format_v1_0.md` | v1.1 | 2026-08-26 | Deciding whether to add the QC "wins-ranked pods-of-4" league format or a league-season playoff. Compares the standalone QC Schedule Generator to the platform League Manager and gives the integration recommendation (adopt the format, not the app's plumbing). |
+| `2026-08-26_reference_qc-league-format_v1_0.md` | v1.2 | 2026-08-27 | Deciding whether to add the QC "wins-ranked pods-of-4" league format or a league-season playoff. Compares the standalone QC Schedule Generator to the platform League Manager and gives the integration recommendation (adopt the format, not the app's plumbing). v1.2: the owner's 2026-08-27 decision supersedes rec 3 — the league finale is the placement-pods fixture (shipped v0.211.0), not the multi-week playoff. |
 | `2026-08-01_decisions_org-roster_v1_1.md` | v1.1 | 2026-08-01 | Touching orgs, payments binding, or org deletes. Holds the keep-set (BTA/MPS/Queens/COBO), D-ORG-5..8, and the live-D1 scan that narrowed the delete set to orgs 6–9. |
 | `2026-08-01_requirements_lfg-membership_v1_0.md` | v1.0 | 2026-08-01 | Touching LFG, membership custom fields, or the opportunities feed. **See contradiction C2 below — §4 is out of date.** |
 | `2026-08-01_uiux-review_admin-shell_v1_0.md` | **v1.1** | 2026-08-02 | Touching any shell, rail, header, or contrast. Names the real AA offenders by file and line. Steps 1–3 of §6 shipped; **step 4 (SPA shell) is the last open item.** |
