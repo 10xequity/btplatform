@@ -1,6 +1,6 @@
 /**
  * Boomtown Platform — §-1r RF-2 Unit B + RF-3: the structured league night, and the forfeit
- * File: worker/test/league_night.test.mjs · Version: v1.0 · Date: 2026-08-24 · Ships in: v0.192.0
+ * File: worker/test/league_night.test.mjs · Version: v1.1 · Date: 2026-08-27 · Ships in: v0.192.0 (v1.1 in v0.211.0: the strength-of-power playoff fixture — pods honor gamesPerMatch 1-3)
  *
  * Owner rules, 2026-08-24, both recorded verbatim in the roadmap rows:
  *   RF-2B — "We will simply rotate through all the teams more than once, team can go on different
@@ -132,6 +132,61 @@ test("RF-2B NC — hostile shape inputs CLAMP (99 → 3, 0 → 1) instead of ref
   assert.equal(r.data.games_per_match, 1, "a junk gamesPerMatch did not clamp at 1");
   const n = env.DB.one("SELECT COUNT(*) AS n FROM matches WHERE event_id=7 AND deleted_at IS NULL").n;
   assert.equal(n, 6, "2 pairings × 3 rotations × 1 game = 6 rows");
+});
+
+/* ═══════ The playoff fixture (owner 2026-08-27): "For league we do placement pool (we call
+   strenght of power games) this may be a match or 1 set or game depending on time." The
+   wins-pods night IS that placement structure — rank-adjacent pods seeded by standings — and
+   the FIXTURE length is the new degree of freedom: gamesPerMatch 1-3 on the pods path (3 = a
+   full match, best of 3, per encounter), where the pods path silently ignored it before.
+   Default 1 keeps every existing pods night byte-identical. ═══════ */
+
+test("strength-of-power fixture — the pods path honors gamesPerMatch: 3 = a full match per encounter", async () => {
+  const env = makeEnv();
+  const token = await seedLeague(env, 4);
+  const r = await call(env, "POST", "/api/leagues/7/week", {
+    body: { pairingMode: "wins-pods", gamesPerMatch: 3 }, token,
+  });
+  expectStatus(r, 200, "wins-pods week with gamesPerMatch 3");
+  assert.equal(r.data.games_per_match, 3, "the response does not carry the fixture length");
+  const rows = env.DB.query(
+    "SELECT round, court, game_number, team_a_id, team_b_id FROM matches WHERE event_id=7 AND deleted_at IS NULL ORDER BY game_number, court");
+  // A pod of 4 = 2 pairings per slot × 3 slots × 3 games per encounter = 18 rows, still ONE round.
+  assert.equal(rows.length, 18, "a pod-of-4 full-match night is 18 game rows");
+  assert.ok(rows.every((m) => m.round === 1), "a playoff night is still ONE round");
+  // Play order: slot s (0-2), game g (1-3) → game_number s*3+g, so the night reads 1..9.
+  assert.deepEqual([...new Set(rows.map((m) => m.game_number))].sort((a, b) => a - b),
+    [1, 2, 3, 4, 5, 6, 7, 8, 9]);
+  // An encounter's 3 games are the SAME pairing on the SAME court, back to back — and the pod
+  // round-robin still covers all 6 distinct pairings of 4 teams.
+  const byPair = new Map();
+  for (const m of rows) {
+    const k = `${Math.min(m.team_a_id, m.team_b_id)}-${Math.max(m.team_a_id, m.team_b_id)}`;
+    if (!byPair.has(k)) byPair.set(k, []);
+    byPair.get(k).push(m.court);
+  }
+  assert.equal(byPair.size, 6, "the pod round-robin no longer covers all 6 pairings");
+  for (const [k, courts] of byPair) {
+    assert.equal(courts.length, 3, `pairing ${k} does not play a best-of-3 (${courts.length} rows)`);
+    assert.equal(new Set(courts).size, 1, `pairing ${k}'s match is split across courts`);
+  }
+});
+
+test("strength-of-power fixture — junk clamps at 3, and the DEFAULT stays 1 game (existing pods nights unchanged)", async () => {
+  const env = makeEnv();
+  const token = await seedLeague(env, 4);
+  const r = await call(env, "POST", "/api/leagues/7/week", {
+    body: { pairingMode: "wins-pods", gamesPerMatch: 99 }, token,
+  });
+  expectStatus(r, 200, "hostile pods gamesPerMatch");
+  assert.equal(r.data.games_per_match, 3, "a junk pods gamesPerMatch did not clamp at 3");
+  const r2 = await call(env, "POST", "/api/leagues/7/week", { body: { pairingMode: "wins-pods" }, token });
+  expectStatus(r2, 200, "default pods week");
+  assert.equal(r2.data.games_per_match, 1, "the default fixture is no longer one game");
+  const w2 = env.DB.query(
+    "SELECT game_number FROM matches WHERE event_id=7 AND round=2 AND deleted_at IS NULL");
+  assert.equal(w2.length, 6, "a default pod-of-4 night is 6 rows — the byte-preservation net");
+  assert.deepEqual([...new Set(w2.map((m) => m.game_number))].sort((a, b) => a - b), [1, 2, 3]);
 });
 
 /* ═══════════════════ RF-3: the forfeit ═══════════════════ */

@@ -280,18 +280,27 @@ async function generateWeek(request, env, ctx, id) {
     const pointsToP = Number(b.pointsTo) || cfg.pointsTo || 21;
     const capP = Number(b.cap) || cfg.cap || pointsToP + 2;
     const courtsP = Math.max(1, Number(b.courts) || ev.court_count || 4);
+    // The playoff fixture (owner 2026-08-27): "For league we do placement pool (we call strenght
+    // of power games) this may be a match or 1 set or game depending on time." The pods night IS
+    // that placement structure; gamesPerMatch (1-3, was silently ignored here) is where the
+    // available time turns into games — 3 = a full match, best of 3, per encounter. Cap 3, not
+    // level-capped's 2: RF-2B's 2-game cap is the owner's rule for THAT path. Default 1 keeps
+    // every existing pods night byte-identical (game_number r*1+1 = the old r+1).
+    const gpmP = Math.min(3, Math.max(1, Number(b.gamesPerMatch) || Number(cfg.gamesPerMatch) || 1));
     // D-59: accumulate the week's inserts and flush them in ONE atomic batch (PROMPT §3, and the
     // test DB batches atomically too), so a pod night is all-or-nothing rather than a partial week
-    // if a statement fails mid-loop. The court/game_number logic is unchanged — statements are
-    // pushed in the exact order they were previously run.
+    // if a statement fails mid-loop. An encounter's games share a court, played back to back
+    // (RF-2B's shape); game_number = slot*gamesPerMatch + game keeps the play order readable.
     const podStmts = [];
     for (let r = 0; r < podRounds.length; r++) {
       let court = 1;
       for (const [a, bb] of podRounds[r]) {
-        podStmts.push(env.DB.prepare(
-          `INSERT INTO matches (org_id, event_id, stage, round, court, team_a_id, team_b_id, points_to, cap, game_number)
-           VALUES (?1,?2,'pool',?3,?4,?5,?6,?7,?8,?9)`
-        ).bind(ev.org_id, id, roundNo, court, a, bb, pointsToP, capP, r + 1));
+        for (let g = 1; g <= gpmP; g++) {
+          podStmts.push(env.DB.prepare(
+            `INSERT INTO matches (org_id, event_id, stage, round, court, team_a_id, team_b_id, points_to, cap, game_number)
+             VALUES (?1,?2,'pool',?3,?4,?5,?6,?7,?8,?9)`
+          ).bind(ev.org_id, id, roundNo, court, a, bb, pointsToP, capP, r * gpmP + g));
+        }
         court = court % courtsP + 1;
       }
     }
@@ -299,14 +308,14 @@ async function generateWeek(request, env, ctx, id) {
     await env.DB.batch(podStmts);
     const insertedP = podStmts.length;
     await audit(env, ctx, "league.week.generate", "events", id,
-      { round: roundNo, matches: insertedP, byes: podByes.length, pairingMode: "wins-pods" });
+      { round: roundNo, matches: insertedP, byes: podByes.length, pairingMode: "wins-pods", gamesPerMatch: gpmP });
     let claim = null;
     try {
       claim = await autoClaimForEvent(env, ctx, ev,
         { courts: courtsP, budgetMinutes: Number(b.weekMinutes) || cfg.weekMinutes || 180, weekRound: roundNo });
     } catch (e) { console.error("autoclaim failed", e); claim = { skipped: "Court claim failed; book manually on the Facility calendar." }; }
     return json({ ok: true, round: roundNo, matches: insertedP, byes: podByes, warnings: [],
-      pairing_mode: "wins-pods", facility_claim: claim });
+      pairing_mode: "wins-pods", games_per_match: gpmP, facility_claim: claim });
   }
 
   // RF-2 Unit B (owner rule 2026-08-24): "rotate through all the teams more than once … 3 rounds

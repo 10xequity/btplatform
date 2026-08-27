@@ -1,7 +1,8 @@
 /* Boomtown Platform — League Manager
-   File: web/assets/admin-league.js · Version: v1.6.1 · Date: 2026-08-27 · Ships in: v0.93.0
-   (v1.6.1 in v0.210.0: inlineRename mechanics → BT_ADMIN.inlineEdit, §-1c D-60; the header had
-   lagged at v1.5 while the body carried the v1.6 rename block)
+   File: web/assets/admin-league.js · Version: v1.7 · Date: 2026-08-27 · Ships in: v0.93.0
+   (v1.7 in v0.211.0: the strength-of-power playoff fixture — syncFormatControls keeps the
+   rounds/games selects honest per format, full match best-of-3 is a pods-only choice.
+   v1.6.1 in v0.210.0: inlineRename mechanics → BT_ADMIN.inlineEdit, §-1c D-60)
 
    v1.5 (§-1r RF-2 Unit B + RF-3, owner rules 2026-08-24):
    · The generate press sends roundsPerNight (1-3) and gamesPerMatch (1-2) from the toolbar
@@ -411,10 +412,12 @@
     if (!leagueId) return;
     $("genWeek").disabled = true;
     // RF-2B: the night's shape rides the press. Missing selects (an old cached shell) fall back
-    // to today's single-game night — the server clamps to 1-3 / 1-2 either way.
+    // to today's single-game night — the server clamps either way (rounds 1-3; games 1-2
+    // level-capped, 1-3 pods).
     // v1.6 (owner 2026-08-26): pairingMode picks the format — "level-capped" (skill-gapped weekly
-    // pairing, the default) or "wins-pods" (rank by wins, pods of 4, 3 fresh opponents/night). In
-    // wins-pods the server ignores rounds/games (the pod RR defines the night).
+    // pairing, the default) or "wins-pods" (rank by standings, pods of 4, 3 fresh opponents/night).
+    // v1.7 (owner 2026-08-27): in wins-pods, gamesPerMatch is the playoff FIXTURE — a match,
+    // set, or game depending on time — and rounds stays server-ignored (the pod RR is the night).
     const body = {
       pairingMode: ($("wkMode") && $("wkMode").value) || "level-capped",
       roundsPerNight: Number($("wkRounds") && $("wkRounds").value) || 1,
@@ -434,6 +437,27 @@
     }
     load();
   }
+
+  /* v1.7 (owner 2026-08-27): "For league we do placement pool (we call strenght of power games)
+     this may be a match or 1 set or game depending on time." The pods format IS that placement
+     structure, so the fixture select is where time turns into games. Full match (best of 3) is a
+     pods-only choice: the level-capped night keeps RF-2B's owner cap of 2 (option 3 hides and a
+     stranded 3 falls back to 2). The rounds select is honestly DISABLED for pods instead of the
+     silent no-op it was: the 3-slot pod round-robin IS the night's structure.
+     Guard: league_wins_pods.test.mjs v1.1. */
+  function syncFormatControls() {
+    const mode = $("wkMode"), rounds = $("wkRounds"), games = $("wkGames"), g3 = $("wkGames3");
+    if (!mode || !rounds || !games) return;              // an old cached shell: leave defaults
+    const pods = mode.value === "wins-pods";
+    if (g3) { g3.hidden = !pods; g3.disabled = !pods; }
+    if (!pods && games.value === "3") games.value = "2";
+    rounds.disabled = pods;
+    rounds.title = pods ? "Pods always play the 3-slot round robin. Pick games per matchup to fit the time." : "";
+    $("genHint").textContent = pods
+      ? "Strength of power: teams pod by standings and play 3 placement matchups. Games per matchup 3 is a full match, best of 3."
+      : "";
+  }
+  if ($("wkMode")) { $("wkMode").addEventListener("change", syncFormatControls); syncFormatControls(); }
 
   function say(msg, isErr) {
     $("status").innerHTML = msg ? `<p class="${isErr ? "notice-err" : "notice-ok"}">${esc(msg)}</p>` : "";

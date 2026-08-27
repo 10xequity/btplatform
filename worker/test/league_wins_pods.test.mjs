@@ -1,6 +1,6 @@
 /**
  * Boomtown Platform — the wins-ranked pods-of-4 league format (QC integration, owner 2026-08-26)
- * File: worker/test/league_wins_pods.test.mjs · Version: v1.0 · Date: 2026-08-26 · Ships in: v0.206.0
+ * File: worker/test/league_wins_pods.test.mjs · Version: v1.1 · Date: 2026-08-27 · Ships in: v0.206.0 (v1.1 in v0.211.0: the fixture-length UI pins)
  *
  * Owner (2026-08-26): "add the format and integrate it." The QC Schedule Generator's weekly format —
  * rank the ladder by WINS, cut it into rank-adjacent pods of 4 (or 6), and play a partial
@@ -80,7 +80,7 @@ test("a 2-team pod plays best-of-3 across the night — neither team sits idle",
 
 /* ── the mode is wired into week generation ── */
 import { readFileSync } from "node:fs";
-import { blankComments } from "../testkit/route-extract.mjs";
+import { blankComments, functionBodyAfter } from "../testkit/route-extract.mjs";
 const ADMIN_SRC = blankComments(readFileSync(new URL("../src/leagues_admin.js", import.meta.url), "utf8"));
 const UI_SRC = blankComments(readFileSync(new URL("../../web/assets/admin-league.js", import.meta.url), "utf8"));
 
@@ -92,4 +92,31 @@ test("generateWeek branches on pairingMode and wins-pods skips the level-gap cap
 
 test("the UI offers the mode and sends it with the generate press", () => {
   assert.match(UI_SRC, /pairingMode/, "admin-league.js never sends pairingMode to the server");
+});
+
+/* v1.1 (owner 2026-08-27): the playoff fixture. "For league we do placement pool (we call
+   strenght of power games) this may be a match or 1 set or game depending on time." The pods
+   format is that placement structure; the fixture select is where the available time turns into
+   games per matchup. Full match (best of 3) is a pods-only choice — the level-capped night keeps
+   the owner's RF-2B cap of 2 — and the rounds select is honestly DISABLED for pods (the 3-slot
+   pod round-robin IS the night's structure) instead of silently ignored, which is what it was. */
+
+test("the fixture length is exposed for pods: a full-match option, synced by the format handler", () => {
+  const HTML_SRC = readFileSync(new URL("../../web/admin-league.html", import.meta.url), "utf8");
+  assert.match(HTML_SRC, /id="wkGames3"/, "the full-match option (id=wkGames3) is missing from Games per matchup");
+  assert.match(HTML_SRC, /full match/, "the option does not say what a 3 means in the owner's terms");
+  // Body-scoped (functionBodyAfter), not whole-file: the handler itself must consult wkRounds,
+  // wkGames3 and a .disabled — a whole-file match could be satisfied by unrelated disables.
+  const body = functionBodyAfter(UI_SRC, "function syncFormatControls");
+  assert.ok(body, "admin-league.js has no format-change handler (syncFormatControls)");
+  assert.match(body, /wkRounds/, "the handler never touches the rounds select");
+  assert.match(body, /\.disabled/, "the handler disables nothing — the rounds select stays a silent no-op for pods");
+  assert.match(body, /wkGames3/, "the handler never toggles the full-match option");
+  assert.match(UI_SRC, /strength of power/i, "the UI never names the format what the owner calls it");
+});
+
+test("NC: dropping the format-sync handler is caught", () => {
+  const stripped = UI_SRC.replace(/function syncFormatControls/g, "function renamedAway");
+  assert.notEqual(stripped, UI_SRC, "no syncFormatControls in admin-league.js — the mutation cannot land");
+  assert.doesNotMatch(stripped, /function syncFormatControls/, "the handler detector cannot fail");
 });
