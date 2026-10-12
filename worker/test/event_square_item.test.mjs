@@ -119,46 +119,13 @@ test("K-15 — the fixture holds a priced, a free and an external event, or the 
 
 /* ══════════════ 1. pricing an existing event creates the item — named, scoped, sandboxed ══════════════ */
 
-test("K-15 — bulk-pricing a free event creates ONE catalog ITEM: event-named + dated, priced, on the ORG's location, on the SANDBOX host, ids stored, note returned", async () => {
-  const env = boot({ orgLocation: "LOC_ORG_1" });
-  const token = await staff(env);
-  const sq = stubSquare();
-  try {
-    const r = await call(env, "PATCH", "/api/admin/events/bulk", { token, body: { ids: [2], fields: { price_cents: 2500 } } });
-    assert.equal(r.status, 200);
-    assert.equal(r.data.ok, true);
-    assert.equal(sq.calls.length, 1, "exactly one Square call for one repriced event");
-    const c = sq.calls[0];
-    assert.ok(c.url.startsWith("https://connect.squareupsandbox.com/v2/catalog/object"),
-      `SANDBOX host, standing rule 1 — got ${c.url}`);
-    assert.equal(c.body.object.type, "ITEM");
-    assert.equal(c.body.object.item_data.name, "Free Jam · 2026-09-08", "named from the event, dated");
-    assert.deepEqual(c.body.object.present_at_location_ids, ["LOC_ORG_1"],
-      "the ORG's location wins over the platform fallback — the 'appropriate organization' half");
-    const v = c.body.object.item_data.variations[0];
-    assert.equal(v.item_variation_data.price_money.amount, 2500, "the variation carries the price");
-    const row = env.DB.one("SELECT square_item_id AS i, square_variation_id AS v FROM events WHERE id=2");
-    assert.equal(row.i, "SQ_ITEM_1");
-    assert.equal(row.v, "SQ_VAR_1");
-    assert.match(String(r.data.square_note || ""), /created 1 catalog item/i, "the operator hears what happened");
-  } finally { sq.restore(); }
-});
 
-test("K-15 — org location NULL (the live state on all 6 orgs) falls back to env.SQUARE_LOCATION_ID, exactly as payment links do", async () => {
-  const env = boot({ orgLocation: null });
-  const token = await staff(env);
-  const sq = stubSquare();
-  try {
-    await call(env, "PATCH", "/api/admin/events/bulk", { token, body: { ids: [2], fields: { price_cents: 2500 } } });
-    assert.equal(sq.calls.length, 1);
-    assert.deepEqual(sq.calls[0].body.object.present_at_location_ids, ["LOC_PLATFORM"]);
-  } finally { sq.restore(); }
-});
 
 /* ══════════════ 2. the never cases — and each one's allowed twin is test 1 ══════════════ */
 
 test("K-15 — an EXTERNAL event never gets an item, even when the priced+external contradiction is manufactured by raw SQL (routes refuse it; the destination must too)", async () => {
   const env = boot();
+  env.BT_SQUARE_CATALOG_ITEMS = "1"; // the refusal ladder below is proven WITH the path enabled (owner switch 2026-10-12)
   // The state PM-1 makes unwriteable through every route — which is exactly why the guard has to
   // build it by hand: if ensure() only ever saw route-legal rows, this check could rot unnoticed.
   env.DB.exec("UPDATE events SET price_cents=5000 WHERE id=3");
@@ -199,66 +166,83 @@ test("K-15 — no SQUARE_ACCESS_TOKEN: the price saves, no Square call, and NO n
   } finally { sq.restore(); }
 });
 
-test("K-15 — token set but NO location anywhere: the price saves, no ids, and the note says why", async () => {
-  const env = boot({ orgLocation: null, platformLocation: null });
-  const token = await staff(env);
-  const sq = stubSquare();
-  try {
-    const r = await call(env, "PATCH", "/api/admin/events/bulk", { token, body: { ids: [2], fields: { price_cents: 2500 } } });
-    assert.equal(r.data.ok, true);
-    assert.equal(sq.calls.length, 0);
-    assert.equal(env.DB.one("SELECT square_item_id AS i FROM events WHERE id=2").i, null);
-    assert.match(String(r.data.square_note || ""), /location/i, "the operator hears what did not happen and why");
-  } finally { sq.restore(); }
-});
 
 /* ══════════════ 3. idempotence — the write happens once ══════════════ */
 
-test("K-15 — repricing the same event twice makes exactly ONE Square call: the stored item id is the memory", async () => {
-  const env = boot();
-  const token = await staff(env);
-  const sq = stubSquare();
-  try {
-    await call(env, "PATCH", "/api/admin/events/bulk", { token, body: { ids: [2], fields: { price_cents: 2500 } } });
-    await call(env, "PATCH", "/api/admin/events/bulk", { token, body: { ids: [2], fields: { price_cents: 3000 } } });
-    assert.equal(sq.calls.length, 1, "the second pricing write found square_item_id and skipped");
-    assert.equal(env.DB.one("SELECT price_cents AS p FROM events WHERE id=2").p, 3000, "the price itself still moved");
-  } finally { sq.restore(); }
-});
 
 /* ══════════════ 4. the creation choke point — every insertEvent path is covered ══════════════ */
 
-test("K-15 — duplicating a priced event creates an item for the COPY, named as the copy", async () => {
-  const env = boot();
-  const token = await staff(env);
+
+
+/* ══════════════ OWNER RULING 2026-10-12: NO catalog items, from ANY pricing writer ══════════════
+   "lets go with #1 … this is how we do it today." Checkout is quick_pay (registrations.js) and never
+   referenced the item, so each priced event was an unused Items-library row. The switch lives at the
+   choke point (ensureEventSquareItem's first statement); the four writers below are the same four
+   K-15/D-34/D-35 proved reached it, so a writer that bypasses the choke point still reddens here. */
+
+test("OFF — the stub CAN see an outbound call (positive control for every zero below)", async () => {
   const sq = stubSquare();
   try {
-    const r = await call(env, "POST", "/api/events/1/duplicate", { token, body: {} });
-    assert.equal(r.data.ok, true);
-    assert.equal(sq.calls.length, 1);
-    assert.equal(sq.calls[0].body.object.item_data.name, "Paid Open (copy) · 2026-09-01");
-    const row = env.DB.one(`SELECT square_item_id AS i FROM events WHERE id=${r.data.id}`);
-    assert.equal(row.i, "SQ_ITEM_1");
+    await globalThis.fetch("https://connect.squareupsandbox.com/v2/catalog/object", { method: "POST", body: "{}" });
+    assert.equal(sq.calls.length, 1, "the fetch stub does not capture — every zero-call assertion below would be vacuous");
   } finally { sq.restore(); }
 });
 
-test("K-15 — a priced recurring series creates one item per session, and the DATE suffix is what tells them apart", async () => {
-  const env = boot();
-  const token = await staff(env);
+test("OFF — bulk price, event-page price, duplicate, recurring series, series edit: ZERO Square calls, no ids, no note, price still saved", async () => {
+  const env = boot({ orgLocation: "LOC_ORG_1" });
+  const t = await staff(env);
+  env.DB.exec(`INSERT INTO events (id, org_id, type, name, status, price_cents, starts_at, series_id) VALUES
+    (21,1,'training','Wed Skills','published',0,'2026-09-02 18:00','ser-w'),
+    (22,1,'training','Wed Skills','published',0,'2026-09-09 18:00','ser-w')`);
   const sq = stubSquare();
   try {
-    const r = await call(env, "POST", "/api/admin/events/recurring", { token, body: {
-      base: { name: "Tuesday League", type: "league", starts_at: "2026-09-01 18:00", price_cents: 1500 },
-      rule: { freq: "weekly", count: 3 },
-    } });
-    assert.equal(r.data.ok, true);
-    assert.equal(r.data.count, 3);
-    assert.equal(sq.calls.length, 3, "one item per session");
-    const names = sq.calls.map((c) => c.body.object.item_data.name);
-    for (const n of names) assert.match(n, /^Tuesday League · 2026-09-\d\d$/, `dated name, got ${n}`);
-    assert.equal(new Set(names).size, 3, "three sessions, three distinct names — same-named items would be indistinguishable in the catalog");
-    assert.match(String(r.data.square_note || ""), /created 3 catalog items/i);
+    const writes = [
+      ["PATCH", "/api/admin/events/bulk", { ids: [2], fields: { price_cents: 2500 } }],
+      ["PATCH", "/api/events/2", { price_cents: 3000 }],
+      ["POST", "/api/events/1/duplicate", {}],
+      ["POST", "/api/admin/events/recurring", { base: { name: "Tuesday League", type: "league", starts_at: "2026-09-01 18:00", price_cents: 1500 }, rule: { freq: "weekly", count: 3 } }],
+      ["PATCH", "/api/admin/series/ser-w", { from_event_id: 21, fields: { price_cents: 2000 } }],
+    ];
+    for (const [m, path, body] of writes) {
+      const r = await call(env, m, path, { token: t, body });
+      assert.equal(r.status, 200, `${m} ${path}: ${JSON.stringify(r.data).slice(0, 200)}`);
+      assert.equal(r.data.square_note, undefined, `${path} still speaks of a catalog item: ${r.data.square_note}`);
+    }
+    assert.equal(sq.calls.length, 0, `a pricing writer still reached Square: ${sq.calls.map((c) => c.url).join(", ")}`);
+    assert.equal(env.DB.query("SELECT COUNT(*) AS n FROM events WHERE square_item_id IS NOT NULL")[0].n, 0, "an item id was stored");
+    assert.equal(env.DB.one("SELECT price_cents AS p FROM events WHERE id=2").p, 3000, "the price itself must still move");
+    assert.equal(env.DB.query("SELECT COUNT(*) AS n FROM events WHERE price_cents=2000 AND series_id='ser-w'")[0].n, 2, "the series price must still move");
   } finally { sq.restore(); }
+});
+
+test("OFF — the switch is the FIRST statement of the choke point, and a set flag re-enables (so the reversal is one secret, not a rebuild)", async () => {
+  const body = functionBodyAfter(blankComments(src("memberships.js")), "export async function ensureEventSquareItem");
+  assert.match(body.replace(/^\s*\{\s*/, ""), /^if \(!env\.BT_SQUARE_CATALOG_ITEMS\) return \{ skipped: "disabled" \};/,
+    "the switch must precede every read and every Square call — a switch after the fetch is not a switch");
+  const env = boot({ orgLocation: "LOC_ORG_1" });
+  env.BT_SQUARE_CATALOG_ITEMS = "1";
+  const t = await staff(env);
+  const sq = stubSquare();
+  try {
+    const r = await call(env, "PATCH", "/api/admin/events/bulk", { token: t, body: { ids: [2], fields: { price_cents: 2500 } } });
+    assert.equal(r.status, 200);
+    assert.equal(sq.calls.length, 1, "with the flag set the old K-15 path must still run — otherwise the flag is decoration");
+    assert.equal(sq.calls[0].body.object.item_data.name, "Free Jam · 2026-09-08");
+    assert.deepEqual(sq.calls[0].body.object.present_at_location_ids, ["LOC_ORG_1"], "D-36: the org's own location still rides the item when the path runs");
+  } finally { sq.restore(); }
+});
+
+test("D-36 — the org's Square location is still written through settings and read by the payment-link path (the catalog half is gone, the location is not)", async () => {
+  const env = boot({ orgLocation: null, platformLocation: "LOC_PLATFORM" });
+  const t = await staff(env);
+  const w = await call(env, "PUT", "/api/admin/org/profile", { token: t, body: { square_location_id: "LOC_WRITTEN" } });
+  assert.equal(w.status, 200, JSON.stringify(w.data).slice(0, 200));
+  assert.equal(env.DB.one("SELECT square_location_id AS l FROM orgs WHERE id=1").l, "LOC_WRITTEN");
+  const c = await call(env, "PUT", "/api/admin/org/profile", { token: t, body: { square_location_id: "" } });
+  assert.equal(c.status, 200);
+  assert.equal(env.DB.one("SELECT square_location_id AS l FROM orgs WHERE id=1").l, null, "emptied means the platform default returns");
+  const reg = blankComments(src("registrations.js"));
+  assert.match(reg, /ev\.square_location_id \|\| env\.SQUARE_LOCATION_ID/, "payment links no longer read the org location first — D-36's reader is gone");
 });
 
 /* ══════════════ 5. the way in is pinned — real bytes, comments stripped, NC mutates the input ══════════════ */
@@ -390,27 +374,6 @@ test("D-34 — a capacity edit reaches the sign-up gate, BOTH directions, throug
     "capacity lowered below the current count must refuse the NEXT sign-up (existing ones keep their spots)");
 });
 
-test("D-34 — the event page's price leg fires K-15's hook: created once, idempotent, keyless-silent", async () => {
-  const env = boot({ orgLocation: "LOC_ORG_1" });
-  const t = await staff(env);
-  const stub = stubSquare();
-  try {
-    const r = await call(env, "PATCH", "/api/events/2", { token: t, body: { price_cents: 3000 } });
-    assert.equal(r.status, 200, JSON.stringify(r.data).slice(0, 200));
-    assert.equal(stub.calls.length, 1, "pricing via the event page did not create a catalog item — K-15's missed-moment class, third writer");
-    const row = env.DB.one("SELECT square_item_id AS i, square_variation_id AS v FROM events WHERE id=2");
-    assert.ok(row.i && row.v, "the created ids never reached the row");
-    await call(env, "PATCH", "/api/events/2", { token: t, body: { price_cents: 3500 } });
-    assert.equal(stub.calls.length, 1, "a re-price created a SECOND item — the hook lost its idempotence through this leg");
-  } finally { stub.restore(); }
-  const keyless = boot({ squareToken: null });
-  const t2 = await staff(keyless);
-  const stub2 = stubSquare();
-  try {
-    assert.equal((await call(keyless, "PATCH", "/api/events/2", { token: t2, body: { price_cents: 900 } })).status, 200);
-    assert.equal(stub2.calls.length, 0, "keyless must be SILENT — no outbound call, no failure");
-  } finally { stub2.restore(); }
-});
 
 test("D-35 — editSeries judges the RESULT PER INSTANCE and refuses WHOLESALE, both directions", async () => {
   const env = boot({ squareToken: null });
@@ -440,20 +403,6 @@ test("D-35 — editSeries judges the RESULT PER INSTANCE and refuses WHOLESALE, 
   assert.equal((await call(env, "PATCH", "/api/admin/series/ser-9", { token: t, body: { from_event_id: 11, fields: { price_cents: "junk" } } })).status, 400);
 });
 
-test("D-35 — pricing a series through editSeries creates each instance's catalog item (the recorded missed moment closes)", async () => {
-  const env = boot({ orgLocation: "LOC_ORG_1" });
-  const t = await staff(env);
-  env.DB.exec(`INSERT INTO events (id, org_id, type, name, status, price_cents, starts_at, series_id) VALUES
-    (21,1,'training','Wed Skills','published',0,'2026-09-02 18:00','ser-w'),
-    (22,1,'training','Wed Skills','published',0,'2026-09-09 18:00','ser-w')`);
-  const stub = stubSquare();
-  try {
-    const r = await call(env, "PATCH", "/api/admin/series/ser-w", { token: t, body: { from_event_id: 21, fields: { price_cents: 2000 } } });
-    assert.equal(r.status, 200, JSON.stringify(r.data).slice(0, 200));
-    assert.equal(stub.calls.length, 2, "each priced instance needs its own catalog item — D-35's record named this exact missed moment");
-    assert.equal(env.DB.query("SELECT COUNT(*) AS n FROM events WHERE series_id='ser-w' AND square_item_id IS NOT NULL")[0].n, 2);
-  } finally { stub.restore(); }
-});
 
 test("D-34 — the screen stops lying in the OTHER direction too: the events-list-only note is gone, the server rule is stated", () => {
   const ui = web("assets/admin-event.js");
@@ -468,30 +417,6 @@ test("D-34 — the screen stops lying in the OTHER direction too: the events-lis
 
 /* ══════════════ D-36 (§-1c): the writer feeds the reader, end to end ══════════════ */
 
-test("D-36 — a location WRITTEN through org settings is what the next catalog item rides; emptied, the platform default returns", async () => {
-  const env = boot({ orgLocation: null, platformLocation: "LOC_PLATFORM" });
-  const t = await staff(env);
-  const stub = stubSquare();
-  try {
-    // write the org's location through the REAL settings route — D-36's missing writer
-    const w = await call(env, "PUT", "/api/admin/org/profile", { token: t, body: { square_location_id: "LOC_WRITTEN" } });
-    assert.equal(w.status, 200, JSON.stringify(w.data).slice(0, 200));
-    // price an event: the item must land on the org's OWN location now
-    const r = await call(env, "PATCH", "/api/events/2", { token: t, body: { price_cents: 3000 } });
-    assert.equal(r.status, 200, JSON.stringify(r.data).slice(0, 200));
-    assert.equal(stub.calls.length, 1, "pricing made no catalog call — the end-to-end never ran");
-    assert.deepEqual(stub.calls[0].body.object.present_at_location_ids, ["LOC_WRITTEN"],
-      "the item did not ride the org's own location — the writer and the reader are not connected (D-36's whole point)");
-    // the sanctioned exit, live through the routes: empty the field, the platform default returns
-    const c = await call(env, "PUT", "/api/admin/org/profile", { token: t, body: { square_location_id: "" } });
-    assert.equal(c.status, 200, JSON.stringify(c.data).slice(0, 200));
-    const r2 = await call(env, "PATCH", "/api/events/1", { token: t, body: { price_cents: 4600 } });
-    assert.equal(r2.status, 200);
-    const last = stub.calls[stub.calls.length - 1];
-    assert.deepEqual(last.body.object.present_at_location_ids, ["LOC_PLATFORM"],
-      "with the org field emptied the platform fallback must return — the exit was deleted");
-  } finally { stub.restore(); }
-});
 
 test("D-36 — the settings screen carries the field, says where the id lives, and that empty means the platform default", () => {
   const html = web("admin-org-settings.html");

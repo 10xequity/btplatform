@@ -94,7 +94,11 @@ moment `SQUARE_ENV` reads `production` — set that secret LAST.**
    - `SQUARE_WEBHOOK_SIGNATURE_KEY` = the signature key (step 4)
    - `SQUARE_ENV` = `production` ← this is the switch; everything before it is inert
 6. **Test with a real card and a small amount** (e.g., a $1 test item), then refund it from the
-   Square Dashboard. Square's online rate on the free plan is currently **3.3% + 30¢** per
+   Square Dashboard.
+7. **Catalog items (owner decision 2026-10-12, v0.214.0):** the platform creates **no** Square
+   catalog items for events. Players pay through a quick-pay link named after the event, so
+   each tournament still shows by name in Square sales reports and nothing is added to the
+   Items library. Your one shared "Tournament" item stays as it is; the platform never touches it. Square's online rate on the free plan is currently **3.3% + 30¢** per
    transaction; there is no monthly fee.
 
 ## §4. Texting — SKIPPED (owner decision 2026-08-27), and the Square question answered

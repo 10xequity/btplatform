@@ -150,6 +150,8 @@ async function createSquareItemObjects(env, name, priceCents, locationId) {
 /**
  * The one place a pricing write becomes a Square catalog item (owner 2026-08-11: "write and
  * create items in square under the appropriate organization and then name the item correctly").
+ * SWITCHED OFF 2026-10-12 by the owner (see the first statement of the function): nothing below
+ * runs unless BT_SQUARE_CATALOG_ITEMS is set, which no deployment sets.
  * Callers: events_admin.js's insertEvent (every creation path) and bulkEdit (the one route that
  * can price an existing event), injected through wireEventsAdmin — events_admin imports nothing.
  *
@@ -170,6 +172,13 @@ async function createSquareItemObjects(env, name, priceCents, locationId) {
  * to Square — every path out of here leaves the event exactly as the caller saved it.
  */
 export async function ensureEventSquareItem(env, eventId) {
+  /* OWNER RULING 2026-10-12 — "lets go with #1 … this is how we do it today": the platform creates
+     NO Square catalog items for events. Checkout never referenced them (payment links are quick_pay,
+     registrations.js), so each priced event was adding an unused item to the Items library, forever.
+     This reverses the 2026-08-11 ask (K-15) at its single choke point; every caller still runs through
+     here, so the wiring tests stand and a future reversal is one line. The columns stay (additive-only).
+     event_square_item.test.mjs pins ZERO outbound calls from every pricing writer. */
+  if (!env.BT_SQUARE_CATALOG_ITEMS) return { skipped: "disabled" };
   const ev = await env.DB.prepare(
     `SELECT e.id, e.name, e.starts_at, e.price_cents, e.external_url, e.square_item_id,
             o.square_location_id AS org_location
