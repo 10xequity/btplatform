@@ -143,11 +143,11 @@
     { key: "registrations", label: "Registrations & Check-in", pages: ["admin-registrations.html", "admin-waitlists.html", "admin-checkin.html"] },
     { key: "tryouts",       label: "Tryouts & Squads",         pages: ["admin-tryouts.html", "admin-squads.html"] },
     { key: "facility",      label: "Facility Calendar",        pages: ["admin-facility.html"] },
-    { key: "tournaments",   label: "Tournaments",              pages: ["tournament.html", "admin-brackets.html", "admin-divisions.html", "admin-pool-board.html", "admin-score-links.html", "admin-schedule-editor.html"] },
+    { key: "tournaments",   label: "Tournaments",              pages: ["tournament.html", "admin-brackets.html", "admin-divisions.html", "admin-pool-board.html", "admin-score-links.html", "admin-schedule-editor.html", "admin-prizes.html"] },
     { key: "leagues",       label: "Leagues",                  pages: ["admin-league.html", "admin-schedule-editor.html"] },
     { key: "kotc",          label: "Court Board (KOTC)",       pages: ["admin-kotc.html"] },
     { key: "reports",       label: "Sales & Reports",          pages: ["admin-reports.html"] },
-    { key: "pos",           label: "Point of Sale",            pages: ["admin-pos.html"] },
+    { key: "pos",           label: "Point of Sale",            pages: ["admin-pos.html", "admin-prizes.html"] },
     { key: "memberships",   label: "Memberships & Passes",     pages: ["admin-plans.html", "admin-tiers.html", "admin-member-fields.html", "admin-passes.html"] },
     { key: "staffpay",      label: "Staff Pay",                pages: ["admin-staff-pay.html"] },
     { key: "announcements", label: "Announcements",            pages: ["admin-announcements.html"] },
@@ -300,6 +300,7 @@
     { label: "Money", key: "money", items: [
       { href: "admin-reports.html",       ico: "sales",  text: "Sales & Reports" },
       { href: "admin-pos.html",           ico: "sales",  text: "Point of Sale" },
+      { href: "admin-prizes.html",        ico: "sales",  text: "Prizes & Inventory" }, // v0.213.0
       { href: "admin-plans.html",         ico: "sales",  text: "Membership Plans" },
       { href: "admin-tiers.html",          ico: "roles",  text: "Membership Levels" },
       { href: "admin-member-fields.html",    ico: "roles",  text: "Membership Fields" },
@@ -1027,7 +1028,7 @@
       if (window.BT_STATUS || document.getElementById("bt-status-js")) return;
       var s = document.createElement("script");
       s.id = "bt-status-js";
-      s.src = "assets/build-status.js?v=0.212.0";
+      s.src = "assets/build-status.js?v=0.213.0";
       s.async = false;
       document.head.appendChild(s);
     } catch (e) { /* indicators are never load-blocking */ }

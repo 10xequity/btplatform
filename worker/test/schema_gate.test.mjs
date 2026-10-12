@@ -146,7 +146,7 @@ test("pad produces the 4-digit form used in filenames and the ledger", () => {
   assert.equal(pad(2026), "2026");
 });
 
-test("the real db/migrations directory parses cleanly and reports 0053", () => {
+test("the real db/migrations directory parses cleanly and reports 0054", () => {
   // This number is a deliberate ratchet, not a nuisance: it reddens on every new migration and
   // makes whoever added one confirm the scanner still reads the whole directory. Bump it in the
   // same commit as the migration, AFTER the ledger row exists in live D1 (v0.60.0 → 0036;
@@ -209,10 +209,15 @@ test("the real db/migrations directory parses cleanly and reports 0053", () => {
   // Moved once live D1 answered MAX(version)='0053', COUNT(*)=53, pragma_table_info('matches')
   // showed forfeit_by present and nullable, and `COUNT(*) WHERE forfeit_by IS NOT NULL` came back
   // 0: no match was ever a forfeit until a director records one, so the deploy rescored nothing.
-  // league_night.test.mjs pins the write, the ±1 rule, and the earned-shutout discriminator.)
+  // league_night.test.mjs pins the write, the ±1 rule, and the earned-shutout discriminator.
+  // FOURTEENTH time 2026-10-12: migration 0054 (prizes + inventory, owner ask 2026-10-12) — additive,
+  // four NEW tables + one partial unique index, nothing existing touched. Moved once live D1 answered
+  // MAX(version)='0054' and sqlite_master listed prize_items/prize_receipts/prize_receipt_lines/
+  // prize_awards; the DDL was read back from sqlite_master and pasted VERBATIM into journey-schema.sql.
+  // prizes.test.mjs drives every route against it.)
   const { highest, files, unparseable } = scanMigrations(DEFAULT_DIR);
   assert.deepEqual(unparseable, [], `unparseable migration filenames: ${unparseable.join(", ")}`);
-  assert.equal(highest, 53);
+  assert.equal(highest, 54);
   assert.ok(files >= 20, `expected at least 20 .sql files, saw ${files}`);
 });
 

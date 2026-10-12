@@ -230,6 +230,7 @@ import { bracketRoutes, wireBrackets } from "./brackets.js"; // v0.66.0 playable
 import { kotcRoutes, wireKotc } from "./kotcplay.js"; // v0.80.0 KOTC play surface (migrations 0040/0042)
 import { divisionRoutes, wireDivisions } from "./divisions.js"; // v0.69.0 divisions + bracket balancing (migration 0038)
 import { liveRoutes, wireLive } from "./live.js"; // v0.73.0 public live board (read-only, no auth)
+import { prizesRoutes, wirePrizes } from "./prizes.js"; // v0.213.0 prizes + inventory (migration 0054)
 import { waiverReminderSweep, waiverExpirySweep, sendEmail, escapeHtml } from "./registrations.js";
 
 const MAGIC_LINK_TTL_MIN = 15;
@@ -324,6 +325,7 @@ wireFormats({ ...wiredHelpers, requireStaff: staffGateFor("tournaments") }); // 
 wireBrackets({ ...wiredHelpers, requireStaff: staffGateFor("tournaments") }); // v0.66.0
 wireKotc({ ...wiredHelpers, requireStaff: staffGateFor("kotc") });
 wireDivisions({ ...wiredHelpers, requireStaff: staffGateFor("tournaments") }); // v0.69.0
+wirePrizes({ ...wiredHelpers, requireStaff: staffGateFor("tournaments", "pos") }); // v0.213.0 — admin-prizes.html has TWO owners in BT_MODULES (the schedule-editor precedent); either key passes
 wireLive({ json }); // v0.73.0 — read-only, so it needs nothing but json
 wirePush(wiredHelpers); // v0.20.0 — unbound: /api/admin/push/test targets the caller's own devices
 wireWaivers({ ...wiredHelpers, requireStaff: staffGateFor("waivers") }); // v0.22.0
@@ -531,7 +533,7 @@ export default {
         const session = await currentSession(request, env);
         res = session ? await listOrgs(env) : json({ error: "Sign in first." }, 401);
       } else if (url.pathname === "/api/health") {
-        res = json({ ok: true, version: "v0.212.0" });
+        res = json({ ok: true, version: "v0.213.0" });
       } else if (url.pathname === "/api/webhooks/square" && request.method === "POST") {
         res = await membershipWebhook(request, env); // verifies signature; forwards payment.* to squareWebhook
       } else if (url.pathname === "/api/public/org-brand" && request.method === "GET") {
@@ -598,6 +600,7 @@ export default {
     ["division",      divisionRoutes],                      // v0.69.0 — divisions, court ranges, balance proposals
     ["kotc",         kotcRoutes],                          // v0.80.0 — KOTC: entry list, per-player links, confirm-or-edit
     ["live",          liveRoutes],                          // v0.73.0 — public scoreboard, no login
+    ["prizes",        prizesRoutes],                        // v0.213.0 — prize inventory, receipts, awards
     ["league",        leagueRoutes],
     ["report",        reportRoutes],
     ["checkin",       checkinRoutes],

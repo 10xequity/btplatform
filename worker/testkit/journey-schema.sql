@@ -1137,3 +1137,13 @@ CREATE UNIQUE INDEX idx_umg_live ON user_module_grants (org_id, user_id, module_
 -- Migration 0053 (RF-3, owner ruling 2026-08-24) — which side forfeited ('a'|'b', NULL = played).
 -- The flag, not the 25-0 score, carries the one-point differential rule.
 ALTER TABLE matches ADD COLUMN forfeit_by TEXT;
+
+-- Migration 0054 (v0.213.0, owner ask 2026-10-12) — prizes + inventory. Read VERBATIM from live
+-- sqlite_master after the MCP apply, per the provenance rule above (ledger 0054).
+CREATE TABLE prize_items ( id INTEGER PRIMARY KEY AUTOINCREMENT, org_id INTEGER NOT NULL REFERENCES orgs(id), name TEXT NOT NULL, unit_cost_cents INTEGER NOT NULL DEFAULT 0, sponsor_id INTEGER REFERENCES sponsors(id), notes TEXT, active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')), deleted_at TEXT );
+CREATE TABLE prize_receipts ( id INTEGER PRIMARY KEY AUTOINCREMENT, org_id INTEGER NOT NULL REFERENCES orgs(id), vendor TEXT NOT NULL, invoice_no TEXT, invoice_date TEXT, total_cents INTEGER, upload_id INTEGER REFERENCES uploads(id), source TEXT NOT NULL DEFAULT 'manual', email_message_id TEXT, notes TEXT, created_by_user_id INTEGER REFERENCES users(id), created_at TEXT NOT NULL DEFAULT (datetime('now')), deleted_at TEXT );
+CREATE UNIQUE INDEX idx_prize_receipts_email ON prize_receipts (org_id, email_message_id) WHERE email_message_id IS NOT NULL;
+CREATE TABLE prize_receipt_lines ( id INTEGER PRIMARY KEY AUTOINCREMENT, org_id INTEGER NOT NULL REFERENCES orgs(id), receipt_id INTEGER NOT NULL REFERENCES prize_receipts(id), item_id INTEGER NOT NULL REFERENCES prize_items(id), qty INTEGER NOT NULL, unit_cost_cents INTEGER NOT NULL DEFAULT 0 );
+CREATE INDEX idx_prize_receipt_lines_item ON prize_receipt_lines (org_id, item_id);
+CREATE TABLE prize_awards ( id INTEGER PRIMARY KEY AUTOINCREMENT, org_id INTEGER NOT NULL REFERENCES orgs(id), event_id INTEGER NOT NULL REFERENCES events(id), team_id INTEGER REFERENCES teams(id), recipient TEXT, place INTEGER, bracket_name TEXT, item_id INTEGER REFERENCES prize_items(id), qty INTEGER NOT NULL DEFAULT 1, cash_cents INTEGER NOT NULL DEFAULT 0, notes TEXT, awarded_by_user_id INTEGER REFERENCES users(id), created_at TEXT NOT NULL DEFAULT (datetime('now')), deleted_at TEXT );
+CREATE INDEX idx_prize_awards_event ON prize_awards (org_id, event_id);

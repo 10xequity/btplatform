@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<!-- Boomtown Platform — Prizes & Inventory · Version: v1.0 · Date: 2026-10-12 · Ships in: v0.213.0
+     Owner ask 2026-10-12. Three tabs, in the order the day runs: AWARD (pick the event, the
+     finishers are read off the bracket, one button each), INVENTORY (what is on hand, derived),
+     RECEIVE (log an invoice — vendor, number, date, the file, and the lines; a new item name on a
+     line creates the item). Speaks the hub's ?event= contract so it frames inside admin-manager.
+     Shares .tabs/.tab, .btn, .card from admin.css — no new vocabulary. -->
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Prizes &amp; Inventory · Boomtown Athletics</title>
+  <script>/* Pre-paint state — collapse + theme (uiux-review §4/§6.4, v0.52.0): read the bt_nav cookie and the saved theme BEFORE the first stylesheet so the rail state AND the theme are right on frame one — no post-paint snap of either. admin-nav.js writes the cookie on rail toggle and bt_theme on theme toggle; the localStorage bt_nav fallback migrates pre-v0.51 sessions. */(function(){try{var m=document.cookie.match(/(?:^|; )bt_nav=([^;]*)/);var v=m?m[1]:((window.localStorage&&localStorage.getItem("bt_nav_collapsed")==="1")?"min":"");if(v==="min")document.documentElement.dataset.nav="min";var t=(window.localStorage&&localStorage.getItem("bt_theme"))||(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.dataset.theme=t;}catch(e){}})();</script>
+  <script>try{var btTpl=localStorage.getItem("bt_template");if(btTpl)document.documentElement.dataset.template=btTpl;}catch(e){}</script>
+  <link rel="stylesheet" href="assets/tokens.css?v=0.213.0" />
+  <link rel="stylesheet" href="assets/app.css?v=0.213.0" />
+  <link rel="stylesheet" href="assets/admin.css?v=0.213.0" />
+  <style>
+    .pz-panel { display: none; }
+    .pz-panel.on { display: block; }
+    .pz-grid { display: grid; gap: 16px; grid-template-columns: 1.3fr 1fr; align-items: start; }
+    @media (max-width: 1020px) { .pz-grid { grid-template-columns: 1fr; } }
+    .pz-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card); padding: 16px; }
+    .pz-card h2 { margin: 0 0 8px; font-size: var(--fs-h2); }
+    .pz-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--border); flex-wrap: wrap; }
+    .pz-row:first-of-type { border-top: 0; }
+    .pz-row .grow { flex: 1; min-width: 160px; }
+    .pz-row .k { font-weight: 700; }
+    .pz-row .v { color: var(--text-muted); font-size: 13px; }
+    .pz-form label { display: block; font-weight: 700; font-size: 14px; margin: 12px 0 4px; }
+    .pz-form input, .pz-form select, .pz-form textarea { width: 100%; font: inherit; padding: 10px 12px; border: 1px solid var(--border);
+      border-radius: var(--radius-control); background: var(--surface-raised); color: var(--text); }
+    .pz-form .two { display: grid; gap: 10px; grid-template-columns: 1fr 1fr; }
+    .pz-hint { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+    .pz-actions { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; align-items: center; }
+    .pz-place { display: inline-grid; place-items: center; min-width: 36px; height: 36px; padding: 0 8px; border-radius: 999px; font-weight: 800;
+      background: var(--gold, #d4a017); color: var(--gold-ink, #111); }
+    .pz-place.p2 { background: var(--surface-raised); color: var(--text); border: 1px solid var(--border); }
+    .pz-place.p3 { background: var(--surface-raised); color: var(--text-muted); border: 1px solid var(--border); }
+    .pz-stock { font-variant-numeric: tabular-nums; font-weight: 800; min-width: 48px; text-align: right; }
+    .pz-stock.low { color: var(--danger); }
+    .pz-line { display: grid; gap: 8px; grid-template-columns: 2fr 80px 110px 44px; align-items: end; margin-top: 8px; }
+    .pz-line input { padding: 8px 10px; }
+    .pz-msg { margin-top: 12px; font-weight: 600; }
+    .pz-msg.err { color: var(--danger); }
+    .pz-msg.ok { color: var(--positive); }
+    .pz-total { font-size: 20px; font-weight: 800; }
+    button:active { transform: scale(0.97); transition: transform 120ms cubic-bezier(0.23,1,0.32,1); }
+  </style>
+</head>
+<body>
+    <header class="header chrome-glass no-print">
+    <a class="wordmark" href="admin.html" style="text-decoration:none;color:inherit"><img class="brand-logo" src="assets/logo-boom-icon-512.png?v=0.213.0" alt="" width="22" height="22" />Boomtown <span>Athletics</span></a>
+    <div class="spacer"></div>
+    <select id="orgSwitcher" class="org-switcher" aria-label="Switch organization"></select>
+    <a id="btHdrMail" class="btn ghost hdr-mail" href="admin-messages.html" aria-label="Messages">✉</a>
+    <button id="themeToggle" class="btn ghost theme-toggle" aria-label="Theme and colors">◐</button>
+    <a class="btn ghost" href="index.html">Member site</a>
+    <div class="hdr-profile-wrap">
+      <button id="btHdrProfile" class="btn ghost hdr-profile" aria-expanded="false" aria-controls="btProfileMenu" aria-label="Account menu">◉</button>
+      <div id="btProfileMenu" class="profile-menu" hidden aria-label="Account menu">
+        <a class="pm-item" href="settings.html">Account settings</a>
+        <div class="pm-sep" role="separator"></div>
+        <button id="logoutBtn" class="pm-item" hidden>Sign out</button>
+      </div>
+    </div>
+  </header>
+  <div id="app" class="admin-layout">
+    <aside class="sidebar" data-static="rail" aria-label="Admin sections">
+      <nav class="nav-group" data-key="run">
+        <div class="nav-label" role="button" tabindex="0" aria-expanded="true">Run events<span class="grp-chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></span></div>
+        
+          <a class="nav-item" href="admin.html" title="Dashboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="5" rx="1.5"/><rect x="13" y="10" width="8" height="11" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/></svg><span class="txt">Dashboard</span></a>
+          <a class="nav-item" href="admin-events.html" title="Events & Programs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span class="txt">Events & Programs</span></a>
+          <a class="nav-item" href="admin-manage.html" title="Event Management"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 3v3M16 3v3M8 11h8M8 15h5"/></svg><span class="txt">Event Management</span></a>
+          <a class="nav-item" href="admin-registrations.html" title="Registrations"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 12l2 2 4-5"/><rect x="4" y="4" width="16" height="16" rx="2"/></svg><span class="txt">Registrations</span></a>
+          <a class="nav-item" href="admin-waitlists.html" title="Waitlists"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 12l2 2 4-5"/><rect x="4" y="4" width="16" height="16" rx="2"/></svg><span class="txt">Waitlists</span></a>
+          <a class="nav-item" href="admin-checkin.html" title="Check-in"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 3h6v18h-6"/><path d="M13 21H4V3h9"/><circle cx="10.5" cy="12" r="1.2"/></svg><span class="txt">Check-in</span></a>
+          <a class="nav-item" href="admin-tryouts.html" title="Tryouts"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 12l2 2 4-5"/><rect x="4" y="4" width="16" height="16" rx="2"/></svg><span class="txt">Tryouts</span></a>
+          <a class="nav-item" href="admin-squads.html" title="Tryout Squads"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M2.5 20c1.2-3.4 4-4.6 6.5-4.6S14.3 16.6 15.5 20"/><circle cx="17" cy="9" r="2.6"/><path d="M15.5 14.6c2.8-.3 5.2 1 6 4.4"/></svg><span class="txt">Tryout Squads</span></a>
+          <a class="nav-item" href="admin-facility.html" title="Facility Calendar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/><circle cx="19" cy="18" r="2"/></svg><span class="txt">Facility Calendar</span></a>
+      </nav>
+      <nav class="nav-group" data-key="money">
+        <div class="nav-label" role="button" tabindex="0" aria-expanded="true">Money<span class="grp-chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></span></div>
+        
+          <a class="nav-item" href="admin-reports.html" title="Sales & Reports"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-8M21 20H3"/></svg><span class="txt">Sales & Reports</span></a>
+          <a class="nav-item" href="admin-pos.html" title="Point of Sale"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-8M21 20H3"/></svg><span class="txt">Point of Sale</span></a>
+          <a class="nav-item" href="admin-prizes.html" title="Prizes &amp; Inventory"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-8M21 20H3"/></svg><span class="txt">Prizes &amp; Inventory</span></a>
+          <a class="nav-item" href="admin-plans.html" title="Membership Plans"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-8M21 20H3"/></svg><span class="txt">Membership Plans</span></a>
+          <a class="nav-item" href="admin-tiers.html" title="Membership Levels"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/><circle cx="12" cy="15" r="1.6"/></svg><span class="txt">Membership Levels</span></a>
+          <a class="nav-item" href="admin-member-fields.html" title="Membership Fields"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/><circle cx="12" cy="15" r="1.6"/></svg><span class="txt">Membership Fields</span></a>
+          <a class="nav-item" href="admin-passes.html" title="Passes &amp; Credits"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-8M21 20H3"/></svg><span class="txt">Passes &amp; Credits</span></a>
+          <a class="nav-item" href="admin-staff-pay.html" title="Staff Pay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-8M21 20H3"/></svg><span class="txt">Staff Pay</span></a>
+      </nav>
+      <nav class="nav-group" data-key="mkt">
+        <div class="nav-label" role="button" tabindex="0" aria-expanded="true">Marketing<span class="grp-chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></span></div>
+        
+          <a class="nav-item" href="admin-announcements.html" title="Announcements"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11v2a1 1 0 0 0 1 1h2l5 4V6L6 10H4a1 1 0 0 0-1 1z"/><path d="M15 9a4 4 0 0 1 0 6M18 7a7 7 0 0 1 0 10"/></svg><span class="txt">Announcements</span></a>
+          <a class="nav-item" href="admin-marketing.html" title="Marketing & Email"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-8M21 20H3"/></svg><span class="txt">Marketing & Email</span></a>
+          <a class="nav-item" href="admin-sms.html" title="Text Messages"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-8M21 20H3"/></svg><span class="txt">Text Messages</span></a>
+          <a class="nav-item" href="admin-messages.html" title="Message Reports"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M2.5 20c1.2-3.4 4-4.6 6.5-4.6S14.3 16.6 15.5 20"/><circle cx="17" cy="9" r="2.6"/><path d="M15.5 14.6c2.8-.3 5.2 1 6 4.4"/></svg><span class="txt">Message Reports</span></a>
+      </nav>
+      <nav class="nav-group" data-key="people">
+        <div class="nav-label" role="button" tabindex="0" aria-expanded="true">People<span class="grp-chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></span></div>
+        
+          <a class="nav-item" href="admin-users.html" title="Members"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M2.5 20c1.2-3.4 4-4.6 6.5-4.6S14.3 16.6 15.5 20"/><circle cx="17" cy="9" r="2.6"/><path d="M15.5 14.6c2.8-.3 5.2 1 6 4.4"/></svg><span class="txt">Members</span></a>
+          <a class="nav-item" href="admin-users.html#roles" title="Admins & Roles"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/><circle cx="12" cy="15" r="1.6"/></svg><span class="txt">Admins & Roles</span></a>
+          <a class="nav-item" href="admin-security.html" title="Security & Recovery"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/><circle cx="12" cy="15" r="1.6"/></svg><span class="txt">Security & Recovery</span></a>
+          <a class="nav-item" href="admin-waivers.html" title="Waivers"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M2.5 20c1.2-3.4 4-4.6 6.5-4.6S14.3 16.6 15.5 20"/><circle cx="17" cy="9" r="2.6"/><path d="M15.5 14.6c2.8-.3 5.2 1 6 4.4"/></svg><span class="txt">Waivers</span></a>
+          <a class="nav-item" href="admin-documents.html" title="Documents"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9z"/><path d="M13 3v6h6"/></svg><span class="txt">Documents</span></a>
+          <a class="nav-item" href="admin-faq.html" title="Help & FAQ"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9z"/><path d="M13 3v6h6"/></svg><span class="txt">Help & FAQ</span></a>
+          <a class="nav-item" href="admin-uploads.html" title="Files"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9z"/><path d="M13 3v6h6"/></svg><span class="txt">Files</span></a>
+          <a class="nav-item" href="admin-org-settings.html" title="Organization"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9 17 7M7 17l-2.1 2.1"/></svg><span class="txt">Organization</span></a>
+      </nav>
+      <nav class="nav-group" data-key="site">
+        <div class="nav-label" role="button" tabindex="0" aria-expanded="true">Public site<span class="grp-chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></span></div>
+        
+          <a class="nav-item" href="admin-events.html#views" title="Views & Embed"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 8 4 12l4 4M16 8l4 4-4 4"/></svg><span class="txt">Views & Embed</span></a>
+          <a class="nav-item" href="admin-calendar.html" title="Calendar Feeds"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/><circle cx="19" cy="18" r="2"/></svg><span class="txt">Calendar Feeds</span></a>
+      </nav>
+      <nav class="nav-group sandbox" data-key="sandbox">
+        <div class="nav-label" role="button" tabindex="0" aria-expanded="true">Sandbox<span class="grp-chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></span></div>
+        <a class="nav-item" href="#" id="btViewMember" title="View as member"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M2.5 20c1.2-3.4 4-4.6 6.5-4.6S14.3 16.6 15.5 20"/><circle cx="17" cy="9" r="2.6"/><path d="M15.5 14.6c2.8-.3 5.2 1 6 4.4"/></svg><span class="txt">View as member</span></a>
+        <a class="nav-item" href="#" id="btTestData" title="Test data"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 12l2 2 4-5"/><rect x="4" y="4" width="16" height="16" rx="2"/></svg><span class="txt">Test data…</span></a>
+        <a class="nav-item" href="admin-buildstatus.html" title="Build status"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 3v3M16 3v3M8 11h8M8 15h5"/></svg><span class="txt">Build status</span></a>
+      </nav>
+      <button class="bt-edge" type="button" aria-label="Collapse or expand navigation"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
+    </aside>
+    <main class="main">
+      <h1 class="page-title">Prizes &amp; Inventory</h1>
+      <p class="muted">Who finished where, what they walked away with, and what is left on the shelf.</p>
+
+      <div class="tabs" role="tablist" aria-label="Prizes">
+        <button class="tab active" role="tab" aria-selected="true" data-tab="award">Award</button>
+        <button class="tab" role="tab" aria-selected="false" data-tab="inventory">Inventory</button>
+        <button class="tab" role="tab" aria-selected="false" data-tab="receive">Receive</button>
+      </div>
+
+      <!-- AWARD -->
+      <section id="panel-award" class="pz-panel on" role="tabpanel">
+        <div class="pz-grid">
+          <div class="pz-card">
+            <div class="pz-form">
+              <label for="awEvent">Event</label>
+              <select id="awEvent" aria-label="Event"></select>
+            </div>
+            <h2 style="margin-top:16px">Finishers</h2>
+            <p id="awBasis" class="pz-hint"></p>
+            <div id="awFinishers" aria-live="polite"></div>
+            <div class="pz-actions">
+              <button id="awOther" class="btn ghost" type="button">Award someone else…</button>
+            </div>
+          </div>
+          <div class="pz-card">
+            <h2>Awarded at this event</h2>
+            <p id="awCash" class="pz-hint"></p>
+            <div id="awList" aria-live="polite"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- INVENTORY -->
+      <section id="panel-inventory" class="pz-panel" role="tabpanel">
+        <div class="pz-grid">
+          <div class="pz-card">
+            <h2>On hand</h2>
+            <p class="pz-hint">Derived from receipts minus awards, so there is nothing to reconcile.</p>
+            <div id="invList"></div>
+          </div>
+          <div class="pz-card">
+            <h2 id="itemFormTitle">New item</h2>
+            <form id="itemForm" class="pz-form" autocomplete="off">
+              <input type="hidden" id="itemId" />
+              <label for="itemName">Name</label>
+              <input id="itemName" required maxlength="120" placeholder="Gold medal" />
+              <div class="two">
+                <div><label for="itemCost">Cost each</label><input id="itemCost" type="number" min="0" step="0.01" placeholder="0.00" /></div>
+                <div><label for="itemSponsor">Donated by</label><select id="itemSponsor"><option value="">Nobody</option></select></div>
+              </div>
+              <label for="itemNotes">Notes</label>
+              <input id="itemNotes" maxlength="500" />
+              <div class="pz-actions">
+                <button class="btn primary" type="submit">Save item</button>
+                <button class="btn ghost" type="button" id="itemReset">Clear</button>
+              </div>
+              <div id="itemMsg" class="pz-msg" role="status"></div>
+            </form>
+          </div>
+        </div>
+      </section>
+
+      <!-- RECEIVE -->
+      <section id="panel-receive" class="pz-panel" role="tabpanel">
+        <div class="pz-grid">
+          <div class="pz-card">
+            <h2>Log a receipt</h2>
+            <p class="pz-hint">An invoice, a donation, or an opening count. Type a new item's name on a line and it is created for you.</p>
+            <form id="rcForm" class="pz-form" autocomplete="off">
+              <div class="two">
+                <div><label for="rcVendor">Vendor</label><input id="rcVendor" required maxlength="120" placeholder="Crown Awards" /></div>
+                <div><label for="rcSource">Kind</label>
+                  <select id="rcSource"><option value="manual">Invoice / purchase</option><option value="adjustment">Opening count or adjustment</option></select></div>
+              </div>
+              <div class="two">
+                <div><label for="rcInvoice">Invoice #</label><input id="rcInvoice" maxlength="60" /></div>
+                <div><label for="rcDate">Invoice date</label><input id="rcDate" type="date" /></div>
+              </div>
+              <div class="two">
+                <div><label for="rcTotal">Invoice total</label><input id="rcTotal" type="number" min="0" step="0.01" placeholder="0.00" /></div>
+                <div><label for="rcFile">Invoice file (PDF or photo)</label><input id="rcFile" type="file" accept="application/pdf,image/*" /></div>
+              </div>
+              <label>Lines</label>
+              <div id="rcLines"></div>
+              <div class="pz-actions" style="margin-top:8px">
+                <button class="btn ghost sm" type="button" id="rcAddLine">+ Add line</button>
+              </div>
+              <label for="rcNotes">Notes</label>
+              <input id="rcNotes" maxlength="500" />
+              <div class="pz-actions">
+                <button class="btn primary" type="submit">Log receipt</button>
+              </div>
+              <div id="rcMsg" class="pz-msg" role="status"></div>
+            </form>
+          </div>
+          <div class="pz-card">
+            <h2>Recent receipts</h2>
+            <div id="rcList"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- award dialog -->
+  <dialog id="awDlg" class="modal" aria-labelledby="awDlgTitle">
+    <form id="awForm" class="pz-form" method="dialog" autocomplete="off">
+      <h2 id="awDlgTitle">Award</h2>
+      <p id="awDlgWho" class="muted"></p>
+      <input type="hidden" id="awTeamId" /><input type="hidden" id="awPlace" /><input type="hidden" id="awBracket" />
+      <div id="awWhoRow"><label for="awRecipient">Who</label>
+        <select id="awRecipient"></select></div>
+      <div class="two">
+        <div><label for="awItem">Item</label><select id="awItem"><option value="">None (cash only)</option></select></div>
+        <div><label for="awQty">Quantity</label><input id="awQty" type="number" min="1" value="1" /></div>
+      </div>
+      <label for="awCashAmt">Cash</label>
+      <input id="awCashAmt" type="number" min="0" step="0.01" placeholder="0.00" />
+      <label for="awNotes">Notes</label>
+      <input id="awNotes" maxlength="500" />
+      <div class="pz-actions">
+        <button class="btn primary" type="submit" value="save">Log award</button>
+        <button class="btn ghost" type="button" id="awCancel">Cancel</button>
+      </div>
+      <div id="awMsg" class="pz-msg" role="status"></div>
+    </form>
+  </dialog>
+
+  <script src="assets/config.js?v=0.213.0"></script>
+  <script src="assets/admin.js?v=0.213.0"></script>
+  <script src="assets/admin-nav.js?v=0.213.0"></script>
+  <script src="assets/admin-prizes.js?v=0.213.0" defer></script>
+</body>
+</html>

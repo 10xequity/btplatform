@@ -44,6 +44,7 @@ was about, which is its own lesson and is in the table below.
 
 | File | Ver | Date | Open it when |
 |---|---|---|---|
+| `2026-10-12_runbook_prizes-inventory_v1_0.md` | v1.0 | 2026-10-12 | The owner runs Prizes & Inventory (v0.213.0): award finishers off the bracket, log invoices by hand, the exact Claude Code + Gmail prompt for the email scan, why stock is derived not stored, and what was deliberately not built. |
 | `2026-08-27_runbook_production-gates_v1_0.md` | v1.0 | 2026-08-27 | The owner opens a production gate (Brevo email · VAPID push · Square payments): step-by-step, no coding, exact secret names from the code, official links. Also records the SMS-skipped decision and why Square cannot carry the platform's texts (no developer API). |
 | `2026-08-26_reference_qc-league-format_v1_0.md` | v1.2 | 2026-08-27 | Deciding whether to add the QC "wins-ranked pods-of-4" league format or a league-season playoff. Compares the standalone QC Schedule Generator to the platform League Manager and gives the integration recommendation (adopt the format, not the app's plumbing). v1.2: the owner's 2026-08-27 decision supersedes rec 3 — the league finale is the placement-pods fixture (shipped v0.211.0), not the multi-week playoff. |
 | `2026-08-01_decisions_org-roster_v1_1.md` | v1.1 | 2026-08-01 | Touching orgs, payments binding, or org deletes. Holds the keep-set (BTA/MPS/Queens/COBO), D-ORG-5..8, and the live-D1 scan that narrowed the delete set to orgs 6–9. |

@@ -78,6 +78,11 @@
     { key: "bracket", label: "Bracket", panes: [
       { key: "bracket", label: "Bracket", page: "admin-brackets.html" },
     ] },
+    /* v0.213.0 (owner ask 2026-10-12): who finished where, and what they walked away with — the
+       finishers are read off the bracket this hub already frames, so the tab sits after it. */
+    { key: "prizes", label: "Prizes", panes: [
+      { key: "prizes", label: "Prizes", page: "admin-prizes.html" },
+    ] },
   ];
 
   /* WHICH TABS AN EVENT TYPE ACTUALLY NEEDS. The keys are the schema's own event types — the
@@ -92,8 +97,8 @@
      admin-brackets' own empty state plus its Generate panel IS that way in. So a league sees every
      tab, and the pages themselves say when they have nothing yet. */
   const TAB_TYPES = {
-    tournament:   ["overview", "registrations", "announce", "divisions", "scoring-links", "schedule", "scoring", "live", "bracket"],
-    league:       ["overview", "registrations", "announce", "divisions", "scoring-links", "schedule", "scoring", "live", "bracket"],
+    tournament:   ["overview", "registrations", "announce", "divisions", "scoring-links", "schedule", "scoring", "live", "bracket", "prizes"],
+    league:       ["overview", "registrations", "announce", "divisions", "scoring-links", "schedule", "scoring", "live", "bracket", "prizes"],
     /* SG-5: every type has a face and people worth telling something — a drop-in session is
        the events program's common case (Cathy's Tuesdays), and for one this hub is now the
        whole screen: the event's page, who is coming, and the megaphone. */

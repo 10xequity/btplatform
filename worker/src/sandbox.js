@@ -291,6 +291,12 @@ export const WIPE_SQL = [
      wipe_order v1.1's COMPLETENESS check now walks the whole FK graph, so a module that grows
      a new reference to a wiped table reddens the suite instead of the live button. Children
      first within this block too (pass_redemptions → passes → sales; grants → subscriptions). ---- */
+  /* v0.213.0: prizes. Awards reference events/teams/items; lines reference receipts/items;
+     receipts reference uploads; items reference sponsors. Children first. */
+  `DELETE FROM prize_awards WHERE event_id BETWEEN ${LO} AND ${HI} OR team_id BETWEEN ${LO} AND ${HI} OR item_id IN (SELECT id FROM prize_items WHERE id BETWEEN ${LO} AND ${HI})`,
+  `DELETE FROM prize_receipt_lines WHERE receipt_id IN (SELECT id FROM prize_receipts WHERE id BETWEEN ${LO} AND ${HI}) OR item_id IN (SELECT id FROM prize_items WHERE id BETWEEN ${LO} AND ${HI})`,
+  `DELETE FROM prize_receipts WHERE id BETWEEN ${LO} AND ${HI} OR upload_id IN (SELECT id FROM uploads WHERE uploaded_by_contact_id BETWEEN ${LO} AND ${HI})`,
+  `DELETE FROM prize_items WHERE id BETWEEN ${LO} AND ${HI}`,
   `DELETE FROM pass_redemptions WHERE contact_id BETWEEN ${LO} AND ${HI} OR event_id BETWEEN ${LO} AND ${HI} OR pass_id IN (SELECT id FROM passes WHERE contact_id BETWEEN ${LO} AND ${HI}) OR attendance_id IN (SELECT id FROM attendance WHERE event_id BETWEEN ${LO} AND ${HI})`,
   `DELETE FROM membership_grants WHERE contact_id BETWEEN ${LO} AND ${HI} OR subscription_id IN (SELECT id FROM subscriptions WHERE contact_id BETWEEN ${LO} AND ${HI})`,
   `DELETE FROM passes         WHERE contact_id BETWEEN ${LO} AND ${HI}`,

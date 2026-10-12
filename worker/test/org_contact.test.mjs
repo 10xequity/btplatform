@@ -334,7 +334,7 @@ function srcOffences(name, text) {
 
 test("D-30 — no worker module ships a literal address in its strings (corpus: all modules, block comments stripped)", () => {
   const files = readdirSync(SRC).filter((f) => f.endsWith(".js"));
-  assert.equal(files.length, 51,
+  assert.equal(files.length, 52,
     `the worker corpus moved (${files.length} modules) — re-derive this floor from preflight's module count before trusting the scan`);
   const bad = [];
   for (const f of files) for (const a of srcOffences(f, readSrc(f))) bad.push(`${f}: ${a}`);

@@ -65,7 +65,7 @@ function tabs() {
 test("the tab row: the owner's seven in his order, with SG-5's Overview first and Announce after Registrations", () => {
   const t = tabs();
   assert.deepEqual(t.map((x) => x.key),
-    ["overview", "registrations", "announce", "divisions", "scoring-links", "schedule", "scoring", "live", "bracket"],
+    ["overview", "registrations", "announce", "divisions", "scoring-links", "schedule", "scoring", "live", "bracket", "prizes"],
     "the owner's seven (item 7, verbatim) keep their relative order; Overview and Announce are §-1o SG-5's additions — the event's own face first, the megaphone beside the guest list (create → target → announce → watch)");
   // A tab with no pane yet must not render as a dead button: the list carries every tab, the
   // renderer filters on what is actually wired. Both halves asserted, or the filter is decoration.
@@ -84,7 +84,7 @@ test("the sub-tabs are the owner's subsections: Waitlist and Check-in under Regi
      "admin-marketing.html",
      "admin-divisions.html", "admin-pool-board.html", "admin-score-links.html",
      "admin-schedule-editor.html", "tournament.html", "admin-league.html",
-     "live.html", "admin-brackets.html"],
+     "live.html", "admin-brackets.html", "admin-prizes.html"],
     "each pane is an EXISTING page — a tab whose content is a new implementation is the rewrite this design refuses. SG-5's two additions (the event's own page, marketing) and B14's Check-in (v0.161.0 — the owner's T2-9a complaint was precisely that check-in was 'not linked from the flow') are existing pages framed, exactly per the rule");
 });
 

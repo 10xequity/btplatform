@@ -69,6 +69,7 @@ const BOUND = {
   wireFacility:      ["facility"],                 // admin-facility.html
   wireReports:       ["reports"],                  // admin-reports.html
   wirePos:           ["pos"],                      // admin-pos.html
+  wirePrizes:        ["tournaments", "pos"],       // admin-prizes.html — BOTH owners (v0.213.0): awards are a tournament act, stock is money
   wireMemberships:   ["memberships"],              // admin-plans.html
   wireTiers:         ["memberships"],              // admin-tiers.html
   wireMemberFields:  ["memberships"],              // admin-member-fields.html
