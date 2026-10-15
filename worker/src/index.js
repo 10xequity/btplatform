@@ -533,7 +533,7 @@ export default {
         const session = await currentSession(request, env);
         res = session ? await listOrgs(env) : json({ error: "Sign in first." }, 401);
       } else if (url.pathname === "/api/health") {
-        res = json({ ok: true, version: "v0.215.0" });
+        res = json({ ok: true, version: "v0.216.0" });
       } else if (url.pathname === "/api/webhooks/square" && request.method === "POST") {
         res = await membershipWebhook(request, env); // verifies signature; forwards payment.* to squareWebhook
       } else if (url.pathname === "/api/public/org-brand" && request.method === "GET") {
@@ -711,17 +711,17 @@ async function eventReminderSweep(env) {
 /* ---------- auth ---------- */
 
 async function requestLink(request, env) {
-  const { email, from } = await safeJson(request);
+  const { email, from, sandbox_key } = await safeJson(request);
   if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
     return json({ error: "Enter a valid email address." }, 400);
   }
-  return sendLoginLink(env, email, from);
+  return sendLoginLink(env, email, from, sandbox_key);
 }
 
 /** Shared: create + (sandbox: return / email mode: send) a magic sign-in link.
     `from` (optional, D-48/v0.177.0): the page to return to after sign-in — the link may be
     opened on another device, so the LINK is the only carry that survives sign-in. */
-async function sendLoginLink(env, email, from) {
+async function sendLoginLink(env, email, from, sandboxKey) {
   // S-3b flood band. One human sentence, identical whether the address has an account or
   // not — a distinguishable 429 would be the user-enumeration oracle requestLink avoids.
   const addr = email.toLowerCase();
@@ -733,6 +733,17 @@ async function sendLoginLink(env, email, from) {
   ).bind(addr).first();
   if (overFlood(recent.n, LINKS_PER_WINDOW) || overFlood(today.n, LINKS_PER_DAY)) {
     return json({ error: "Several sign-in links were just requested for this address. Wait a few minutes and use the newest link you have; it still works." }, 429);
+  }
+
+  /* v0.216.0 (review F1): in sandbox mode the link is RETURNED to the caller, so without this
+     check anyone who knows an admin's email could mint that admin's session with one POST. When
+     the secret SANDBOX_LOGIN_KEY is set (and no email provider is), the link goes only to a
+     request carrying the matching key. Refused BEFORE the row is written, with one sentence that
+     is identical for a known and an unknown address. With BREVO_API_KEY set the key is moot: the
+     link is emailed, never returned. Neither secret set = unchanged (the owner's one-step action
+     is in the gates runbook §1). sandbox_login_key.test.mjs pins every branch. */
+  if (!env.BREVO_API_KEY && env.SANDBOX_LOGIN_KEY && !sameSecret(sandboxKey, env.SANDBOX_LOGIN_KEY)) {
+    return json({ error: "Sandbox sign-in needs the sandbox key. Enter it once on this device.", sandbox_locked: true }, 403);
   }
 
   const token = randomToken();
@@ -964,6 +975,15 @@ async function sendBrevoEmail(env, to, link, orgId = null) {
     body: JSON.stringify(body),
   });
   return resp.ok;
+}
+
+/** Constant-time string equality for secrets (v0.216.0). */
+function sameSecret(a, b) {
+  const x = String(a == null ? "" : a), y = String(b == null ? "" : b);
+  if (x.length !== y.length) return false;
+  let diff = 0;
+  for (let i = 0; i < x.length; i++) diff |= x.charCodeAt(i) ^ y.charCodeAt(i);
+  return diff === 0;
 }
 
 function allowedOrigins(env) {

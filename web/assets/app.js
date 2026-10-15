@@ -170,7 +170,7 @@
     if (nameEl) nameEl.textContent = brand.display_name;
     const img = document.getElementById("loginBrandLogo");
     if (img && brand.logo_url) {
-      img.onerror = () => { img.src = "assets/logo-boom-icon-512.png?v=0.215.0"; }; // fail closed on 404
+      img.onerror = () => { img.src = "assets/logo-boom-icon-512.png?v=0.216.0"; }; // fail closed on 404
       img.src = brand.logo_url;
     }
   }
@@ -186,7 +186,7 @@
     /* RF-8(a): the lockup ships UNCONDITIONALLY with the Boomtown default, so an arrival with no
        ?org hint gets a branded card instead of a bare one. applyLoginBrand(org) swaps in an org's
        own name/logo when one resolves; with no org it is a no-op and this default stands. */
-    const brandSlot = `<div class="login-brand"><img id="loginBrandLogo" src="assets/logo-boom-icon-512.png?v=0.215.0" alt="" width="36" height="36" /><span id="loginBrandName">Boomtown Athletics</span></div>`;
+    const brandSlot = `<div class="login-brand"><img id="loginBrandLogo" src="assets/logo-boom-icon-512.png?v=0.216.0" alt="" width="36" height="36" /><span id="loginBrandName">Boomtown Athletics</span></div>`;
     render(`
       <div class="login-wrap">
         <div class="card login-card reveal">
@@ -224,12 +224,16 @@
         /* D-48: the return page rides the REQUEST so the server can put it in the emailed link —
            the link may be opened on another device, where no storage from this page exists. */
         r = await api("/api/auth/request-link", { method: "POST",
-          body: JSON.stringify({ email, from: safeFrom(params.get("from")) || undefined }) });
+          body: JSON.stringify({ email, from: safeFrom(params.get("from")) || undefined,
+            sandbox_key: safeGet("bt_sandbox_key") || undefined }) });
       } finally {
         btn.disabled = false;
         btn.textContent = "Send sign-in link";
       }
-      if (!r.ok) return notice(r.data.error || "Something went wrong. Try again.", true);
+      if (!r.ok) {
+        if (r.status === 403 && r.data.sandbox_locked) return sandboxKeyPrompt();
+        return notice(r.data.error || "Something went wrong. Try again.", true);
+      }
       if (r.data.mode === "sandbox") {
         notice(`Sandbox mode (no email provider yet). <a href="${r.data.dev_link}">Open your sign-in link</a>.`);
       } else {
@@ -239,6 +243,18 @@
     function notice(msg, isError) {
       document.getElementById("loginNotice").innerHTML =
         `<div class="notice${isError ? " error" : ""}">${msg}</div>`;
+    }
+    /* v0.216.0 (review F1): the server refuses the on-screen sandbox link without the sandbox
+       key. Ask for it once, keep it on this device, and resend. */
+    function sandboxKeyPrompt() {
+      notice(`Sandbox sign-in needs the sandbox key (once on this device).
+        <input id="sbKey" type="password" autocomplete="off" aria-label="Sandbox key" style="margin:6px 6px 0 0" />
+        <button id="sbUse" class="btn" type="button">Use key</button>`);
+      const key = document.getElementById("sbKey");
+      const use = () => { safeSet("bt_sandbox_key", key.value.trim()); submit(); };
+      document.getElementById("sbUse").onclick = use;
+      key.addEventListener("keydown", (e) => { if (e.key === "Enter") use(); });
+      key.focus();
     }
   }
 

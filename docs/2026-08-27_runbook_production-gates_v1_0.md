@@ -48,6 +48,13 @@ today shows the honest "no mail key" notice.
 6. **Test:** open the live site signed out and request a sign-in link to your own address. The
    email should arrive from no-reply@boomtownvb.com within a minute.
 
+**Until `BREVO_API_KEY` is set, close the sandbox door (added 2026-10-15, v0.216.0).** In sandbox mode
+the sign-in link is shown on screen to whoever asked for it, so anyone who knows an admin's email can
+sign in as that admin. Setting Brevo ends that. If you want to keep sandbox sign-in a while longer,
+set a second secret the same way as §0: NAME `SANDBOX_LOGIN_KEY`, value = any long random string
+(a password-manager password is fine). The login page will then ask for that key once per device
+and remember it. Nothing else changes; remove the secret when Brevo is live.
+
 ## §2. Push notifications — VAPID (free forever, no account, no vendor)
 
 What turns on: browser push (waitlist alerts and the notification test-send). VAPID is not a
