@@ -168,6 +168,7 @@ async function roster(env, ctx, eventId) {
             (SELECT a.checked_in_at FROM attendance a WHERE a.event_id=?1 AND a.team_member_id=tm.id AND a.deleted_at IS NULL LIMIT 1) AS checked_in_at,
             (SELECT r.id FROM registrations r WHERE r.event_id=?1 AND r.team_id=t.id AND r.status != 'cancelled' AND r.deleted_at IS NULL ORDER BY r.id LIMIT 1) AS reg_id,
             (SELECT r.status FROM registrations r WHERE r.event_id=?1 AND r.team_id=t.id AND r.status != 'cancelled' AND r.deleted_at IS NULL ORDER BY r.id LIMIT 1) AS reg_status,
+            (SELECT r.price_cents FROM registrations r WHERE r.event_id=?1 AND r.team_id=t.id AND r.status != 'cancelled' AND r.deleted_at IS NULL ORDER BY r.id LIMIT 1) AS reg_price_cents,
             EXISTS (SELECT 1 FROM contacts c JOIN waivers w ON w.contact_id=c.id AND ${WAIVER_LIVE_PREDICATE}
                     WHERE c.org_id=tm.org_id AND c.deleted_at IS NULL
                       AND ${WAIVER_IDENTITY_MATCH("tm.contact_id", "tm.member_email")}) AS waiver_ok
@@ -181,7 +182,11 @@ async function roster(env, ctx, eventId) {
      FROM attendance WHERE event_id=?1 AND team_member_id IS NULL AND deleted_at IS NULL ORDER BY checked_in_at`
   ).bind(eventId).all()).results;
   for (const r of rows) {
-    r.balance_cents = balanceCents(r.reg_status, ev.price_cents);
+    /* v0.215.0 (review F10): the registration SNAPSHOTS its price (migration 0024: tier
+       discounts, and the list price as it was that day). The desk charged the event's current
+       price instead, so a discounted team or a later price edit showed the wrong balance.
+       NULL means a pre-0024 row; the event price is its honest fallback. */
+    r.balance_cents = balanceCents(r.reg_status, r.reg_price_cents ?? ev.price_cents);
     r.waiver = waiverAdvisory(!!r.waiver_ok); // v1.3 — chip data, never a gate
   }
   return json({

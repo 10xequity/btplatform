@@ -95,7 +95,7 @@
   async function loadEvents() {
     const evs = (await api("/api/events")).data.events || [];
     $("eventSelect").innerHTML = `<option value="">Choose an event…</option>` +
-      evs.map((e) => `<option value="${e.id}">${e.name}${e.starts_at ? " · " + e.starts_at.slice(0, 10) : ""}</option>`).join("");
+      evs.map((e) => `<option value="${e.id}">${dsEsc(e.name)}${e.starts_at ? " · " + e.starts_at.slice(0, 10) : ""}</option>`).join("");
     $("eventSelect").onchange = () => $("eventSelect").value && openEvent(+$("eventSelect").value);
     // E3 (v0.91.0, audit §6.5): every other module opens on the first real event; this page used
     // to sit on the placeholder and look like it had loaded nothing. Same rule now, any count.
@@ -335,7 +335,7 @@
     };
     const byesIn = (r) => {
       const playing = new Set(matches.filter((m) => m.round === r).flatMap((m) => [m.team_a_id, m.team_b_id]));
-      return teams.filter((t) => !playing.has(t.id)).map((t) => t.name).join(", ") || "—";
+      return teams.filter((t) => !playing.has(t.id)).map((t) => dsEsc(t.name)).join(", ") || "—";
     };
     let html;
     if (courtsDown()) {
@@ -376,10 +376,10 @@
   function matchCell(m) {
     const scored = m.score_a != null;
     return `<div class="match-cell${scored ? " scored" : ""}" data-id="${m.id}" role="button" tabindex="0"
-      aria-label="${teamLabel(m.team_a_id)} versus ${teamLabel(m.team_b_id)}${scored ? `, ${m.score_a} to ${m.score_b}` : ", tap to score"}">
-      <span class="vs">${teamName[m.team_a_id] || "?"} <span class="muted">vs</span> ${teamName[m.team_b_id] || "?"}</span>
+      aria-label="${dsEsc(teamLabel(m.team_a_id))} versus ${dsEsc(teamLabel(m.team_b_id))}${scored ? `, ${m.score_a} to ${m.score_b}` : ", tap to score"}">
+      <span class="vs">${dsEsc(teamName[m.team_a_id] || "?")} <span class="muted">vs</span> ${dsEsc(teamName[m.team_b_id] || "?")}</span>
       ${scored ? `<span class="score">${m.score_a}–${m.score_b}</span>` : ""}
-      ${m.ref_team_id ? `<span class="ref">ref: ${teamName[m.ref_team_id] || ""}</span>` : ""}
+      ${m.ref_team_id ? `<span class="ref">ref: ${dsEsc(teamName[m.ref_team_id] || "")}</span>` : ""}
     </div>`;
   }
 
@@ -397,8 +397,8 @@
     sheet.innerHTML = `
       <h4>Who won? <span class="muted">(to ${m.points_to}, cap ${m.cap})</span></h4>
       <div class="tap-row">
-        <button class="btn" data-w="a">${teamLabel(m.team_a_id)}</button>
-        <button class="btn" data-w="b">${teamLabel(m.team_b_id)}</button>
+        <button class="btn" data-w="a">${dsEsc(teamLabel(m.team_a_id))}</button>
+        <button class="btn" data-w="b">${dsEsc(teamLabel(m.team_b_id))}</button>
         <button class="btn ghost" data-w="x">Cancel</button>
       </div>
       <div id="diffRow" hidden>
@@ -414,7 +414,15 @@
       sheet.querySelector("#diffRow").hidden = false;   // tap 1 done
     }));
     const send = async (diff) => {
-      await api(`/api/matches/${matchId}/score`, { method: "POST", body: JSON.stringify({ winner, diff }) });
+      const r = await api(`/api/matches/${matchId}/score`, { method: "POST", body: JSON.stringify({ winner, diff }) });
+      if (!r.ok) {
+        /* v0.215.0 (review F7): a failed save used to close the sheet as though it had saved.
+           The sheet stays open with the chosen winner, and the failure is named in it. */
+        let line = sheet.querySelector("#scoreErr");
+        if (!line) { line = document.createElement("p"); line.id = "scoreErr"; line.className = "warn-banner"; line.setAttribute("role", "alert"); sheet.appendChild(line); }
+        line.textContent = "Not saved: " + (r.data && r.data.error ? r.data.error : "check the connection and try again.");
+        return;
+      }
       closeSheet();
       refreshAll();
     };
@@ -438,7 +446,7 @@
     $("standingsPanel").hidden = rows.length === 0;
     $("standingsTable").innerHTML =
       `<tr><th>#</th><th>Team</th><th>W</th><th>L</th><th>±</th><th>PF</th></tr>` +
-      rows.map((s) => `<tr><td>${s.rank}</td><td>${s.name}</td><td>${s.wins}</td><td>${s.losses}</td><td>${s.point_diff > 0 ? "+" : ""}${s.point_diff}</td><td>${s.points_for}</td></tr>`).join("");
+      rows.map((s) => `<tr><td>${s.rank}</td><td>${dsEsc(s.name)}</td><td>${s.wins}</td><td>${s.losses}</td><td>${s.point_diff > 0 ? "+" : ""}${s.point_diff}</td><td>${s.points_for}</td></tr>`).join("");
   }
 
   $("bracketBtn").onclick = async () => {

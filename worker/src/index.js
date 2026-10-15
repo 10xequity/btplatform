@@ -533,7 +533,7 @@ export default {
         const session = await currentSession(request, env);
         res = session ? await listOrgs(env) : json({ error: "Sign in first." }, 401);
       } else if (url.pathname === "/api/health") {
-        res = json({ ok: true, version: "v0.214.0" });
+        res = json({ ok: true, version: "v0.215.0" });
       } else if (url.pathname === "/api/webhooks/square" && request.method === "POST") {
         res = await membershipWebhook(request, env); // verifies signature; forwards payment.* to squareWebhook
       } else if (url.pathname === "/api/public/org-brand" && request.method === "GET") {
@@ -921,6 +921,13 @@ async function currentSession(request, env) {
     const cookie = request.headers.get("Cookie") || "";
     const m = cookie.match(/(?:^|;\s*)bt_session=([^;]+)/);
     if (m) token = m[1];
+    /* v0.215.0 (review F3): the cookie rides SameSite=None, so a foreign page can make the
+       browser attach it to a cross-site write. A cookie-sourced token is therefore honoured on
+       an unsafe method ONLY when the request's Origin is one of ours; otherwise the request is
+       anonymous. Bearer tokens are untouched (a foreign page cannot read sessionStorage), and
+       reads are untouched (they mutate nothing). review_hardening.test.mjs pins all four cases. */
+    if (token && !["GET", "HEAD", "OPTIONS"].includes(request.method)
+        && !allowedOrigins(env).includes(request.headers.get("Origin") || "")) return null;
   }
   if (!token) return null;
   const hash = await sha256(token);
@@ -959,8 +966,12 @@ async function sendBrevoEmail(env, to, link, orgId = null) {
   return resp.ok;
 }
 
+function allowedOrigins(env) {
+  return (env.ALLOWED_ORIGINS || "").split(",").map((s) => s.trim()).filter(Boolean);
+}
+
 function corsHeaders(origin, env) {
-  const allowed = (env.ALLOWED_ORIGINS || "").split(",").map((s) => s.trim()).filter(Boolean);
+  const allowed = allowedOrigins(env);
   const h = {
     /* EVERY METHOD THE ROUTER ACCEPTS MUST BE ADVERTISED HERE (v0.115.0). This read
        "GET,POST,OPTIONS" while the worker routed 45 handlers on PATCH, PUT and DELETE across more

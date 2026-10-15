@@ -88,7 +88,7 @@ html, body {
   font: inherit; font-size: 15px; font-weight: 600; background: none; border: 0;
   text-align: left; cursor: pointer; }
 .profile-menu .pm-item[hidden] { display: none; }
-.profile-menu .pm-item:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.profile-menu .pm-item:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 .profile-menu .pm-sep { height: 1px; background: var(--border); margin: 6px 4px; }
 .profile-menu .badge { margin-left: auto; flex: none; min-width: 20px; height: 20px; padding: 0 6px;
   border-radius: 999px; background: var(--accent); color: var(--gold-ink); font-size: 12px;
@@ -146,7 +146,7 @@ html, body {
 }
 .btn:active { transform: scale(0.97); }
 .btn:focus-visible, .org-switcher:focus-visible, input:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 .btn.ghost {
@@ -258,7 +258,7 @@ button, .btn, .tab, .nav-item, a[href], input, select { touch-action: manipulati
   border-radius: var(--radius-control); cursor: pointer; }
 .login-tab.active { color: var(--primary); border-color: var(--primary);
   box-shadow: inset 0 -2px 0 0 var(--accent); background: var(--surface); }
-.login-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.login-tab:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 
 /* Settings page */
 .settings-wrap { max-width: 720px; }

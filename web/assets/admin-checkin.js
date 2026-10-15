@@ -118,11 +118,22 @@
         <button class="btn" id="wSave">Check in</button></div>`);
     back.querySelector("[data-close]").onclick = closeModal;
     back.querySelector("#wSave").onclick = async () => {
+      const save = back.querySelector("#wSave");
+      save.disabled = true;
       const r = await api(`/api/events/${eventId}/checkin-walkin`, { method: "POST",
         body: JSON.stringify({ name: back.querySelector("#wName").value, email: back.querySelector("#wEmail").value }) });
+      if (!r.ok) {
+        /* v0.215.0 (review F8): a failed walk-in used to close the modal and throw the typed
+           details away. The modal stays open and the error lands beside the fields. */
+        save.disabled = false;
+        let err = back.querySelector("#wErr");
+        if (!err) { err = document.createElement("p"); err.id = "wErr"; err.className = "help-text"; err.setAttribute("role", "alert"); back.querySelector(".actions").before(err); }
+        err.textContent = r.data.error || "Couldn't add the walk-in. Check the name and try again.";
+        return;
+      }
       closeModal();
-      say(r.ok ? "Walk-in checked in." : (r.data.error || "Couldn't add the walk-in."), r.ok);
-      if (r.ok) load();
+      say("Walk-in checked in.", true);
+      load();
     };
   }
 

@@ -88,26 +88,31 @@
       b.onclick = () => {
         const winner = b.dataset.win;
         diffs.hidden = false;
-        diffs.innerHTML = [1, 2, 3, 5, 8].map((d) => `<button class="btn ghost" data-d="${d}">by ${d}${d === 8 ? "+" : ""}</button>`).join("");
-        diffs.querySelectorAll("[data-d]").forEach((db) => {
-          db.onclick = async () => {
-            el.querySelectorAll("button").forEach((x) => (x.disabled = true));
-            const r = await api(`/api/score/${encodeURIComponent(token)}`, {
-              method: "POST",
-              body: JSON.stringify({ match_id: m.id, winner, diff: +db.dataset.d }),
-            });
-            if (!r.ok) {
-              el.querySelectorAll("button").forEach((x) => (x.disabled = false));
-              el.insertAdjacentHTML("beforeend", `<p class="meta" style="color:#c55">${esc(r.data.error)}</p>`);
-              return;
-            }
-            el.classList.add("done");
-            el.innerHTML = `<h3>${esc(m.stage_label || "Pool")} · vs ${esc(opp(m))}</h3><p class="result">Saved: ${r.data.score_a}–${r.data.score_b} ✓</p>`;
-            // That was the team's last game — reload so the page retires itself rather than
-            // sitting there looking like it still wants something.
-            if (r.data.done) setTimeout(load, 900);
-          };
-        });
+        // v0.215.0 (review F13): the chips cover the common margins in two taps; the numeric box
+        // carries every other margin (a 4, 6, 7 or 11 used to be unrecordable here), bounded by
+        // points_to like the admin sheet.
+        diffs.innerHTML = [1, 2, 3, 5, 8].map((d) => `<button class="btn ghost" data-d="${d}">by ${d}${d === 8 ? "+" : ""}</button>`).join("") +
+          `<input type="number" class="diff-other" min="1" max="${m.points_to}" inputmode="numeric" placeholder="Other" aria-label="Other margin" style="width:5.5em;min-height:44px" />`;
+        const submit = async (diff) => {
+          el.querySelectorAll("button, input").forEach((x) => (x.disabled = true));
+          const r = await api(`/api/score/${encodeURIComponent(token)}`, {
+            method: "POST",
+            body: JSON.stringify({ match_id: m.id, winner, diff }),
+          });
+          if (!r.ok) {
+            el.querySelectorAll("button, input").forEach((x) => (x.disabled = false));
+            el.insertAdjacentHTML("beforeend", `<p class="meta" style="color:#c55">${esc(r.data.error)}</p>`);
+            return;
+          }
+          el.classList.add("done");
+          el.innerHTML = `<h3>${esc(m.stage_label || "Pool")} · vs ${esc(opp(m))}</h3><p class="result">Saved: ${r.data.score_a}–${r.data.score_b} ✓</p>`;
+          // That was the team's last game: reload so the page retires itself rather than
+          // sitting there looking like it still wants something.
+          if (r.data.done) setTimeout(load, 900);
+        };
+        diffs.querySelectorAll("[data-d]").forEach((db) => { db.onclick = () => submit(+db.dataset.d); });
+        const other = diffs.querySelector(".diff-other");
+        other.addEventListener("change", () => { const d = Math.round(+other.value); if (d >= 1) submit(d); });
       };
     });
   }

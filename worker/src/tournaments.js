@@ -36,7 +36,7 @@ export async function tournamentRoutes(request, env, url, ctx) {
     if (m === "PATCH") return patchEvent(request, env, ctx, +match[1]);
   }
   if ((match = p.match(/^\/api\/events\/(\d+)\/teams$/))) {
-    if (m === "GET") return listTeams(env, +match[1]);
+    if (m === "GET") return listTeams(env, +match[1], ctx);
     if (m === "POST") return addTeams(request, env, ctx, +match[1]);
   }
   if ((match = p.match(/^\/api\/events\/(\d+)\/schedule$/))) {
@@ -44,7 +44,7 @@ export async function tournamentRoutes(request, env, url, ctx) {
     if (m === "POST") return generateSchedule(request, env, ctx, +match[1]);
   }
   if ((match = p.match(/^\/api\/events\/(\d+)\/standings$/)) && m === "GET") {
-    return getStandings(env, +match[1]);
+    return getStandings(env, +match[1], ctx);
   }
   // v0.121.0 (T2-5): the legacy POST /api/events/:id/bracket route is REMOVED, not orphaned.
   // It wrote only first-round games and skipped byes; the modern engine at
@@ -93,10 +93,23 @@ async function createEvent(request, env, ctx) {
   return json({ id: r.meta.last_row_id });
 }
 
-async function getEvent(env, ctx, id) {
+/* v0.215.0 (review F4): the public reads here used to return SELECT * (so the check-in
+   capability token and the Square ids rode out to anyone with the event id) and only getEvent
+   gated drafts. One loader now does both jobs for every public read in this module: refuse a
+   draft to non-staff, and drop the operational columns before the row leaves. Staff have their
+   own routes for those values (checkin.js mints and reads the token). */
+const PUBLIC_EVENT_SECRETS = ["checkin_token", "square_item_id", "square_variation_id"];
+async function publicEvent(env, ctx, id) {
   const ev = await env.DB.prepare("SELECT * FROM events WHERE id=?1 AND deleted_at IS NULL").bind(id).first();
-  if (!ev) return json({ error: "Event not found." }, 404);
-  if (ev.status === "draft" && !(await isStaff(env, ctx, ev.org_id))) return json({ error: "Not available." }, 403);
+  if (!ev) return { deny: json({ error: "Event not found." }, 404) };
+  if (ev.status === "draft" && !(await isStaff(env, ctx, ev.org_id))) return { deny: json({ error: "Not available." }, 403) };
+  for (const k of PUBLIC_EVENT_SECRETS) delete ev[k];
+  return { ev };
+}
+
+async function getEvent(env, ctx, id) {
+  const { ev, deny } = await publicEvent(env, ctx, id);
+  if (deny) return deny;
   // SG-2 (§-1o): the count IS Cathy's decision, so the event carries it — activeRegistrationCount
   // is the capacity gate's own number (registration ROWS, the same units as `capacity`, so
   // "9 of 12" and "full at 12" can never contradict). Unconditional: the sheet already shows
@@ -166,7 +179,8 @@ async function patchEvent(request, env, ctx, id) {
    — `personName` returns it in full only when they chose 'public', and "First L." otherwise.
    Reading the member's setting rather than the caller's convenience is the whole rule;
    scheduler_ux.test.mjs flips the setting and asserts the output follows it. */
-async function listTeams(env, eventId) {
+async function listTeams(env, eventId, ctx = null) {
+  if (ctx) { const { deny } = await publicEvent(env, ctx, eventId); if (deny) return deny; }
   const rows = (await env.DB.prepare(
     `SELECT t.id, t.name, t.level, t.gender_division, t.seed, ${CAPTAIN_COLS}
        FROM teams t ${CAPTAIN_JOIN}
@@ -252,8 +266,8 @@ async function generateSchedule(request, env, ctx, eventId) {
 }
 
 async function getSchedule(env, ctx, eventId) {
-  const ev = await env.DB.prepare("SELECT * FROM events WHERE id=?1 AND deleted_at IS NULL").bind(eventId).first();
-  if (!ev) return json({ error: "Event not found." }, 404);
+  const { ev, deny } = await publicEvent(env, ctx, eventId);
+  if (deny) return deny;
   const rows = (await env.DB.prepare(
     `SELECT m.id, m.stage, m.round, m.court, m.team_a_id, m.team_b_id, m.ref_team_id, m.points_to, m.cap, m.score_a, m.score_b
      FROM matches m WHERE m.event_id=?1 AND m.deleted_at IS NULL ORDER BY m.stage, m.round, m.court`
@@ -289,7 +303,14 @@ async function patchMatch(request, env, ctx, matchId) {
   const deny = await requireStaff(env, ctx, mt.org_id);
   if (deny) return deny;
   const b = await request.json();
-  const allowed = ["round", "court", "score_a", "score_b", "ref_team_id"];
+  /* v0.215.0 (review F5): scores left this route. It wrote score_a/score_b raw (a -10 and a
+     1.5 both persisted) and refreshed neither standings nor the bracket, so a score entered
+     here silently disagreed with every board. POST /api/matches/:id/score is the one writer. */
+  if ("score_a" in b || "score_b" in b) return json({ error: "Scores are entered through the score sheet, not this edit." }, 400);
+  const posInt = (v) => Number.isInteger(v) && v > 0 && v < 10000;
+  for (const k of ["round", "court"]) if (k in b && !posInt(b[k])) return json({ error: `${k} must be a positive whole number.` }, 400);
+  if ("ref_team_id" in b && b.ref_team_id !== null && !posInt(b.ref_team_id)) return json({ error: "ref_team_id must be a team id or null." }, 400);
+  const allowed = ["round", "court", "ref_team_id"];
   const sets = [], vals = [];
   for (const k of allowed) if (k in b) { sets.push(`${k}=?${sets.length + 1}`); vals.push(b[k]); }
   if (!sets.length) return json({ error: "Nothing to update." }, 400);
@@ -417,7 +438,8 @@ export async function refreshStandings(env, eventId, orgId) {
   }
 }
 
-async function getStandings(env, eventId) {
+async function getStandings(env, eventId, ctx = null) {
+  if (ctx) { const { deny } = await publicEvent(env, ctx, eventId); if (deny) return deny; }
   const rows = (await env.DB.prepare(
     `SELECT s.rank, s.team_id, t.name, s.wins, s.losses, s.point_diff, s.points_for, s.points_against
      FROM standings s JOIN teams t ON t.id = s.team_id
