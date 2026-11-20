@@ -146,7 +146,7 @@ test("pad produces the 4-digit form used in filenames and the ledger", () => {
   assert.equal(pad(2026), "2026");
 });
 
-test("the real db/migrations directory parses cleanly and reports 0054", () => {
+test("the real db/migrations directory parses cleanly and reports 0055", () => {
   // This number is a deliberate ratchet, not a nuisance: it reddens on every new migration and
   // makes whoever added one confirm the scanner still reads the whole directory. Bump it in the
   // same commit as the migration, AFTER the ledger row exists in live D1 (v0.60.0 → 0036;
@@ -215,9 +215,14 @@ test("the real db/migrations directory parses cleanly and reports 0054", () => {
   // MAX(version)='0054' and sqlite_master listed prize_items/prize_receipts/prize_receipt_lines/
   // prize_awards; the DDL was read back from sqlite_master and pasted VERBATIM into journey-schema.sql.
   // prizes.test.mjs drives every route against it.)
+  // FIFTEENTH time 2026-11-20: migration 0055 (facility zones, party-booking spec v1.1 unit 1) — the
+  // first DATA-ONLY one: no DDL, so journey-schema.sql did not move. Moved once live D1 answered
+  // MAX(version)='0055', 15 courts in sort order, presets Zone 1-7 reading back as the owner's table,
+  // 232 booking_spaces rows written (116 whole-end bookings x VB 14 + VB 15) and org 11 = Shoot 360
+  // Denver. facility_zones.test.mjs replays the real 0008 seed and the real 0055 file and judges both.
   const { highest, files, unparseable } = scanMigrations(DEFAULT_DIR);
   assert.deepEqual(unparseable, [], `unparseable migration filenames: ${unparseable.join(", ")}`);
-  assert.equal(highest, 54);
+  assert.equal(highest, 55);
   assert.ok(files >= 20, `expected at least 20 .sql files, saw ${files}`);
 });
 
