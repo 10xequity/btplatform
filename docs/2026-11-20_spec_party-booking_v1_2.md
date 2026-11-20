@@ -1,6 +1,6 @@
 # Party booking and space calendar — build prompt
 
-**Version:** v1.1 · **Date:** 2026-11-20 · **Status:** Building — unit 1 shipped 2026-11-20 (migration 0055); owner answered the v1.0 questions the same day (§7) · **Supersedes:** v1.0 (same day, never committed)
+**Version:** v1.2 · **Date:** 2026-11-20 · **Status:** Building — unit 1 shipped 2026-11-20 (migration 0055). v1.2 folds in the owner's second round of answers the same day: party-court and Zone 7 pricing per 3 hours, half-court basketball, Studio 1 and capacities, the $300 deposit, the 30% cancellation rule, winter availability (§3, §7) · **Supersedes:** v1.1 (same day; renamed in place)
 **Use** Paste everything below the line into a new Claude Code session opened in `D:\github\repos\btplatform`.
 
 ---
@@ -46,32 +46,48 @@ You are extending the Boomtown Platform (this repo) so FieldhouseUSA Aurora can 
 
 | Item | Price |
 |---|---|
-| Party room | $400 per 3 hours, setup and cleanup included, no food. The party room is half of the studio: the studio splits into two party rooms or opens into one large room. "Activity Rooms 1 and 2" are these same two halves |
-| Volleyball court | $150 per court per hour |
-| Basketball court | $200 for the 3 hours |
+| Party room | $400 per 3 hours, setup and cleanup included, no food. The party room is **Studio 1**, which can be split in two. Parties currently get the whole studio, but **public copy never says so** |
+| Volleyball court added to a party | **$150 for the whole 3 hours**, not per hour. Party pricing only; this is not the court rental rate |
+| Basketball | **$200 full court or $100 half court**, for the 3 hours |
 | Pickleball, 3 courts | $200 for the 3 hours |
 | Inflatables | $150, set up in Zone 7 |
-| Zone 7 (three courts, futsal or inflatables) | $400 per hour, a bundle discount from $450 |
-| Shoot 360 (4 hoops) | $400 per hour, food not included. Shoot 360 Denver is a separate operator; add it as an operator org |
+| Zone 7 (three courts, futsal or inflatables) | **$400 for the whole 3 hours**, not per hour (owner confirmed 2026-11-20). Three courts at $150, discounted |
+| Shoot 360 (4 hoops) | $400 per hour, food not included. Shoot 360 Denver is a separate operator (org 11 since migration 0055) |
 | Social Den, private TV lounge | $600 per hour. Otherwise it is open seating, free for groups that buy a food package |
-| Corral area | $250 per 3-hour slot, plus the court rental. Two corrals: the vertical court in Zone 7 split into two areas |
-| Whole studio (both party rooms as one) | Price **not set** |
-| Karaoke, speaker and lights, fog machine | Added to the quote, probably about $100. Games TBD |
+| Corral area | $250 per 3-hour slot, 20–30 people, plus the court rental. Two corrals: the vertical court in Zone 7 split into two areas |
+| DJ system or karaoke system | Includes lights and fog machine. Added to the quote, about $100. Games TBD |
 | Food, Oda Up | Kids $15 per head (2 slices of pizza, bites, fountain drink). Adults $25 per person |
 | Outside food | $250 fee, only for parties contracted with the facility that skip the food package. The general public may not bring food. No outside alcohol. Off-menu food can be made with notice |
 | Tax | Charged on food and drinks only. Kids food comes to about $16 to $17 with tax |
-| Colorado Boom club members | One volleyball court for the 3-hour period included with the party room |
+| Colorado Boom club members | One volleyball court included with the party room (a $150 credit) |
 
-**Payment terms (owner):** payment up front, plus a security deposit for cleaning and damage (amount not set). For dates more than 3 months away, a 30% deposit holds the date and the rest is due 1 to 2 months before.
+**Target.** A typical party is $400–600 for room plus activity area, before food.
+
+**The pricing reference** is `afh/assets/party.js` on branch `v3` at commit `caaeb12`, which already matches this table.
+
+**No "activity rooms" product.** The customer says what kind of party it is and staff match the room or activity. Do not build or sell "Activity Rooms 1 and 2".
+
+**Capacity.**
+
+| Space | Holds |
+|---|---|
+| Studio 1 (the party room) | 200 people; 70 for a yoga class |
+| One volleyball court | 12–20 |
+| Social Den | 200 |
+| Zone 7 | 300–400 |
+| Corral | 20–30 |
+| Whole building | Up to 1,200 with planning. Event-Den quotes up to 600, or 1,000 for the whole building |
+
+**Payment terms (owner):** payment up front, plus a **$300 security deposit** for parties ("probably"; more for events). For dates more than 3 months away, a **30% deposit** holds the date and the rest is due 1 to 2 months before. **Cancelling within 60 days of the party forfeits that 30%** (owner correction 2026-11-20; an earlier relay said 25%, which was wrong). Use one constant for the 30% in code: it is both the hold deposit and the cancellation forfeit.
 
 **Routing.** These go to Event-Den, the planning company, instead of being booked instantly:
-- more than 75 guests (one constant, tunable; the owner's first instinct was 50)
+- more than 75 guests (one constant, tunable; confirmed 2026-11-20 even though Studio 1 holds 200)
 - more than one day
 - staging, sound or AV
 - décor, rentals or a planner
 - vendor booths, an expo or a convention
 
-Event-Den's capacity is up to 600. Tournaments and sports events stay with Boomtown Athletics.
+Event-Den quotes up to 600, or 1,000 for the whole building. Tournaments and sports events stay with Boomtown Athletics.
 
 **Waivers.** Everyone who plays on a court or an inflatable signs the waiver. A guardian signs for minors.
 
@@ -82,11 +98,13 @@ Event-Den's capacity is up to 600. Tournaments and sports events stay with Boomt
 - Weekdays before 4 PM are open.
 - Summer weekends are mostly open.
 
+**Where party slots can go (owner, second round):** in winter mostly Friday, Saturday and Sunday **nights**, maybe Monday or Tuesday from 7:30 PM. Summer has more, depending on events. This replaces the earlier Sunday 4–7 PM and weekday-daytime recommendation.
+
 ## 4. Build units (one per release)
 
 1. **Atoms.**
    - Add VB 14 and VB 15. Rebuild the presets as Zone 1–Zone 7 plus the existing whole-floor presets.
-   - Add the rooms the owner confirms: the party room(s), Activity Rooms 1 and 2 (check whether these are Dance-Den 1 and 2), the corral areas and the Shoot 360 bays.
+   - **Shipped (migration 0055):** VB 14–15, Zone 1–7 presets, Party Room 1–2 (the two halves of Studio 1), Corral 1–2, Shoot 360 Denver. Not added: Shoot 360 bays (unsettled whether the hoops are their own area or Zone 1). There is no Activity Rooms product.
    - Add Shoot 360 Denver as an operator org.
    - Migrate existing bookings that reference the old basketball presets.
 2. **Sheet import.**
@@ -104,7 +122,7 @@ Event-Den's capacity is up to 600. Tournaments and sports events stay with Boomt
    - Expose `POST /api/party/quote`, which returns the line items and total. It must reproduce `afh/assets/party.js` `estimate()` exactly. Copy its assert cases into a test.
    - Put the routing rule server-side, so a request that should go to Event-Den is refused with the Event-Den link.
 4. **Held slots.**
-   - Party slot templates: weekday, start, end, atoms and allowed packages. Example: Sunday 4–7 PM, party room plus Zone 6.
+   - Party slot templates: weekday, start, end, atoms and allowed packages. Example: Saturday night, party room plus Zone 6.
    - Availability is the templates minus any hard conflict. Staff can open or close single dates.
    - Never offer a slot whose atoms conflict with a tournament, a league series or a closure.
 5. **Public booking.**
@@ -136,15 +154,20 @@ Event-Den's capacity is up to 600. Tournaments and sports events stay with Boomt
 
 ## 7. Owner decisions
 
-Answered 2026-11-20 and folded into §3: the party room is the studio (two halves), basketball, pickleball and inflatable prices, the corral, the Colorado Boom special, payment terms, tax, and outside food.
+**Answered 2026-11-20 and folded into §3 — do not re-ask:** the party room's identity (Studio 1, splits in two) and capacity; basketball, pickleball and inflatable prices; party-court pricing per 3 hours; Zone 7 at $400 for the 3 hours; the corral; the Colorado Boom credit; payment terms; the $300 security deposit; the 60-day cancellation rule (forfeits the 30% deposit); tax; outside food; the 75-guest routing limit; and where slots can go (winter weekend nights).
 
-Still open. Ask once, in one inline list with a recommendation each, before units 1 and 4:
+**Still open from the owner:**
 
-1. How many guests one party room holds, and both together. The 75-guest routing limit should follow from this.
-2. The price of the whole studio (both party rooms as one).
-3. The security deposit amount, and the cancellation and refund rules.
-4. Which slot templates to sell. Recommended: Sunday 4–7 PM; weekdays 10 AM–3 PM (school breaks and corporate team-building); open weekends by date.
-5. Whether the studio in the party page is Dance-Den 1 and 2 in the existing atoms, or a different room.
+1. The exact start and end times of the slot templates (Friday, Saturday, Sunday nights; Monday or Tuesday from 7:30 PM). Needed before unit 4.
+
+The whole-studio price is moot while parties get the whole studio; revisit only if the halves are ever sold separately.
+
+**Found during the build, 2026-11-20 (unit 1 session):**
+
+2. Which Square account and location party payments land in. No org has a Square location and the live webhook is not configured (§8).
+3. Whether Shoot 360's four hoops are their own area or sit on Zone 1 (the sheet shows Shoot 360 in Zone 1 from 4 to 5 PM).
+4. Whether the 77 coarse calendar rows from the August import may be retired before the zone-exact sheet import (a delete).
+5. Party Room 1–2 were added as new rooms for the halves of Studio 1. Whether Studio 1 is the same physical room as one of the older Dance-Den / Yoga-Den entries is unmapped; harmless while those hold no bookings, but settle it before unit 4 sells the room.
 
 ## 8. Square connection (owner asked for this on 2026-11-20)
 
