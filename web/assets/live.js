@@ -72,7 +72,7 @@
         <span class="lv-sc${lead ? " lv-lead" : ""}">${unplayed ? LIVE_NO_SCORE : score}</span>
       </span>`;
     return `<li class="lv-court" data-k="${esc(keyOf(mt))}">
-      <span class="lv-ct">Court ${mt.court}</span>
+      <span class="lv-ct">${window.BT_FACILITY_MAP ? `<button type="button" class="lv-ctbtn" data-fm-court="${mt.court}" aria-label="Where is court ${mt.court}">Court ${mt.court} · Zone ${window.BT_FACILITY_MAP.zoneOf(mt.court) || "?"}</button>` : `Court ${mt.court}`}</span>
       <span class="lv-stage">${esc(mt.stage)}</span>
       ${side(mt.team_a, mt.captain_a, mt.seed_a != null ? mt.seed_a : null, mt.score_a, !unplayed && mt.score_a > mt.score_b)}
       ${side(mt.team_b, mt.captain_b, mt.seed_b != null ? mt.seed_b : null, mt.score_b, !unplayed && mt.score_b > mt.score_a)}

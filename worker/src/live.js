@@ -147,8 +147,11 @@ export async function liveRoutes(request, env, url, ctx) {
       .sort((a, b) => a.court - b.court);
 
     const inPool = (pid) => teams.filter((t) => t.pool_id === pid);
+    // v0.217.0: the stored rank is per POOL now (tournaments.js standingsByPool) and carries the
+    // head-to-head tiebreak, so it leads; the old wins/points order remains the fallback for a
+    // team no standings row has ranked yet.
     const standingsIn = (list) => [...list].sort((a, b) =>
-      b.wins - a.wins || b.point_diff - a.point_diff || a.name.localeCompare(b.name));
+      (a.rank ?? 9999) - (b.rank ?? 9999) || b.wins - a.wins || b.point_diff - a.point_diff || a.name.localeCompare(b.name));
 
     const brackets = brs.map((br) => {
       const mine = matches.filter((mt) => mt.bracket_id === br.id);

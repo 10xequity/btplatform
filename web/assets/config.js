@@ -18,6 +18,9 @@
 window.BT_CONFIG = {
   apiBase: "https://boomtown-api.vvisuth.workers.dev",
   RENTALS_ENABLED: false,
+  /* v0.217.0: the hosted facility map (the 2D/3D map of 2026-11-12). Empty = the schematic in
+     facility-map.js is the map and "Where's my court?" never shows a dead link. */
+  facilityMapUrl: "",
 };
 
 /* THE CALENDAR DAY CAP — ONE JUDGEMENT, TWO READERS (§-1r RF-7, v0.176.0).

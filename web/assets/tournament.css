@@ -137,3 +137,18 @@ body.print-day .ds-close { display: inline-block; }
      hidden in print even though the reveal rules above force display on the visible ones. */
   #gridPanel[hidden], #standingsPanel[hidden] { display: none; }
 }
+
+/* v0.217.0: the paper pool sheet (print-day mode, tournament.js composePoolSheets). Black on
+   white; the boxes are for a pen. Screen never shows it — see the print-day rules above. */
+.ps-page { page-break-after: always; }
+.ps-head { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; border-bottom: 2px solid #000; padding-bottom: 6px; margin-bottom: 8px; }
+.ps-meta { margin: 2px 0 0; font-size: 12px; }
+.ps-rules { margin: 0; font-size: 11px; max-width: 46%; text-align: right; }
+.ps-grid, .ps-card { width: 100%; border-collapse: collapse; margin-top: 8px; table-layout: fixed; }
+.ps-grid th, .ps-grid td, .ps-card th, .ps-card td { border: 1px solid #000; padding: 4px 5px; font-size: 12px; text-align: center; color: #000; }
+.ps-grid th:first-child, .ps-card th:first-child { width: 58px; }
+.ps-grid td small { display: block; font-size: 9px; }
+.ps-card .ps-team { text-align: left; width: 22%; }
+.ps-card .ps-cap { text-align: left; width: 18%; }
+.ps-card td.ps-box { height: 30px; }
+@media screen { .ps-page { display: none; } }

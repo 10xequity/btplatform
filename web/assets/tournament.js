@@ -194,6 +194,46 @@
      second press — the server 409s first and says what it would do. */
   let plannedRounds = null;
 
+  /* ---------- v0.217.0: pools run the day ----------
+     The board's saved pools decide the schedule. When there are any (with two or more teams), the
+     planner shows them and ONE button builds every pool's round robin on its own courts; the
+     teams/courts/options path below stays for a day with no pools. */
+  let board = null;
+  async function loadBoard() {
+    const r = await api(`/api/admin/events/${currentEvent.id}/board`);
+    board = r.ok ? r.data : null;
+    const pools = boardPools();
+    $("plPools").hidden = !pools.length;
+    $("plByPool").hidden = !pools.length;
+    $("plOptions").hidden = pools.length > 0;
+    if (pools.length) {
+      $("plPools").innerHTML = `<b>${pools.length} pool${pools.length === 1 ? "" : "s"}</b>: each gets its own round robin on its own courts: ` +
+        pools.map((p) => `${dsEsc(p.name)} (${p.teams.length} teams${p.court_from ? `, courts ${p.court_from}–${p.court_to || p.court_from}` : ""})`).join(" · ") +
+        `. <a href="admin-pool-board.html?event=${currentEvent.id}">Change pools</a>`;
+    }
+    $("bracketLink").href = `admin-brackets.html?event=${currentEvent.id}`;
+  }
+  /** Every saved pool with at least two teams, in board order, divisions first then loose pools. */
+  function boardPools() {
+    if (!board) return [];
+    const all = [...(board.divisions || []).flatMap((d) => d.pools || []), ...(board.loose_pools || [])];
+    return all.filter((p) => (p.teams || []).length >= 2);
+  }
+
+  $("plByPool").onclick = async () => {
+    if (!currentEvent) return;
+    const body = { games_each: +$("plGames").value || 8, points_to: +$("plPoints").value || 25,
+      cap: $("plNoCap").checked ? 0 : undefined, assign_refs: true };
+    const post = (b) => api(`/api/admin/events/${currentEvent.id}/generate-schedule`, { method: "POST", body: JSON.stringify(b) });
+    let r = await post(body);
+    if (r.status === 409) {
+      if (!confirm(`${r.data.error} Replace it?`)) return;
+      r = await post({ ...body, replace: true });
+    }
+    $("plMsg").textContent = r.ok ? (r.data.summary || []).join(" ") : (r.data.error || "Couldn't write the schedules.");
+    if (r.ok) refreshAll();
+  };
+
   $("plOptions").onclick = async () => {
     const t = +$("plTeams").value, c = +$("plCourts").value;
     plannedRounds = null;
@@ -240,7 +280,8 @@
 
   $("plCommit").onclick = async () => {
     if (!plannedRounds || !currentEvent) return;
-    const body = { courts: +$("plCourts").value, rounds: plannedRounds, assign_refs: true,
+    const body = { courts: +$("plCourts").value, rounds: plannedRounds, assign_refs: true, by_pool: false,
+      cap: $("plNoCap").checked ? 0 : undefined,
       points_to: +$("plPoints").value || undefined }; // T2-4: the committed matches carry the same points the preview showed
     let r = await api(`/api/admin/events/${currentEvent.id}/generate-schedule`, { method: "POST", body: JSON.stringify(body) });
     if (r.status === 409) {
@@ -297,6 +338,7 @@
     renderWarnings(sched.data.warnings || []);
     renderGrid();
     renderStandings();
+    loadBoard();
   }
 
   function renderWarnings(warnings) {
@@ -444,9 +486,13 @@
     const r = await api(`/api/events/${currentEvent.id}/standings`);
     const rows = r.data.standings || [];
     $("standingsPanel").hidden = rows.length === 0;
-    $("standingsTable").innerHTML =
+    /* v0.217.0: one table per pool — the server already groups them and ranks within the pool. */
+    const groups = (r.data.pools && r.data.pools.length) ? r.data.pools : [{ pool: null, standings: rows }];
+    const row = (s) => `<tr><td>${s.rank}</td><td>${dsEsc(s.name)}</td><td>${s.wins}</td><td>${s.losses}</td><td>${s.point_diff > 0 ? "+" : ""}${s.point_diff}</td><td>${s.points_for}</td></tr>`;
+    $("standingsTable").innerHTML = groups.map((g) =>
+      (g.pool ? `<tr><th colspan="6" style="text-align:left">${dsEsc(g.pool)}</th></tr>` : "") +
       `<tr><th>#</th><th>Team</th><th>W</th><th>L</th><th>±</th><th>PF</th></tr>` +
-      rows.map((s) => `<tr><td>${s.rank}</td><td>${dsEsc(s.name)}</td><td>${s.wins}</td><td>${s.losses}</td><td>${s.point_diff > 0 ? "+" : ""}${s.point_diff}</td><td>${s.points_for}</td></tr>`).join("");
+      (g.standings || []).map(row).join("")).join("");
   }
 
   $("bracketBtn").onclick = async () => {
@@ -621,6 +667,57 @@
     if (!currentEvent) return;
     return whileBusy($("daySheetBtn"), async () => {
       await composeDaySheet();
+      document.body.classList.add("print-day");
+      addEventListener("afterprint", exitPrintDay, { once: true });
+      print();
+    });
+  };
+
+  /* ---------- v0.217.0: the paper pool sheet ----------
+     A copy of the sheet the owner's courts have used all autumn (Drive "Pool Sheet Library",
+     finals-pool-play-scores_v3): per pool, one letter page — a header with the format line, a
+     Court × Round grid written in TEAM NUMBERS, then the scorecard: # / Team / Captain / one blank
+     box per round for the point differential / Win. Numbers are 1..N in the pool's board order,
+     which is the order the schedule was generated in, so "1 v 3" on paper is the same game as the
+     one on screen. Black on white, no colour: it is photocopied and written on. */
+  function composePoolSheets() {
+    const pools = boardPools();
+    const groups = pools.length
+      ? pools.map((p) => ({ name: p.name, teams: p.teams, matches: matches.filter((m) => m.pool_id === p.id) }))
+      : [{ name: "", teams: teams.map((t) => ({ ...t, captain: teamCaptain[t.id] })), matches }];
+    const fmt = (ms) => {
+      const m0 = ms[0];
+      if (!m0) return "";
+      return `1 game to ${m0.points_to}${m0.cap ? `, cap ${m0.cap}` : ", NO CAP"}`;
+    };
+    let html = "";
+    for (const g of groups) {
+      if (!g.matches.length) continue;
+      const num = new Map(g.teams.map((t, i) => [t.id, i + 1]));
+      const rounds = [...new Set(g.matches.map((m) => m.round))].sort((a, b) => a - b);
+      const courts = [...new Set(g.matches.map((m) => m.court))].sort((a, b) => a - b);
+      const cell = (c, r) => {
+        const m = g.matches.find((x) => x.court === c && x.round === r);
+        return m ? `${num.get(m.team_a_id) || "?"} v ${num.get(m.team_b_id) || "?"}${m.ref_team_id && num.get(m.ref_team_id) ? `<small> ref ${num.get(m.ref_team_id)}</small>` : ""}` : "";
+      };
+      html += `<div class="ds-section ps-page">
+        <div class="ps-head"><div><h3 class="ds-h">${dsEsc(currentEvent.name)}${g.name ? ` · ${dsEsc(g.name)}` : ""}</h3>
+          <p class="ps-meta">Courts ${courts[0]}–${courts[courts.length - 1]} · ${dsEsc(fmt(g.matches))} · ${rounds.length} rounds</p></div>
+          <p class="ps-rules"><b>Write the point differential only</b> (+5 / −5). Both boxes of a game must cancel. Standings: wins, then points, then head-to-head.</p></div>
+        <table class="ps-grid"><tr><th>Court</th>${rounds.map((r) => `<th>R${r}</th>`).join("")}</tr>` +
+        courts.map((c) => `<tr><th>Court ${c}</th>${rounds.map((r) => `<td>${cell(c, r)}</td>`).join("")}</tr>`).join("") +
+        `</table>
+        <table class="ps-card"><tr><th>#</th><th class="ps-team">Team</th><th class="ps-cap">Captain</th>${rounds.map((r) => `<th>R${r}</th>`).join("")}<th>Win</th><th>Pts</th></tr>` +
+        g.teams.map((t, i) => `<tr><td><b>${i + 1}</b></td><td class="ps-team">${dsEsc(t.name)}</td><td class="ps-cap">${dsEsc(t.captain || "")}</td>${rounds.map(() => `<td class="ps-box"></td>`).join("")}<td class="ps-box"></td><td class="ps-box"></td></tr>`).join("") +
+        `</table></div>`;
+    }
+    $("daySheet").innerHTML = html || `<p class="ds-note">No pool games yet. Build the schedule first.</p>`;
+  }
+
+  $("poolSheetsBtn").onclick = () => {
+    if (!currentEvent) return;
+    return whileBusy($("poolSheetsBtn"), async () => {
+      composePoolSheets();
       document.body.classList.add("print-day");
       addEventListener("afterprint", exitPrintDay, { once: true });
       print();

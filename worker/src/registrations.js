@@ -1096,8 +1096,23 @@ async function captainMatches(env, token) {
       : `Round of ${2 ** r.bracket_round}`;
   const withLabels = matches.map((r) => ({ ...r, stage_label: stageLabel(r) }));
   const remaining = withLabels.filter((r) => r.score_a === null || r.score_b === null).length;
+  /* v0.217.0 (owner 2026-11-23): "have standings across the top to ensure teams can review." The
+     team's own pool table rides on the scoring page — rank within the pool (tournaments.js
+     standingsByPool), so a captain sees where they stand after every score they enter. */
+  const poolRow = await env.DB.prepare(
+    "SELECT t.pool_id, p.name AS pool FROM teams t LEFT JOIN pools p ON p.id=t.pool_id AND p.deleted_at IS NULL WHERE t.id=?1"
+  ).bind(team.id).first();
+  const standings = (await env.DB.prepare(
+    `SELECT s.rank, s.team_id, t.name, s.wins, s.losses, s.point_diff
+       FROM standings s JOIN teams t ON t.id = s.team_id
+      WHERE s.event_id=?1 AND s.deleted_at IS NULL AND t.deleted_at IS NULL
+        AND ${poolRow && poolRow.pool_id ? "t.pool_id=?2" : "t.pool_id IS NULL AND ?2 IS NULL"}
+      ORDER BY s.rank`
+  ).bind(team.event_id, poolRow ? poolRow.pool_id : null).all()).results || [];
   return json({
     team: { id: team.id, name: team.name }, event: team.event_name,
+    pool: poolRow ? poolRow.pool : null,
+    standings,
     matches: withLabels,
     // The page uses this to retire itself once there is nothing left to enter (owner 2026-08-03:
     // "get rid of that page after scores are submitted").

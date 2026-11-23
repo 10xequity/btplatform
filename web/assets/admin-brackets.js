@@ -102,17 +102,27 @@
   }
 
   function treeHtml(br) {
-    const rounds = br.rounds.map((r) => `
-      <div class="br-round" role="group" aria-label="${esc(r.label)}">
-        <h3 class="br-round-h">${esc(r.label)}</h3>
-        <ul class="br-list">${r.matches.map(matchCard).join("")}</ul>
-      </div>`).join("");
+    /* v0.217.0: the 3rd-place match shares the final's round on the server; on the board it gets
+       its own column after the final so the connectors (which follow ceil(slot/2)) stay honest. */
+    const rounds = br.rounds.flatMap((r) => {
+      const main = r.matches.filter((m) => !m.third_place), third = r.matches.filter((m) => m.third_place);
+      const col = (label, ms) => `
+      <div class="br-round" role="group" aria-label="${esc(label)}">
+        <h3 class="br-round-h">${esc(label)}</h3>
+        <ul class="br-list">${ms.map(matchCard).join("")}</ul>
+      </div>`;
+      return [col(r.label, main)].concat(third.length ? [col("3rd place", third)] : []);
+    }).join("");
     const champ = br.champion
       ? `<p class="br-champ">🏆 <b>${esc(br.champion)}</b> wins the ${esc(br.name)} bracket.</p>`
       : `<p class="mf-note">${br.played} of ${br.total} games played${br.seeded_by ? ` · seeded by ${esc(br.seeded_by)}` : ""}.</p>`;
+    // v0.217.0: 3rd/4th, and HOW they were decided (owner: by seed when the match isn't played).
+    const third = br.third_place && br.third_place.third
+      ? `<p class="mf-note">3rd <b>${esc(br.third_place.third)}</b> · 4th <b>${esc(br.third_place.fourth)}</b>${br.third_place.decided_by === "seed" ? " (by seed: the 3rd-place match has not been played)" : ""}.</p>`
+      : "";
     return `<section class="br-tree" aria-labelledby="brH${br.id}">
       <h2 class="mf-sub" id="brH${br.id}">${esc(br.name)} bracket</h2>
-      ${champ}
+      ${champ}${third}
       <div class="br-scroll">
         <svg class="br-links" aria-hidden="true"></svg>
         ${rounds}</div>
@@ -300,7 +310,33 @@
       points_to: Number($("bPoints").value) || undefined,
       courts: Number($("bCourts").value) || undefined,
       best_of: $("bBo3").checked ? 3 : 1,
+      // v0.217.0: pool-scoped draw, no-cap games, the 3rd-place match.
+      pool_id: Number($("bPool").value) || undefined,
+      cap: $("bNoCap").checked ? 0 : undefined,
+      third_place: $("bThird").checked,
     };
+  }
+
+  /* v0.217.0: the pool picker reads the pool board. Picking a pool sets "Top teams into A" to the
+     pool's size — "everyone breaks" is the owner's default for a pool of 4 or 8 — and the pool's
+     courts. A director can still type over either. */
+  async function loadPools() {
+    const sel = $("bPool");
+    sel.innerHTML = `<option value="">Whole event</option>`;
+    if (!eventId) return;
+    const r = await api(`/api/admin/events/${eventId}/board`);
+    if (!r.ok) return;
+    const pools = [...(r.data.divisions || []).flatMap((d) => d.pools || []), ...(r.data.loose_pools || [])]
+      .filter((p) => (p.teams || []).length >= 2);
+    for (const p of pools) {
+      const o = document.createElement("option");
+      o.value = p.id;
+      o.textContent = `${p.name} (${p.teams.length} teams${p.court_from ? `, courts ${p.court_from}–${p.court_to || p.court_from}` : ""})`;
+      o.dataset.teams = p.teams.length;
+      o.dataset.courts = p.court_from ? (p.court_to || p.court_from) - p.court_from + 1 : "";
+      sel.appendChild(o);
+    }
+    if (pools.length && !sel.value) { sel.value = pools[0].id; sel.dispatchEvent(new Event("change")); }
   }
 
   async function estimate() {
@@ -381,6 +417,7 @@
     if (pre && list.some((e) => String(e.id) === pre)) { eventId = +pre; $("bEvent").value = pre; }
     if (!eventId) return BT_ADMIN.orgEmptyState("bTrees", "events"); // v0.89.0 Block B3: an empty org is not a broken module
     load();
+    loadPools();
     estimate();
   }
 
@@ -392,7 +429,13 @@
       if (rafId) cancelAnimationFrame(rafId);
       rafId = requestAnimationFrame(drawConnectors);
     });
-    $("bEvent").addEventListener("change", () => { eventId = Number($("bEvent").value); load(); estimate(); });
+    $("bEvent").addEventListener("change", () => { eventId = Number($("bEvent").value); load(); loadPools(); estimate(); });
+    $("bPool").addEventListener("change", () => {
+      const o = $("bPool").selectedOptions[0];
+      if (o && o.dataset.teams) { $("bASize").value = o.dataset.teams; $("bRest").checked = false; }
+      if (o && o.dataset.courts) $("bCourts").value = o.dataset.courts;
+      estimate();
+    });
     // Every control that changes the shape of the draw also changes how long it takes.
     ["bASize", "bPoints", "bCourts", "bSlot", "bHave"].forEach((id) =>
       $(id).addEventListener("input", scheduleEstimate));
