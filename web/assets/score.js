@@ -44,11 +44,24 @@
 
     app.innerHTML = `<div class="card">
         <h1 style="font-size:1.2rem">${esc(team.name)}</h1>
-        <p class="meta">${esc(r.data.event)} · tap who won, then the point margin</p>
+        <p class="meta">${esc(r.data.event)}${r.data.pool ? ` · ${esc(r.data.pool)}` : ""} · tap who won, then the point margin</p>
       </div>` +
+      standingsStrip(r.data) +
       (pending.length ? pending.map(matchCard).join("") : "<div class='card'><p>Nothing to score yet; your next game will appear here.</p></div>") +
       (done.length ? `<div class="card"><h2 style="font-size:1rem">Already scored</h2>${done.map(scoredLine).join("")}</div>` : "");
     pending.forEach(wire);
+  }
+
+  /* v0.217.0 (owner 2026-11-23): "have standings across the top to ensure teams can review." The
+     pool's table, the team's own row marked, refreshed with every load — so a captain checks their
+     place the moment a score goes in, and a wrong entry is noticed by the team it hurts. */
+  function standingsStrip(data) {
+    const rows = data.standings || [];
+    if (!rows.length) return "";
+    return `<div class="card" style="padding:10px 12px"><h2 style="font-size:1rem;margin:0 0 6px">${esc(data.pool || "Standings")}</h2>
+      <table class="st-table" aria-label="Pool standings"><tr><th>#</th><th style="text-align:left">Team</th><th>W</th><th>L</th><th>±</th></tr>` +
+      rows.map((s) => `<tr${s.team_id === team.id ? ' class="st-me"' : ""}><td>${s.rank ?? ""}</td><td style="text-align:left">${esc(s.name)}</td><td>${s.wins}</td><td>${s.losses}</td><td>${s.point_diff > 0 ? "+" : ""}${s.point_diff}</td></tr>`).join("") +
+      `</table></div>`;
   }
 
   /** The finished state. Their results stay visible; the controls do not. */
@@ -57,7 +70,7 @@
         <h1 style="font-size:1.2rem">${esc(data.team.name)} · all done</h1>
         <p class="meta">${esc(data.event)}</p>
         <p>Every game has a score. Thanks. Nothing else to do here.</p>
-      </div>
+      </div>` + standingsStrip(data) + `
       <div class="card"><h2 style="font-size:1rem">Your results</h2>${done.map(scoredLine).join("")}</div>
       <div class="card"><p class="meta">Something wrong? The tournament desk can fix any score.</p></div>`;
   }
@@ -72,7 +85,7 @@
     // court for than "Pool", and until v0.67.0 bracket games were not shown here at all.
     return `<div class="match" id="m${m.id}">
       <h3>${esc(m.stage_label || "Pool")} · vs ${esc(opp(m))}</h3>
-      <div class="meta">Court ${m.court} · game to ${m.points_to}</div>
+      <div class="meta">${window.BT_FACILITY_MAP ? window.BT_FACILITY_MAP.button(m.court, "btn ghost") : `Court ${m.court}`} · game to ${m.points_to}</div>
       <div class="taps">
         <button class="btn" data-win="us">We won</button>
         <button class="btn ghost" data-win="them">They won</button>

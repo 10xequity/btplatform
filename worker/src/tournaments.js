@@ -269,7 +269,7 @@ async function getSchedule(env, ctx, eventId) {
   const { ev, deny } = await publicEvent(env, ctx, eventId);
   if (deny) return deny;
   const rows = (await env.DB.prepare(
-    `SELECT m.id, m.stage, m.round, m.court, m.team_a_id, m.team_b_id, m.ref_team_id, m.points_to, m.cap, m.score_a, m.score_b
+    `SELECT m.id, m.stage, m.pool_id, m.round, m.court, m.team_a_id, m.team_b_id, m.ref_team_id, m.points_to, m.cap, m.score_a, m.score_b
      FROM matches m WHERE m.event_id=?1 AND m.deleted_at IS NULL ORDER BY m.stage, m.round, m.court`
   ).bind(eventId).all()).results;
   const teams = (await env.DB.prepare(
@@ -423,12 +423,34 @@ async function scoreMatch(request, env, ctx, matchId) {
    to have already proved the event belongs to the org. Every route reaching it does — which is why
    this was a latent defect and not a live leak — but "org-scoped by default" is not a property you
    inherit from your callers, and the orgId needed to fix it was already a parameter. Free. */
+/**
+ * v0.217.0 (owner 2026-11-23): STANDINGS ARE PER POOL. A pool game carries its pool_id, and the
+ * teams in that pool are ranked against each other only — Upper's #1 and Lower's #1 are both #1.
+ * Games with no pool_id (the single-pool path, and every schedule generated before this release)
+ * form one group over the teams not in any pool, so nothing an older event shows changes.
+ *
+ * Pure so the test can hand it rows and read the groups back.
+ * `rows` carry poolId; `teams` carry {id, poolId}. Returns computeStandings rows plus poolId.
+ */
+export function standingsByPool(rows, teams) {
+  const keys = new Set([...rows.map((r) => r.poolId ?? null), ...teams.map((t) => t.poolId ?? null)]);
+  const out = [];
+  for (const key of keys) {
+    const games = rows.filter((r) => (r.poolId ?? null) === key);
+    const ids = new Set(teams.filter((t) => (t.poolId ?? null) === key).map((t) => t.id));
+    for (const g of games) { if (g.teamA != null) ids.add(g.teamA); if (g.teamB != null) ids.add(g.teamB); }
+    if (!ids.size) continue;
+    for (const r of computeStandings(games, [...ids])) out.push({ ...r, poolId: key });
+  }
+  return out;
+}
+
 export async function refreshStandings(env, eventId, orgId) {
   const rows = (await env.DB.prepare(
-    "SELECT team_a_id AS teamA, team_b_id AS teamB, score_a AS scoreA, score_b AS scoreB, forfeit_by AS forfeitBy FROM matches WHERE event_id=?1 AND org_id=?2 AND stage='pool' AND deleted_at IS NULL"
+    "SELECT team_a_id AS teamA, team_b_id AS teamB, score_a AS scoreA, score_b AS scoreB, forfeit_by AS forfeitBy, pool_id AS poolId FROM matches WHERE event_id=?1 AND org_id=?2 AND stage='pool' AND bracket_id IS NULL AND deleted_at IS NULL"
   ).bind(eventId, orgId).all()).results;
-  const teams = (await env.DB.prepare("SELECT id FROM teams WHERE event_id=?1 AND org_id=?2 AND deleted_at IS NULL").bind(eventId, orgId).all()).results.map((t) => t.id);
-  const table = computeStandings(rows, teams);
+  const teams = (await env.DB.prepare("SELECT id, pool_id AS poolId FROM teams WHERE event_id=?1 AND org_id=?2 AND deleted_at IS NULL").bind(eventId, orgId).all()).results;
+  const table = standingsByPool(rows, teams);
   for (const r of table) {
     await env.DB.prepare(
       `INSERT INTO standings (org_id, event_id, team_id, wins, losses, point_diff, points_for, points_against, rank)
@@ -441,11 +463,21 @@ export async function refreshStandings(env, eventId, orgId) {
 async function getStandings(env, eventId, ctx = null) {
   if (ctx) { const { deny } = await publicEvent(env, ctx, eventId); if (deny) return deny; }
   const rows = (await env.DB.prepare(
-    `SELECT s.rank, s.team_id, t.name, s.wins, s.losses, s.point_diff, s.points_for, s.points_against
+    `SELECT s.rank, s.team_id, t.name, s.wins, s.losses, s.point_diff, s.points_for, s.points_against,
+            t.pool_id, p.name AS pool, p.sort_order AS pool_sort
      FROM standings s JOIN teams t ON t.id = s.team_id
-     WHERE s.event_id=?1 AND s.deleted_at IS NULL ORDER BY s.rank`
+     LEFT JOIN pools p ON p.id = t.pool_id AND p.deleted_at IS NULL
+     WHERE s.event_id=?1 AND s.deleted_at IS NULL ORDER BY COALESCE(p.sort_order, 9999), t.pool_id, s.rank`
   ).bind(eventId).all()).results;
-  return json({ standings: rows });
+  // v0.217.0: grouped by pool for every screen that draws a table per pool. `standings` stays flat
+  // for the readers that predate pools; its rank is now the rank WITHIN the team's pool.
+  const pools = [];
+  for (const r of rows) {
+    let g = pools.find((x) => (x.pool_id ?? null) === (r.pool_id ?? null));
+    if (!g) { g = { pool_id: r.pool_id ?? null, pool: r.pool ?? null, standings: [] }; pools.push(g); }
+    g.standings.push(r);
+  }
+  return json({ standings: rows, pools });
 }
 
 /* ---------- shared helpers (injected by index.js via ctx) ---------- */

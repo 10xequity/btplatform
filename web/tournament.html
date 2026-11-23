@@ -8,14 +8,14 @@
   <title>Tournament Ops · Boomtown Athletics</title>
   <script>/* Pre-paint state — collapse + theme (uiux-review §4/§6.4, v0.52.0): read the bt_nav cookie and the saved theme BEFORE the first stylesheet so the rail state AND the theme are right on frame one — no post-paint snap of either. admin-nav.js writes the cookie on rail toggle and bt_theme on theme toggle; the localStorage bt_nav fallback migrates pre-v0.51 sessions. */(function(){try{var m=document.cookie.match(/(?:^|; )bt_nav=([^;]*)/);var v=m?m[1]:((window.localStorage&&localStorage.getItem("bt_nav_collapsed")==="1")?"min":"");if(v==="min")document.documentElement.dataset.nav="min";var t=(window.localStorage&&localStorage.getItem("bt_theme"))||(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.dataset.theme=t;}catch(e){}})();</script>
   <script>try{var btTpl=localStorage.getItem("bt_template");if(btTpl)document.documentElement.dataset.template=btTpl;}catch(e){}</script>
-  <link rel="stylesheet" href="assets/tokens.css?v=0.216.0" />
-  <link rel="stylesheet" href="assets/app.css?v=0.216.0" />
-  <link rel="stylesheet" href="assets/admin.css?v=0.216.0" />
-  <link rel="stylesheet" href="assets/tournament.css?v=0.216.0" />
+  <link rel="stylesheet" href="assets/tokens.css?v=0.217.0" />
+  <link rel="stylesheet" href="assets/app.css?v=0.217.0" />
+  <link rel="stylesheet" href="assets/admin.css?v=0.217.0" />
+  <link rel="stylesheet" href="assets/tournament.css?v=0.217.0" />
 </head>
 <body>
   <header class="header chrome-glass no-print">
-    <a class="wordmark" href="admin.html" style="text-decoration:none;color:inherit"><img class="brand-logo" src="assets/logo-boom-icon-512.png?v=0.216.0" alt="" width="22" height="22" />Boomtown <span>Athletics</span></a>
+    <a class="wordmark" href="admin.html" style="text-decoration:none;color:inherit"><img class="brand-logo" src="assets/logo-boom-icon-512.png?v=0.217.0" alt="" width="22" height="22" />Boomtown <span>Athletics</span></a>
     <div class="spacer"></div>
     <select id="orgSwitcher" class="org-switcher" aria-label="Switch organization"></select>
     <a id="btHdrMail" class="btn ghost hdr-mail" href="admin-messages.html" aria-label="Messages">✉</a>
@@ -98,7 +98,10 @@
       <button id="newEventBtn" class="btn">New tournament</button>
       <div class="spacer"></div>
       <a href="admin-registrations.html" class="btn ghost" style="text-decoration:none">Registrations</a>
-      <button id="printBtn" class="btn ghost">Print pool sheet</button>
+      <button id="printBtn" class="btn ghost">Print grid</button>
+      <!-- v0.217.0 (owner 2026-11-23): the paper the courts actually use — one page per pool, team
+           numbers in the grid, a scorecard with blank differential boxes. -->
+      <button id="poolSheetsBtn" class="btn ghost">Print pool sheets</button>
       <button id="csvBtn" class="btn ghost">Export CSV</button>
       <button id="emailBtn" class="btn ghost">Email pool sheet</button>
       <!-- P-E (v0.163.0): the desk's whole day — schedule, pools and bracket, one print job -->
@@ -146,6 +149,11 @@
         <div class="field"><label for="plGames">Games each</label><input id="plGames" type="number" min="1" value="8" /></div>
         <div class="field"><label for="plPoints">Points to</label><input id="plPoints" type="number" min="1" value="21" /></div>
       </div>
+      <!-- v0.217.0: when the event has saved pools each pool gets its own round robin on its own
+           courts; this block names them and the one button below builds every pool at once. -->
+      <div id="plPools" class="muted" style="margin:0 0 8px" hidden></div>
+      <label class="mf-check" style="display:inline-flex;align-items:center;gap:6px;min-height:44px;margin-right:12px"><input id="plNoCap" type="checkbox" /> No cap (play it out)</label>
+      <button id="plByPool" class="btn" hidden>Build the pool schedules</button>
       <button id="plOptions" class="btn ghost">Show the options</button>
       <div id="plChoices" style="margin-top:10px"></div>
       <div id="plSummary" class="muted" style="margin-top:8px"></div>
@@ -168,7 +176,8 @@
     <section id="standingsPanel" class="card" hidden>
       <div class="row-between no-print">
         <h3>Standings</h3>
-        <button id="bracketBtn" class="btn ghost">Break to bracket (Top <select id="aSize" class="inline-select"><option>4</option><option selected>8</option><option>10</option></select> A / rest BB)</button>
+        <span class="no-print"><a id="bracketLink" class="btn ghost" href="admin-brackets.html" style="text-decoration:none">Draw the brackets</a>
+        <button id="bracketBtn" class="btn ghost" hidden>Break to bracket (Top <select id="aSize" class="inline-select"><option>4</option><option selected>8</option><option>10</option></select> A / rest BB)</button></span>
       </div>
       <!-- RF-1(f): the press's outcome speaks HERE, beside the button — #warningsBox sits a whole
            grid above it and belongs to the schedule generator. aria-live so it is announced. -->
@@ -190,8 +199,8 @@
 
   <div id="scoreSheet" class="score-sheet no-print" hidden aria-modal="true" role="dialog" aria-label="Enter score"></div>
 
-  <script src="assets/config.js?v=0.216.0"></script>
-  <script src="assets/admin-nav.js?v=0.216.0"></script>
-  <script src="assets/tournament.js?v=0.216.0"></script>
+  <script src="assets/config.js?v=0.217.0"></script>
+  <script src="assets/admin-nav.js?v=0.217.0"></script>
+  <script src="assets/tournament.js?v=0.217.0"></script>
 </body>
 </html>

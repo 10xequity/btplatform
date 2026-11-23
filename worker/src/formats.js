@@ -685,6 +685,134 @@ export function wireFormats(h) { ({ json, requireStaff, audit } = h); }
  *   POST /api/admin/formats/plan  {teams,courts,rounds,points_to,minutes_per_game}
  *                                                    → the schedule plus the constraint report
  */
+/* ---------------- v0.217.0: per-pool scheduling ---------------- */
+
+/**
+ * The event's saved pools, in board order, each with the teams the board put in it (in the board's
+ * own order, which is the number printed on the paper sheet) and the courts it owns. Pools with
+ * fewer than two teams are not returned: there is nothing to schedule in them, and the caller says
+ * so rather than failing the whole day.
+ */
+export async function poolsForScheduling(env, ctx, eventId) {
+  const pools = (await env.DB.prepare(
+    `SELECT id, name, division_id, sort_order, court_from, court_to FROM pools
+      WHERE org_id=?1 AND event_id=?2 AND deleted_at IS NULL ORDER BY sort_order, id`
+  ).bind(ctx.orgId, eventId).all()).results || [];
+  if (!pools.length) return [];
+  const teams = (await env.DB.prepare(
+    `SELECT id, name, pool_id FROM teams WHERE org_id=?1 AND event_id=?2 AND deleted_at IS NULL AND pool_id IS NOT NULL
+      ORDER BY board_order, COALESCE(seed, 9999), id`
+  ).bind(ctx.orgId, eventId).all()).results || [];
+  return pools
+    .map((p) => ({ ...p, teams: teams.filter((t) => t.pool_id === p.id) }))
+    .filter((p) => p.teams.length >= 2);
+}
+
+/**
+ * The courts a pool plays on, as a list of court numbers. A pool with its own range uses it. A pool
+ * without one gets an equal share of the event's courts, dealt out in board order, so three pools on
+ * twelve courts get 1–4, 5–8, 9–12 — the shape of every real day so far.
+ */
+export function courtsForPools(pools, eventCourts) {
+  const out = new Map();
+  const unranged = pools.filter((p) => !(Number(p.court_from) > 0));
+  const total = Math.max(1, Number(eventCourts) || 1);
+  const share = unranged.length ? Math.max(1, Math.floor(total / unranged.length)) : 0;
+  let next = 1;
+  for (const p of pools) {
+    if (Number(p.court_from) > 0) {
+      const from = Number(p.court_from), to = Math.max(from, Number(p.court_to) || from);
+      out.set(p.id, Array.from({ length: to - from + 1 }, (_, i) => from + i));
+      continue;
+    }
+    const list = Array.from({ length: share }, (_, i) => next + i);
+    next += share;
+    out.set(p.id, list);
+  }
+  return out;
+}
+
+async function generateByPool(env, ctx, ev, pools, b, opts) {
+  const { pointsTo, cap, minutesPerGame } = opts;
+  const courtMap = courtsForPools(pools, opts.courts || ev.court_count);
+  const poolRounds = (b.pool_rounds && typeof b.pool_rounds === "object") ? b.pool_rounds : {};
+  const gamesEach = Number(b.games_each) > 0 ? Number(b.games_each) : undefined;
+
+  // Plan every pool BEFORE writing any of them: a refusal on pool C after A and B were written
+  // would leave two thirds of a day on the table and no way to tell from the screen.
+  const planned = [];
+  for (const p of pools) {
+    const courtList = courtMap.get(p.id) || [];
+    const n = p.teams.length;
+    const useCourts = Math.max(1, Math.min(courtList.length, Math.floor(n / 2)));
+    let rounds = Number(poolRounds[p.id]) || Number(opts.rounds) || 0;
+    let chosen = null;
+    if (!rounds) {
+      chosen = chooseRounds(n, useCourts, gamesEach);
+      if (!chosen.ok) return json({ error: `${p.name}: ${chosen.error}` }, 400);
+      rounds = chosen.rounds;
+    }
+    const plan = planBestPool({ teams: n, courts: useCourts, rounds, pointsTo, minutesPerGame });
+    if (!plan.ok) return json({ error: `${p.name}: ${plan.error}` }, 400);
+    if (!plan.report.valid) return json({ error: `${p.name}: that schedule is not usable: ${plan.report.problems[0]}` }, 400);
+    if (b.assign_refs) assignRefs(plan, n);
+    planned.push({ pool: p, plan, courtList, useCourts, rounds, note: chosen && chosen.note });
+  }
+
+  const existing = await env.DB.prepare(
+    "SELECT COUNT(*) AS n FROM matches WHERE org_id=?1 AND event_id=?2 AND deleted_at IS NULL"
+  ).bind(ctx.orgId, ev.id).first();
+  if (existing.n > 0 && !b.replace) {
+    return json({
+      error: ev.name + " already has " + existing.n + " matches. Generating again would put a second schedule on top of the first.",
+      existing_matches: existing.n,
+      hint: "Send replace: true to set the current schedule aside and use this one instead.",
+    }, 409);
+  }
+  let replaced = 0;
+  if (existing.n > 0 && b.replace) {
+    const del = await env.DB.prepare(
+      "UPDATE matches SET deleted_at=datetime('now') WHERE org_id=?1 AND event_id=?2 AND deleted_at IS NULL"
+    ).bind(ctx.orgId, ev.id).run();
+    replaced = del.meta.changes;
+  }
+
+  let written = 0;
+  const summary = [];
+  for (const { pool, plan, courtList, rounds, note } of planned) {
+    const idOf = (n) => pool.teams[n - 1].id;
+    for (let ri = 0; ri < plan.rounds.length; ri++) {
+      const round = plan.rounds[ri];
+      for (let mi = 0; mi < round.length; mi++) {
+        const mt = round[mi];
+        const refIdx = plan.refs && plan.refs[ri] ? plan.refs[ri][mi] : null;
+        await env.DB.prepare(
+          `INSERT INTO matches (org_id, event_id, pool_id, stage, round, court, team_a_id, team_b_id,
+                                ref_team_id, points_to, cap, game_number)
+           VALUES (?1,?2,?3,'pool',?4,?5,?6,?7,?8,?9,?10,1)`
+        ).bind(ctx.orgId, ev.id, pool.id, ri + 1, courtList[mt.court - 1] ?? mt.court, idOf(mt.a), idOf(mt.b),
+               refIdx ? idOf(refIdx) : null, pointsTo, cap).run();
+        written++;
+      }
+    }
+    summary.push({
+      pool_id: pool.id, pool: pool.name, teams: pool.teams.length, rounds,
+      courts: courtList, games_each: plan.report.gamesPerTeam.min, matches: plan.rounds.flat().length,
+      byes: plan.byes.map((r) => r.map((n) => pool.teams[n - 1].name)),
+      note: note || undefined,
+    });
+  }
+
+  await audit(env, ctx, "schedule.generate", "events", ev.id,
+    { matches: written, replaced, pools: planned.length, by_pool: true });
+
+  return json({
+    ok: true, by_pool: true, event: ev.name, matches_written: written, matches_replaced: replaced,
+    pools: summary,
+    summary: summary.map((s) => `${s.pool}: ${s.teams} teams, ${s.rounds} rounds on courts ${s.courts[0]}–${s.courts[s.courts.length - 1]}, ${s.games_each} games each.`),
+  });
+}
+
 export async function formatsRoutes(request, env, url, ctx) {
   const p = url.pathname, m = request.method;
   let x;
@@ -774,8 +902,24 @@ export async function formatsRoutes(request, env, url, ctx) {
     const courts = Number(b.courts);
     const rounds = Number(b.rounds);
     const pointsTo = Number(b.points_to) > 0 ? Number(b.points_to) : 21;
-    const cap = Number(b.cap) > 0 ? Number(b.cap) : pointsTo + 2;
+    /* v0.217.0 (owner 2026-11-23): "no cap" is a real format — QC Finals and the SAV bracket both
+       run it. cap: 0 (or null) means no cap and is stored as 0; absent means the old points+2. */
+    const cap = b.cap === 0 || b.cap === null ? 0 : Number(b.cap) > 0 ? Number(b.cap) : pointsTo + 2;
     const minutesPerGame = Number(b.minutes_per_game) > 0 ? Number(b.minutes_per_game) : 22;
+
+    /* ---- v0.217.0: POOLS RUN THE DAY (owner 2026-11-23) ----
+       Every tournament the owner actually ran this autumn (QC Finals, Halloween RevCo, SAV #2) was
+       two or three SEPARATE pools, each with its own round robin on its own courts, its own
+       standings and its own bracket. Until now this route built ONE round robin across every team
+       in the event, so the pools saved on the pool board were decoration and a real day meant one
+       event per pool. When the event has saved pools holding at least two teams each, the schedule
+       is now generated POOL BY POOL unless the caller says `by_pool: false`. Each pool's games carry
+       its pool_id, which is what per-pool standings and per-pool brackets key on downstream. */
+    const savedPools = await poolsForScheduling(env, ctx, eventId);
+    const byPool = b.by_pool !== false && savedPools.length > 0;
+    if (byPool) {
+      return generateByPool(env, ctx, ev, savedPools, b, { courts, rounds, pointsTo, cap, minutesPerGame });
+    }
 
     const plan = planBestPool({ teams: teamRows.length, courts, rounds, pointsTo, minutesPerGame });
     if (!plan.ok) return json({ error: plan.error }, 400);

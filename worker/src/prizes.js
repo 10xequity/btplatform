@@ -77,16 +77,34 @@ export function finishersFrom(rows, winnerOf) {
   for (const [bracket, mine] of byBracket) {
     const side = (r, s) => (s === "a" ? { team_id: r.team_a_id, team: r.team_a } : { team_id: r.team_b_id, team: r.team_b });
     const other = (s) => (s === "a" ? "b" : "a");
-    for (const f of mine.filter((r) => r.bracket_round === 1)) {
+    // v0.217.0: round 1 holds the final at slot 1 and, when the director asked for one, the
+    // 3rd-place match at slot 2 (brackets.js). Rows without a slot predate the column and are finals.
+    const isThird = (r) => r.bracket_round === 1 && Number(r.bracket_slot) === 2;
+    for (const f of mine.filter((r) => r.bracket_round === 1 && !isThird(r))) {
       const w = winnerOf(f.score_a, f.score_b);
       if (!w) continue;                                // final not played: nobody has finished yet
       out.push({ bracket, place: 1, ...side(f, w) });
       if (f[`team_${other(w)}_id`]) out.push({ bracket, place: 2, ...side(f, other(w)) });
     }
-    for (const s of mine.filter((r) => r.bracket_round === 2)) {
-      const w = winnerOf(s.score_a, s.score_b);
-      if (!w || !s[`team_${other(w)}_id`]) continue;
-      out.push({ bracket, place: 3, ...side(s, other(w)) });
+    const third = mine.find(isThird);
+    if (third && third.team_a_id && third.team_b_id) {
+      const w = winnerOf(third.score_a, third.score_b);
+      if (w) {
+        out.push({ bracket, place: 3, ...side(third, w) });
+        out.push({ bracket, place: 4, ...side(third, other(w)) });
+      } else {
+        // Owner 2026-11-23: "default to seed placement if they do not play it." The better seed
+        // takes 3rd when the match is skipped; equal or missing seeds share 3rd as before.
+        const sa = Number(third.seed_a) || 9999, sb = Number(third.seed_b) || 9999;
+        if (sa === sb) { out.push({ bracket, place: 3, ...side(third, "a") }); out.push({ bracket, place: 3, ...side(third, "b") }); }
+        else { out.push({ bracket, place: 3, ...side(third, sa < sb ? "a" : "b"), by_seed: true }); out.push({ bracket, place: 4, ...side(third, sa < sb ? "b" : "a"), by_seed: true }); }
+      }
+    } else {
+      for (const s of mine.filter((r) => r.bracket_round === 2)) {
+        const w = winnerOf(s.score_a, s.score_b);
+        if (!w || !s[`team_${other(w)}_id`]) continue;
+        out.push({ bracket, place: 3, ...side(s, other(w)) });
+      }
     }
   }
   return out.sort((a, b) => (a.bracket < b.bracket ? -1 : a.bracket > b.bracket ? 1 : a.place - b.place));
@@ -321,8 +339,8 @@ async function eventPrizes(env, ctx, eventId) {
   if (!ev) return json({ error: "That event isn't here." }, 404);
 
   const rows = (await env.DB.prepare(
-    `SELECT b.name AS bracket_name, m.bracket_round, m.team_a_id, m.team_b_id, m.score_a, m.score_b,
-            ta.name AS team_a, tb.name AS team_b
+    `SELECT b.name AS bracket_name, m.bracket_round, m.bracket_slot, m.team_a_id, m.team_b_id, m.score_a, m.score_b,
+            ta.name AS team_a, tb.name AS team_b, ta.seed AS seed_a, tb.seed AS seed_b
        FROM matches m
        JOIN brackets b ON b.id = m.bracket_id AND b.deleted_at IS NULL
        LEFT JOIN teams ta ON ta.id = m.team_a_id

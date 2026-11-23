@@ -424,6 +424,33 @@ export function pendingAdvances(matches) {
       if (to.side === "a") next.team_a_id = teamId; else next.team_b_id = teamId;
     }
   }
+
+  /* v0.217.0: THE 3RD-PLACE MATCH IS FED BY LOSERS. Round 1 slot 2 (brackets.js planFor) takes the
+     loser of semi-final 1 on side a and the loser of semi-final 2 on side b. Same lock rule, same
+     idempotence, same "disturbs a played match" honesty as the winners' path above. */
+  const third = byKey.get("1:2");
+  if (third) {
+    for (const s of [1, 2]) {
+      const games = nodes.get(`2:${s}`);
+      if (!games) continue;
+      const m = games[0];
+      const side = matchWinnerOf(games, games.length > 1 ? 3 : 1);
+      if (!side) continue;
+      const loserId = side === "a" ? m.team_b_id : m.team_a_id;
+      if (!loserId) continue;
+      const toSide = s === 1 ? "a" : "b";
+      const current = toSide === "a" ? third.team_a_id : third.team_b_id;
+      if (current === loserId) continue;
+      const held = toSide === "a" ? third.slot_locked_a : third.slot_locked_b;
+      changes.push({
+        match_id: third.id, round: 1, slot: 2, side: toSide, team_id: loserId, from_match_id: m.id,
+        replaced_team_id: current || null, loser_feed: true,
+        disturbs_played_match: third.score_a !== null && third.score_b !== null,
+        ...(held ? { held: true } : {}),
+      });
+      if (!held) { if (toSide === "a") third.team_a_id = loserId; else third.team_b_id = loserId; }
+    }
+  }
   return changes;
 }
 
@@ -470,18 +497,32 @@ export async function advanceBracketFor(env, orgId, eventId) {
   };
 }
 
+/** Ids of the brackets drawn for one pool (stamped in config_json since v0.217.0). */
+async function poolBracketIds(env, ctx, eventId, poolId) {
+  const rows = (await env.DB.prepare(
+    "SELECT id, config_json FROM brackets WHERE org_id=?1 AND event_id=?2 AND deleted_at IS NULL"
+  ).bind(ctx.orgId, eventId).all()).results || [];
+  return rows.filter((r) => {
+    try { return Number(JSON.parse(r.config_json || "{}").pool_id) === Number(poolId); } catch { return false; }
+  }).map((r) => r.id);
+}
+
 /* ---------------- routes ---------------- */
 
 let json, requireStaff, audit;
 export function wireBrackets(h) { ({ json, requireStaff, audit } = h); }
 
 /** Read the seed order for an event: explicit list, else pool standings, else the teams' own seeds. */
-async function seedOrder(env, ctx, eventId, explicit) {
+async function seedOrder(env, ctx, eventId, explicit, poolId = null) {
   // pool_id rides along for T2-5's cross-pool round one (v0.124.0). It is read here, with the
   // teams, so there is ONE place that knows which pool a team came out of.
+  // v0.217.0: a bracket drawn FOR a pool (owner 2026-11-23, "each pool stands alone") reads only
+  // that pool's teams, and that pool's standings — which are ranked within the pool since this
+  // release — so Upper's 1–8 and Lower's 1–8 each get their own tree.
   const teams = (await env.DB.prepare(
-    `SELECT id, name, seed, pool_id FROM teams WHERE org_id=?1 AND event_id=?2 AND deleted_at IS NULL`
-  ).bind(ctx.orgId, eventId).all()).results || [];
+    `SELECT id, name, seed, pool_id FROM teams WHERE org_id=?1 AND event_id=?2 AND deleted_at IS NULL
+       ${poolId ? "AND pool_id=?3" : ""}`
+  ).bind(...(poolId ? [ctx.orgId, eventId, poolId] : [ctx.orgId, eventId])).all()).results || [];
   const known = new Map(teams.map((t) => [t.id, t]));
 
   if (Array.isArray(explicit) && explicit.length) {
@@ -508,7 +549,7 @@ async function seedOrder(env, ctx, eventId, explicit) {
     `SELECT team_id AS id FROM standings
       WHERE org_id=?1 AND event_id=?2 AND deleted_at IS NULL ORDER BY rank`
   ).bind(ctx.orgId, eventId).all()).results || [];
-  const ranked = standings.map((r) => r.id).filter((id) => known.has(id));
+  const ranked = standings.map((r) => r.id).filter((id) => known.has(id));   // pool-scoped via `known`
   if (ranked.length >= 2) return { source: "pool finish", ids: ranked, names: known };
 
   // No pool played yet — fall back to entry seeds so a bracket-only event still works.
@@ -535,7 +576,15 @@ function divisionForGroup(b, name) {
  * point is that a director can ask the question without committing to the answer.
  */
 async function planFor(env, ctx, ev, b) {
-  const seeds = await seedOrder(env, ctx, ev.id, b.seeds);
+  const poolId = Number(b.pool_id) > 0 ? Number(b.pool_id) : null;
+  let pool = null;
+  if (poolId) {
+    pool = await env.DB.prepare(
+      "SELECT id, name, court_from, court_to FROM pools WHERE id=?1 AND org_id=?2 AND event_id=?3 AND deleted_at IS NULL"
+    ).bind(poolId, ctx.orgId, ev.id).first();
+    if (!pool) return { ok: false, error: "That pool isn't in this event.", status: 404 };
+  }
+  const seeds = await seedOrder(env, ctx, ev.id, b.seeds, poolId);
   if (seeds.error) return { ok: false, error: seeds.error, status: 400 };
   if (seeds.ids.length < 2) {
     return { ok: false, error: "Add the teams first; there is nothing to bracket yet.", status: 409 };
@@ -562,18 +611,25 @@ async function planFor(env, ctx, ev, b) {
   }
 
   const pointsTo = Number(b.points_to) > 0 ? Number(b.points_to) : 25;
-  const cap = Number(b.cap) > 0 ? Number(b.cap) : pointsTo + 2;
+  // v0.217.0: cap 0 / null means NO CAP (the owner's bracket format: "to 25, no cap").
+  const cap = b.cap === 0 || b.cap === null ? 0 : Number(b.cap) > 0 ? Number(b.cap) : pointsTo + 2;
   const courts = Number(b.courts) > 0 ? Number(b.courts) : (ev.court_count || 4);
 
   // Every tree is built and checked BEFORE anything is written. A refusal on the second group after
   // the first has already been inserted leaves half a bracket on the table and no way to tell.
   const plans = [];
+  const thirdPlace = b.third_place === true;
   for (const g of groups) {
     const tree = buildTree(g.ids.length);
     if (!tree.ok) return { ok: false, error: tree.error, status: 400 };
+    /* v0.217.0 3RD-PLACE MATCH (owner 2026-11-23, SAV #2's shape): the two semi-final losers play
+       for 3rd and 4th. It lives at round 1, slot 2 — the final only ever occupies slot 1, so the
+       coordinate is free, nothing is stored that arithmetic cannot derive, and pendingAdvances feeds
+       it from the semis' LOSERS. Needs semis to exist (four or more teams). */
+    if (thirdPlace && tree.depth >= 2) tree.matches.push({ round: 1, slot: 2, a: null, b: null, third_place: true });
     plans.push({ g, tree });
   }
-  return { ok: true, seeds, aSize, groups, plans, pointsTo, cap, courts };
+  return { ok: true, seeds, aSize, groups, plans, pointsTo, cap, courts, pool, thirdPlace };
 }
 
 /** The event's divisions, keyed by id — the court ranges the allocator has to respect. */
@@ -817,16 +873,23 @@ export async function generateBracketFor(env, ctx, eventId, b = {}) {
 
   const plan = await planFor(env, ctx, ev, b);
   if (!plan.ok) return plan;
-  const { seeds, aSize, plans, pointsTo, cap, courts } = plan;
+  const { seeds, aSize, plans, pointsTo, cap, courts, pool, thirdPlace } = plan;
 
+  /* v0.217.0: a pool's bracket replaces only THAT pool's bracket. Three pools draw three brackets
+     one after another, and the second draw must not wipe the first. The event-wide path (no
+     pool_id) keeps its old meaning: every bracket in the event. */
+  const poolScope = pool ? await poolBracketIds(env, ctx, eventId, pool.id) : null;
+  const scopeSql = poolScope
+    ? (poolScope.length ? `AND bracket_id IN (${poolScope.join(",")})` : "AND 0")
+    : "";
   const existing = await env.DB.prepare(
     `SELECT COUNT(*) AS n FROM matches
-      WHERE org_id=?1 AND event_id=?2 AND bracket_id IS NOT NULL AND deleted_at IS NULL`
+      WHERE org_id=?1 AND event_id=?2 AND bracket_id IS NOT NULL AND deleted_at IS NULL ${scopeSql}`
   ).bind(ctx.orgId, eventId).first();
   if (existing.n > 0 && !b.replace) {
     return {
       ok: false, status: 409,
-      error: ev.name + " already has a bracket with " + existing.n + " games. Generating again would put a second bracket on top of the first.",
+      error: (pool ? pool.name : ev.name) + " already has a bracket with " + existing.n + " games. Generating again would put a second bracket on top of the first.",
       existing_matches: existing.n,
       hint: "Send replace: true to set the current bracket aside and use this one instead.",
     };
@@ -835,11 +898,12 @@ export async function generateBracketFor(env, ctx, eventId, b = {}) {
   if (existing.n > 0 && b.replace) {
     const del = await env.DB.prepare(
       `UPDATE matches SET deleted_at=datetime('now')
-        WHERE org_id=?1 AND event_id=?2 AND bracket_id IS NOT NULL AND deleted_at IS NULL`
+        WHERE org_id=?1 AND event_id=?2 AND bracket_id IS NOT NULL AND deleted_at IS NULL ${scopeSql}`
     ).bind(ctx.orgId, eventId).run();
     replaced = del.meta.changes;
     await env.DB.prepare(
-      "UPDATE brackets SET deleted_at=datetime('now') WHERE org_id=?1 AND event_id=?2 AND deleted_at IS NULL"
+      `UPDATE brackets SET deleted_at=datetime('now') WHERE org_id=?1 AND event_id=?2 AND deleted_at IS NULL
+         ${poolScope ? (poolScope.length ? `AND id IN (${poolScope.join(",")})` : "AND 0") : ""}`
     ).bind(ctx.orgId, eventId).run();
   }
 
@@ -881,10 +945,14 @@ export async function generateBracketFor(env, ctx, eventId, b = {}) {
     const ins = await env.DB.prepare(
       `INSERT INTO brackets (org_id, event_id, name, split_rule, config_json, division_id, court_from, court_to)
        VALUES (?1,?2,?3,?4,?5,?6,?7,?8)`
-    ).bind(ctx.orgId, eventId, p.g.name, aSize < seeds.ids.length ? `top${aSize}` : "all",
-           JSON.stringify({ seeded_by: seeds.source, seeds: p.g.ids, points_to: pointsTo }),
+    ).bind(ctx.orgId, eventId, pool ? (p.g.name === "A" && plans.length === 1 ? pool.name : `${pool.name} · ${p.g.name}`) : p.g.name,
+           aSize < seeds.ids.length ? `top${aSize}` : "all",
+           JSON.stringify({ seeded_by: seeds.source, seeds: p.g.ids, points_to: pointsTo, cap,
+                            pool_id: pool ? pool.id : null, group: p.g.name, third_place: !!thirdPlace, best_of: Number(b.best_of) === 3 ? 3 : 1 }),
            divisionForGroup(b, p.g.name),
-           Number(b.court_from) || null, Number(b.court_to) || null).run();
+           // A pool's bracket plays on the pool's own courts unless the caller says otherwise.
+           Number(b.court_from) || (pool && pool.court_from) || null,
+           Number(b.court_to) || (pool && pool.court_to) || null).run();
     p.bracketId = ins.meta.last_row_id;
     // Read back rather than trust what we just bound: the allocator must see what the database holds.
     p.bracketRow = await env.DB.prepare(
@@ -1319,6 +1387,11 @@ async function loadBrackets(env, ctx, eventId) {
 
   const label = (r) => (r === 1 ? "Final" : r === 2 ? "Semi-final" : r === 3 ? "Quarter-final" : `Round of ${2 ** r}`);
 
+  const poolNames = new Map((((await env.DB.prepare(
+    "SELECT id, name FROM pools WHERE org_id=?1 AND event_id=?2 AND deleted_at IS NULL"
+  ).bind(ctx.orgId, eventId).all()).results) || []).map((p) => [p.id, p.name]));
+  const isThird = (x) => x.bracket_round === 1 && x.bracket_slot === 2;
+
   const brackets = brs.map((br) => {
     const mine = rows.filter((r) => r.bracket_id === br.id);
     const depth = mine.reduce((n, r) => Math.max(n, r.bracket_round), 0);
@@ -1331,6 +1404,10 @@ async function loadBrackets(env, ctx, eventId) {
           const w = winnerOf(x.score_a, x.score_b);
           return {
             id: x.id, slot: x.bracket_slot, round: x.round, court: x.court,
+            // v0.217.0: the 3rd-place match shares the final's round; the flag is how a screen
+            // labels it and a printout separates it.
+            third_place: isThird(x),
+            label: isThird(x) ? "3rd place" : label(r),
             team_a: x.team_a, team_b: x.team_b,
             team_a_id: x.team_a_id, team_b_id: x.team_b_id,
             // Where each team came from, for the substitution decision.
@@ -1344,8 +1421,8 @@ async function loadBrackets(env, ctx, eventId) {
             score_a: x.score_a, score_b: x.score_b, points_to: x.points_to,
             winner: w ? (w === "a" ? x.team_a : x.team_b) : null,
             // Which game each empty side is waiting on, said out loud.
-            waiting_a: x.team_a_id ? null : feederLabel(r, x.bracket_slot, "a", label),
-            waiting_b: x.team_b_id ? null : feederLabel(r, x.bracket_slot, "b", label),
+            waiting_a: x.team_a_id ? null : (isThird(x) ? "Loser of Semi-final 1" : feederLabel(r, x.bracket_slot, "a", label)),
+            waiting_b: x.team_b_id ? null : (isThird(x) ? "Loser of Semi-final 2" : feederLabel(r, x.bracket_slot, "b", label)),
           };
         }),
       });
@@ -1354,13 +1431,26 @@ async function loadBrackets(env, ctx, eventId) {
     try { config = JSON.parse(br.config_json || "{}"); } catch { config = {}; }
     const played = mine.filter((x) => winnerOf(x.score_a, x.score_b)).length;
     const champion = (() => {
-      const f = mine.find((x) => x.bracket_round === 1);
+      const f = mine.find((x) => x.bracket_round === 1 && !isThird(x));
       if (!f) return null;
       const w = winnerOf(f.score_a, f.score_b);
       return w ? (w === "a" ? f.team_a : f.team_b) : null;
     })();
+    // 3rd/4th: by the match when played, by seed when not (owner 2026-11-23).
+    const third = (() => {
+      const t = mine.find(isThird);
+      if (!t || !t.team_a_id || !t.team_b_id) return null;
+      const w = winnerOf(t.score_a, t.score_b);
+      if (w) return { decided_by: "match", third: w === "a" ? t.team_a : t.team_b, fourth: w === "a" ? t.team_b : t.team_a };
+      const sa = Number(t.seed_a) || 9999, sb = Number(t.seed_b) || 9999;
+      if (sa === sb) return { decided_by: "pending", third: null, fourth: null };
+      return { decided_by: "seed", third: sa < sb ? t.team_a : t.team_b, fourth: sa < sb ? t.team_b : t.team_a };
+    })();
     return {
       id: br.id, name: br.name, split_rule: br.split_rule, seeded_by: config.seeded_by || null,
+      pool_id: config.pool_id || null, pool: config.pool_id ? (poolNames.get(config.pool_id) || null) : null,
+      group: config.group || br.name, best_of: config.best_of || 1, cap: config.cap ?? null,
+      third_place: third, has_third_place: mine.some(isThird),
       rounds, total: mine.length, played, champion,
     };
   });
