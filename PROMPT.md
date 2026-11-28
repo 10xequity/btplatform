@@ -190,7 +190,7 @@ Everything above is standing and lives here. **The pasted prompt carries only th
 and should be roughly this long:
 
 ```
-Continue the Boomtown Platform build in D:\github\repos\btplatform as a ralph loop.
+Continue the Boomtown Platform build in D:\github\repos\boomtown\btplatform as a ralph loop.
 
 Boomtown Platform runs the whole of a sports and events business — tournaments, leagues,
 memberships, point of sale, facilities, marketing and staff — owned and operated by one

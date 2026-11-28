@@ -165,7 +165,7 @@ driver note. The HALT/drift/release machinery is unchanged — it worked.
 You are one iteration of an autonomous loop. Assume your context is EMPTY and will be
 DISCARDED when you exit. Everything you learn must be written to disk or it is lost.
 
-Repo: `D:\github\repos\btplatform`
+Repo: `D:\github\repos\boomtown\btplatform`
 
 Do ONE unit of work, verify it, record it, halt. Do not try to empty the queue in one
 iteration. A short correct iteration beats a long ambitious one.
