@@ -1,10 +1,8 @@
 # CLAUDE.md — Boomtown Platform (btplatform)
 
-**File:** CLAUDE.md · **Version:** v1.2 · **Created:** 2026-08-02 · **Updated:** 2026-08-02
+**File:** CLAUDE.md · **Version:** v1.3 · **Created:** 2026-08-02 · **Updated:** 2026-11-27
 **Status:** ACTIVE — always-loaded context for Claude Code in this repo.
-**Supersedes:** nothing. First Claude Code instruction file for this project; ported from the
-Claude Desktop project-knowledge doc set (9 markdown files + 1 HTML demo, dated 2026-07-26 →
-2026-08-02).
+**Supersedes:** v1.2 (2026-08-02). Originally ported from the Claude Desktop project-knowledge doc set.
 **Companion:** account-level `~/.claude/CLAUDE.md` (voice/stance). This file is project rules only.
 
 ---
@@ -13,10 +11,11 @@ Claude Desktop project-knowledge doc set (9 markdown files + 1 HTML demo, dated 
 
 | Step | File | When |
 |---|---|---|
-| 1 | `docs/2026-08-03_handoff_v0_81_0.md` | **Every session.** State of record. §0 delivery + the order-of-operations rules, §1 measured build state, §2 the owner's eight items and which shipped, **§2b THE OPEN PROBLEM — read first**, §3 the review pass and the four defects this session's own code produced, §4 owner answers, §6 next build, §7 the next-session prompt. |
-| 2 | `docs/2026-07-30_standards_v2_0.md` | **Every session.** Build/design law. |
-| 3 | `docs/2026-08-02_roadmap_v1_0.md` | **Every session.** What is unbuilt and in what order. |
-| 4 | `docs/INDEX.md` | **Every session.** Read-order, doc status, and the open contradiction register. |
+| 1 | `LOOP.md` — the last three entries | **Every session.** The ledger: measured state, what was learned, what is next. Handoff files stopped at v0.100.0 (2026-08-06); LOOP.md replaced them. |
+| 2 | `RALPH.md` | **Every session running the loop.** The instruction set. |
+| 3 | `docs/INDEX.md` | **Every session.** Doc status and the open contradiction register. |
+| 4 | `docs/2026-07-30_standards_v2_0.md` | **Every session.** Build/design law. |
+| 4b | `docs/2026-08-02_roadmap_v1_0.md` | When choosing what to build next. |
 | 5 | `docs/2026-08-01_decisions_org-roster_v1_1.md` | When touching orgs, payments binding, or deletes. |
 | 6 | `docs/2026-08-01_requirements_lfg-membership_v1_0.md` | When touching LFG, membership fields, or the opportunities feed. |
 | 7 | `docs/2026-08-01_uiux-review_admin-shell_v1_0.md` | When touching any shell, rail, header, or contrast. |
@@ -24,7 +23,7 @@ Claude Desktop project-knowledge doc set (9 markdown files + 1 HTML demo, dated 
 | 9 | `docs/2026-08-03_spec_kotc_v1_1.md` | When touching King/Queen of the Court — the current next build. §6 holds all five owner answers (notably: `move_up` is a director setting and **no formula is encoded**), §7 two findings against v1.0, §8 what is left. |
 | — | `docs/archive/*` | **On demand only. Never as part of a normal build.** See §7. |
 
-Steps 1–4 are ~7,400 tokens combined. That is the intended per-session doc budget.
+Keep the per-session doc read under the §7 budget (~10,000 tokens). Nothing listed above is a substitute for `grep` on the tree.
 
 ---
 
@@ -40,10 +39,8 @@ node worker/scripts/preflight.mjs --session
 
 That reports, in one pass: sync state vs `origin/main`, module syntax, F-37 test-file parity, the
 **measured** suite count, repo-highest migration vs live D1, and source version vs `/api/health`.
-It exits non-zero on any hard failure. The four manual commands it replaces are still correct if
-you need one in isolation, but the script is the ritual — the manual version was skipped, and on
-2026-08-02 the local clone sat two releases behind origin for a whole session while work was built
-on top of it.
+It exits non-zero on any hard failure. The script is the ritual: the manual checks it replaces were
+skipped once (2026-08-02) and a whole session was built on a clone two releases behind origin.
 
 `WARN` is not `PASS`. A check that could not run (no D1 token, offline) is named in the summary and
 never counted as clean. Live D1 is read via Cloudflare MCP (db `6cde5d11-4199-4e57-b10f-2b7e968264ea`);
@@ -88,13 +85,8 @@ broken module before trusting itself.
 
 ## 2. Delivery — DIRECT COMMIT (owner decision 2026-08-02)
 
-**The ZIP is retired. Claude Code commits and pushes to `main` directly.**
-
-The doc set was written for Claude Desktop, where the assistant could not write to the repo, so
-delivery was one ZIP per release with two manifest ratchets and the owner dragging files in. That
-constraint never applied in Claude Code, and on 2026-08-02 the owner closed the question: commit
-directly. This replaces the ZIP ritual, both ratchets, and Desktop-parity mode. v0.53.1 — whose
-only content was moving `CHANGELOG.md` into the ZIP — is moot for the same reason.
+**Claude Code commits and pushes to `main` directly.** (The Claude Desktop-era ZIP delivery, its two
+manifest ratchets and Desktop-parity mode were retired by the owner on 2026-08-02.)
 
 **The release loop:**
 
@@ -164,15 +156,11 @@ Any UI work loads these, in this order (standards §5, owner requirement #13 ver
 
 1. **`/emil-design-eng`** — the base. Animation decision framework, `:active` feedback, ease-out,
    no enter-animation on high-frequency controls.
-   **INSTALLED 2026-08-03** at `~/.claude/skills/emil-design-eng/` from `github.com/emilkowalski/skill`
-   (MIT, Emil Kowalski's own repo, markdown only — no scripts or hooks). It had been missing for the
-   whole port and every session so far had silently substituted for it. The same repo also supplied
-   four companions now installed and worth reaching for: **`review-animations`** (has a STANDARDS.md
-   checklist), **`improve-animations`**, **`animation-vocabulary`**, **`find-animation-opportunities`**.
-   *A skill installed mid-session is not in that session's skill list — it becomes invokable on the
-   next start. Say so rather than pretending to have loaded it.*
-2. **`frontend-design`** — structure and aesthetic. Available here as `skill-library:frontend-design`,
-   with `skill-library:web-design-guidelines` as a pre-merge MUST/SHOULD/NEVER gate.
+   Lives in this repo at `.claude/skills/emil-design-eng/` (from `github.com/emilkowalski/skill`, MIT;
+   moved here from user level 2026-11-27) with its companions **`improve-animations`** and
+   **`animation-vocabulary`**. A skill added mid-session is not in that session's list; say so.
+2. **`frontend-design`** — structure and aesthetic. Installed as `anthropic-skills:frontend-design`
+   (document-skills plugin); `skill-library:web-design-guidelines` is the pre-merge MUST/SHOULD/NEVER gate.
 3. **`ux-copy` conventions** — human copy, no jargon, sentence case (v0.5.0 precedent).
 
 **Tokens only.** Colors, fonts, spacing come from `assets/tokens.css` variables. `tokens.test.mjs`
@@ -289,25 +277,14 @@ gate live test · Oda Up and External/Rental confirms (C-1/C-2, decisions §F).
 
 ---
 
-## 9. Open decisions for the owner
+## 9. Closed decisions
 
-1. ~~**Direct commits.**~~ **CLOSED 2026-08-02 — direct commit authorized.** See §2. The ZIP, both
-   manifest ratchets, and Desktop-parity mode are retired. `preflight.mjs` replaces the mechanical
-   half of the checkpoint the owner's drag used to provide.
-2. ~~**Standards §9 / handoff §0 contradiction.**~~ **CLOSED 2026-08-02 — moot and struck.** Both
-   clauses described ZIP delivery, which no longer exists. `standards §9` and the
-   `uiux-review §6` closing paragraph were rewritten to point at §2 in the same release.
-3. ~~**The CI syntax gate cannot fail.**~~ **CLOSED 2026-08-02 — fixed in v0.55.0 with owner OK.**
-   `deploy-worker.yml` step 1 ran `node --check "$f"`, which exits 0 for any ESM `.js` file even
-   when unparseable (reproduced on Node 22.23.2 and 24.18.1). All 37 modules are ESM, so the step
-   had passed unconditionally since v0.2.x. Now pipes each file to `node --check --input-type=module`
-   and **self-tests against a deliberately broken module first** — if the check ever stops being
-   able to fail, the build stops rather than reporting clean. This remains the only workflow edit
-   made under §8; the standing rule is unchanged.
+All three decisions once listed here are closed (2026-08-02): direct commits authorized (§2); the
+standards §9 / handoff §0 ZIP contradiction struck as moot; the blind CI syntax gate fixed in v0.55.0
+with an owner OK (§1). Full text: git history of this file, v1.0–v1.2.
 
 ---
 
-*Changelog: v1.2 (2026-08-02) — §9.3 closed: the blind CI syntax gate is fixed in v0.55.0 with an owner OK and now self-tests; §1 note updated (bug reproduced on Node 22 and 24). v1.1 (2026-08-02) — records the owner's direct-commit decision: §2 rewritten from
-Desktop-parity to the direct-commit release loop, §1 session protocol replaced by `preflight.mjs`,
-§6 GitHub row corrected to reflect git/gh as the write path. Closes open decisions 1 and 2; opens
-3, the blind CI syntax gate. v1.0 (2026-08-02) — created for the Claude Code port.*
+*Changelog: v1.3 (2026-11-27) — context tune-up: §0 read order rewritten to LOOP.md (handoffs ended at
+v0.100.0), §1/§2 history folded to one line each, §4 skill names corrected (emil-design-eng now a repo
+skill; frontend-design is `anthropic-skills:`), §9 collapsed. Earlier entries: git history.*
